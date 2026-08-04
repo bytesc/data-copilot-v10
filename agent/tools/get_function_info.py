@@ -1,6 +1,6 @@
 from .copilot.utils.call_llm_test import call_llm
 from .tools_def import draw_graph, query_database, explain_data, exe_sql, draw_compare_graph, load_data, \
-    get_save_image_path
+    get_save_image_path, search_web
 
 FUNCTION_DICT = {
     # "query_database": query_database,
@@ -10,6 +10,7 @@ FUNCTION_DICT = {
     "exe_sql": exe_sql,
     "load_data": load_data,
     "get_save_image_path": get_save_image_path,
+    "search_web": search_web,
 }
 
 FUNCTION_IMPORT = {
@@ -20,6 +21,7 @@ FUNCTION_IMPORT = {
     exe_sql: "from agent.tools.tools_def import exe_sql",
     load_data: "from agent.tools.tools_def import load_data",
     get_save_image_path: "from agent.tools.tools_def import get_save_image_path",
+    search_web: "from agent.tools.tools_def import search_web",
 }
 
 ASSIST_FUNCTION_DICT = {

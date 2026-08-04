@@ -9,6 +9,7 @@ from .copilot.utils.read_db import execute_select
 from .data_trans.download_csv_to_pd import download_csv_to_dataframe, extract_csv_filename_from_url, read_csv_from_local
 from .copilot.sql_code import query_database_func
 from .copilot.python_code import draw_graph_func, draw_compare_graph_func
+from .web_search.web_search import search_web
 
 
 DATABASE_URL = config_data['mysql']

@@ -19,3 +19,5 @@ python-docx==1.2.0
 Markdown==3.3
 beautifulsoup4==4.12.3
 
+ddgs==9.14.4
+
