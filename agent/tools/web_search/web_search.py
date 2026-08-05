@@ -1,16 +1,9 @@
-"""Web search and page fetching tool for the agent.
 
-Provides web search capability using DuckDuckGo search engine,
-and page content fetching using headless browser (Playwright) or plain HTTP.
-
-Usage:
-    results = search_web("latest medical research 2024")
-    content = fetch_web_page("https://example.com/article")
-"""
-
-import asyncio
 import json
-from typing import Optional, List, Dict, Any
+from typing import Optional
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
+from html.parser import HTMLParser
 
 
 def search_web(query: str, max_results: int = 10, region: str = "wt-wt") -> str:
@@ -116,6 +109,93 @@ def search_web(query: str, max_results: int = 10, region: str = "wt-wt") -> str:
         return json.dumps({
             "error": str(e),
             "query": query
+        }, ensure_ascii=False)
+
+
+class _HTMLTextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._text_parts = []
+        self._skip_tags = {"script", "style", "noscript", "head", "meta", "link"}
+        self._current_skip = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._skip_tags:
+            self._current_skip = True
+
+    def handle_endtag(self, tag):
+        if tag in self._skip_tags:
+            self._current_skip = False
+
+    def handle_data(self, data):
+        if not self._current_skip:
+            text = data.strip()
+            if text:
+                self._text_parts.append(text)
+
+    def get_text(self):
+        return "\n".join(self._text_parts)
+
+
+def fetch_webpage(url: str, max_length: int = 10000) -> str:
+    """
+    fetch_webpage(url: str, max_length: int = 10000) -> str:
+    Fetch a webpage and extract its text content. Returns the extracted text as a string.
+
+    This function retrieves the HTML content of a given URL, strips out HTML tags,
+    scripts, styles, and other non-content elements, and returns the plain text.
+    It is useful for reading the content of a specific page discovered via search_web.
+
+    Args:
+    - url (str): The full URL of the webpage to fetch (e.g., "https://example.com/article").
+    - max_length (int): Maximum number of characters to return (default: 10000).
+      This prevents excessively long responses from large pages.
+
+    Returns:
+    - str: The extracted text content of the webpage.
+      Returns a JSON error string if the fetch fails.
+
+    Example:
+    ```python
+        text = fetch_webpage("https://example.com/article")
+        # Output(str): Plain text content of the page
+
+        text = fetch_webpage("https://example.com", max_length=5000)
+        # Output(str): First 5000 characters of text content
+    ```
+    """
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        req = Request(url, headers=headers)
+        with urlopen(req, timeout=15) as response:
+            charset = response.headers.get_content_charset() or "utf-8"
+            html = response.read().decode(charset, errors="replace")
+
+        extractor = _HTMLTextExtractor()
+        extractor.feed(html)
+        text = extractor.get_text()
+
+        if len(text) > max_length:
+            text = text[:max_length] + "\n...[truncated]"
+
+        return text
+
+    except HTTPError as e:
+        return json.dumps({
+            "error": f"HTTP {e.code}: {e.reason}",
+            "url": url
+        }, ensure_ascii=False)
+    except URLError as e:
+        return json.dumps({
+            "error": f"URL error: {e.reason}",
+            "url": url
+        }, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({
+            "error": str(e),
+            "url": url
         }, ensure_ascii=False)
 
 
