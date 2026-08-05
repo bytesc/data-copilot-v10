@@ -67,7 +67,7 @@ def func(data_dict):
     # access dataframes like: df1 = data_dict['key1']
 without any additional comments, explanations or cmds !!!
 """
-            logging.error(ans + "No code was generated.")
+            logging.error(str(ans.content) + "No code was generated.")
             print("No code was generated.")
             continue
 
@@ -119,7 +119,7 @@ def func(data):
 ```
 without any additional comments, explanations or cmds !!!
 """
-            logging.error(ans + "No code was generated.")
+            logging.error(str(ans.content) + "No code was generated.")
             print("No code was generated.")
             continue
 
@@ -160,7 +160,7 @@ def func():
 ```
 without any additional comments, explanations or cmds !!!
 """
-            logging.error(ans + "No code was generated.")
+            logging.error(str(ans.content) + "No code was generated.")
             print("No code was generated.")
             continue
 

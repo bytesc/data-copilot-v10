@@ -7,7 +7,8 @@ mysql_sys: "mysql+pymysql://root:123456@localhost:3306/2026start_sys"
 
 static_path: "http://127.0.0.1:8009/"
 
-model_name: "qwen3.6-flash"
+model_name: "qwen3.8-max"
+# qwen3.7-flash
 # glm-4
 # deepseek-chat
 # qwen-max

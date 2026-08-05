@@ -27,7 +27,7 @@ SELECT_LABELS = []
 
 def ai_agent_api(question: str, tables: Optional[List[str]] = None, path: str = "/api/ask-agent/",
                  url="http://127.0.0.1:" + str(config_data["server_port"]), session_id: str = ""):
-    with httpx.Client(timeout=180.0) as client:
+    with httpx.Client(timeout=300.0) as client:
         try:
             payload = {"question": question, "session_id": session_id}
             if tables:
@@ -52,7 +52,7 @@ def upload_csv_api(file_content, table_name="uploaded_data"):
     data = {
         'table_name': table_name
     }
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=60.0) as client:
         try:
             response = client.post(url, files=files, data=data)
             if response.status_code == 200:
@@ -71,7 +71,7 @@ def upload_doc_api(file_content, filename, table_name="uploaded_data"):
     data = {
         'table_name': table_name
     }
-    with httpx.Client(timeout=30.0) as client:
+    with httpx.Client(timeout=60.0) as client:
         try:
             response = client.post(url, files=files, data=data)
             if response.status_code == 200:
@@ -85,7 +85,7 @@ def upload_doc_api(file_content, filename, table_name="uploaded_data"):
 def download_image(url):
     """下载网络图片"""
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=30)
         if response.status_code == 200:
             return io.BytesIO(response.content)
     except:

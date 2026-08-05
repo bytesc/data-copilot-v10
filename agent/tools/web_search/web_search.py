@@ -52,10 +52,7 @@ def search_web(query: str, max_results: int = 10, region: str = "wt-wt") -> str:
     ```
     """
     try:
-        try:
-            from ddgs import DDGS
-        except ImportError:
-            from duckduckgo_search import DDGS
+        from ddgs import DDGS
     except ImportError:
         return json.dumps({
             "error": "ddgs not installed. Run: pip install ddgs",
@@ -74,7 +71,7 @@ def search_web(query: str, max_results: int = 10, region: str = "wt-wt") -> str:
                     max_results=max_results,
                     region=region,
                     backend=backend,
-                    timeout=30
+                    timeout=60
                 ))
                 if results:
                     break
@@ -169,7 +166,7 @@ def fetch_webpage(url: str, max_length: int = 10000) -> str:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
         req = Request(url, headers=headers)
-        with urlopen(req, timeout=15) as response:
+        with urlopen(req, timeout=30) as response:
             charset = response.headers.get_content_charset() or "utf-8"
             html = response.read().decode(charset, errors="replace")
 
