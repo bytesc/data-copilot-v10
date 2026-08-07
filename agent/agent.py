@@ -9,6 +9,8 @@ from .tools.tools_def import engine, llm, query_database, exe_sql
 from .tools.copilot.python_code import get_py_code
 from .tools.copilot.utils.code_executor import execute_py_code
 from .tools.copilot.sql_code import get_db_info_prompt
+from .tools.copilot.utils.call_llm_test import call_llm_stream
+from .tools.copilot.utils.parse_output import parse_generated_python_code
 
 from .tools.get_function_info import get_function_info
 
@@ -293,3 +295,94 @@ def get_cot_code(question, retries=2):
             if code is None:
                 continue
             return code
+
+
+def format_yield_item(item, print_rows=5):
+    if isinstance(item, pd.DataFrame):
+        if item.index.size > 10:
+            text = df_to_markdown(item.head(print_rows)) + \
+                   "\nfirst {} rows of {}".format(print_rows, len(item)) + \
+                   "\nthe data above are just slice example, download csv to get full data\n"
+        else:
+            text = df_to_markdown(item)
+        html_link = pd_to_walker(item)
+        csv_link = pd_to_csv(item)
+        text += wrap_html_url_with_html_a(html_link)
+        text += wrap_csv_url_with_html_a(csv_link)
+        return text
+    elif isinstance(item, str) and is_png_url(item):
+        return "\n" + wrap_png_url_with_markdown_image(item) + "\n"
+    elif isinstance(item, str) and is_local_png_path(item):
+        return "\n" + wrap_png_url_with_markdown_image(STATIC_URL + item[2:]) + "\n"
+    elif is_iframe_tag(str(item)):
+        return "\n" + str(item) + "\n"
+    else:
+        return "\n" + str(item) + "\n"
+
+
+def generate_code_stream(question, tables=None, use_all_functions=False, retries=2):
+    yield {"type": "status", "content": "正在分析问题..."}
+
+    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions)
+
+    if cot_prompt == "solved":
+        yield {"type": "solved", "content": rag_ans}
+        yield {"type": "done", "content": ""}
+        return
+
+    yield {"type": "status", "content": "正在生成代码..."}
+
+    full_prompt = cot_prompt
+    err_msg = ""
+    for j in range(retries):
+        current_prompt = full_prompt + err_msg
+        raw_content = ""
+        for chunk in call_llm_stream(current_prompt, llm):
+            raw_content += chunk
+            yield {"type": "code_chunk", "content": chunk}
+
+        code = parse_generated_python_code(raw_content)
+        if code is None:
+            yield {"type": "error", "content": "代码解析失败，正在重试..."}
+            err_msg = "\n代码解析失败，请确保代码在 ```python 代码块中。\n"
+            continue
+
+        code = insert_lines_into_function(code, function_import)
+        code = insert_lines_into_function(code, IMPORTANT_MODULE)
+        code = insert_lines_into_function(code, THIRD_MODULE)
+        print("\n[Generated Code]:\n", code)
+
+        yield {"type": "code_complete", "content": code}
+        yield {"type": "done", "content": ""}
+        return
+
+    yield {"type": "error", "content": "代码生成失败"}
+    yield {"type": "done", "content": ""}
+
+
+def execute_code_stream(code, retries=2, print_rows=5):
+    yield {"type": "status", "content": "正在执行代码..."}
+
+    err_msg = ""
+    for j in range(retries):
+        current_code = code
+        try:
+            result = execute_py_code(current_code)
+            for item in result:
+                formatted = format_yield_item(item, print_rows)
+                yield {"type": "chunk", "content": formatted}
+                print(item)
+
+            yield {"type": "done", "content": ""}
+            logging.info(f"Code executed successfully.\nCode: {code}\n")
+            return
+        except Exception as e:
+            err_msg = str(e)
+            print(f"Execution error: {e}")
+            yield {"type": "status", "content": f"执行出错: {str(e)[:150]}..."}
+            if j < retries - 1:
+                yield {"type": "status", "content": "正在重试..."}
+            continue
+
+    yield {"type": "error", "content": f"执行失败: {err_msg[:200]}"}
+    yield {"type": "done", "content": ""}

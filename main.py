@@ -1,4 +1,5 @@
 import asyncio
+import json
 import mimetypes
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
@@ -7,7 +8,7 @@ import sqlalchemy
 import uvicorn
 import os
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi import File, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -15,11 +16,11 @@ from starlette.responses import JSONResponse
 
 from agent.cot_chat import get_cot_chat
 from agent.data_comment import get_llm_data_comment
-from agent.step_chat import get_step_chat
+from agent.step_chat import get_step_chat, get_step_chat_stream
 from data_access.insert_data_from_csv import process_csv_to_database
 from utils.get_config import config_data
 
-from agent.agent import exe_cot_code, get_cot_code, cot_agent, get_db
+from agent.agent import exe_cot_code, get_cot_code, cot_agent, generate_code_stream, execute_code_stream, get_db
 from agent.summary import get_ans_summary
 from agent.ans_review import get_ans_review
 from utils.process_file import process_file_content
@@ -495,6 +496,66 @@ async def upload_txt(
         print(e)
         raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}")
     return JSONResponse(content=result)
+
+
+def _event_stream_generate_code(question: str, tables: Optional[List[str]]):
+    for event in generate_code_stream(question, tables, True):
+        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+def _event_stream_execute_code(code: str):
+    for event in execute_code_stream(code):
+        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+def _event_stream_step_chat(question: str):
+    for chunk in get_step_chat_stream(question):
+        yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'type': 'done', 'content': ''}, ensure_ascii=False)}\n\n"
+
+
+class CodeInput(BaseModel):
+    code: str
+    session_id: Optional[str] = None
+
+
+@app.post("/api/generate-code/stream/")
+async def generate_code_stream_api(request: Request, user_input: AgentInput):
+    return StreamingResponse(
+        _event_stream_generate_code(user_input.question, user_input.tables),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+@app.post("/api/exe-code/stream/")
+async def execute_code_stream_api(request: Request, code_input: CodeInput):
+    return StreamingResponse(
+        _event_stream_execute_code(code_input.code),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+@app.post("/api/step-chat/stream/")
+async def step_chat_stream(request: Request, user_input: AgentInput):
+    return StreamingResponse(
+        _event_stream_step_chat(user_input.question),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 if __name__ == "__main__":

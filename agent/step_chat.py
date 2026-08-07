@@ -6,7 +6,7 @@ from .tools.copilot.sql_code import get_db_info_prompt
 
 from .tools.get_function_info import get_function_info
 
-from .tools.copilot.utils.call_llm_test import call_llm
+from .tools.copilot.utils.call_llm_test import call_llm, call_llm_stream
 
 
 def get_step_chat_prompt(question):
@@ -112,3 +112,12 @@ def get_step_chat(question: str):
     # print(cot_prompt)
     ans = call_llm(cot_prompt, llm)
     return ans.content
+
+
+def get_step_chat_stream(question: str):
+    cot_prompt, rag_ans, function_import = get_step_chat_prompt(question)
+    if cot_prompt == "solved":
+        yield rag_ans
+        return
+    for chunk in call_llm_stream(cot_prompt, llm):
+        yield chunk

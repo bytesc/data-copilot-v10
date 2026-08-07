@@ -1,7 +1,7 @@
 # config
 server_port: 8009
 server_host: "0.0.0.0"
-mysql: "mysql+pymysql://root:123456@localhost:3306/2026start"
+mysql: "mysql+pymysql://root:123456@localhost:3306/med_data"
 
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/2026start_sys"
 
