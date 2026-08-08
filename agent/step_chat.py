@@ -9,7 +9,7 @@ from .tools.get_function_info import get_function_info
 from .tools.copilot.utils.call_llm_test import call_llm, call_llm_stream
 
 
-def get_step_chat_prompt(question, tables=None):
+def get_step_chat_prompt(question, tables=None, selected_fields=None):
     rag_ans = ""
 
     knowledge = "\nBase knowledge: \n" + rag_ans + "\n"
@@ -19,7 +19,7 @@ def get_step_chat_prompt(question, tables=None):
     if function_info == "solved":
         return "solved", rag_ans, []
 
-    data_prompt = get_db_info_prompt(engine, example=False, simple=True, tables=tables)
+    data_prompt = get_db_info_prompt(engine, example=False, simple=True, tables=tables, selected_fields=selected_fields)
     database = "\nThe database content: \n" + data_prompt + "\n"
 
     pre_prompt = """ 
@@ -103,15 +103,14 @@ Response:
     return cot_prompt, rag_ans, function_import
 
 
-def get_step_chat(question: str, tables=None):
-    cot_prompt, rag_ans, function_import = get_step_chat_prompt(question, tables)
-    # print(cot_prompt)
+def get_step_chat(question: str, tables=None, selected_fields=None):
+    cot_prompt, rag_ans, function_import = get_step_chat_prompt(question, tables, selected_fields)
     ans = call_llm(cot_prompt, llm)
     return ans.content
 
 
-def get_step_chat_stream(question: str, tables=None):
-    cot_prompt, rag_ans, function_import = get_step_chat_prompt(question, tables)
+def get_step_chat_stream(question: str, tables=None, selected_fields=None):
+    cot_prompt, rag_ans, function_import = get_step_chat_prompt(question, tables, selected_fields)
     if cot_prompt == "solved":
         yield rag_ans
         return

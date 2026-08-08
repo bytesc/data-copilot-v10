@@ -101,10 +101,13 @@ def execute_code_stream(code: str,
 
 
 def step_chat_api_stream(question: str, tables: Optional[List[str]] = None,
+                         selected_fields: Optional[dict] = None,
                          url="http://127.0.0.1:" + str(config_data["server_port"]), session_id: str = ""):
     payload = {"question": question, "session_id": session_id}
     if tables:
         payload["tables"] = tables
+    if selected_fields:
+        payload["selected_fields"] = selected_fields
     with httpx.stream("POST", url + "/api/step-chat/stream/",
                       json=payload,
                       timeout=300.0) as response:

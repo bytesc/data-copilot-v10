@@ -295,7 +295,7 @@ async def cot_chat(request: Request, user_input: AgentInput):
 @app.post("/api/step-chat/")
 async def step_chat(request: Request, user_input: AgentInput):
     loop = asyncio.get_event_loop()
-    ans = await loop.run_in_executor(executor, get_step_chat, user_input.question, user_input.tables)
+    ans = await loop.run_in_executor(executor, get_step_chat, user_input.question, user_input.tables, user_input.selected_fields)
     print(ans)
     print(user_input.session_id)
     if ans:
@@ -591,9 +591,9 @@ def _event_stream_execute_code(code: str, session_id: str = "", request_url: str
     record_session_operation(session_id, request_url, "", ans=full_ans, code=code, result_type="success")
 
 
-def _event_stream_step_chat(question: str, tables=None, session_id: str = "", request_url: str = ""):
+def _event_stream_step_chat(question: str, tables=None, selected_fields=None, session_id: str = "", request_url: str = ""):
     full_content = ""
-    for chunk in get_step_chat_stream(question, tables):
+    for chunk in get_step_chat_stream(question, tables, selected_fields):
         full_content += chunk
         yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
     yield f"data: {json.dumps({'type': 'done', 'content': ''}, ensure_ascii=False)}\n\n"
@@ -634,7 +634,7 @@ async def execute_code_stream_api(request: Request, code_input: CodeInput):
 @app.post("/api/step-chat/stream/")
 async def step_chat_stream(request: Request, user_input: AgentInput):
     return StreamingResponse(
-        _event_stream_step_chat(user_input.question, user_input.tables, user_input.session_id or "", request.url.path),
+        _event_stream_step_chat(user_input.question, user_input.tables, user_input.selected_fields, user_input.session_id or "", request.url.path),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
