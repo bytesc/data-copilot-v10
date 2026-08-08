@@ -2,7 +2,7 @@ import asyncio
 import json
 import mimetypes
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional
+from typing import List, Optional, Dict
 import pandas as pd
 import sqlalchemy
 import uvicorn
@@ -63,6 +63,7 @@ class AgentInput(BaseModel):
     question: str
     tables: Optional[List[str]] = None
     session_id: Optional[str] = None
+    selected_fields: Optional[Dict[str, List[str]]] = None
 
 
 class AgentInputDict(BaseModel):
@@ -88,7 +89,10 @@ async def ask_agent(request: Request, user_input: AgentInput):
         cot_agent,
         user_input.question,
         user_input.tables,
-        True
+        True,
+        2,
+        5,
+        user_input.selected_fields
     )
     print(ans)
     if ans:
@@ -373,6 +377,7 @@ async def get_graph_api(request: Request, user_input: AgentInputDict):
 
 from agent.tools.copilot.utils.read_db import get_rows_from_all_tables, get_table_comments_dict, execute_select, \
     get_all_comments
+from agent.tools.copilot.sql_code import filter_db_fields, filter_db_fields_stream
 from agent.tools.tools_def import engine, llm, draw_graph
 
 
@@ -439,7 +444,48 @@ async def table_comments(request: Request):
     return JSONResponse(content=processed_data)
 
 
+@app.post("/api/filter-db-fields/")
+async def filter_db_fields_api(request: Request, user_input: AgentInput):
+    loop = asyncio.get_event_loop()
+    selected_fields = await loop.run_in_executor(
+        executor,
+        filter_db_fields,
+        user_input.question,
+        engine,
+        llm,
+        user_input.tables
+    )
+    if selected_fields is not None:
+        processed_data = {
+            "ans": selected_fields,
+            "type": "success",
+            "msg": "字段筛选成功"
+        }
+    else:
+        processed_data = {
+            "ans": {},
+            "type": "error",
+            "msg": "字段筛选失败"
+        }
+    return JSONResponse(content=processed_data)
 
+
+def _event_stream_filter_db_fields(question: str, tables: Optional[List[str]]):
+    for event in filter_db_fields_stream(question, engine, llm, tables):
+        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+@app.post("/api/filter-db-fields/stream/")
+async def filter_db_fields_stream_api(request: Request, user_input: AgentInput):
+    return StreamingResponse(
+        _event_stream_filter_db_fields(user_input.question, user_input.tables),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 @app.post("/upload-csv/")
@@ -498,8 +544,8 @@ async def upload_txt(
     return JSONResponse(content=result)
 
 
-def _event_stream_generate_code(question: str, tables: Optional[List[str]]):
-    for event in generate_code_stream(question, tables, True):
+def _event_stream_generate_code(question: str, tables: Optional[List[str]], selected_fields: Optional[Dict[str, List[str]]] = None):
+    for event in generate_code_stream(question, tables, True, selected_fields=selected_fields):
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
 
@@ -522,7 +568,7 @@ class CodeInput(BaseModel):
 @app.post("/api/generate-code/stream/")
 async def generate_code_stream_api(request: Request, user_input: AgentInput):
     return StreamingResponse(
-        _event_stream_generate_code(user_input.question, user_input.tables),
+        _event_stream_generate_code(user_input.question, user_input.tables, user_input.selected_fields),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -46,9 +46,13 @@ def ai_agent_api(question: str, tables: Optional[List[str]] = None, path: str = 
 
 
 def generate_code_stream(question: str, tables: Optional[List[str]] = None,
+                         selected_fields: Optional[dict] = None,
                          url="http://127.0.0.1:" + str(config_data["server_port"]), session_id: str = ""):
+    payload = {"question": question, "tables": tables, "session_id": session_id}
+    if selected_fields:
+        payload["selected_fields"] = selected_fields
     with httpx.stream("POST", url + "/api/generate-code/stream/",
-                      json={"question": question, "tables": tables, "session_id": session_id},
+                      json=payload,
                       timeout=300.0) as response:
         if response.status_code != 200:
             yield {"type": "error", "content": f"HTTP {response.status_code}"}
@@ -129,6 +133,34 @@ def step_chat_api_stream(question: str,
                             pass
 
         yield {"type": "done", "content": "", "full_ans": full_ans}
+
+
+def filter_db_fields_stream(question: str, tables: Optional[List[str]] = None,
+                            url="http://127.0.0.1:" + str(config_data["server_port"])):
+    with httpx.stream("POST", url + "/api/filter-db-fields/stream/",
+                      json={"question": question, "tables": tables},
+                      timeout=300.0) as response:
+        if response.status_code != 200:
+            yield {"type": "error", "content": f"HTTP {response.status_code}"}
+            return
+
+        full_content = ""
+        buffer = ""
+        for chunk in response.iter_text():
+            buffer += chunk
+            while "\n\n" in buffer:
+                event_str, buffer = buffer.split("\n\n", 1)
+                for line in event_str.split("\n"):
+                    if line.startswith("data: "):
+                        try:
+                            event = json.loads(line[6:])
+                            if event.get("type") == "chunk":
+                                full_content += event["content"]
+                            yield event
+                        except json.JSONDecodeError:
+                            pass
+
+        yield {"type": "done", "content": full_content}
 
 
 def upload_csv_api(file_content, table_name="uploaded_data"):
@@ -543,12 +575,45 @@ def main():
             full_question = question
 
         if value == question:
+            filter_scope = f"filter_scope_{len(conversation_history)}"
+            put_scope(filter_scope)
+            filter_content = ""
+            selected_fields = None
+            for event in filter_db_fields_stream(table_pre + full_question, SELECT_TABLES):
+                event_type = event.get("type")
+                if event_type == "status":
+                    toast(event["content"], color='info')
+                elif event_type == "chunk":
+                    filter_content += event["content"]
+                    with use_scope(filter_scope, clear=True):
+                        put_collapse("🔍 数据库字段筛选", [put_markdown("```json\n" + filter_content + "\n```", sanitize=False)])
+                elif event_type == "done":
+                    filter_content = event.get("content", "")
+                    import re as _re
+                    match = _re.search(r'```json\s*(.*?)\s*```', filter_content, _re.DOTALL)
+                    if match:
+                        try:
+                            selected_fields = json.loads(match.group(1))
+                        except json.JSONDecodeError:
+                            pass
+                    with use_scope(filter_scope, clear=True):
+                        if selected_fields:
+                            put_collapse("🔍 数据库字段筛选", [
+                                put_markdown("✅ 已筛选以下表和字段：", sanitize=False),
+                                put_markdown("```json\n" + json.dumps(selected_fields, ensure_ascii=False, indent=2) + "\n```", sanitize=False)
+                            ])
+                        else:
+                            put_collapse("🔍 数据库字段筛选", [put_markdown("```json\n" + filter_content + "\n```", sanitize=False)])
+                elif event_type == "error":
+                    toast(event["content"], color='warning')
+
             code_scope = f"code_scope_{len(conversation_history)}"
             put_scope(code_scope)
             append_code = display_streaming_response(code_scope)
             full_code = ""
             solved_ans = ""
             for event in generate_code_stream(table_pre + full_question, SELECT_TABLES,
+                                              selected_fields=selected_fields,
                                               session_id=conversation_session_id):
                 append_code(event)
                 if event.get("type") == "code_complete":

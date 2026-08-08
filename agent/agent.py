@@ -8,7 +8,7 @@ from .tools.tools_def import engine, llm, query_database, exe_sql
 
 from .tools.copilot.python_code import get_py_code
 from .tools.copilot.utils.code_executor import execute_py_code
-from .tools.copilot.sql_code import get_db_info_prompt
+from .tools.copilot.sql_code import get_db_info_prompt, filter_db_fields
 from .tools.copilot.utils.call_llm_test import call_llm_stream
 from .tools.copilot.utils.parse_output import parse_generated_python_code
 
@@ -35,7 +35,7 @@ def get_db():
     return get_db_info_prompt(engine, example=True, simple=True)
 
 
-def get_cot_code_prompt(question, tables=None, use_all_functions=False):
+def get_cot_code_prompt(question, tables=None, use_all_functions=False, selected_fields=None):
     rag_ans = ""
     knowledge = ""
     rag_ans = get_base_knowledge()
@@ -50,7 +50,9 @@ def get_cot_code_prompt(question, tables=None, use_all_functions=False):
 
     database = ""
     if query_database in function_set or exe_sql in function_set:
-        data_prompt = get_db_info_prompt(engine, tables=tables, simple=True, example=False)
+        if selected_fields is None:
+            selected_fields = filter_db_fields(question, engine, llm, tables)
+        data_prompt = get_db_info_prompt(engine, tables=tables, simple=True, example=False, selected_fields=selected_fields)
         database = "\nThe database content: \n" + data_prompt + "\n"
 
     pre_prompt = """ 
@@ -167,11 +169,11 @@ Here is the functions you can import and use:
     return cot_prompt, rag_ans, function_import
 
 
-def cot_agent(question, tables=None, use_all_functions=False, retries=2, print_rows=5):
+def cot_agent(question, tables=None, use_all_functions=False, retries=2, print_rows=5, selected_fields=None):
     exp = None
     code = None
     for i in range(retries):
-        cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions)
+        cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions, selected_fields)
         print(rag_ans)
         # print(cot_prompt)
         if cot_prompt == "solved":
@@ -320,10 +322,10 @@ def format_yield_item(item, print_rows=5):
         return "\n" + str(item) + "\n"
 
 
-def generate_code_stream(question, tables=None, use_all_functions=False, retries=2):
+def generate_code_stream(question, tables=None, use_all_functions=False, retries=2, selected_fields=None):
     yield {"type": "status", "content": "正在分析问题..."}
 
-    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions)
+    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions, selected_fields)
 
     if cot_prompt == "solved":
         yield {"type": "solved", "content": rag_ans}

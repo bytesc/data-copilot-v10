@@ -40,16 +40,24 @@ def get_all_table_names(engine):
 #             continue
 #
 #     return first_five_rows
-def get_rows_from_all_tables(engine, tables, num=3):
+def get_rows_from_all_tables(engine, tables, num=3, selected_fields=None):
     inspector = inspect(engine)
     if not tables:
         table_names = inspector.get_table_names()
     else:
         table_names = tables
+
+    if selected_fields:
+        table_names = [t for t in table_names if t in selected_fields]
+
     first_five_rows = {}
     for table_name in table_names:
         try:
-            query = text(f"SELECT * FROM {table_name} LIMIT {num}")
+            if selected_fields and table_name in selected_fields:
+                cols = ", ".join(selected_fields[table_name])
+                query = text(f"SELECT {cols} FROM {table_name} LIMIT {num}")
+            else:
+                query = text(f"SELECT * FROM {table_name} LIMIT {num}")
             with engine.connect() as connection:
                 df = pd.read_sql(query, connection)
             for col in df.columns:
@@ -82,12 +90,16 @@ def get_foreign_keys(engine, tables):
     return foreign_keys
 
 
-def get_table_and_column_comments(engine, tables):
+def get_table_and_column_comments(engine, tables, selected_fields=None):
     inspector = inspect(engine)
     if not tables:
         table_names = inspector.get_table_names()
     else:
         table_names = tables
+
+    if selected_fields:
+        table_names = [t for t in table_names if t in selected_fields]
+
     table_comments = {}
     column_comments = {}
 
@@ -96,6 +108,11 @@ def get_table_and_column_comments(engine, tables):
         if table_comment['text'] is not None:
             table_comments[table_name] = table_comment['text']
         columns = inspector.get_columns(table_name)
+
+        if selected_fields and table_name in selected_fields:
+            allowed_cols = set(selected_fields[table_name])
+            columns = [c for c in columns if c['name'] in allowed_cols]
+
         column_comments[table_name] = {}
         for column in columns:
             if column['comment'] is not None:
@@ -106,28 +123,42 @@ def get_table_and_column_comments(engine, tables):
     return [table_comments, column_comments]
 
 
-def get_table_creation_statements(engine, tables, simple=False):
+def get_table_creation_statements(engine, tables, simple=False, selected_fields=None):
     inspector = inspect(engine)
     if not tables:
         table_names = inspector.get_table_names()
     else:
         table_names = tables
+
+    if selected_fields:
+        table_names = [t for t in table_names if t in selected_fields]
+
     creation_statements = {}
 
     for table_name in table_names:
-        # 获取表的列信息
         columns = inspector.get_columns(table_name)
-        # 获取表的主键信息
         primary_keys = inspector.get_pk_constraint(table_name)
-        # 获取表的外键信息
         foreign_keys = inspector.get_foreign_keys(table_name)
-        # 获取表的索引信息
-        # indexes = inspector.get_indexes(table_name)
 
-        # 开始构建建表语句
+        if selected_fields and table_name in selected_fields:
+            allowed_cols = set(selected_fields[table_name])
+            columns = [c for c in columns if c['name'] in allowed_cols]
+            if primary_keys['constrained_columns']:
+                pk_cols = [c for c in primary_keys['constrained_columns'] if c in allowed_cols]
+                primary_keys = {'constrained_columns': pk_cols}
+            filtered_fks = []
+            for fk in foreign_keys:
+                constrained = [c for c in fk['constrained_columns'] if c in allowed_cols]
+                if constrained:
+                    filtered_fks.append({
+                        'constrained_columns': constrained,
+                        'referred_table': fk['referred_table'],
+                        'referred_columns': fk['referred_columns']
+                    })
+            foreign_keys = filtered_fks
+
         create_table_statement = f"CREATE TABLE {table_name} (\n"
 
-        # 添加列定义
         column_definitions = []
         for column in columns:
             if not simple:
@@ -138,18 +169,13 @@ def get_table_creation_statements(engine, tables, simple=False):
                     column_def += f" DEFAULT {column['default']}"
             else:
                 column_def = f"    {column['name']} {column['type']}"
-            # # 添加列的注释
-            # if 'comment' in column and column['comment']:
-            #     column_def += f" COMMENT '{column['comment']}'"
             column_definitions.append(column_def)
 
         if not simple:
-            # 添加主键定义
             if primary_keys['constrained_columns']:
                 pk_columns = ", ".join(primary_keys['constrained_columns'])
                 column_definitions.append(f"    PRIMARY KEY ({pk_columns})")
 
-            # 添加外键定义
             for fk in foreign_keys:
                 fk_columns = ", ".join(fk['constrained_columns'])
                 referred_table = fk['referred_table']
@@ -157,20 +183,9 @@ def get_table_creation_statements(engine, tables, simple=False):
                 column_definitions.append(
                     f"    FOREIGN KEY ({fk_columns}) REFERENCES {referred_table} ({referred_columns})")
 
-        # 将列定义添加到建表语句中
         create_table_statement += ",\n".join(column_definitions)
         create_table_statement += "\n);"
 
-        # # 添加索引定义
-        # for index in indexes:
-        #     if not index['unique']:
-        #         index_columns = ", ".join(index['column_names'])
-        #         create_table_statement += f"\nCREATE INDEX {index['name']} ON {table_name} ({index_columns});"
-        #     else:
-        #         index_columns = ", ".join(index['column_names'])
-        #         create_table_statement += f"\nCREATE UNIQUE INDEX {index['name']} ON {table_name} ({index_columns});"
-
-        # 将建表语句存储到字典中
         creation_statements[table_name] = create_table_statement
 
     return creation_statements
