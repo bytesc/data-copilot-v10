@@ -152,6 +152,8 @@ def display_streaming_response(scope_name, collapse_title=None):
     handled = False
     last_update = 0
 
+    put_loading(shape="grow", color="primary", scope=scope_name)
+
     def append_chunk(event):
         nonlocal accumulated, handled, last_update
         event_type = event.get("type")
@@ -255,15 +257,19 @@ def main():
     put_scope(filter_scope)
     filter_content = ""
     selected_fields = None
+    last_update = time.time()
     for event in filter_db_fields_stream(question, SELECT_TABLES, session_id=conversation_session_id):
         event_type = event.get("type")
         if event_type == "status":
             toast(event["content"], color='info')
         elif event_type == "chunk":
             filter_content += event["content"]
-            with use_scope(filter_scope, clear=True):
-                put_markdown(filter_content, sanitize=False)
-                put_html(CURSOR)
+            now = time.time()
+            if now - last_update > 0.5:
+                last_update = now
+                with use_scope(filter_scope, clear=True):
+                    put_markdown(filter_content, sanitize=False)
+                    put_html(CURSOR)
         elif event_type == "done":
             filter_content = event.get("content", "")
             import re as _re
@@ -317,10 +323,11 @@ def main():
         if not has_planner:
             plan_complete = True
 
+        next_text="continue !"
         if plan_complete:
             value = ""
         else:
-            value = "please do the next step on the todo list"
+            value = next_text
         question = textarea("What is next?:", value=value, type=TEXT, rows=2)
         if not question.strip():
             continue
@@ -335,7 +342,7 @@ def main():
         selected_fields = None
         function_solved = False
 
-        is_default = (question == "please do the next step on the todo list")
+        is_default = (question == next_text)
 
         if is_default:
             for value in [question]:
@@ -344,15 +351,19 @@ def main():
                 function_content = ""
                 selected_functions = None
                 function_solved = False
+                last_update = time.time()
                 for event in filter_functions_stream(full_question, session_id=conversation_session_id):
                     event_type = event.get("type")
                     if event_type == "status":
                         toast(event["content"], color='info')
                     elif event_type == "chunk":
                         function_content += event["content"]
-                        with use_scope(function_scope, clear=True):
-                            put_markdown(function_content, sanitize=False)
-                            put_html(CURSOR)
+                        now = time.time()
+                        if now - last_update > 0.5:
+                            last_update = now
+                            with use_scope(function_scope, clear=True):
+                                put_markdown(function_content, sanitize=False)
+                                put_html(CURSOR)
                     elif event_type == "done":
                         function_content = event.get("content", "")
                         selected_functions = event.get("selected_functions")
@@ -381,15 +392,19 @@ def main():
                 put_scope(filter_scope)
                 filter_content = ""
                 selected_fields = None
+                last_update = time.time()
                 for event in filter_db_fields_stream(full_question, SELECT_TABLES, session_id=conversation_session_id):
                     event_type = event.get("type")
                     if event_type == "status":
                         toast(event["content"], color='info')
                     elif event_type == "chunk":
                         filter_content += event["content"]
-                        with use_scope(filter_scope, clear=True):
-                            put_markdown(filter_content, sanitize=False)
-                            put_html(CURSOR)
+                        now = time.time()
+                        if now - last_update > 0.5:
+                            last_update = now
+                            with use_scope(filter_scope, clear=True):
+                                put_markdown(filter_content, sanitize=False)
+                                put_html(CURSOR)
                     elif event_type == "done":
                         filter_content = event.get("content", "")
                         import re as _re
@@ -482,15 +497,19 @@ def main():
             put_scope(filter_scope)
             filter_content = ""
             selected_fields = None
+            last_update = time.time()
             for event in filter_db_fields_stream(full_question, SELECT_TABLES, session_id=conversation_session_id):
                 event_type = event.get("type")
                 if event_type == "status":
                     toast(event["content"], color='info')
                 elif event_type == "chunk":
                     filter_content += event["content"]
-                    with use_scope(filter_scope, clear=True):
-                        put_markdown(filter_content, sanitize=False)
-                        put_html(CURSOR)
+                    now = time.time()
+                    if now - last_update > 0.5:
+                        last_update = now
+                        with use_scope(filter_scope, clear=True):
+                            put_markdown(filter_content, sanitize=False)
+                            put_html(CURSOR)
                 elif event_type == "done":
                     filter_content = event.get("content", "")
                     import re as _re
@@ -516,7 +535,7 @@ def main():
             if selected_fields is not None and len(selected_fields) == 0:
                 selected_fields = None
 
-        if not function_solved:
+        if not function_solved and not is_default:
             plan_scope = f"plan_scope_{loop_id}"
             put_scope(plan_scope)
             append_plan = display_streaming_response(plan_scope, collapse_title="📋 Analysis Plan")
