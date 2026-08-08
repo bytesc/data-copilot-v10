@@ -210,6 +210,7 @@ def filter_db_fields_stream(question, engine, llm, tables=None):
     yield {"type": "status", "content": "正在筛选相关表和字段..."}
 
     prompt = _build_filter_prompt(question, engine, tables)
+    prompt_length = len(prompt)
     full_content = ""
 
     for chunk in call_llm_stream(prompt, llm):
@@ -219,6 +220,6 @@ def filter_db_fields_stream(question, engine, llm, tables=None):
     result = parse_selected_fields_json(full_content)
     if result is not None and isinstance(result, dict):
         logging.info(f"filter_db_fields_stream: Question: {question}\nResult: {result}\n")
-        yield {"type": "done", "content": full_content, "selected_fields": result}
+        yield {"type": "done", "content": full_content, "selected_fields": result, "prompt_length": prompt_length}
     else:
-        yield {"type": "error", "content": "字段筛选解析失败", "selected_fields": None}
+        yield {"type": "error", "content": "字段筛选解析失败", "selected_fields": None, "prompt_length": prompt_length}

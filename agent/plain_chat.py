@@ -33,5 +33,6 @@ def get_plain_chat(question: str, tables=None, selected_fields=None):
 
 def get_plain_chat_stream(question: str, tables=None, selected_fields=None):
     prompt = get_plain_chat_prompt(question, tables, selected_fields)
+    yield {"prompt_length": len(prompt)}
     for chunk in call_llm_stream(prompt, llm):
         yield chunk

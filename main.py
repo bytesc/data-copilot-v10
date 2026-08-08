@@ -105,10 +105,10 @@ async def ask_agent(request: Request, user_input: AgentInput):
             "type": "success",
             "msg": "处理成功",
             "session_id": user_input.session_id or ""
-        }
+}
         record_session_operation(
             user_input.session_id, request.url.path,
-            user_input.question, ans, code, "success", "处理成功"
+            user_input.question, "", "", "error", "处理失败，请换个问法吧", prompt_length=len(user_input.question)
         )
     else:
         processed_data = {
@@ -475,11 +475,14 @@ async def filter_db_fields_api(request: Request, user_input: AgentInput):
 
 def _event_stream_filter_db_fields(question: str, tables: Optional[List[str]], session_id: str = "", request_url: str = ""):
     full_content = ""
+    prompt_length = 0
     for event in filter_db_fields_stream(question, engine, llm, tables):
         if event.get("type") == "chunk":
             full_content += event.get("content", "")
+        if event.get("type") in ("done", "error"):
+            prompt_length = event.get("prompt_length", 0)
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success")
+    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success", prompt_length=prompt_length)
 
 
 @app.post("/api/filter-db-fields/stream/")
@@ -497,11 +500,14 @@ async def filter_db_fields_stream_api(request: Request, user_input: AgentInput):
 
 def _event_stream_filter_functions(question: str, session_id: str = "", request_url: str = ""):
     full_content = ""
+    prompt_length = 0
     for event in filter_functions_stream(question, llm):
         if event.get("type") == "chunk":
             full_content += event.get("content", "")
+        if event.get("type") == "done":
+            prompt_length = event.get("prompt_length", 0)
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success")
+    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success", prompt_length=prompt_length)
 
 
 @app.post("/api/filter-functions/stream/")
@@ -575,29 +581,42 @@ async def upload_txt(
 
 def _event_stream_generate_code(question: str, tables: Optional[List[str]], selected_fields: Optional[Dict[str, Any]] = None, selected_functions: Optional[List[str]] = None, session_id: str = "", request_url: str = ""):
     full_code = ""
+    prompt_length = 0
     for event in generate_code_stream(question, tables, True, selected_fields=selected_fields, selected_functions=selected_functions):
         if event.get("type") == "code_complete":
             full_code = event.get("content", "")
+        if event.get("type") == "done":
+            prompt_length = event.get("prompt_length", 0)
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-    record_session_operation(session_id, request_url, question, code=full_code, result_type="success")
+    record_session_operation(session_id, request_url, question, code=full_code, result_type="success", prompt_length=prompt_length)
 
 
 def _event_stream_execute_code(code: str, session_id: str = "", request_url: str = ""):
     full_ans = ""
+    exec_error = None
     for event in execute_code_stream(code):
         if event.get("type") == "chunk":
             full_ans += event.get("content", "")
+        elif event.get("type") == "error":
+            exec_error = event.get("content", "")
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-    record_session_operation(session_id, request_url, "", ans=full_ans, code=code, result_type="success")
+    if exec_error:
+        record_session_operation(session_id, request_url, "", ans=full_ans, code=code, result_type="error", msg=exec_error[:500], prompt_length=len(code))
+    else:
+        record_session_operation(session_id, request_url, "", ans=full_ans, code=code, result_type="success", prompt_length=len(code))
 
 
 def _event_stream_step_chat(question: str, tables=None, selected_fields=None, session_id: str = "", request_url: str = ""):
     full_content = ""
+    prompt_length = 0
     for chunk in get_step_chat_stream(question, tables, selected_fields):
+        if isinstance(chunk, dict) and "prompt_length" in chunk:
+            prompt_length = chunk["prompt_length"]
+            continue
         full_content += chunk
         yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
     yield f"data: {json.dumps({'type': 'done', 'content': ''}, ensure_ascii=False)}\n\n"
-    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success")
+    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success", prompt_length=prompt_length)
 
 
 class CodeInput(BaseModel):
@@ -678,11 +697,15 @@ async def plain_chat(request: Request, user_input: AgentInput):
 
 def _event_stream_plain_chat(question: str, tables=None, selected_fields=None, session_id: str = "", request_url: str = ""):
     full_content = ""
+    prompt_length = 0
     for chunk in get_plain_chat_stream(question, tables, selected_fields):
+        if isinstance(chunk, dict) and "prompt_length" in chunk:
+            prompt_length = chunk["prompt_length"]
+            continue
         full_content += chunk
         yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
     yield f"data: {json.dumps({'type': 'done', 'content': ''}, ensure_ascii=False)}\n\n"
-    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success")
+    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success", prompt_length=prompt_length)
 
 
 @app.post("/api/plain-chat/stream/")

@@ -17,6 +17,7 @@ session_operation_log = Table(
     Column("code", Text, comment="生成的代码"),
     Column("result_type", String(50), comment="success/error"),
     Column("msg", String(512), comment="处理结果描述"),
+    Column("prompt_length", Integer, comment="prompt长度"),
     Column("created_at", DateTime, comment="记录时间"),
 )
 
@@ -33,6 +34,7 @@ def record_session_operation(
     code="",
     result_type="",
     msg="",
+    prompt_length=0,
 ):
     if not session_id:
         return
@@ -47,6 +49,7 @@ def record_session_operation(
                     code=code,
                     result_type=result_type,
                     msg=msg,
+                    prompt_length=prompt_length,
                     created_at=datetime.now(),
                 )
             )

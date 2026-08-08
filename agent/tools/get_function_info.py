@@ -128,6 +128,7 @@ def filter_functions_stream(question, llm):
     yield {"type": "status", "content": "正在分析可用函数..."}
 
     function_prompt = get_function_prompt(question)
+    prompt_length = len(function_prompt)
     full_content = ""
 
     for chunk in call_llm_stream(function_prompt, llm):
@@ -136,7 +137,7 @@ def filter_functions_stream(question, llm):
 
     function_list_str = full_content.strip()
     if function_list_str == "solved":
-        yield {"type": "done", "content": full_content, "selected_functions": [], "solved": True}
+        yield {"type": "done", "content": full_content, "selected_functions": [], "solved": True, "prompt_length": prompt_length}
         return
 
     function_list = [part.strip() for part in function_list_str.split(',')]
@@ -149,4 +150,4 @@ def filter_functions_stream(question, llm):
             if f not in selected_functions:
                 selected_functions.append(f)
 
-    yield {"type": "done", "content": full_content, "selected_functions": selected_functions, "solved": False}
+    yield {"type": "done", "content": full_content, "selected_functions": selected_functions, "solved": False, "prompt_length": prompt_length}

@@ -35,8 +35,7 @@ def get_step_chat_prompt(question, tables=None, selected_fields=None):
     2. SUCCESS: If the result contains the expected data/confirmation without errors, mark the corresponding checklist step as `- [x]`.
     3. ERROR / EXCEPTION (Autonomous Correction): If the result contains error messages (e.g., KeyError, ValueError, SQL syntax error, missing parameters), DO NOT ask the user what to do. You MUST autonomously modify the failed step in the checklist to fix the error (e.g., correct the table name, change the parameter type, add missing filters) and keep it as `- [ ]`.
     4. PARTIAL SUCCESS: If only part of the task was completed, mark the completed part `- [x]` and append new `- [ ]` steps for the remaining work.
-    5. NO RESULT YET: If it's a fresh question with no execution history, generate a fresh checklist.
-    6. FORMATTING: Do not mention code details. Explicitly specify database tables if used. If similar functions exist and context is insufficient to decide, add a `- [ ]` step to ask the user to choose.
+    5. FORMATTING: Do not mention code details. Explicitly specify database tables if used. If similar functions exist and context is insufficient to decide, add a `- [ ]` step to ask the user to choose.
 
     Checklist Constraints:
     7. LENGTH LIMIT: The checklist MUST contain between 1 and 10 steps (inclusive).
@@ -113,7 +112,9 @@ def get_step_chat(question: str, tables=None, selected_fields=None):
 def get_step_chat_stream(question: str, tables=None, selected_fields=None):
     cot_prompt, rag_ans, function_import = get_step_chat_prompt(question, tables, selected_fields)
     if cot_prompt == "solved":
+        yield {"prompt_length": 0}
         yield rag_ans
         return
+    yield {"prompt_length": len(cot_prompt)}
     for chunk in call_llm_stream(cot_prompt, llm):
         yield chunk

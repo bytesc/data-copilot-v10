@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS `session_operation_log` (
   `code` TEXT COMMENT '生成的代码',
   `result_type` VARCHAR(50) COMMENT 'success/error',
   `msg` VARCHAR(512) COMMENT '处理结果描述',
+  `prompt_length` INT COMMENT 'prompt长度',
   `created_at` DATETIME COMMENT '记录时间',
   PRIMARY KEY (`id`),
   INDEX `idx_session_id` (`session_id`),

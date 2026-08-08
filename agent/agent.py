@@ -355,10 +355,11 @@ def generate_code_stream(question, tables=None, use_all_functions=False, retries
     yield {"type": "status", "content": "正在分析问题..."}
 
     cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions, selected_fields, selected_functions)
+    prompt_length = len(cot_prompt)
 
     if cot_prompt == "solved":
         yield {"type": "solved", "content": rag_ans}
-        yield {"type": "done", "content": ""}
+        yield {"type": "done", "content": "", "prompt_length": 0}
         return
 
     yield {"type": "status", "content": "正在生成代码..."}
@@ -384,11 +385,11 @@ def generate_code_stream(question, tables=None, use_all_functions=False, retries
         print("\n[Generated Code]:\n", code)
 
         yield {"type": "code_complete", "content": code}
-        yield {"type": "done", "content": ""}
+        yield {"type": "done", "content": "", "prompt_length": prompt_length}
         return
 
     yield {"type": "error", "content": "代码生成失败"}
-    yield {"type": "done", "content": ""}
+    yield {"type": "done", "content": "", "prompt_length": prompt_length}
 
 
 def execute_code_stream(code, retries=2, print_rows=5):

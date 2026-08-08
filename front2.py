@@ -180,8 +180,9 @@ def display_streaming_response(scope_name, collapse_title=None):
                     put_markdown(accumulated, sanitize=False)
         elif event_type == "error":
             toast(event["content"], color='error')
-            with use_scope(scope_name, clear=False):
-                put_markdown(f"\n\n**Error:** {event['content']}", sanitize=False)
+            accumulated = ""
+            with use_scope(scope_name, clear=True):
+                put_markdown(f"**Error:** {event['content']}", sanitize=False)
         return accumulated
 
     return append_chunk
@@ -436,9 +437,20 @@ def main():
                         put_scope(ans_scope)
                         append_ans = display_streaming_response(ans_scope)
                         full_ans = ""
+                        exec_error = None
+                        partial_ans = ""
                         for event in execute_code_stream(full_code, session_id=conversation_session_id):
+                            if event.get("type") == "error":
+                                partial_ans = full_ans
+                                exec_error = event.get("content", "")
                             full_ans = append_ans(event)
-                        if full_ans:
+                        if exec_error:
+                            conversation_history = [entry for entry in conversation_history if not entry.startswith("Exe Error: ") and not entry.startswith("Exe Partial: ")]
+                            if partial_ans:
+                                conversation_history.append(f"Exe Partial: {partial_ans}")
+                            conversation_history.append(f"Exe Error: {exec_error}")
+                        elif full_ans:
+                            conversation_history = [entry for entry in conversation_history if not entry.startswith("Exe Error: ") and not entry.startswith("Exe Partial: ")]
                             conversation_history.append(f"Exe Result: {full_ans}")
                         else:
                             put_text("Failed to get a response from the AI Agent.")
