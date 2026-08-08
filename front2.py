@@ -1,6 +1,7 @@
 import json
 import random
 import string
+import time
 from datetime import datetime
 from typing import Optional, List
 import base64
@@ -149,17 +150,21 @@ def display_streaming_response(scope_name, collapse_title=None):
     """Return a callback to append streaming content in the specified scope"""
     accumulated = ""
     handled = False
+    last_update = 0
 
     def append_chunk(event):
-        nonlocal accumulated, handled
+        nonlocal accumulated, handled, last_update
         event_type = event.get("type")
         if event_type == "status":
             toast(event["content"], color='info')
         elif event_type in ("chunk", "code_chunk"):
             accumulated += event["content"]
-            with use_scope(scope_name, clear=True):
-                put_markdown(accumulated, sanitize=False)
-                put_html(CURSOR)
+            now = time.time()
+            if now - last_update > 0.5:
+                last_update = now
+                with use_scope(scope_name, clear=True):
+                    put_markdown(accumulated, sanitize=False)
+                    put_html(CURSOR)
         elif event_type == "code_complete":
             handled = True
             accumulated = "```python\n" + event["content"] + "\n```"
@@ -178,6 +183,9 @@ def display_streaming_response(scope_name, collapse_title=None):
                     put_collapse(collapse_title, [put_markdown(accumulated, sanitize=False)])
                 elif accumulated:
                     put_markdown(accumulated, sanitize=False)
+                else:
+                    put_markdown(accumulated, sanitize=False)
+                    put_html(CURSOR)
         elif event_type == "error":
             toast(event["content"], color='error')
             accumulated = ""
