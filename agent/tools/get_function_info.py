@@ -62,7 +62,7 @@ draw_graph, query_database
     return "question:" + question + pre_prompt + function_prompt + str(FUNCTION_DESCRIPTION) + example_code
 
 
-def get_function_info(question, llm, use_all_functions=False):
+def get_function_info(question, llm, use_all_functions=False, brief=False):
     if use_all_functions:
         function_set = set(FUNCTION_DICT.values())
         for main_function in FUNCTION_DICT.values():
@@ -73,7 +73,10 @@ def get_function_info(question, llm, use_all_functions=False):
         function_info = ""
         function_import = []
         for function in function_set:
-            function_info += "\n" + str(function.__doc__) + "\n"
+            if brief:
+                function_info += "\n" + '\n'.join(str(function.__doc__).splitlines()[:3]) + "\n"
+            else:
+                function_info += "\n" + str(function.__doc__) + "\n"
             import_list = FUNCTION_IMPORT.get(function)
             if import_list:
                 function_import.append(import_list)
@@ -101,7 +104,10 @@ def get_function_info(question, llm, use_all_functions=False):
     function_info = ""
     function_import = []
     for function in function_set:
-        function_info += "\n" + str(function.__doc__) + "\n"
+        if brief:
+            function_info += "\n" + '\n'.join(str(function.__doc__).splitlines()[:3]) + "\n"
+        else:
+            function_info += "\n" + str(function.__doc__) + "\n"
         import_list = FUNCTION_IMPORT.get(function)
         if import_list:
             function_import.append(import_list)

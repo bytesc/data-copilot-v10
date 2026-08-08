@@ -17,7 +17,7 @@ def get_step_chat_prompt(question):
     knowledge = "\nBase knowledge: \n" + rag_ans + "\n"
     database = ""
 
-    function_set, function_info, function_import = get_function_info(question, llm, use_all_functions=True)
+    function_set, function_info, function_import = get_function_info(question, llm, use_all_functions=True, brief=True)
     if function_info == "solved":
         return "solved", rag_ans, []
     # print(function_info)
