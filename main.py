@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from starlette.responses import JSONResponse
 
 from agent.cot_chat import get_cot_chat
+from agent.plain_chat import get_plain_chat, get_plain_chat_stream
 from agent.data_comment import get_llm_data_comment
 from agent.step_chat import get_step_chat, get_step_chat_stream
 from data_access.insert_data_from_csv import process_csv_to_database

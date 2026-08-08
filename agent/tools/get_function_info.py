@@ -31,7 +31,9 @@ ASSIST_FUNCTION_DICT = {
     # exe_sql: [explain_data],
 }
 
-IMPORTANT_FUNC = ["load_data", "get_save_image_path"]
+IMPORTANT_FUNC = [
+    # "load_data", "get_save_image_path"
+]
 
 # FUNCTION_INFO = {key: func.__doc__ for key, func in FUNCTION_DICT.items()}
 # ASSIST_FUNCTION_INFO = {key: ' '.join(func.__doc__ for func in funcs) for key, funcs in ASSIST_FUNCTION_DICT.items()}
