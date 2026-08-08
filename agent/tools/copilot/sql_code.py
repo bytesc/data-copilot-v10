@@ -129,6 +129,7 @@ def parse_selected_fields_json(txt):
 
 def _build_filter_prompt(question, engine, tables=None):
     schema = _build_compact_schema(engine, tables)
+    empty_json = "{}"
     return f"""You are a database analysis assistant. Analyze the following input to determine which database tables and columns are needed:
 
 "{question}"
@@ -140,20 +141,20 @@ Below is the structure and comments of all database tables:
 The input above may contain conversation history, a step-by-step plan, and the current task. Your job is to identify which database tables and columns are needed to execute the current task described in the plan.
 
 Requirements:
-1. Read the plan carefully - if it mentions any data retrieval, table operations, or database queries, you MUST select the relevant tables and columns
-2. Only select tables and columns directly relevant to the current task
-3. Do not include a table if none of its columns are relevant
-4. If only some columns of a table are relevant, include only those columns
-5. If ALL columns of a table are relevant, use an empty list [] to indicate all columns
-6. Must include key columns used for table joins (e.g., foreign keys, IDs)
+1. If the user mentions ANY of these keywords: analysis, analyze, data, query, graph, chart, plot, visualization, statistics, report, summary, explore, inspect, look at, show, display, select, filter, group, count, average, sum, min, max, trend, distribution, comparison, or any data-related operation, you MUST select relevant tables and columns. NEVER return `__no_db__` for data-related requests.
+2. If the user's request is vague but related to data/analysis, select ALL tables and ALL columns by returning `{empty_json}`.
+3. Only select tables and columns directly relevant to the current task.
+4. If only some columns of a table are relevant, include only those columns.
+5. If ALL columns of a table are relevant, use an empty list [] to indicate all columns.
+6. Must include key columns used for table joins (e.g., foreign keys, IDs).
 
 Output rules:
 - Use `{{"table_name": ["col1", "col2"]}}` to select specific columns
 - Use `{{"table_name": []}}` to select ALL columns of a table
-- Use `{{}}` to select ALL tables and ALL columns
-- Use `{{"__no_db__": true}}` ONLY if the current task is purely conversational (greeting, clarification, etc.) and requires NO data access whatsoever
+- Use `{empty_json}` to select ALL tables and ALL columns
+- Use `{{"__no_db__": true}}` ONLY for pure greetings/thanks/farewells (e.g. "hello", "thank you", "bye"). NEVER use it for any data-related request.
 
-Please strictly output in the following JSON format, without any additional explanation:
+Please output ONLY the JSON inside a ```json code block. Do NOT output raw JSON without the code block. Do not add any explanation before or after the code block:
 
 ```json
 {{
@@ -179,7 +180,7 @@ Select all columns of a table:
 
 Select all tables and all columns:
 ```json
-{{}}
+{empty_json}
 ```
 
 No database query needed (only for pure conversation):

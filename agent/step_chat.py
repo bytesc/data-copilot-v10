@@ -51,7 +51,8 @@ def get_step_chat_prompt(question, tables=None, selected_fields=None):
     2. You should name the database and functions needed on the step.
     3. Use [x] to update todo list or revise it. never return the same list without doing anything!!!
     4. You can use [x] to update multiple items in todo list if more than one is done.
-    
+    5. CRITICAL: When the user asks to analyze data, ALWAYS prefer querying the database directly using available tables. NEVER suggest web search when database tables are available. The database contains real data that should be analyzed.
+        
     ⚠️ CRITICAL CONSTRAINTS:
     5. Do NOT use any code, code snippets, programming syntax, or technical placeholders (e.g., `SELECT * FROM`, `def function():`, `print()`, `{}`, `->`, `# comment`) in your output.
     6. Do NOT write any code to solve the problem!!! Your task is just to generate or update the todolist.

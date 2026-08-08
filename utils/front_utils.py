@@ -169,9 +169,12 @@ def plain_chat_api_stream(question: str, tables: Optional[List[str]] = None,
 
 
 def filter_db_fields_stream(question: str, tables: Optional[List[str]] = None,
-                            url="http://127.0.0.1:" + str(config_data["server_port"])):
+                            url="http://127.0.0.1:" + str(config_data["server_port"]), session_id: str = ""):
+    payload = {"question": question, "session_id": session_id}
+    if tables:
+        payload["tables"] = tables
     with httpx.stream("POST", url + "/api/filter-db-fields/stream/",
-                      json={"question": question, "tables": tables},
+                      json=payload,
                       timeout=300.0) as response:
         if response.status_code != 200:
             yield {"type": "error", "content": f"HTTP {response.status_code}"}
@@ -197,9 +200,9 @@ def filter_db_fields_stream(question: str, tables: Optional[List[str]] = None,
 
 
 def filter_functions_stream(question: str,
-                            url="http://127.0.0.1:" + str(config_data["server_port"])):
+                            url="http://127.0.0.1:" + str(config_data["server_port"]), session_id: str = ""):
     with httpx.stream("POST", url + "/api/filter-functions/stream/",
-                      json={"question": question},
+                      json={"question": question, "session_id": session_id},
                       timeout=300.0) as response:
         if response.status_code != 200:
             yield {"type": "error", "content": f"HTTP {response.status_code}"}

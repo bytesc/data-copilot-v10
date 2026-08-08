@@ -47,6 +47,10 @@ def get_function_prompt(question):
     pre_prompt = """ 
 Please select ALL functions that will be called in the generated code to solve the problem.
 Include every function from the list below that will appear in the code, including utility functions.
+
+CRITICAL: When the plan involves querying or analyzing data from the database, you MUST select exe_sql. 
+Only use search_web or fetch_webpage when the plan explicitly requires external web data. 
+Database queries take priority over web search when both are available.
 """
     function_prompt = """ 
 Here is the functions you can use:
@@ -59,6 +63,9 @@ Return "solved" if no functions are needed.
 
 Example 1:
 exe_sql, get_save_image_path
+
+Example 2:
+exe_sql
 """
     return "question:" + question + pre_prompt + function_prompt + str(FUNCTION_DESCRIPTION) + example_code
 

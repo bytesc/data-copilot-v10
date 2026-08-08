@@ -142,6 +142,9 @@ Here is the functions you can import and use:
     remind_prompt = """
     Remind: 
 
+    - CRITICAL: ALL code MUST be wrapped inside `def func():` function. The code will be executed by calling `func()`. yield can ONLY be used inside the function body.
+    - The first line of your code MUST be `def func():`. Do NOT write any code outside the function.
+    - Do NOT use yield at module level (outside a function). This will cause a SyntaxError.
     - IMPORTANT: Please use yield instead of return and print(), never use input() or any funcs that hung up the process to wait user action!
     - Please yield explanation string of each step as kind of report! Please yield some information string during the function!
     - Please yield the result of each step and function call! Please yield report many times during the function!!! not only yield at last! 
