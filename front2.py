@@ -205,7 +205,7 @@ def upload_doc_api(file_content, filename, table_name="uploaded_data"):
 
 
 def download_image(url):
-    """下载网络图片"""
+    """Download web image"""
     try:
         response = requests.get(url, timeout=30)
         if response.status_code == 200:
@@ -216,7 +216,7 @@ def download_image(url):
 
 
 def markdown_to_word(doc, markdown_text):
-    """将Markdown转换为Word文档内容"""
+    """Convert Markdown to Word document content"""
     html = markdown.markdown(markdown_text, extensions=['extra', 'tables'])
     soup = BeautifulSoup(html, 'html.parser')
 
@@ -249,9 +249,9 @@ def markdown_to_word(doc, markdown_text):
                             try:
                                 doc.add_picture(img_data, width=Inches(5))
                             except:
-                                p.add_run(f"[图片: {img_url}]")
+                                p.add_run(f"[Image: {img_url}]")
                         else:
-                            p.add_run(f"[图片加载失败: {img_url}]")
+                            p.add_run(f"[Image load failed: {img_url}]")
                 elif child.string:
                     p.add_run(child.string)
                 elif child.name is None:
@@ -285,7 +285,7 @@ def markdown_to_word(doc, markdown_text):
 
 
 def export_full_to_word(conversation_history):
-    """导出完整的对话历史为Word文档"""
+    """Export full conversation history to Word document"""
     doc = Document()
 
     title = doc.add_heading('Data-Copilot Conversation Export (Full)', 0)
@@ -327,7 +327,7 @@ def export_full_to_word(conversation_history):
 
 
 def export_essentials_to_word(conversation_history):
-    """只导出答案(ans)和第一个问题"""
+    """Export only answers and first question"""
     doc = Document()
 
     title = doc.add_heading('Data-Copilot Export', 0)
@@ -366,7 +366,7 @@ def export_essentials_to_word(conversation_history):
 
 
 def handle_export_word(conversation_history, export_type="full"):
-    """处理导出Word文档"""
+    """Handle Word document export"""
     if not conversation_history:
         toast("No content to export!", color='warning')
         return
@@ -474,7 +474,7 @@ def handle_table_selection(table_options):
 
 
 def display_streaming_response(scope_name, collapse_title=None):
-    """返回一个回调函数，用于在指定scope中追加显示流式内容"""
+    """Return a callback to append streaming content in the specified scope"""
     accumulated = ""
 
     def append_chunk(event):
@@ -560,7 +560,7 @@ def main():
 
     scope_name = f"plan_scope"
     put_scope(scope_name)
-    append_plan = display_streaming_response(scope_name, collapse_title="📋 分析计划")
+    append_plan = display_streaming_response(scope_name, collapse_title="📋 Analysis Plan")
     full_plan = ""
     for event in step_chat_api_stream(question, SELECT_TABLES, session_id=conversation_session_id):
         full_plan = append_plan(event)
@@ -605,11 +605,11 @@ def main():
                             pass
                     with use_scope(filter_scope, clear=True):
                         if selected_fields:
-                            put_collapse("🔍 数据库字段筛选", [
+                            put_collapse("🔍 Database Field Filter", [
                                 put_markdown("```json\n" + json.dumps(selected_fields, ensure_ascii=False, indent=2) + "\n```", sanitize=False)
                             ])
                         else:
-                            put_collapse("🔍 数据库字段筛选", [put_markdown("```json\n" + filter_content + "\n```", sanitize=False)])
+                            put_collapse("🔍 Database Field Filter", [put_markdown("```json\n" + filter_content + "\n```", sanitize=False)])
                 elif event_type == "error":
                     toast(event["content"], color='warning')
                     selected_fields = None
@@ -655,7 +655,7 @@ def main():
 
         plan_scope = f"plan_scope_{len(conversation_history)}"
         put_scope(plan_scope)
-        append_plan = display_streaming_response(plan_scope, collapse_title="📋 分析计划")
+        append_plan = display_streaming_response(plan_scope, collapse_title="📋 Analysis Plan")
         full_plan = ""
         for event in step_chat_api_stream(table_pre + full_question, SELECT_TABLES, session_id=conversation_session_id):
             full_plan = append_plan(event)
