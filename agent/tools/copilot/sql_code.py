@@ -141,18 +141,19 @@ Below is the structure and comments of all database tables:
 The input above may contain conversation history, a step-by-step plan, and the current task. Your job is to identify which database tables and columns are needed to execute the current task described in the plan.
 
 Requirements:
-1. If the user mentions ANY of these keywords: analysis, analyze, data, query, graph, chart, plot, visualization, statistics, report, summary, explore, inspect, look at, show, display, select, filter, group, count, average, sum, min, max, trend, distribution, comparison, or any data-related operation, you MUST select relevant tables and columns. NEVER return `__no_db__` for data-related requests.
+1. If the user mentions ANY of these keywords: analysis, analyze, data, query, graph, chart, plot, visualization, statistics, report, explore, inspect, look at, show, display, select, filter, group, count, average, sum, min, max, trend, distribution, comparison, or any data-related operation that requires fetching data from the database, you MUST select relevant tables and columns. NEVER return `__no_db__` for data-fetching requests.
 2. If the user's request is vague but related to data/analysis, select ALL tables and ALL columns by returning `{empty_json}`.
 3. Only select tables and columns directly relevant to the current task.
 4. If only some columns of a table are relevant, include only those columns.
 5. If ALL columns of a table are relevant, use an empty list [] to indicate all columns.
 6. Must include key columns used for table joins (e.g., foreign keys, IDs).
+7. If the task is to summarize, conclude, explain, or describe content that is already in the conversation history or previous execution results, do NOT query the database. Return `__no_db__` instead.
 
 Output rules:
 - Use `{{"table_name": ["col1", "col2"]}}` to select specific columns
 - Use `{{"table_name": []}}` to select ALL columns of a table
 - Use `{empty_json}` to select ALL tables and ALL columns
-- Use `{{"__no_db__": true}}` ONLY for pure greetings/thanks/farewells (e.g. "hello", "thank you", "bye"). NEVER use it for any data-related request.
+- Use `{{"__no_db__": true}}` for greetings/thanks/farewells, or for tasks that summarize/explain existing results without needing new data.
 
 Please output ONLY the JSON inside a ```json code block. Do NOT output raw JSON without the code block. Do not add any explanation before or after the code block:
 

@@ -130,7 +130,7 @@ def handle_table_selection(table_options):
         SELECT_LABELS = selected_labels
 
 
-CURSOR = '<span class="blink-cursor">|</span>'
+CURSOR = '<span class="blink-cursor">|</span> <span class="thinking-text">Thinking...</span>'
 
 CURSOR_CSS = '''
 <style>
@@ -202,8 +202,11 @@ def main():
         table_options.append({'label': display_name, 'value': table_name})
 
     put_markdown("### Control Panel")
-    put_buttons(['Select Tables', 'Upload CSV File', 'Upload Document File'],
-                onclick=[lambda: handle_table_selection(table_options), handle_csv_upload, handle_doc_upload])
+    # put_buttons(['Select Tables', 'Upload CSV File', 'Upload Document File'],
+    #             onclick=[lambda: handle_table_selection(table_options), handle_csv_upload, handle_doc_upload])
+
+    put_buttons([ 'Upload CSV File', 'Upload Document File'],
+                onclick=[lambda: handle_csv_upload, handle_doc_upload])
 
     put_markdown("### Export Options")
     put_buttons(['Export Full Conversation', 'Export Essentials (Answers)'],
@@ -295,12 +298,16 @@ def main():
         loop_id = datetime.now().strftime("%H%M%S%f")
         import re as _re2
         plan_complete = False
+        has_planner = False
         for entry in reversed(conversation_history):
             if entry.startswith("Planner: "):
+                has_planner = True
                 plan_text = entry[9:]
                 pending = _re2.findall(r'- \[ \]', plan_text)
                 plan_complete = len(pending) == 0
                 break
+        if not has_planner:
+            plan_complete = True
 
         if plan_complete:
             value = ""
@@ -318,6 +325,7 @@ def main():
             full_question = question
 
         selected_fields = None
+        function_solved = False
 
         is_default = (question == "please do the next step on the todo list")
 
@@ -411,6 +419,7 @@ def main():
                     if full_ans:
                         conversation_history.append(f"Q: {question}")
                         conversation_history.append(f"A: {full_ans}")
+                        conversation_history = [entry for entry in conversation_history if not entry.startswith("Planner: ")]
                     else:
                         put_text("Failed to get a response from the AI Agent.")
                 else:
@@ -457,6 +466,7 @@ def main():
                     elif solved_ans:
                         conversation_history.append(f"Q: {question}")
                         conversation_history.append(f"A: {solved_ans}")
+                        conversation_history = [entry for entry in conversation_history if not entry.startswith("Planner: ")]
                     else:
                         put_text("Failed to get a response from the AI Agent.")
         else:
@@ -498,23 +508,24 @@ def main():
             if selected_fields is not None and len(selected_fields) == 0:
                 selected_fields = None
 
-        plan_scope = f"plan_scope_{loop_id}"
-        put_scope(plan_scope)
-        append_plan = display_streaming_response(plan_scope, collapse_title="📋 Analysis Plan")
+        if not function_solved:
+            plan_scope = f"plan_scope_{loop_id}"
+            put_scope(plan_scope)
+            append_plan = display_streaming_response(plan_scope, collapse_title="📋 Analysis Plan")
 
-        context = "\n".join(conversation_history)
-        full_question = f"Context:\n{context}\n\nCurrent Question:\n{question}"
+            context = "\n".join(conversation_history)
+            full_question = f"Context:\n{context}\n\nCurrent Question:\n{question}"
 
-        full_plan = ""
-        for event in step_chat_api_stream(full_question, SELECT_TABLES,
-                                          selected_fields=selected_fields,
-                                          session_id=conversation_session_id):
-            full_plan = append_plan(event)
-        if full_plan:
-            conversation_history = [entry for entry in conversation_history if not entry.startswith("Planner: ")]
-            conversation_history.append(f"Planner: {full_plan}")
-        else:
-            put_text("Failed to get a response from the AI Agent.")
+            full_plan = ""
+            for event in step_chat_api_stream(full_question, SELECT_TABLES,
+                                              selected_fields=selected_fields,
+                                              session_id=conversation_session_id):
+                full_plan = append_plan(event)
+            if full_plan:
+                conversation_history = [entry for entry in conversation_history if not entry.startswith("Planner: ")]
+                conversation_history.append(f"Planner: {full_plan}")
+            else:
+                put_text("Failed to get a response from the AI Agent.")
 
 
 if __name__ == '__main__':
