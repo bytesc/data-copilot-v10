@@ -64,6 +64,7 @@ class AgentInput(BaseModel):
     tables: Optional[List[str]] = None
     session_id: Optional[str] = None
     selected_fields: Optional[Dict[str, Any]] = None
+    selected_functions: Optional[List[str]] = None
 
 
 class AgentInputDict(BaseModel):
@@ -378,6 +379,7 @@ async def get_graph_api(request: Request, user_input: AgentInputDict):
 from agent.tools.copilot.utils.read_db import get_rows_from_all_tables, get_table_comments_dict, execute_select, \
     get_all_comments
 from agent.tools.copilot.sql_code import filter_db_fields, filter_db_fields_stream
+from agent.tools.get_function_info import filter_functions_stream
 from agent.tools.tools_def import engine, llm, draw_graph
 
 
@@ -492,6 +494,28 @@ async def filter_db_fields_stream_api(request: Request, user_input: AgentInput):
     )
 
 
+def _event_stream_filter_functions(question: str, session_id: str = "", request_url: str = ""):
+    full_content = ""
+    for event in filter_functions_stream(question, llm):
+        if event.get("type") == "chunk":
+            full_content += event.get("content", "")
+        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success")
+
+
+@app.post("/api/filter-functions/stream/")
+async def filter_functions_stream_api(request: Request, user_input: AgentInput):
+    return StreamingResponse(
+        _event_stream_filter_functions(user_input.question, user_input.session_id or "", request.url.path),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
 @app.post("/upload-csv/")
 async def upload_csv(
         file: UploadFile = File(..., description="CSV file"),
@@ -548,9 +572,9 @@ async def upload_txt(
     return JSONResponse(content=result)
 
 
-def _event_stream_generate_code(question: str, tables: Optional[List[str]], selected_fields: Optional[Dict[str, Any]] = None, session_id: str = "", request_url: str = ""):
+def _event_stream_generate_code(question: str, tables: Optional[List[str]], selected_fields: Optional[Dict[str, Any]] = None, selected_functions: Optional[List[str]] = None, session_id: str = "", request_url: str = ""):
     full_code = ""
-    for event in generate_code_stream(question, tables, True, selected_fields=selected_fields):
+    for event in generate_code_stream(question, tables, True, selected_fields=selected_fields, selected_functions=selected_functions):
         if event.get("type") == "code_complete":
             full_code = event.get("content", "")
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
@@ -583,7 +607,7 @@ class CodeInput(BaseModel):
 @app.post("/api/generate-code/stream/")
 async def generate_code_stream_api(request: Request, user_input: AgentInput):
     return StreamingResponse(
-        _event_stream_generate_code(user_input.question, user_input.tables, user_input.selected_fields, user_input.session_id or "", request.url.path),
+        _event_stream_generate_code(user_input.question, user_input.tables, user_input.selected_fields, user_input.selected_functions, user_input.session_id or "", request.url.path),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

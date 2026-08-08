@@ -193,7 +193,7 @@ def explain_data(question: str, data: pd.DataFrame, col_explanation: str = None)
 def exe_sql(sql: str) -> pd.DataFrame:
     """
     exe_sql(sql: str) -> pd.DataFrame:
-    Execute the sql query string.
+    Execute the sql query string. Must be used in case of data query with sql database.
     Returns the query results in pandas DataFrame.
 
     Args:
@@ -221,7 +221,7 @@ def exe_sql(sql: str) -> pd.DataFrame:
 def load_data(url: str) -> pd.DataFrame:
     """
     load_data(url: str) -> pd.DataFrame:
-    Load data form a CSV file url
+    Load data form a CSV file url. You can use it to retrieve the data queried or processed in the context.
     Returns the result in a pandas DataFrame.
 
     Args:
@@ -244,7 +244,7 @@ def load_data(url: str) -> pd.DataFrame:
 def get_save_image_path() -> str:
     """
        get_save_image_path() -> str:
-       get the path to save the generated graph image, you can only save it in the generated path, not anywhere else
+       get the path to save the generated graph image, you can only save it in the generated path, not anywhere else. Must be used in case of drawing plots.
        Returns str path to save the png image, the path include the `.png` file name.
 
        Returns:

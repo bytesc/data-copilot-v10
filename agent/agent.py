@@ -12,7 +12,7 @@ from .tools.copilot.sql_code import get_db_info_prompt, filter_db_fields
 from .tools.copilot.utils.call_llm_test import call_llm_stream
 from .tools.copilot.utils.parse_output import parse_generated_python_code
 
-from .tools.get_function_info import get_function_info
+from .tools.get_function_info import get_function_info, FUNCTION_DICT, FUNCTION_IMPORT, ASSIST_FUNCTION_DICT, IMPORTANT_FUNC
 
 from .utils.final_output_parse import df_to_markdown, wrap_html_url_with_html_a, \
     wrap_csv_url_with_html_a, is_local_png_path
@@ -35,14 +35,36 @@ def get_db():
     return get_db_info_prompt(engine, example=True, simple=True)
 
 
-def get_cot_code_prompt(question, tables=None, use_all_functions=False, selected_fields=None):
+def get_cot_code_prompt(question, tables=None, use_all_functions=False, selected_fields=None, selected_functions=None):
     rag_ans = ""
     knowledge = ""
     rag_ans = get_base_knowledge()
     knowledge = "\nBase knowledge: \n" + rag_ans + "\n"
     # print(rag_ans)
 
-    function_set, function_info, function_import = get_function_info(question, llm, use_all_functions)
+    if selected_functions is not None:
+        function_set = set()
+        function_info = ""
+        function_import = []
+        for func_name in selected_functions:
+            func = FUNCTION_DICT.get(func_name)
+            if func:
+                function_set.add(func)
+                assist_functions = ASSIST_FUNCTION_DICT.get(func)
+                if assist_functions:
+                    for assist_function in assist_functions:
+                        function_set.add(assist_function)
+        for func_name in IMPORTANT_FUNC:
+            func = FUNCTION_DICT.get(func_name)
+            if func:
+                function_set.add(func)
+        for function in function_set:
+            function_info += "\n" + str(function.__doc__) + "\n"
+            import_list = FUNCTION_IMPORT.get(function)
+            if import_list:
+                function_import.append(import_list)
+    else:
+        function_set, function_info, function_import = get_function_info(question, llm, use_all_functions)
     # print(function_info)
     if function_info == "solved":
         return "solved", rag_ans, []
@@ -326,10 +348,10 @@ def format_yield_item(item, print_rows=5):
         return "\n" + str(item) + "\n"
 
 
-def generate_code_stream(question, tables=None, use_all_functions=False, retries=2, selected_fields=None):
+def generate_code_stream(question, tables=None, use_all_functions=False, retries=2, selected_fields=None, selected_functions=None):
     yield {"type": "status", "content": "正在分析问题..."}
 
-    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions, selected_fields)
+    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions, selected_fields, selected_functions)
 
     if cot_prompt == "solved":
         yield {"type": "solved", "content": rag_ans}

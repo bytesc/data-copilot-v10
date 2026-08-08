@@ -1,4 +1,4 @@
-from .copilot.utils.call_llm_test import call_llm
+from .copilot.utils.call_llm_test import call_llm, call_llm_stream
 from .tools_def import draw_graph, query_database, explain_data, exe_sql, draw_compare_graph, load_data, \
     get_save_image_path, search_web, fetch_webpage
 
@@ -31,7 +31,7 @@ ASSIST_FUNCTION_DICT = {
     # exe_sql: [explain_data],
 }
 
-IMPORTANT_FUNC = ["load_data"]
+IMPORTANT_FUNC = ["load_data", "get_save_image_path"]
 
 # FUNCTION_INFO = {key: func.__doc__ for key, func in FUNCTION_DICT.items()}
 # ASSIST_FUNCTION_INFO = {key: ' '.join(func.__doc__ for func in funcs) for key, funcs in ASSIST_FUNCTION_DICT.items()}
@@ -42,12 +42,9 @@ FUNCTION_DESCRIPTION = {
 
 
 def get_function_prompt(question):
-    # print(predict_grade_for_stu.__doc__)
-    # print('\n'.join(predict_grade_for_stu.__doc__.splitlines()[1:3]))
     pre_prompt = """ 
-Please select the functions need to use based on the question.
-You can select multiple functions, to solve the problem.
-You can choose as many as possible to ensure that the problem can be solved.
+Please select ALL functions that will be called in the generated code to solve the problem.
+Include every function from the list below that will appear in the code, including utility functions.
 """
     function_prompt = """ 
 Here is the functions you can use:
@@ -55,9 +52,11 @@ Here is the functions you can use:
     example_code = """
 Please only return the names list of the functions split by ","
 Do not add any explanations of commands!!!
+Return an empty response if you think all functions are needed.
+Return "solved" if no functions are needed.
 
 Example 1:
-draw_graph, query_database
+exe_sql, get_save_image_path
 """
     return "question:" + question + pre_prompt + function_prompt + str(FUNCTION_DESCRIPTION) + example_code
 
@@ -88,12 +87,14 @@ def get_function_info(question, llm, use_all_functions=False, brief=False):
     if function_list_str == "solved":
         return {}, "solved", []
     function_list = [part.strip() for part in function_list_str.split(',')]
+    function_list = [f for f in function_list if f]
+    if not function_list:
+        return get_function_info(question, llm, use_all_functions=True, brief=brief)
     for f in IMPORTANT_FUNC:
         if f not in function_list:
             function_list.append(f)
     function_set = set()
     for function_name in function_list:
-        # print(function_name)
         function = FUNCTION_DICT.get(function_name)
         if function:
             function_set.add(function)
@@ -112,3 +113,31 @@ def get_function_info(question, llm, use_all_functions=False, brief=False):
         if import_list:
             function_import.append(import_list)
     return function_set, function_info, function_import
+
+
+def filter_functions_stream(question, llm):
+    yield {"type": "status", "content": "正在分析可用函数..."}
+
+    function_prompt = get_function_prompt(question)
+    full_content = ""
+
+    for chunk in call_llm_stream(function_prompt, llm):
+        full_content += chunk
+        yield {"type": "chunk", "content": chunk}
+
+    function_list_str = full_content.strip()
+    if function_list_str == "solved":
+        yield {"type": "done", "content": full_content, "selected_functions": [], "solved": True}
+        return
+
+    function_list = [part.strip() for part in function_list_str.split(',')]
+    function_list = [f for f in function_list if f]
+    if not function_list:
+        selected_functions = list(FUNCTION_DICT.keys())
+    else:
+        selected_functions = function_list
+        for f in IMPORTANT_FUNC:
+            if f not in selected_functions:
+                selected_functions.append(f)
+
+    yield {"type": "done", "content": full_content, "selected_functions": selected_functions, "solved": False}

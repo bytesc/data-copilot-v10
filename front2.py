@@ -12,7 +12,7 @@ from pywebio import start_server, config
 from data_access.read_db import get_rows_from_all_tables, get_table_comments_dict, get_all_comments_from_table
 from utils.front_utils import (
     ai_agent_api, generate_code_stream, execute_code_stream,
-    step_chat_api_stream, filter_db_fields_stream, upload_csv_api,
+    step_chat_api_stream, filter_db_fields_stream, filter_functions_stream, upload_csv_api,
     upload_doc_api, download_image, markdown_to_word,
     export_full_to_word, export_essentials_to_word
 )
@@ -277,76 +277,121 @@ def main():
             full_question = question
 
         if value == question:
-            filter_scope = f"filter_scope_{len(conversation_history)}"
-            put_scope(filter_scope)
-            filter_content = ""
-            selected_fields = None
-            for event in filter_db_fields_stream(table_pre + full_question, SELECT_TABLES):
+            function_scope = f"function_scope_{len(conversation_history)}"
+            put_scope(function_scope)
+            function_content = ""
+            selected_functions = None
+            function_solved = False
+            for event in filter_functions_stream(table_pre + full_question):
                 event_type = event.get("type")
                 if event_type == "status":
                     toast(event["content"], color='info')
                 elif event_type == "chunk":
-                    filter_content += event["content"]
-                    with use_scope(filter_scope, clear=True):
-                        put_markdown(filter_content, sanitize=False)
+                    function_content += event["content"]
+                    with use_scope(function_scope, clear=True):
+                        put_markdown(function_content, sanitize=False)
                         put_html(CURSOR)
                 elif event_type == "done":
-                    filter_content = event.get("content", "")
-                    import re as _re
-                    match = _re.search(r'```json\s*(.*?)\s*```', filter_content, _re.DOTALL)
-                    if match:
-                        try:
-                            selected_fields = json.loads(match.group(1))
-                        except json.JSONDecodeError:
-                            pass
-                    with use_scope(filter_scope, clear=True):
-                        if isinstance(selected_fields, dict) and selected_fields.get("__no_db__"):
-                            put_collapse("🔍 Database Field Filter", [put_markdown("No database query needed.", sanitize=False)])
-                        elif selected_fields and not selected_fields.get("__no_db__"):
-                            put_collapse("🔍 Database Field Filter", [
-                                put_markdown("```json\n" + json.dumps(selected_fields, ensure_ascii=False, indent=2) + "\n```", sanitize=False)
+                    function_content = event.get("content", "")
+                    selected_functions = event.get("selected_functions")
+                    function_solved = event.get("solved", False)
+                    with use_scope(function_scope, clear=True):
+                        if function_solved:
+                            put_collapse("🔧 Function Selection", [
+                                put_markdown("No functions needed, direct answer.", sanitize=False),
+                                put_markdown("```\n" + function_content + "\n```", sanitize=False)
                             ])
-                        else:
-                            put_collapse("🔍 Database Field Filter", [put_markdown("```json\n" + filter_content + "\n```", sanitize=False)])
+                        elif selected_functions is not None:
+                            if selected_functions:
+                                put_collapse("🔧 Function Selection", [
+                                    put_markdown("Selected: `" + ", ".join(selected_functions) + "`", sanitize=False),
+                                    put_markdown("```\n" + function_content + "\n```", sanitize=False)
+                                ])
+                            else:
+                                put_collapse("🔧 Function Selection", [
+                                    put_markdown("All functions will be used.", sanitize=False),
+                                    put_markdown("```\n" + function_content + "\n```", sanitize=False)
+                                ])
                 elif event_type == "error":
                     toast(event["content"], color='warning')
+
+            if function_solved:
+                conversation_history.append(f"Q: {question}")
+                conversation_history.append(f"A: {function_content}")
+                context = "\n".join(conversation_history)
+                full_question = f"Context:\n{context}\n"
+            else:
+                filter_scope = f"filter_scope_{len(conversation_history)}"
+                put_scope(filter_scope)
+                filter_content = ""
+                selected_fields = None
+                for event in filter_db_fields_stream(table_pre + full_question, SELECT_TABLES):
+                    event_type = event.get("type")
+                    if event_type == "status":
+                        toast(event["content"], color='info')
+                    elif event_type == "chunk":
+                        filter_content += event["content"]
+                        with use_scope(filter_scope, clear=True):
+                            put_markdown(filter_content, sanitize=False)
+                            put_html(CURSOR)
+                    elif event_type == "done":
+                        filter_content = event.get("content", "")
+                        import re as _re
+                        match = _re.search(r'```json\s*(.*?)\s*```', filter_content, _re.DOTALL)
+                        if match:
+                            try:
+                                selected_fields = json.loads(match.group(1))
+                            except json.JSONDecodeError:
+                                pass
+                        with use_scope(filter_scope, clear=True):
+                            if isinstance(selected_fields, dict) and selected_fields.get("__no_db__"):
+                                put_collapse("🔍 Database Field Filter", [put_markdown("No database query needed.", sanitize=False)])
+                            elif selected_fields and not selected_fields.get("__no_db__"):
+                                put_collapse("🔍 Database Field Filter", [
+                                    put_markdown("```json\n" + json.dumps(selected_fields, ensure_ascii=False, indent=2) + "\n```", sanitize=False)
+                                ])
+                            else:
+                                put_collapse("🔍 Database Field Filter", [put_markdown("```json\n" + filter_content + "\n```", sanitize=False)])
+                    elif event_type == "error":
+                        toast(event["content"], color='warning')
+                        selected_fields = None
+
+                if selected_fields is not None and len(selected_fields) == 0:
                     selected_fields = None
 
-            if selected_fields is not None and len(selected_fields) == 0:
-                selected_fields = None
+                code_scope = f"code_scope_{len(conversation_history)}"
+                put_scope(code_scope)
+                append_code = display_streaming_response(code_scope)
+                full_code = ""
+                solved_ans = ""
+                for event in generate_code_stream(table_pre + full_question, SELECT_TABLES,
+                                                  selected_fields=selected_fields,
+                                                  selected_functions=selected_functions,
+                                                  session_id=conversation_session_id):
+                    append_code(event)
+                    if event.get("type") == "code_complete":
+                        full_code = event["content"]
+                    elif event.get("type") == "solved":
+                        solved_ans = event["content"]
 
-            code_scope = f"code_scope_{len(conversation_history)}"
-            put_scope(code_scope)
-            append_code = display_streaming_response(code_scope)
-            full_code = ""
-            solved_ans = ""
-            for event in generate_code_stream(table_pre + full_question, SELECT_TABLES,
-                                              selected_fields=selected_fields,
-                                              session_id=conversation_session_id):
-                append_code(event)
-                if event.get("type") == "code_complete":
-                    full_code = event["content"]
-                elif event.get("type") == "solved":
-                    solved_ans = event["content"]
-
-            if full_code:
-                ans_scope = f"ans_scope_{len(conversation_history)}"
-                put_scope(ans_scope)
-                append_ans = display_streaming_response(ans_scope)
-                full_ans = ""
-                for event in execute_code_stream(full_code, session_id=conversation_session_id):
-                    full_ans = append_ans(event)
-                if full_ans:
+                if full_code:
+                    ans_scope = f"ans_scope_{len(conversation_history)}"
+                    put_scope(ans_scope)
+                    append_ans = display_streaming_response(ans_scope)
+                    full_ans = ""
+                    for event in execute_code_stream(full_code, session_id=conversation_session_id):
+                        full_ans = append_ans(event)
+                    if full_ans:
+                        conversation_history.append(f"Q: {question}")
+                        conversation_history.append(f"A: {full_ans}")
+                elif solved_ans:
                     conversation_history.append(f"Q: {question}")
-                    conversation_history.append(f"A: {full_ans}")
-            elif solved_ans:
-                conversation_history.append(f"Q: {question}")
-                conversation_history.append(f"A: {solved_ans}")
-            else:
-                put_text("Failed to get a response from the AI Agent.")
+                    conversation_history.append(f"A: {solved_ans}")
+                else:
+                    put_text("Failed to get a response from the AI Agent.")
 
-            context = "\n".join(conversation_history)
-            full_question = f"Context:\n{context}\n"
+                context = "\n".join(conversation_history)
+                full_question = f"Context:\n{context}\n"
         else:
             context = "\n".join(conversation_history)
             full_question = f"Context:\n{context}\n\nCurrent Question:\n{question}"

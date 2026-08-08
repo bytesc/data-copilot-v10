@@ -37,10 +37,13 @@ def ai_agent_api(question: str, tables: Optional[List[str]] = None, path: str = 
 
 def generate_code_stream(question: str, tables: Optional[List[str]] = None,
                          selected_fields: Optional[dict] = None,
+                         selected_functions: Optional[List[str]] = None,
                          url="http://127.0.0.1:" + str(config_data["server_port"]), session_id: str = ""):
     payload = {"question": question, "tables": tables, "session_id": session_id}
     if selected_fields:
         payload["selected_fields"] = selected_fields
+    if selected_functions:
+        payload["selected_functions"] = selected_functions
     with httpx.stream("POST", url + "/api/generate-code/stream/",
                       json=payload,
                       timeout=300.0) as response:
@@ -154,6 +157,32 @@ def filter_db_fields_stream(question: str, tables: Optional[List[str]] = None,
                             pass
 
         yield {"type": "done", "content": full_content}
+
+
+def filter_functions_stream(question: str,
+                            url="http://127.0.0.1:" + str(config_data["server_port"])):
+    with httpx.stream("POST", url + "/api/filter-functions/stream/",
+                      json={"question": question},
+                      timeout=300.0) as response:
+        if response.status_code != 200:
+            yield {"type": "error", "content": f"HTTP {response.status_code}"}
+            return
+
+        full_content = ""
+        buffer = ""
+        for chunk in response.iter_text():
+            buffer += chunk
+            while "\n\n" in buffer:
+                event_str, buffer = buffer.split("\n\n", 1)
+                for line in event_str.split("\n"):
+                    if line.startswith("data: "):
+                        try:
+                            event = json.loads(line[6:])
+                            if event.get("type") == "chunk":
+                                full_content += event["content"]
+                            yield event
+                        except json.JSONDecodeError:
+                            pass
 
 
 def upload_csv_api(file_content, table_name="uploaded_data"):
