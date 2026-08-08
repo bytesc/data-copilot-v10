@@ -54,8 +54,12 @@ def get_rows_from_all_tables(engine, tables, num=3, selected_fields=None):
     for table_name in table_names:
         try:
             if selected_fields and table_name in selected_fields:
-                cols = ", ".join(selected_fields[table_name])
-                query = text(f"SELECT {cols} FROM {table_name} LIMIT {num}")
+                cols = selected_fields[table_name]
+                if cols:
+                    cols_str = ", ".join(cols)
+                    query = text(f"SELECT {cols_str} FROM {table_name} LIMIT {num}")
+                else:
+                    query = text(f"SELECT * FROM {table_name} LIMIT {num}")
             else:
                 query = text(f"SELECT * FROM {table_name} LIMIT {num}")
             with engine.connect() as connection:
@@ -110,8 +114,10 @@ def get_table_and_column_comments(engine, tables, selected_fields=None):
         columns = inspector.get_columns(table_name)
 
         if selected_fields and table_name in selected_fields:
-            allowed_cols = set(selected_fields[table_name])
-            columns = [c for c in columns if c['name'] in allowed_cols]
+            allowed_cols = selected_fields[table_name]
+            if allowed_cols:
+                allowed_cols = set(allowed_cols)
+                columns = [c for c in columns if c['name'] in allowed_cols]
 
         column_comments[table_name] = {}
         for column in columns:
@@ -141,21 +147,23 @@ def get_table_creation_statements(engine, tables, simple=False, selected_fields=
         foreign_keys = inspector.get_foreign_keys(table_name)
 
         if selected_fields and table_name in selected_fields:
-            allowed_cols = set(selected_fields[table_name])
-            columns = [c for c in columns if c['name'] in allowed_cols]
-            if primary_keys['constrained_columns']:
-                pk_cols = [c for c in primary_keys['constrained_columns'] if c in allowed_cols]
-                primary_keys = {'constrained_columns': pk_cols}
-            filtered_fks = []
-            for fk in foreign_keys:
-                constrained = [c for c in fk['constrained_columns'] if c in allowed_cols]
-                if constrained:
-                    filtered_fks.append({
-                        'constrained_columns': constrained,
-                        'referred_table': fk['referred_table'],
-                        'referred_columns': fk['referred_columns']
-                    })
-            foreign_keys = filtered_fks
+            allowed_cols = selected_fields[table_name]
+            if allowed_cols:
+                allowed_cols = set(allowed_cols)
+                columns = [c for c in columns if c['name'] in allowed_cols]
+                if primary_keys['constrained_columns']:
+                    pk_cols = [c for c in primary_keys['constrained_columns'] if c in allowed_cols]
+                    primary_keys = {'constrained_columns': pk_cols}
+                filtered_fks = []
+                for fk in foreign_keys:
+                    constrained = [c for c in fk['constrained_columns'] if c in allowed_cols]
+                    if constrained:
+                        filtered_fks.append({
+                            'constrained_columns': constrained,
+                            'referred_table': fk['referred_table'],
+                            'referred_columns': fk['referred_columns']
+                        })
+                foreign_keys = filtered_fks
 
         create_table_statement = f"CREATE TABLE {table_name} (\n"
 

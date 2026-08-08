@@ -52,8 +52,12 @@ def get_cot_code_prompt(question, tables=None, use_all_functions=False, selected
     if query_database in function_set or exe_sql in function_set:
         if selected_fields is None:
             selected_fields = filter_db_fields(question, engine, llm, tables)
-        data_prompt = get_db_info_prompt(engine, tables=tables, simple=True, example=False, selected_fields=selected_fields)
-        database = "\nThe database content: \n" + data_prompt + "\n"
+        if selected_fields and selected_fields.get("__no_db__"):
+            database = ""
+            selected_fields = None
+        else:
+            data_prompt = get_db_info_prompt(engine, tables=tables, simple=True, example=False, selected_fields=selected_fields)
+            database = "\nThe database content: \n" + data_prompt + "\n"
 
     pre_prompt = """ 
 Please use the following functions to solve the problem.

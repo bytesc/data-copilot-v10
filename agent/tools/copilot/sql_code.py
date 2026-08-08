@@ -143,22 +143,50 @@ Requirements:
 1. Only select tables and columns directly relevant to the question
 2. Do not include a table if none of its columns are relevant
 3. If only some columns of a table are relevant, include only those columns
-4. Must include key columns used for table joins (e.g., foreign keys, IDs)
-5. Output format must be JSON, with table names as keys and lists of column names as values
+4. If ALL columns of a table are relevant, use an empty list [] to indicate all columns
+5. Must include key columns used for table joins (e.g., foreign keys, IDs)
+6. Output format must be JSON, with table names as keys and lists of column names as values
+
+Output rules:
+- Use `{{"table_name": ["col1", "col2"]}}` to select specific columns
+- Use `{{"table_name": []}}` to select ALL columns of a table
+- Use `{{}}` to select ALL tables and ALL columns
+- Use `{{"__no_db__": true}}` if the question does NOT require any database query
 
 Please strictly output in the following JSON format, without any additional explanation:
 
 ```json
 {{
     "table_name_1": ["column_a", "column_b", "id"],
-    "table_name_2": ["id", "name"]
+    "table_name_2": []
 }}
 ```
 
-If the user's question does not require querying the database, output an empty object:
+Select specific columns:
+```json
+{{
+    "users": ["id", "name", "age"]
+}}
+```
 
+Select all columns of a table:
+```json
+{{
+    "users": [],
+    "orders": []
+}}
+```
+
+Select all tables and all columns:
 ```json
 {{}}
+```
+
+No database query needed:
+```json
+{{
+    "__no_db__": true
+}}
 ```"""
 
 

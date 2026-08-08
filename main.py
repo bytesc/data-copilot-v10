@@ -2,7 +2,7 @@ import asyncio
 import json
 import mimetypes
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 import pandas as pd
 import sqlalchemy
 import uvicorn
@@ -63,7 +63,7 @@ class AgentInput(BaseModel):
     question: str
     tables: Optional[List[str]] = None
     session_id: Optional[str] = None
-    selected_fields: Optional[Dict[str, List[str]]] = None
+    selected_fields: Optional[Dict[str, Any]] = None
 
 
 class AgentInputDict(BaseModel):
@@ -470,15 +470,19 @@ async def filter_db_fields_api(request: Request, user_input: AgentInput):
     return JSONResponse(content=processed_data)
 
 
-def _event_stream_filter_db_fields(question: str, tables: Optional[List[str]]):
+def _event_stream_filter_db_fields(question: str, tables: Optional[List[str]], session_id: str = "", request_url: str = ""):
+    full_content = ""
     for event in filter_db_fields_stream(question, engine, llm, tables):
+        if event.get("type") == "chunk":
+            full_content += event.get("content", "")
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success")
 
 
 @app.post("/api/filter-db-fields/stream/")
 async def filter_db_fields_stream_api(request: Request, user_input: AgentInput):
     return StreamingResponse(
-        _event_stream_filter_db_fields(user_input.question, user_input.tables),
+        _event_stream_filter_db_fields(user_input.question, user_input.tables, user_input.session_id or "", request.url.path),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -544,20 +548,31 @@ async def upload_txt(
     return JSONResponse(content=result)
 
 
-def _event_stream_generate_code(question: str, tables: Optional[List[str]], selected_fields: Optional[Dict[str, List[str]]] = None):
+def _event_stream_generate_code(question: str, tables: Optional[List[str]], selected_fields: Optional[Dict[str, Any]] = None, session_id: str = "", request_url: str = ""):
+    full_code = ""
     for event in generate_code_stream(question, tables, True, selected_fields=selected_fields):
+        if event.get("type") == "code_complete":
+            full_code = event.get("content", "")
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+    record_session_operation(session_id, request_url, question, code=full_code, result_type="success")
 
 
-def _event_stream_execute_code(code: str):
+def _event_stream_execute_code(code: str, session_id: str = "", request_url: str = ""):
+    full_ans = ""
     for event in execute_code_stream(code):
+        if event.get("type") == "chunk":
+            full_ans += event.get("content", "")
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+    record_session_operation(session_id, request_url, "", ans=full_ans, code=code, result_type="success")
 
 
-def _event_stream_step_chat(question: str, tables=None):
+def _event_stream_step_chat(question: str, tables=None, session_id: str = "", request_url: str = ""):
+    full_content = ""
     for chunk in get_step_chat_stream(question, tables):
+        full_content += chunk
         yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
     yield f"data: {json.dumps({'type': 'done', 'content': ''}, ensure_ascii=False)}\n\n"
+    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success")
 
 
 class CodeInput(BaseModel):
@@ -568,7 +583,7 @@ class CodeInput(BaseModel):
 @app.post("/api/generate-code/stream/")
 async def generate_code_stream_api(request: Request, user_input: AgentInput):
     return StreamingResponse(
-        _event_stream_generate_code(user_input.question, user_input.tables, user_input.selected_fields),
+        _event_stream_generate_code(user_input.question, user_input.tables, user_input.selected_fields, user_input.session_id or "", request.url.path),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -581,7 +596,7 @@ async def generate_code_stream_api(request: Request, user_input: AgentInput):
 @app.post("/api/exe-code/stream/")
 async def execute_code_stream_api(request: Request, code_input: CodeInput):
     return StreamingResponse(
-        _event_stream_execute_code(code_input.code),
+        _event_stream_execute_code(code_input.code, code_input.session_id or "", request.url.path),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -594,7 +609,7 @@ async def execute_code_stream_api(request: Request, code_input: CodeInput):
 @app.post("/api/step-chat/stream/")
 async def step_chat_stream(request: Request, user_input: AgentInput):
     return StreamingResponse(
-        _event_stream_step_chat(user_input.question, user_input.tables),
+        _event_stream_step_chat(user_input.question, user_input.tables, user_input.session_id or "", request.url.path),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
