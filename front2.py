@@ -130,12 +130,28 @@ def handle_table_selection(table_options):
         SELECT_LABELS = selected_labels
 
 
+CURSOR = '<span class="blink-cursor">|</span>'
+
+CURSOR_CSS = '''
+<style>
+.blink-cursor {
+    animation: blink 1s step-end infinite;
+    font-weight: bold;
+}
+@keyframes blink {
+    50% { opacity: 0; }
+}
+</style>
+'''
+
+
 def display_streaming_response(scope_name, collapse_title=None):
     """Return a callback to append streaming content in the specified scope"""
     accumulated = ""
+    handled = False
 
     def append_chunk(event):
-        nonlocal accumulated
+        nonlocal accumulated, handled
         event_type = event.get("type")
         if event_type == "status":
             toast(event["content"], color='info')
@@ -143,18 +159,25 @@ def display_streaming_response(scope_name, collapse_title=None):
             accumulated += event["content"]
             with use_scope(scope_name, clear=True):
                 put_markdown(accumulated, sanitize=False)
+                put_html(CURSOR)
         elif event_type == "code_complete":
+            handled = True
             accumulated = "```python\n" + event["content"] + "\n```"
             with use_scope(scope_name, clear=True):
-                put_collapse("📝 Generated Code", [put_markdown(accumulated, sanitize=False)])
+                put_collapse("📝 Generated Code", [put_markdown(accumulated, sanitize=False)], open=False)
         elif event_type == "solved":
+            handled = True
             accumulated = event["content"]
             with use_scope(scope_name, clear=True):
                 put_markdown(accumulated, sanitize=False)
         elif event_type == "done":
-            if collapse_title and accumulated:
-                with use_scope(scope_name, clear=True):
+            if handled:
+                return accumulated
+            with use_scope(scope_name, clear=True):
+                if collapse_title and accumulated:
                     put_collapse(collapse_title, [put_markdown(accumulated, sanitize=False)])
+                elif accumulated:
+                    put_markdown(accumulated, sanitize=False)
         elif event_type == "error":
             toast(event["content"], color='error')
             with use_scope(scope_name, clear=False):
@@ -166,6 +189,7 @@ def display_streaming_response(scope_name, collapse_title=None):
 
 def main():
     global SELECT_TABLES, SELECT_LABELS
+    put_html(CURSOR_CSS)
     put_markdown("# Data-Copilot (Streaming)")
 
     first_five_rows = get_rows_from_all_tables()
@@ -229,8 +253,22 @@ def main():
     while True:
         table_pre = ""
 
-        value = "please do the next step on the todo list"
+        import re as _re2
+        plan_complete = False
+        for entry in reversed(conversation_history):
+            if entry.startswith("Planner: "):
+                plan_text = entry[9:]
+                pending = _re2.findall(r'- \[ \]', plan_text)
+                plan_complete = len(pending) == 0
+                break
+
+        if plan_complete:
+            value = ""
+        else:
+            value = "please do the next step on the todo list"
         question = textarea("What is next?:", value=value, type=TEXT, rows=2)
+        if not question.strip():
+            continue
         put_markdown("## " + question)
         if conversation_history:
             context = "\n".join(conversation_history)
@@ -251,6 +289,7 @@ def main():
                     filter_content += event["content"]
                     with use_scope(filter_scope, clear=True):
                         put_markdown(filter_content, sanitize=False)
+                        put_html(CURSOR)
                 elif event_type == "done":
                     filter_content = event.get("content", "")
                     import re as _re
