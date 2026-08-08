@@ -131,6 +131,40 @@ def step_chat_api_stream(question: str, tables: Optional[List[str]] = None,
         yield {"type": "done", "content": "", "full_ans": full_ans}
 
 
+def plain_chat_api_stream(question: str, tables: Optional[List[str]] = None,
+                          selected_fields: Optional[dict] = None,
+                          url="http://127.0.0.1:" + str(config_data["server_port"]), session_id: str = ""):
+    payload = {"question": question, "session_id": session_id}
+    if tables:
+        payload["tables"] = tables
+    if selected_fields:
+        payload["selected_fields"] = selected_fields
+    with httpx.stream("POST", url + "/api/plain-chat/stream/",
+                      json=payload,
+                      timeout=300.0) as response:
+        if response.status_code != 200:
+            yield {"type": "error", "content": f"HTTP {response.status_code}"}
+            return
+
+        full_ans = ""
+        buffer = ""
+        for chunk in response.iter_text():
+            buffer += chunk
+            while "\n\n" in buffer:
+                event_str, buffer = buffer.split("\n\n", 1)
+                for line in event_str.split("\n"):
+                    if line.startswith("data: "):
+                        try:
+                            event = json.loads(line[6:])
+                            if event.get("type") == "chunk":
+                                full_ans += event["content"]
+                            yield event
+                        except json.JSONDecodeError:
+                            pass
+
+        yield {"type": "done", "content": "", "full_ans": full_ans}
+
+
 def filter_db_fields_stream(question: str, tables: Optional[List[str]] = None,
                             url="http://127.0.0.1:" + str(config_data["server_port"])):
     with httpx.stream("POST", url + "/api/filter-db-fields/stream/",

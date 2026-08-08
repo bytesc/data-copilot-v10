@@ -644,6 +644,60 @@ async def step_chat_stream(request: Request, user_input: AgentInput):
     )
 
 
+@app.post("/api/plain-chat/")
+async def plain_chat(request: Request, user_input: AgentInput):
+    loop = asyncio.get_event_loop()
+    ans = await loop.run_in_executor(executor, get_plain_chat, user_input.question, user_input.tables, user_input.selected_fields)
+    print(ans)
+    if ans:
+        processed_data = {
+            "question": user_input.question,
+            "ans": ans,
+            "type": "success",
+            "msg": "处理成功",
+            "session_id": user_input.session_id or ""
+        }
+        record_session_operation(
+            user_input.session_id, request.url.path,
+            user_input.question, ans, "", "success", "处理成功"
+        )
+    else:
+        processed_data = {
+            "question": user_input.question,
+            "ans": "",
+            "type": "error",
+            "msg": "处理失败，请换个问法吧",
+            "session_id": user_input.session_id or ""
+        }
+        record_session_operation(
+            user_input.session_id, request.url.path,
+            user_input.question, "", "", "error", "处理失败，请换个问法吧"
+        )
+    return JSONResponse(content=processed_data)
+
+
+def _event_stream_plain_chat(question: str, tables=None, selected_fields=None, session_id: str = "", request_url: str = ""):
+    full_content = ""
+    for chunk in get_plain_chat_stream(question, tables, selected_fields):
+        full_content += chunk
+        yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'type': 'done', 'content': ''}, ensure_ascii=False)}\n\n"
+    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success")
+
+
+@app.post("/api/plain-chat/stream/")
+async def plain_chat_stream(request: Request, user_input: AgentInput):
+    return StreamingResponse(
+        _event_stream_plain_chat(user_input.question, user_input.tables, user_input.selected_fields, user_input.session_id or "", request.url.path),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
 if __name__ == "__main__":
     try:
         uvicorn.run(app, host=config_data['server_host'], port=config_data['server_port'])

@@ -13,7 +13,7 @@ from data_access.read_db import get_rows_from_all_tables, get_table_comments_dic
 from utils.front_utils import (
     ai_agent_api, generate_code_stream, execute_code_stream,
     step_chat_api_stream, filter_db_fields_stream, filter_functions_stream, upload_csv_api,
-    upload_doc_api, download_image, markdown_to_word,
+    plain_chat_api_stream, upload_doc_api, download_image, markdown_to_word,
     export_full_to_word, export_essentials_to_word
 )
 
@@ -320,45 +320,60 @@ def main():
                 conversation_history.append(f"A: {function_content}")
                 context = "\n".join(conversation_history)
                 full_question = f"Context:\n{context}\n"
-            else:
-                filter_scope = f"filter_scope_{len(conversation_history)}"
-                put_scope(filter_scope)
-                filter_content = ""
-                selected_fields = None
-                for event in filter_db_fields_stream(table_pre + full_question, SELECT_TABLES):
-                    event_type = event.get("type")
-                    if event_type == "status":
-                        toast(event["content"], color='info')
-                    elif event_type == "chunk":
-                        filter_content += event["content"]
-                        with use_scope(filter_scope, clear=True):
-                            put_markdown(filter_content, sanitize=False)
-                            put_html(CURSOR)
-                    elif event_type == "done":
-                        filter_content = event.get("content", "")
-                        import re as _re
-                        match = _re.search(r'```json\s*(.*?)\s*```', filter_content, _re.DOTALL)
-                        if match:
-                            try:
-                                selected_fields = json.loads(match.group(1))
-                            except json.JSONDecodeError:
-                                pass
-                        with use_scope(filter_scope, clear=True):
-                            if isinstance(selected_fields, dict) and selected_fields.get("__no_db__"):
-                                put_collapse("🔍 Database Field Filter", [put_markdown("No database query needed.", sanitize=False)])
-                            elif selected_fields and not selected_fields.get("__no_db__"):
-                                put_collapse("🔍 Database Field Filter", [
-                                    put_markdown("```json\n" + json.dumps(selected_fields, ensure_ascii=False, indent=2) + "\n```", sanitize=False)
-                                ])
-                            else:
-                                put_collapse("🔍 Database Field Filter", [put_markdown("```json\n" + filter_content + "\n```", sanitize=False)])
-                    elif event_type == "error":
-                        toast(event["content"], color='warning')
-                        selected_fields = None
 
-                if selected_fields is not None and len(selected_fields) == 0:
+            filter_scope = f"filter_scope_{len(conversation_history)}"
+            put_scope(filter_scope)
+            filter_content = ""
+            selected_fields = None
+            for event in filter_db_fields_stream(table_pre + full_question, SELECT_TABLES):
+                event_type = event.get("type")
+                if event_type == "status":
+                    toast(event["content"], color='info')
+                elif event_type == "chunk":
+                    filter_content += event["content"]
+                    with use_scope(filter_scope, clear=True):
+                        put_markdown(filter_content, sanitize=False)
+                        put_html(CURSOR)
+                elif event_type == "done":
+                    filter_content = event.get("content", "")
+                    import re as _re
+                    match = _re.search(r'```json\s*(.*?)\s*```', filter_content, _re.DOTALL)
+                    if match:
+                        try:
+                            selected_fields = json.loads(match.group(1))
+                        except json.JSONDecodeError:
+                            pass
+                    with use_scope(filter_scope, clear=True):
+                        if isinstance(selected_fields, dict) and selected_fields.get("__no_db__"):
+                            put_collapse("🔍 Database Field Filter", [put_markdown("No database query needed.", sanitize=False)])
+                        elif selected_fields and not selected_fields.get("__no_db__"):
+                            put_collapse("🔍 Database Field Filter", [
+                                put_markdown("```json\n" + json.dumps(selected_fields, ensure_ascii=False, indent=2) + "\n```", sanitize=False)
+                            ])
+                        else:
+                            put_collapse("🔍 Database Field Filter", [put_markdown("```json\n" + filter_content + "\n```", sanitize=False)])
+                elif event_type == "error":
+                    toast(event["content"], color='warning')
                     selected_fields = None
 
+            if selected_fields is not None and len(selected_fields) == 0:
+                selected_fields = None
+
+            if function_solved:
+                ans_scope = f"ans_scope_{len(conversation_history)}"
+                put_scope(ans_scope)
+                append_ans = display_streaming_response(ans_scope)
+                full_ans = ""
+                for event in plain_chat_api_stream(table_pre + full_question, SELECT_TABLES,
+                                                   selected_fields=selected_fields,
+                                                   session_id=conversation_session_id):
+                    full_ans = append_ans(event)
+                if full_ans:
+                    conversation_history.append(f"Q: {question}")
+                    conversation_history.append(f"A: {full_ans}")
+                else:
+                    put_text("Failed to get a response from the AI Agent.")
+            else:
                 code_scope = f"code_scope_{len(conversation_history)}"
                 put_scope(code_scope)
                 append_code = display_streaming_response(code_scope)
