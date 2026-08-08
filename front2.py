@@ -107,10 +107,13 @@ def execute_code_stream(code: str,
         yield {"type": "done", "content": "", "full_ans": full_ans}
 
 
-def step_chat_api_stream(question: str,
+def step_chat_api_stream(question: str, tables: Optional[List[str]] = None,
                          url="http://127.0.0.1:" + str(config_data["server_port"]), session_id: str = ""):
+    payload = {"question": question, "session_id": session_id}
+    if tables:
+        payload["tables"] = tables
     with httpx.stream("POST", url + "/api/step-chat/stream/",
-                      json={"question": question, "session_id": session_id},
+                      json=payload,
                       timeout=300.0) as response:
         if response.status_code != 200:
             yield {"type": "error", "content": f"HTTP {response.status_code}"}
@@ -470,7 +473,7 @@ def handle_table_selection(table_options):
         SELECT_LABELS = selected_labels
 
 
-def display_streaming_response(scope_name):
+def display_streaming_response(scope_name, collapse_title=None):
     """返回一个回调函数，用于在指定scope中追加显示流式内容"""
     accumulated = ""
 
@@ -491,6 +494,10 @@ def display_streaming_response(scope_name):
             accumulated = event["content"]
             with use_scope(scope_name, clear=True):
                 put_markdown(accumulated, sanitize=False)
+        elif event_type == "done":
+            if collapse_title and accumulated:
+                with use_scope(scope_name, clear=True):
+                    put_collapse(collapse_title, [put_markdown(accumulated, sanitize=False)])
         elif event_type == "error":
             toast(event["content"], color='error')
             with use_scope(scope_name, clear=False):
@@ -553,9 +560,9 @@ def main():
 
     scope_name = f"plan_scope"
     put_scope(scope_name)
-    append_plan = display_streaming_response(scope_name)
+    append_plan = display_streaming_response(scope_name, collapse_title="📋 分析计划")
     full_plan = ""
-    for event in step_chat_api_stream(question, session_id=conversation_session_id):
+    for event in step_chat_api_stream(question, SELECT_TABLES, session_id=conversation_session_id):
         full_plan = append_plan(event)
     if full_plan:
         conversation_history.append(f"Planner: {full_plan}")
@@ -586,7 +593,7 @@ def main():
                 elif event_type == "chunk":
                     filter_content += event["content"]
                     with use_scope(filter_scope, clear=True):
-                        put_collapse("🔍 数据库字段筛选", [put_markdown("```json\n" + filter_content + "\n```", sanitize=False)])
+                        put_markdown(filter_content, sanitize=False)
                 elif event_type == "done":
                     filter_content = event.get("content", "")
                     import re as _re
@@ -599,13 +606,16 @@ def main():
                     with use_scope(filter_scope, clear=True):
                         if selected_fields:
                             put_collapse("🔍 数据库字段筛选", [
-                                put_markdown("✅ 已筛选以下表和字段：", sanitize=False),
                                 put_markdown("```json\n" + json.dumps(selected_fields, ensure_ascii=False, indent=2) + "\n```", sanitize=False)
                             ])
                         else:
                             put_collapse("🔍 数据库字段筛选", [put_markdown("```json\n" + filter_content + "\n```", sanitize=False)])
                 elif event_type == "error":
                     toast(event["content"], color='warning')
+                    selected_fields = None
+
+            if selected_fields is not None and len(selected_fields) == 0:
+                selected_fields = None
 
             code_scope = f"code_scope_{len(conversation_history)}"
             put_scope(code_scope)
@@ -645,9 +655,9 @@ def main():
 
         plan_scope = f"plan_scope_{len(conversation_history)}"
         put_scope(plan_scope)
-        append_plan = display_streaming_response(plan_scope)
+        append_plan = display_streaming_response(plan_scope, collapse_title="📋 分析计划")
         full_plan = ""
-        for event in step_chat_api_stream(table_pre + full_question, session_id=conversation_session_id):
+        for event in step_chat_api_stream(table_pre + full_question, SELECT_TABLES, session_id=conversation_session_id):
             full_plan = append_plan(event)
         if full_plan:
             conversation_history.append(f"Planner: {full_plan}")

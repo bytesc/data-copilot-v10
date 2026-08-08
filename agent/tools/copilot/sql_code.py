@@ -129,24 +129,24 @@ def parse_selected_fields_json(txt):
 
 def _build_filter_prompt(question, engine, tables=None):
     schema = _build_compact_schema(engine, tables)
-    return f"""你是一个数据库分析助手。用户提出了以下问题：
+    return f"""You are a database analysis assistant. The user has asked the following question:
 
 "{question}"
 
-下面是数据库中所有表的结构和注释信息：
+Below is the structure and comments of all database tables:
 
 {schema}
 
-请根据用户的问题，筛选出回答该问题需要用到的数据库表和字段。
+Based on the user's question, filter out the database tables and columns needed to answer this question.
 
-要求：
-1. 只选择与问题直接相关的表和字段
-2. 如果某个表的所有字段都不相关，不要包含该表
-3. 如果某个表只有部分字段相关，只包含那些相关的字段
-4. 必须包含用于表关联的关键字段（如外键、ID等）
-5. 输出格式为 JSON，key 为表名，value 为需要使用的字段名列表
+Requirements:
+1. Only select tables and columns directly relevant to the question
+2. Do not include a table if none of its columns are relevant
+3. If only some columns of a table are relevant, include only those columns
+4. Must include key columns used for table joins (e.g., foreign keys, IDs)
+5. Output format must be JSON, with table names as keys and lists of column names as values
 
-请严格按照以下 JSON 格式输出，不要添加任何其他解释或说明：
+Please strictly output in the following JSON format, without any additional explanation:
 
 ```json
 {{
@@ -155,7 +155,7 @@ def _build_filter_prompt(question, engine, tables=None):
 }}
 ```
 
-如果判断用户的问题不需要查询数据库，请输出空对象：
+If the user's question does not require querying the database, output an empty object:
 
 ```json
 {{}}
