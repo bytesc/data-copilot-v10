@@ -21,7 +21,7 @@ from agent.step_chat import get_step_chat, get_step_chat_stream
 from data_access.insert_data_from_csv import process_csv_to_database
 from utils.get_config import config_data
 
-from agent.agent import exe_cot_code, get_cot_code, cot_agent, generate_code_stream, execute_code_stream, get_db
+from agent.agent import exe_cot_code, get_cot_code, cot_agent, generate_code_stream, execute_code_stream, generate_and_execute_stream, get_db
 from agent.summary import get_ans_summary
 from agent.ans_review import get_ans_review
 from utils.process_file import process_file_content
@@ -606,6 +606,27 @@ def _event_stream_execute_code(code: str, session_id: str = "", request_url: str
         record_session_operation(session_id, request_url, "", ans=full_ans, code=code, result_type="success", prompt_length=len(code))
 
 
+def _event_stream_generate_and_execute(question: str, tables: Optional[List[str]], selected_fields: Optional[Dict[str, Any]] = None, selected_functions: Optional[List[str]] = None, session_id: str = "", request_url: str = ""):
+    full_code = ""
+    full_ans = ""
+    exec_error = None
+    prompt_length = 0
+    for event in generate_and_execute_stream(question, tables, True, selected_fields=selected_fields, selected_functions=selected_functions):
+        if event.get("type") == "code_complete" and event.get("phase") == "code":
+            full_code = event.get("content", "")
+        if event.get("type") == "done" and event.get("phase") == "exec":
+            prompt_length = event.get("prompt_length", 0)
+        if event.get("type") == "chunk" and event.get("phase") == "exec":
+            full_ans += event.get("content", "")
+        if event.get("type") == "error" and event.get("phase") == "exec":
+            exec_error = event.get("content", "")
+        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+    if exec_error:
+        record_session_operation(session_id, request_url, question, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500], prompt_length=prompt_length)
+    else:
+        record_session_operation(session_id, request_url, question, ans=full_ans, code=full_code, result_type="success", prompt_length=prompt_length)
+
+
 def _event_stream_step_chat(question: str, tables=None, selected_fields=None, session_id: str = "", request_url: str = ""):
     full_content = ""
     prompt_length = 0
@@ -641,6 +662,19 @@ async def generate_code_stream_api(request: Request, user_input: AgentInput):
 async def execute_code_stream_api(request: Request, code_input: CodeInput):
     return StreamingResponse(
         _event_stream_execute_code(code_input.code, code_input.session_id or "", request.url.path),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+@app.post("/api/generate-and-execute/stream/")
+async def generate_and_execute_stream_api(request: Request, user_input: AgentInput):
+    return StreamingResponse(
+        _event_stream_generate_and_execute(user_input.question, user_input.tables, user_input.selected_fields, user_input.selected_functions, user_input.session_id or "", request.url.path),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

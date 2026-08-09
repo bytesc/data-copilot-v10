@@ -432,3 +432,90 @@ def execute_code_stream(code, retries=2, print_rows=5):
 
     yield {"type": "error", "content": f"执行失败: {err_msg[:200]}"}
     yield {"type": "done", "content": ""}
+
+
+def generate_and_execute_stream(question, tables=None, use_all_functions=False, retries=2,
+                                 selected_fields=None, selected_functions=None, print_rows=5,
+                                 code_gen_retries=2):
+    yield {"type": "status", "content": "正在分析问题...", "phase": "code"}
+
+    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions, selected_fields, selected_functions)
+    prompt_length = len(cot_prompt)
+
+    if cot_prompt == "solved":
+        yield {"type": "solved", "content": rag_ans, "phase": "code"}
+        yield {"type": "done", "content": "", "prompt_length": 0, "phase": "exec"}
+        return
+
+    exec_err_context = ""
+
+    for code_retry in range(code_gen_retries):
+        if code_retry > 0:
+            yield {"type": "status", "content": "执行出错，正在根据错误信息重新生成代码...", "phase": "code"}
+        else:
+            yield {"type": "status", "content": "正在生成代码...", "phase": "code"}
+
+        full_prompt = cot_prompt + exec_err_context
+        err_msg = ""
+        full_code = None
+
+        for j in range(retries):
+            current_prompt = full_prompt + err_msg
+            raw_content = ""
+            for chunk in call_llm_stream(current_prompt, llm):
+                raw_content += chunk
+                yield {"type": "code_chunk", "content": chunk, "phase": "code"}
+
+            code = parse_generated_python_code(raw_content)
+            if code is None:
+                yield {"type": "status", "content": "代码解析失败，正在重试...", "phase": "code"}
+                err_msg = "\n代码解析失败，请确保代码在 ```python 代码块中。\n"
+                continue
+
+            code = insert_lines_into_function(code, function_import)
+            code = insert_lines_into_function(code, IMPORTANT_MODULE)
+            code = insert_lines_into_function(code, THIRD_MODULE)
+            print("\n[Generated Code]:\n", code)
+
+            yield {"type": "code_complete", "content": code, "phase": "code"}
+            full_code = code
+            break
+
+        if full_code is None:
+            if code_retry < code_gen_retries - 1:
+                continue
+            yield {"type": "error", "content": "代码生成失败", "phase": "exec"}
+            yield {"type": "done", "content": "", "prompt_length": prompt_length, "phase": "exec"}
+            return
+
+        yield {"type": "status", "content": "正在执行代码...", "phase": "exec"}
+
+        execution_success = False
+        exec_err_msg = ""
+        for j in range(retries):
+            try:
+                result = execute_py_code(full_code)
+                for item in result:
+                    formatted = format_yield_item(item, print_rows)
+                    yield {"type": "chunk", "content": formatted, "phase": "exec"}
+                    print(item)
+                execution_success = True
+                break
+            except Exception as e:
+                exec_err_msg = str(e)
+                print(f"Execution error: {e}")
+                if j < retries - 1:
+                    yield {"type": "status", "content": f"执行出错，正在重试({j+1}/{retries})...", "phase": "exec"}
+                continue
+
+        if execution_success:
+            yield {"type": "done", "content": "", "prompt_length": prompt_length, "phase": "exec"}
+            logging.info(f"Code executed successfully.\nCode: {full_code}\n")
+            return
+
+        if code_retry < code_gen_retries - 1:
+            exec_err_context = f"\n\n[Execution Error from previous attempt]\nError: {exec_err_msg}\nFailed code:\n```python\n{full_code}\n```\n\nPlease fix the error and regenerate the code."
+            continue
+
+    yield {"type": "error", "content": f"执行失败: {exec_err_msg[:200]}", "phase": "exec"}
+    yield {"type": "done", "content": "", "prompt_length": prompt_length, "phase": "exec"}
