@@ -13,10 +13,16 @@ def get_db_info_prompt(engine, simple=False, example=False, tables=None, selecte
 Here is the structure of the database:
 """
     data_prompt += "\n```sql\n"+str(get_table_creation_statements(engine, tables, simple, selected_fields))+"\n```\n"
-    data_prompt += """
-Here is the table and column comments:
-"""
-    data_prompt += str(get_table_and_column_comments(engine, tables, selected_fields))
+    table_comments, column_comments = get_table_and_column_comments(engine, tables, selected_fields)
+    if table_comments:
+        data_prompt += "\nTable comments:\n"
+        for tname, tcomment in table_comments.items():
+            data_prompt += f"- {tname}: {tcomment}\n"
+    if column_comments:
+        data_prompt += "\nColumn comments:\n"
+        for tname, ccols in column_comments.items():
+            for cname, ccomment in ccols.items():
+                data_prompt += f"- {tname}.{cname}: {ccomment}\n"
     if example:
         data_prompt += """
 Here is data samples(just samples, do not mock any data):

@@ -100,6 +100,35 @@ def execute_code_stream(code: str,
         yield {"type": "done", "content": "", "full_ans": full_ans}
 
 
+def generate_and_execute_stream(question: str, tables: Optional[List[str]] = None,
+                                 selected_fields: Optional[dict] = None,
+                                 selected_functions: Optional[List[str]] = None,
+                                 url="http://127.0.0.1:" + str(config_data["server_port"]), session_id: str = ""):
+    payload = {"question": question, "tables": tables, "session_id": session_id}
+    if selected_fields:
+        payload["selected_fields"] = selected_fields
+    if selected_functions:
+        payload["selected_functions"] = selected_functions
+    with httpx.stream("POST", url + "/api/generate-and-execute/stream/",
+                      json=payload,
+                      timeout=300.0) as response:
+        if response.status_code != 200:
+            yield {"type": "error", "content": f"HTTP {response.status_code}"}
+            return
+        buffer = ""
+        for chunk in response.iter_text():
+            buffer += chunk
+            while "\n\n" in buffer:
+                event_str, buffer = buffer.split("\n\n", 1)
+                for line in event_str.split("\n"):
+                    if line.startswith("data: "):
+                        try:
+                            event = json.loads(line[6:])
+                            yield event
+                        except json.JSONDecodeError:
+                            pass
+
+
 def step_chat_api_stream(question: str, tables: Optional[List[str]] = None,
                          selected_fields: Optional[dict] = None,
                          url="http://127.0.0.1:" + str(config_data["server_port"]), session_id: str = ""):

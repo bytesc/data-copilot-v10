@@ -12,7 +12,7 @@ from pywebio.output import put_text, put_html, put_markdown, clear, put_loading,
 from pywebio import start_server, config
 from data_access.read_db import get_rows_from_all_tables, get_table_comments_dict, get_all_comments_from_table
 from utils.front_utils import (
-    ai_agent_api, generate_code_stream, execute_code_stream,
+    ai_agent_api, generate_code_stream, execute_code_stream, generate_and_execute_stream,
     step_chat_api_stream, filter_db_fields_stream, filter_functions_stream, upload_csv_api,
     plain_chat_api_stream, upload_doc_api, download_image, markdown_to_word,
     export_full_to_word, export_essentials_to_word
@@ -255,6 +255,7 @@ def main():
 
     filter_scope = f"filter_scope_initial"
     put_scope(filter_scope)
+    put_loading(shape="grow", color="primary", scope=filter_scope)
     filter_content = ""
     selected_fields = None
     last_update = time.time()
@@ -345,6 +346,7 @@ def main():
             for value in [question]:
                 function_scope = f"function_scope_{loop_id}"
                 put_scope(function_scope)
+                put_loading(shape="grow", color="primary", scope=function_scope)
                 function_content = ""
                 selected_functions = None
                 function_solved = False
@@ -387,6 +389,7 @@ def main():
 
                 filter_scope = f"filter_scope_{loop_id}"
                 put_scope(filter_scope)
+                put_loading(shape="grow", color="primary", scope=filter_scope)
                 filter_content = ""
                 selected_fields = None
                 last_update = time.time()
@@ -446,80 +449,57 @@ def main():
                     code_scope = f"code_scope_{loop_id}"
                     put_scope(code_scope)
                     append_code = display_streaming_response(code_scope)
-                    full_code = ""
-                    solved_ans = ""
-                    for event in generate_code_stream(full_question, SELECT_TABLES,
-                                                      selected_fields=selected_fields,
-                                                      selected_functions=selected_functions,
-                                                      session_id=conversation_session_id):
-                        append_code(event)
-                        if event.get("type") == "code_complete":
-                            full_code = event["content"]
-                        elif event.get("type") == "solved":
-                            solved_ans = event["content"]
 
-                    if full_code:
-                        code_gen_retries = 2
-                        for code_retry in range(code_gen_retries):
-                            conversation_history = [entry for entry in conversation_history if not entry.startswith("Code Generated: ")]
-                            conversation_history.append(f"Q: {question}")
-                            conversation_history.append(f"Code Generated: {full_code}")
-                            ans_scope = f"ans_scope_{loop_id}_{code_retry}"
-                            put_scope(ans_scope)
-                            append_ans = display_streaming_response(ans_scope)
-                            full_ans = ""
-                            exec_error = None
-                            partial_ans = ""
-                            for event in execute_code_stream(full_code, session_id=conversation_session_id):
-                                if event.get("type") == "error":
-                                    partial_ans = full_ans
-                                    exec_error = event.get("content", "")
-                                full_ans = append_ans(event)
-                            if exec_error and code_retry < code_gen_retries - 1:
-                                conversation_history = [entry for entry in conversation_history if not entry.startswith("Exe Error: ") and not entry.startswith("Exe Partial: ")]
-                                if partial_ans:
-                                    conversation_history.append(f"Exe Partial: {partial_ans}")
-                                conversation_history.append(f"Exe Error: {exec_error}")
-                                context = "\n".join(conversation_history)
-                                full_question = f"Context:\n{context}\n\nCurrent Question:\n{question}"
-                                code_scope = f"code_scope_{loop_id}_retry_{code_retry}"
-                                put_scope(code_scope)
-                                append_code = display_streaming_response(code_scope)
-                                full_code = ""
-                                solved_ans = ""
-                                for event in generate_code_stream(full_question, SELECT_TABLES,
-                                                                  selected_fields=selected_fields,
-                                                                  selected_functions=selected_functions,
-                                                                  session_id=conversation_session_id):
-                                    append_code(event)
-                                    if event.get("type") == "code_complete":
-                                        full_code = event["content"]
-                                    elif event.get("type") == "solved":
-                                        solved_ans = event["content"]
-                                if not full_code:
-                                    put_text("Failed to regenerate code.")
-                                    break
-                                continue
-                            if exec_error:
-                                conversation_history = [entry for entry in conversation_history if not entry.startswith("Exe Error: ") and not entry.startswith("Exe Partial: ")]
-                                if partial_ans:
-                                    conversation_history.append(f"Exe Partial: {partial_ans}")
-                                conversation_history.append(f"Exe Error: {exec_error}")
-                            elif full_ans:
-                                conversation_history = [entry for entry in conversation_history if not entry.startswith("Exe Error: ") and not entry.startswith("Exe Partial: ")]
-                                conversation_history.append(f"Exe Result: {full_ans}")
-                            else:
-                                put_text("Failed to get a response from the AI Agent.")
-                            break
-                    elif solved_ans:
+                    ans_scope = None
+                    append_ans = None
+
+                    full_code = ""
+                    full_ans = ""
+                    exec_error = None
+                    solved_ans = ""
+
+                    for event in generate_and_execute_stream(full_question, SELECT_TABLES,
+                                                              selected_fields=selected_fields,
+                                                              selected_functions=selected_functions,
+                                                              session_id=conversation_session_id):
+                        phase = event.get("phase", "exec")
+                        if phase == "code":
+                            append_code(event)
+                            if event.get("type") == "code_complete":
+                                full_code = event["content"]
+                            elif event.get("type") == "solved":
+                                solved_ans = event["content"]
+                        else:
+                            if append_ans is None:
+                                ans_scope = f"ans_scope_{loop_id}"
+                                put_scope(ans_scope)
+                                append_ans = display_streaming_response(ans_scope)
+                            if event.get("type") == "error":
+                                exec_error = event.get("content", "")
+                            full_ans = append_ans(event)
+
+                    if solved_ans:
                         conversation_history.append(f"Q: {question}")
                         conversation_history.append(f"A: {solved_ans}")
                         conversation_history = [entry for entry in conversation_history if not entry.startswith("Planner: ")]
+                    elif full_code:
+                        conversation_history = [entry for entry in conversation_history if not entry.startswith("Code Generated: ")]
+                        conversation_history.append(f"Q: {question}")
+                        conversation_history.append(f"Code Generated: {full_code}")
+                        if exec_error:
+                            conversation_history = [entry for entry in conversation_history if not entry.startswith("Exe Error: ") and not entry.startswith("Exe Partial: ")]
+                            conversation_history.append(f"Exe Error: {exec_error}")
+                        elif full_ans:
+                            conversation_history = [entry for entry in conversation_history if not entry.startswith("Exe Error: ") and not entry.startswith("Exe Partial: ")]
+                            conversation_history.append(f"Exe Result: {full_ans}")
+                        else:
+                            put_text("Failed to get a response from the AI Agent.")
                     else:
                         put_text("Failed to get a response from the AI Agent.")
         else:
             filter_scope = f"filter_scope_{loop_id}"
             put_scope(filter_scope)
+            put_loading(shape="grow", color="primary", scope=filter_scope)
             filter_content = ""
             selected_fields = None
             last_update = time.time()
