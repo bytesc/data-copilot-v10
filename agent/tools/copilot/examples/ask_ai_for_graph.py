@@ -33,9 +33,9 @@ Remind:
     if col_explanation:
         col_prompt = "\ndf columns explanation: "+str(col_explanation)+"\n"
     if not tmp_file:
-        return "question:"+question + pre_prompt + "`"+generate_img_path()+"`"+example_code+col_prompt
+        return pre_prompt + "`"+generate_img_path()+"`"+example_code+col_prompt+"question:"+question
     else:
-        return "question:"+question + pre_prompt + "./tmp_imgs/tmp.png" + example_code+col_prompt
+        return pre_prompt + "./tmp_imgs/tmp.png" + example_code+col_prompt+"question:"+question
 
 
 def get_ask_compare_graph_prompt(question, col_explanation=None, tmp_file=False):

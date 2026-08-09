@@ -52,7 +52,7 @@ Please write SQL code to select the data needed according to the following requi
 Remind:
 1. All code should be completed in a single markdown code block without any comments, explanations or cmds.
 """
-        final_prompt = question + pre_prompt + "\n" + data_prompt + end_prompt
+        final_prompt = pre_prompt + "\n" + data_prompt + end_prompt + question
 
         ans = call_llm(final_prompt + error_msg, llm)
         print("sql################################3")

@@ -67,7 +67,7 @@ exe_sql, get_save_image_path
 Example 2:
 exe_sql
 """
-    return "question:" + question + pre_prompt + function_prompt + str(FUNCTION_DESCRIPTION) + example_code
+    return pre_prompt + function_prompt + str(FUNCTION_DESCRIPTION) + example_code + "question:" + question
 
 
 def get_function_info(question, llm, use_all_functions=False, brief=False):

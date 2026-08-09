@@ -14,4 +14,4 @@ def func(data):
     return result
 ```
 """
-    return "question:"+question + pre_prompt + example_code
+    return pre_prompt + example_code + "question:" + question

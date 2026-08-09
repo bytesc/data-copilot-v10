@@ -46,7 +46,7 @@ Remind:
 6. Access DataFrames from data_dict using keys, e.g., data_dict['key_name']
 """
 
-    final_prompt = pre_prompt + question + "\n" + data_prompt + end_prompt
+    final_prompt = pre_prompt + "\n" + data_prompt + end_prompt + question
 
     retries_times = 0
     error_msg = ""
@@ -98,7 +98,7 @@ Remind:
 5. Do not use `input()` !!!
 """
 
-    final_prompt = pre_prompt + question + "\n" + data_prompt + end_prompt
+    final_prompt = pre_prompt + "\n" + data_prompt + end_prompt + question
 
     retries_times = 0
     error_msg = ""
@@ -140,7 +140,7 @@ Remind:
 5. Do not use `input()` !!!
 """
 
-    final_prompt = pre_prompt + question + "\n" + end_prompt
+    final_prompt = pre_prompt + "\n" + end_prompt + question
 
     retries_times = 0
     error_msg = ""

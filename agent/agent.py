@@ -192,9 +192,9 @@ Here is the functions you can import and use:
     - If the current todo item requires user confirmation or additional information, yield the request and stop. Do NOT proceed to other items.
     """
 
-    cot_prompt = "question:" + question + knowledge + database + pre_prompt + \
-                 function_prompt + str(function_info) + \
-                 module_prompt + example_code + remind_prompt
+    cot_prompt = pre_prompt + function_prompt + str(function_info) + \
+                 module_prompt + example_code + remind_prompt + \
+                 database + knowledge + "question:" + question
     return cot_prompt, rag_ans, function_import
 
 

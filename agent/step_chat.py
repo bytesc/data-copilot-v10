@@ -97,9 +97,9 @@ Response:
 - [ ] Calculate average.
 """
 
-    cot_prompt = "question:" + question + knowledge + database + pre_prompt + \
-                 function_prompt + str(function_info) + \
-                 example_ans
+    cot_prompt = pre_prompt + function_prompt + str(function_info) + example_ans + \
+                 database + knowledge + \
+                 "question:" + question
     return cot_prompt, rag_ans, function_import
 
 

@@ -21,7 +21,7 @@ You can use the following functions:
     pre_prompt = """
 You are a helpful assistant. Answer the user's question based on the database and available functions provided.
 """
-    prompt = "question:" + question + database + pre_prompt + function_prompt + function_info
+    prompt = pre_prompt + function_prompt + function_info + database + "question:" + question
     return prompt
 
 

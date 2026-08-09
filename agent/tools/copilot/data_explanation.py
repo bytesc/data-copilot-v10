@@ -39,7 +39,7 @@ Remind:
 4. Just describe the data, do not use any phrase to explain what you are doing.
 """
 
-    final_prompt = pre_prompt + question + "\n" + example_prompt + data_prompt + col_prompt + end_prompt
+    final_prompt = pre_prompt + example_prompt + data_prompt + col_prompt + end_prompt + "\n" + question
     ans = call_llm_test.call_llm(final_prompt, llm)
 
     return ans.content
