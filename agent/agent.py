@@ -142,9 +142,23 @@ Here is the functions you can import and use:
     remind_prompt = """
     Remind: 
 
-    - CRITICAL: ALL code MUST be wrapped inside `def func():` function. The code will be executed by calling `func()`. yield can ONLY be used inside the function body.
-    - The first line of your code MUST be `def func():`. Do NOT write any code outside the function.
-    - Do NOT use yield at module level (outside a function). This will cause a SyntaxError.
+    ⚠️ CRITICAL OUTPUT FORMAT — VIOLATION WILL CAUSE EXECUTION FAILURE:
+    - Your ENTIRE response MUST be wrapped in a SINGLE ```python ... ``` markdown code block. Nothing outside the code block is allowed.
+    - The first line of your code MUST be `def func():`. Do NOT write any code, text, or explanation outside the function.
+    - Even if the question can be answered with plain text only (no function calls, no data queries), you MUST still generate code in the ```python``` block format. Use `yield "your answer text"` to output the answer.
+    - NEVER output plain text outside the code block. NEVER output markdown, explanations, or conversational text before or after the code block.
+    
+    Wrong format (will be rejected):
+    - Outputting: "The answer is 42" (plain text, no code block)
+    - Outputting: ```python\ndef func():\n    yield "hello"\n```\nHere is some extra text... (text outside code block)
+    - Outputting: Let me think...\n```python\ndef func():\n    ...\n``` (text before code block)
+    
+    Correct format for text-only answers:
+    ```python
+    def func():
+        yield "Your answer text here"
+    ```
+
     - IMPORTANT: Please use yield instead of return and print(), never use input() or any funcs that hung up the process to wait user action!
     - Please yield explanation string of each step as kind of report! Please yield some information string during the function!
     - Please yield the result of each step and function call! Please yield report many times during the function!!! not only yield at last! 

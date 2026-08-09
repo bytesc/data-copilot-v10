@@ -324,10 +324,7 @@ def main():
             plan_complete = True
 
         next_text="continue !"
-        if plan_complete:
-            value = ""
-        else:
-            value = next_text
+        value = next_text
         question = textarea("What is next?:", value=value, type=TEXT, rows=2)
         if not question.strip():
             continue
