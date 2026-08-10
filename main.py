@@ -26,9 +26,13 @@ from agent.summary import get_ans_summary
 from agent.ans_review import get_ans_review
 from utils.process_file import process_file_content
 from data_access.session_log import record_session_operation, create_session_log_table
+from data_access.observe_log import (
+    create_observe_log_tables, log_observe_cycle, log_observe_session
+)
 
 # 启动时确保会话操作记录表已创建
 create_session_log_table()
+create_observe_log_tables()
 
 # DATABASE_URL = config_data['mysql']
 # engine = sqlalchemy.create_engine(DATABASE_URL)
@@ -753,6 +757,15 @@ async def plain_chat_stream(request: Request, user_input: AgentInput):
             "X-Accel-Buffering": "no",
         }
     )
+
+
+from agent.think import router as think_router
+from agent.act import router as act_router
+from agent.observe import router as observe_router
+
+app.include_router(think_router)
+app.include_router(act_router)
+app.include_router(observe_router)
 
 
 if __name__ == "__main__":

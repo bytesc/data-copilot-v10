@@ -72,8 +72,6 @@ def get_cot_code_prompt(question, tables=None, use_all_functions=False, selected
 
     database = ""
     if query_database in function_set or exe_sql in function_set:
-        if selected_fields is None:
-            selected_fields = filter_db_fields(question, engine, llm, tables)
         if selected_fields and selected_fields.get("__no_db__"):
             database = ""
             selected_fields = None
