@@ -441,6 +441,7 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
     append_exec = None
     append_code = None
     append_search = None
+    search_scope_name = None
     for event in act_api_stream(
         action=action,
         question=full_question,
@@ -460,10 +461,21 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
 
         if sub in ("search_db", "search_func"):
             if append_search is None:
-                search_scope = f"act_{cycle_index}_search"
-                put_scope(search_scope)
-                append_search = display_streaming(search_scope, collapse_title=f"Search Results: {action}")
+                search_scope_name = f"act_{cycle_index}_search"
+                put_scope(search_scope_name)
+                append_search = display_streaming(search_scope_name, collapse_title=f"Search Results: {action}")
             append_search(event)
+            if etype == "done":
+                sf = event.get("selected_fields")
+                sfuncs = event.get("selected_functions")
+                if sf is not None:
+                    with use_scope(search_scope_name):
+                        put_text(f"Selection ({action}):")
+                        put_markdown(f"```json\n{json.dumps(sf, ensure_ascii=False, indent=2)}\n```", sanitize=False)
+                elif sfuncs is not None:
+                    with use_scope(search_scope_name):
+                        put_text(f"Selection ({action}):")
+                        put_markdown(f"```json\n{json.dumps(sfuncs, ensure_ascii=False, indent=2)}\n```", sanitize=False)
         elif sub in ("generate", "code"):
             if append_code is None:
                 code_scope = f"act_{cycle_index}_code"
