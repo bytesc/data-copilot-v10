@@ -56,10 +56,13 @@ def _truncate_val(val, max_len=60):
     return s
 
 
-def get_db_overview_markdown(engine, tables=None, include_samples=True) -> str:
+def get_db_overview_markdown(engine, tables=None, include_samples=True, selected_fields=None) -> str:
     table_names = _get_all_table_names(engine, tables)
     if not table_names:
         return "*(No database tables found)*"
+
+    if selected_fields and not selected_fields.get("__no_db__"):
+        table_names = [t for t in table_names if t in selected_fields]
 
     lines = []
     for tname in table_names:
@@ -68,6 +71,12 @@ def get_db_overview_markdown(engine, tables=None, include_samples=True) -> str:
         pk_cols = info['pk_cols']
         fk_map = info['fk_map']
         comment = info['comment']
+
+        if selected_fields and not selected_fields.get("__no_db__") and tname in selected_fields:
+            allowed = selected_fields[tname]
+            if allowed:
+                allowed_set = set(allowed)
+                columns = [c for c in columns if c['name'] in allowed_set]
 
         header = f"## {tname}"
         if comment:

@@ -103,6 +103,31 @@ def get_func_summary_for_agent() -> str:
     return "\n".join(lines)
 
 
+def get_func_docs_for(fnames: List[str]) -> str:
+    lines = ["## Selected Functions", ""]
+    for fname in fnames:
+        func = FUNCTION_DICT.get(fname)
+        if not func:
+            continue
+        doc = func.__doc__
+        doc_lines = doc.splitlines()
+        signature = doc_lines[0].strip() if doc_lines else fname
+        purpose = doc_lines[1].strip() if len(doc_lines) > 1 else ''
+        lines.append(f"#### `{fname}`")
+        lines.append("")
+        lines.append(f"```\n{signature}\n```")
+        lines.append("")
+        if purpose:
+            lines.append(purpose)
+            lines.append("")
+        extra = FUNC_EXTRA.get(fname, {})
+        if extra.get('example'):
+            lines.append("**Example:**")
+            lines.append(f"```python\n{extra.get('example')}\n```")
+            lines.append("")
+    return "\n".join(lines)
+
+
 def search_func_by_keyword(keyword: str) -> str:
     kw_lower = keyword.lower()
     results = []

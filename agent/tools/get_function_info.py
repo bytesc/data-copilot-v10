@@ -32,7 +32,7 @@ ASSIST_FUNCTION_DICT = {
 }
 
 IMPORTANT_FUNC = [
-    # "load_data", "get_save_image_path"
+    "load_data", "get_save_image_path"
 ]
 
 # FUNCTION_INFO = {key: func.__doc__ for key, func in FUNCTION_DICT.items()}

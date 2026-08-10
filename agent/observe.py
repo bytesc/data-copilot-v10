@@ -80,16 +80,21 @@ Autonomous State Judgment & Update Rules:
 7. Do NOT output any code, code snippets, or conversational text. Output ONLY the updated Markdown checklist.
 8. Use [x] to update multiple items if more than one is done. Never return the same list without doing anything!
 9. BEFORE generate_and_execute, you MUST first call search_db to select relevant tables and columns, and search_func to select needed functions. Never skip these steps.
+10. If "Available Database Context" is present above, search_db has already been done — mark schema exploration steps as DONE. If "Available Functions" is present, search_func has been done — mark function exploration steps as DONE. Do NOT call search_db or search_func again.
 
 After your checklist, output a line starting with NEXT_ACTION: followed by exactly one of:
-- search_db (if you need to explore or search the database schema in detail)
-- search_func (if you need to explore available functions in detail)
-- generate_and_execute (if ready to execute the next step)
+- search_db (if you need to explore the database in detail) — optionally add keyword:xxx
+- search_func (if you need to explore available functions in detail) — optionally add keyword:xxx
+- generate_and_execute (if ready to execute) — add funcs:exe_sql,load_data to specify functions. Table and field info is already in context.
 - output_text (if you want to display information or analysis to the user)
 - ask_question (if you need to ask the user a clarifying question)
 - ask_choice (if you need the user to choose from options)
 - summary_and_pause (if you want to summarize progress and pause for user input)
 - attempt_completion (if the entire task is complete and you want to present final results)
+
+Example:
+NEXT_ACTION: generate_and_execute
+funcs: exe_sql, get_save_image_path
 
 Output ONLY the Markdown checklist followed by NEXT_ACTION:"""
 

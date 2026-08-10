@@ -10,7 +10,7 @@ from agent.tools.tools_def import engine, llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.tools.copilot.sql_code import parse_selected_fields_json
 from agent.tools.search_db import get_db_overview_markdown, search_db_markdown, get_db_summary_for_agent
-from agent.tools.search_func import get_func_catalog_markdown, search_func_by_keyword, get_func_summary_for_agent
+from agent.tools.search_func import get_func_catalog_markdown, search_func_by_keyword, get_func_summary_for_agent, get_func_docs_for
 from agent.tools.get_function_info import FUNCTION_DICT, FUNCTION_DESCRIPTION
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
@@ -86,15 +86,13 @@ def _act_search_db(full_question: str, session_id: str, tables, search_keyword: 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'status', 'content': '正在搜索数据库信息...'}, ensure_ascii=False)}\n\n"
 
     if search_keyword and search_keyword.strip():
-        schema = search_db_markdown(engine, search_keyword.strip(), tables)
+        full_schema = search_db_markdown(engine, search_keyword.strip(), tables)
     else:
-        schema = get_db_overview_markdown(engine, tables, include_samples=True)
-
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'chunk', 'content': schema}, ensure_ascii=False)}\n\n"
+        full_schema = get_db_overview_markdown(engine, tables, include_samples=True)
 
     prompt = f"""Analyze the following database schema and the user's question to select the relevant tables and columns.
 
-{schema}
+{full_schema}
 
 Question:
 {full_question}
@@ -110,27 +108,31 @@ Example:
 
     response = call_llm(prompt, llm)
     selected_fields = parse_selected_fields_json(response.content) or {}
+
+    if selected_fields and not selected_fields.get("__no_db__"):
+        display_content = get_db_overview_markdown(engine, tables, include_samples=True, selected_fields=selected_fields)
+    else:
+        display_content = full_schema
+
     log_observe_cycle(session_id, 0, "act", "search_db",
                       prompt=prompt[:5000], response=response.content[:5000],
                       token_estimate=len(prompt) // 3)
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'done', 'content': schema, 'db_context': schema, 'selected_fields': selected_fields, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'done', 'content': display_content, 'db_context': full_schema, 'selected_fields': selected_fields, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
 
 def _act_search_func(full_question: str, session_id: str, search_keyword: Optional[str] = None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'status', 'content': '正在搜索函数信息...'}, ensure_ascii=False)}\n\n"
 
     if search_keyword and search_keyword.strip():
-        catalog = search_func_by_keyword(search_keyword.strip())
+        full_catalog = search_func_by_keyword(search_keyword.strip())
     else:
-        catalog = get_func_catalog_markdown()
-
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'chunk', 'content': catalog}, ensure_ascii=False)}\n\n"
+        full_catalog = get_func_catalog_markdown()
 
     func_names = ", ".join(FUNCTION_DICT.keys())
     prompt = f"""Analyze the following function catalog and the user's question to select the needed functions.
 
-{catalog}
+{full_catalog}
 
 Question:
 {full_question}
@@ -151,11 +153,16 @@ exe_sql, get_save_image_path
     else:
         selected_functions = [f.strip() for f in raw.split(',') if f.strip() in FUNCTION_DICT]
 
+    if selected_functions:
+        display_content = get_func_docs_for(selected_functions)
+    else:
+        display_content = "*(No functions selected)*"
+
     log_observe_cycle(session_id, 0, "act", "search_func",
                       prompt=prompt[:5000], response=response.content[:5000],
                       token_estimate=len(prompt) // 3)
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'done', 'content': catalog, 'func_context': catalog, 'selected_functions': selected_functions, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'done', 'content': display_content, 'func_context': full_catalog, 'selected_functions': selected_functions, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
 
 def _act_generate_and_execute(full_question: str, session_id: str, request_url: str, tables, selected_fields, selected_functions):

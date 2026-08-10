@@ -209,7 +209,7 @@ def phase_header(phase: str, title: str):
 
 
 def parse_think_result(events: list) -> dict:
-    result = {"plan": "", "next_action": None, "search_keyword": None}
+    result = {"plan": "", "next_action": None, "search_keyword": None, "selected_functions": None}
     for event in events:
         sub = event.get("sub_phase", "")
         etype = event.get("type", "")
@@ -224,6 +224,9 @@ def parse_think_result(events: list) -> dict:
             kw_match = re.search(r'keyword:\s*(\S+)', content)
             if kw_match:
                 result["search_keyword"] = kw_match.group(1).rstrip(')')
+            func_match = re.search(r'funcs:\s*([\w\s,_]+)', content)
+            if func_match:
+                result["selected_functions"] = [f.strip() for f in func_match.group(1).split(',') if f.strip()]
     return result
 
 
@@ -297,7 +300,7 @@ def parse_act_result(events: list) -> dict:
 
 
 def parse_observe_result(events: list) -> dict:
-    result = {"updated_plan": "", "next_action": None, "search_keyword": None}
+    result = {"updated_plan": "", "next_action": None, "search_keyword": None, "selected_functions": None}
     for event in events:
         sub = event.get("sub_phase", "")
         etype = event.get("type", "")
@@ -312,6 +315,9 @@ def parse_observe_result(events: list) -> dict:
             kw_match = re.search(r'keyword:\s*(\S+)', content)
             if kw_match:
                 result["search_keyword"] = kw_match.group(1).rstrip(')')
+            func_match = re.search(r'funcs:\s*([\w\s,_]+)', content)
+            if func_match:
+                result["selected_functions"] = [f.strip() for f in func_match.group(1).split(',') if f.strip()]
     return result
 
 
@@ -429,8 +435,8 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
     put_scope(act_scope)
 
     act_events = []
-    search_content = ""
-    append_act = None
+    append_exec = None
+    append_code = None
     for event in act_api_stream(
         action=action,
         question=full_question,
@@ -449,9 +455,7 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
         content = event.get("content", "")
 
         if sub in ("search_db", "search_func"):
-            if etype == "chunk":
-                search_content = content
-            elif etype == "done":
+            if etype == "done":
                 sf = event.get("selected_fields")
                 sfuncs = event.get("selected_functions")
                 json_display = ""
@@ -461,28 +465,38 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
                     json_display = f"```json\n{json.dumps(sfuncs, ensure_ascii=False, indent=2)}\n```"
                 with use_scope(act_scope, clear=True):
                     put_collapse(f"Search Results: {action}", [
-                        put_markdown(search_content, sanitize=False)
+                        put_markdown(content, sanitize=False)
                     ], open=False)
                     if json_display:
                         put_text(f"Selection ({action}):")
                         put_markdown(json_display, sanitize=False)
-        elif sub == "code" and etype == "code_complete":
-            with use_scope(act_scope):
-                put_collapse("Generated Code", [
-                    put_markdown(f"```python\n{content}\n```", sanitize=False)
-                ], open=False)
+        elif sub == "code":
+            if etype == "code_chunk":
+                if append_code is None:
+                    code_scope = f"act_{cycle_index}_code"
+                    put_scope(code_scope)
+                    append_code = display_streaming(code_scope)
+                append_code({"type": "code_chunk", "content": content})
+            elif etype == "code_complete":
+                with use_scope(act_scope):
+                    put_collapse("Generated Code", [
+                        put_markdown(f"```python\n{content}\n```", sanitize=False)
+                    ], open=False)
+            elif etype == "solved":
+                with use_scope(act_scope):
+                    put_markdown(content, sanitize=False)
         elif sub == "exec":
-            if append_act is None:
+            if append_exec is None:
                 exec_scope = f"act_{cycle_index}_exec"
                 put_scope(exec_scope)
-                append_act = display_streaming(exec_scope)
-            append_act(event)
+                append_exec = display_streaming(exec_scope)
+            append_exec(event)
         elif sub in ("output_text", "summary", "completion", "ask_question", "ask_choice"):
-            if append_act is None:
+            if append_exec is None:
                 out_scope = f"act_{cycle_index}_out"
                 put_scope(out_scope)
-                append_act = display_streaming(out_scope)
-            append_act(event)
+                append_exec = display_streaming(out_scope)
+            append_exec(event)
 
     return parse_act_result(act_events)
 
@@ -589,10 +603,14 @@ def main():
 
         action = determine_next_action(think_result, selected_fields, selected_functions)
         search_keyword = think_result.get("search_keyword")
+        plan_funcs = think_result.get("selected_functions")
+
+        act_funcs = plan_funcs if plan_funcs is not None else selected_functions
+        act_fields = {"__no_db__": True} if action == "generate_and_execute" else selected_fields
 
         act_result = run_act_phase(
             cycle_index, action, full_question,
-            selected_fields, selected_functions,
+            act_fields, act_funcs,
             conversation_history, session_id,
             search_keyword=search_keyword,
         )
