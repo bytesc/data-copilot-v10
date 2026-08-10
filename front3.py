@@ -224,9 +224,9 @@ def parse_think_result(events: list) -> dict:
                 action = match.group(1)
                 if action in ACTIONS:
                     result["next_action"] = action
-            kw_match = re.search(r'keyword:\s*(\S+)', content)
+            kw_match = re.search(r'keyword:\s*(.+?)(?:\n|$)', content)
             if kw_match:
-                result["search_keyword"] = kw_match.group(1).rstrip(')')
+                result["search_keyword"] = kw_match.group(1).strip().rstrip(')')
             func_match = re.search(r'funcs:\s*([\w\s,_]+)', content)
             if func_match:
                 result["selected_functions"] = [f.strip() for f in func_match.group(1).split(',') if f.strip()]
@@ -315,9 +315,9 @@ def parse_observe_result(events: list) -> dict:
                 action = match.group(1)
                 if action in ACTIONS:
                     result["next_action"] = action
-            kw_match = re.search(r'keyword:\s*(\S+)', content)
+            kw_match = re.search(r'keyword:\s*(.+?)(?:\n|$)', content)
             if kw_match:
-                result["search_keyword"] = kw_match.group(1).rstrip(')')
+                result["search_keyword"] = kw_match.group(1).strip().rstrip(')')
             func_match = re.search(r'funcs:\s*([\w\s,_]+)', content)
             if func_match:
                 result["selected_functions"] = [f.strip() for f in func_match.group(1).split(',') if f.strip()]
@@ -643,7 +643,21 @@ def main():
 
         user_interaction = handle_user_interaction(act_result, conversation_history)
         if user_interaction.get("completed"):
-            break
+            question = textarea("What is next?:", value="", type=TEXT, rows=2)
+            if not question.strip():
+                continue
+            put_markdown("## " + question)
+            conversation_history.append(f"Q: {question}")
+            original_question = question
+
+            think_result = run_think_phase(
+                cycle_index, question, selected_fields, conversation_history, session_id,
+            )
+            current_plan = think_result.get("plan", "")
+            if current_plan:
+                conversation_history = [e for e in conversation_history if not e.startswith("Planner: ")]
+                conversation_history.append(f"Planner: {current_plan}")
+            continue
 
         observe_result = run_observe_phase(
             cycle_index, original_question, selected_fields,

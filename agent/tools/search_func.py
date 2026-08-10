@@ -130,11 +130,12 @@ def get_func_docs_for(fnames: List[str]) -> str:
 
 def search_func_by_keyword(keyword: str) -> str:
     kw_lower = keyword.lower()
+    keywords = [k for k in kw_lower.split() if k]
     results = []
 
     for fname, func in FUNCTION_DICT.items():
         search_text = (fname + ' ' + (func.__doc__ or '')).lower()
-        if kw_lower in search_text:
+        if any(k in search_text for k in keywords):
             results.append(fname)
 
     if not results:

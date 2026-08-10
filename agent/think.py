@@ -62,9 +62,10 @@ Rules:
 8. TABLE MATCHING RULE: Check table comments to match concepts to tables. Only ask the user if table comments are missing or ambiguous.
 9. Do NOT output any code, code snippets, or conversational text. Output ONLY the Markdown checklist.
 10. BEFORE generate_and_execute, you MUST first call search_db to select relevant tables and columns, and search_func to select needed functions. Never skip these steps.
+11. KEYWORD FALLBACK: When using keyword search, if the keyword returns no results, retry search_db WITHOUT keyword to get the full table overview.
 
 After your checklist, output a line starting with NEXT_ACTION: followed by exactly one of:
-- search_db (if you need to explore the database in detail) — optionally add keyword:xxx to search by keyword
+- search_db (if you need to explore the database in detail) — optionally add keyword:xxx to search by keyword, space-separate multiple keywords
 - search_func (if you need to explore available functions in detail) — optionally add keyword:xxx
 - generate_and_execute (if ready to execute) — add funcs:exe_sql,load_data to specify functions (must match search_func results). Table and field info is already in context, no need to specify.
 - output_text (if you want to display information or analysis to the user)

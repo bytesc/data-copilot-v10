@@ -111,6 +111,8 @@ Example:
 
     if selected_fields and not selected_fields.get("__no_db__"):
         display_content = get_db_overview_markdown(engine, tables, include_samples=True, selected_fields=selected_fields)
+    elif selected_fields and selected_fields.get("__no_db__"):
+        display_content = "*(No database tables needed)*"
     else:
         display_content = full_schema
 

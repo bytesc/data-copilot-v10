@@ -128,6 +128,7 @@ def search_db_markdown(engine, keyword: str, tables=None) -> str:
         return "*(No database tables found)*"
 
     kw_lower = keyword.lower()
+    keywords = [k for k in kw_lower.split() if k]
     matched_tables = []
     matched_columns = {}
 
@@ -136,11 +137,11 @@ def search_db_markdown(engine, keyword: str, tables=None) -> str:
         comment = info['comment']
         columns = info['columns']
 
-        table_match = kw_lower in tname.lower() or kw_lower in comment.lower()
+        table_match = any(k in tname.lower() or k in comment.lower() for k in keywords)
         col_matches = []
         for col in columns:
             col_comment = col.get('comment') or ''
-            if kw_lower in col['name'].lower() or kw_lower in col_comment.lower():
+            if any(k in col['name'].lower() or k in col_comment.lower() for k in keywords):
                 col_matches.append(col)
 
         if table_match or col_matches:

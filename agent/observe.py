@@ -81,9 +81,10 @@ Autonomous State Judgment & Update Rules:
 8. Use [x] to update multiple items if more than one is done. Never return the same list without doing anything!
 9. BEFORE generate_and_execute, you MUST first call search_db to select relevant tables and columns, and search_func to select needed functions. Never skip these steps.
 10. If "Available Database Context" is present above, search_db has already been done — mark schema exploration steps as DONE. If "Available Functions" is present, search_func has been done — mark function exploration steps as DONE. Do NOT call search_db or search_func again.
+11. EXCEPTION: If "Available Database Context" contains "No tables or columns found matching keyword", it means keyword search returned no results. In that case, retry search_db WITHOUT keyword (do NOT add keyword:xxx).
 
 After your checklist, output a line starting with NEXT_ACTION: followed by exactly one of:
-- search_db (if you need to explore the database in detail) — optionally add keyword:xxx
+- search_db (if you need to explore the database in detail) — optionally add keyword:xxx, space-separate multiple keywords
 - search_func (if you need to explore available functions in detail) — optionally add keyword:xxx
 - generate_and_execute (if ready to execute) — add funcs:exe_sql,load_data to specify functions. Table and field info is already in context.
 - output_text (if you want to display information or analysis to the user)
