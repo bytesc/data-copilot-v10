@@ -186,11 +186,14 @@ def display_streaming(scope_name: str, collapse_title: str = None):
         elif event_type == "done":
             if handled:
                 return accumulated
+            done_content = event.get("content", "")
+            if not accumulated and done_content:
+                accumulated = done_content
             with use_scope(scope_name, clear=True):
                 if collapse_title and accumulated:
                     put_collapse(collapse_title, [
                         put_markdown(accumulated, sanitize=False)
-                    ])
+                    ], open=False)
                 elif accumulated:
                     put_markdown(accumulated, sanitize=False)
         elif event_type == "error":
@@ -437,6 +440,7 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
     act_events = []
     append_exec = None
     append_code = None
+    append_search = None
     for event in act_api_stream(
         action=action,
         question=full_question,
@@ -455,36 +459,17 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
         content = event.get("content", "")
 
         if sub in ("search_db", "search_func"):
-            if etype == "done":
-                sf = event.get("selected_fields")
-                sfuncs = event.get("selected_functions")
-                json_display = ""
-                if sf is not None:
-                    json_display = f"```json\n{json.dumps(sf, ensure_ascii=False, indent=2)}\n```"
-                elif sfuncs is not None:
-                    json_display = f"```json\n{json.dumps(sfuncs, ensure_ascii=False, indent=2)}\n```"
-                with use_scope(act_scope, clear=True):
-                    put_collapse(f"Search Results: {action}", [
-                        put_markdown(content, sanitize=False)
-                    ], open=False)
-                    if json_display:
-                        put_text(f"Selection ({action}):")
-                        put_markdown(json_display, sanitize=False)
-        elif sub == "code":
-            if etype == "code_chunk":
-                if append_code is None:
-                    code_scope = f"act_{cycle_index}_code"
-                    put_scope(code_scope)
-                    append_code = display_streaming(code_scope)
-                append_code({"type": "code_chunk", "content": content})
-            elif etype == "code_complete":
-                with use_scope(act_scope):
-                    put_collapse("Generated Code", [
-                        put_markdown(f"```python\n{content}\n```", sanitize=False)
-                    ], open=False)
-            elif etype == "solved":
-                with use_scope(act_scope):
-                    put_markdown(content, sanitize=False)
+            if append_search is None:
+                search_scope = f"act_{cycle_index}_search"
+                put_scope(search_scope)
+                append_search = display_streaming(search_scope, collapse_title=f"Search Results: {action}")
+            append_search(event)
+        elif sub in ("generate", "code"):
+            if append_code is None:
+                code_scope = f"act_{cycle_index}_code"
+                put_scope(code_scope)
+                append_code = display_streaming(code_scope, collapse_title="Generated Code")
+            append_code(event)
         elif sub == "exec":
             if append_exec is None:
                 exec_scope = f"act_{cycle_index}_exec"
