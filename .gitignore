@@ -15,4 +15,6 @@ temp.html
 
 agent_log.txt
 
+llmlog/*.txt
+
 .kilo

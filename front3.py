@@ -530,6 +530,12 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
         append_code = None
         append_search = None
         search_scope_name = None
+
+        is_genexec = False
+        genexec_scope = None
+        attempts = []
+        current_attempt = {"code": "", "result": "", "error": ""}
+
         for event in act_api_stream(
             action=action,
             question=full_question,
@@ -566,23 +572,70 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
                                 put_markdown(f"```json\n{json.dumps(sfuncs, ensure_ascii=False, indent=2)}\n```", sanitize=False)
                             ], open=False)
             elif sub in ("generate", "code"):
-                if append_code is None:
-                    code_scope = f"act_{cycle_index}_code"
-                    put_scope(code_scope)
-                    append_code = display_streaming(code_scope, collapse_title="Generated Code")
-                append_code(event)
+                if not is_genexec:
+                    is_genexec = True
+                    genexec_scope = f"act_{cycle_index}_genexec"
+                    put_scope(genexec_scope)
+                    put_loading(shape="grow", color="primary", scope=genexec_scope)
+                if etype == "code_complete":
+                    current_attempt["code"] = content
+                elif etype == "solved":
+                    is_genexec = False
+                    with use_scope(genexec_scope, clear=True):
+                        put_markdown(content, sanitize=False)
+                elif etype == "status":
+                    toast(content, color='info')
             elif sub == "exec":
-                if append_exec is None:
-                    exec_scope = f"act_{cycle_index}_exec"
-                    put_scope(exec_scope)
-                    append_exec = display_streaming(exec_scope, collapse_title="Execution Output")
-                append_exec(event)
+                if not is_genexec:
+                    if append_exec is None:
+                        exec_scope = f"act_{cycle_index}_exec"
+                        put_scope(exec_scope)
+                        append_exec = display_streaming(exec_scope, collapse_title="Execution Output")
+                    append_exec(event)
+                else:
+                    if etype == "chunk":
+                        current_attempt["result"] += content
+                    elif etype == "error":
+                        current_attempt["error"] = content
+                    elif etype == "done":
+                        attempts.append(dict(current_attempt))
+                        current_attempt = {"code": "", "result": "", "error": ""}
+                    elif etype == "status":
+                        toast(content, color='info')
             elif sub in ("output_text", "summary", "completion", "ask_question", "ask_choice"):
                 if append_exec is None:
                     out_scope = f"act_{cycle_index}_out"
                     put_scope(out_scope)
                     append_exec = display_streaming(out_scope, collapse_title="Output")
                 append_exec(event)
+
+        if is_genexec and genexec_scope and attempts:
+            with use_scope(genexec_scope, clear=True):
+                for i, att in enumerate(attempts):
+                    attempt_num = i + 1
+                    sections = []
+                    if att.get("code"):
+                        code_block = f"```python\n{att['code']}\n```"
+                        sections.append(put_collapse(
+                            f"Code (Attempt {attempt_num})",
+                            [put_markdown(code_block, sanitize=False)],
+                            open=False
+                        ))
+                    if att.get("result"):
+                        sections.append(put_collapse(
+                            f"Result (Attempt {attempt_num})",
+                            [put_markdown(att["result"], sanitize=False)],
+                            open=False
+                        ))
+                    if att.get("error"):
+                        sections.append(put_collapse(
+                            f"Error (Attempt {attempt_num})",
+                            [put_warning(f"**Error:** {att['error']}")],
+                            open=True
+                        ))
+                    status = "❌" if att.get("error") else "✅" if att.get("result") else ""
+                    title = f"Attempt {attempt_num} {status}".strip()
+                    put_collapse(title, sections, open=(i == len(attempts) - 1))
 
         return parse_act_result(act_events)
     except Exception as e:

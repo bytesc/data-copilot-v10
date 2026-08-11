@@ -158,6 +158,8 @@ exe_sql, get_save_image_path
 
 def _act_generate_and_execute(full_question: str, session_id: str, request_url: str, tables, selected_fields, selected_functions):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': '正在生成并执行代码...'}, ensure_ascii=False)}\n\n"
+    attempt = 1
+    total_attempts = 2
     full_code = ""
     full_ans = ""
     exec_error = None
@@ -167,6 +169,11 @@ def _act_generate_and_execute(full_question: str, session_id: str, request_url: 
         selected_fields=selected_fields,
         selected_functions=selected_functions,
     ):
+        if event.get("type") == "status" and "重新生成代码" in event.get("content", ""):
+            attempt += 1
+        event["attempt"] = attempt
+        event["total_attempts"] = total_attempts
+
         if event.get("type") == "code_complete" and event.get("phase") == "code":
             full_code = event.get("content", "")
         if event.get("type") == "solved" and event.get("phase") == "code":

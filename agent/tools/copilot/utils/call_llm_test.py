@@ -2,8 +2,27 @@ from utils.get_config import config_data
 
 from datetime import datetime
 import os
+import random
+import string
 
-log_path = "./agent_log.txt"
+llmlog_dir = "./llmlog"
+
+
+def _random_str(length=8):
+    return ''.join(random.choices(string.ascii_lowercase, k=length))
+
+
+def _write_llmlog(question, answer):
+    os.makedirs(llmlog_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{timestamp}-{_random_str()}.txt"
+    filepath = os.path.join(llmlog_dir, filename)
+    content = f"INPUT:\n{question}\n\nOUTPUT:\n{answer}"
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+    except Exception as e:
+        print(f"Error writing llmlog: {e}")
 
 
 def call_llm(question, llm):
@@ -18,19 +37,7 @@ def call_llm(question, llm):
     )
 
     answer = response.choices[0].message
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"[{timestamp}]*********************************************************************" \
-                f"\nQ:***\n {question}" \
-                f"\nA:***\n {answer.content}\n\n\n\n"
-
-    try:
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        with open(log_path, "a", encoding="utf-8") as log_file:
-            log_file.write(log_entry)
-    except Exception as e:
-        print(f"Error writing to log file: {e}")
-
+    _write_llmlog(question, answer.content)
     return answer
 
 
@@ -54,14 +61,4 @@ def call_llm_stream(question, llm):
             yield delta
     print()
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"[{timestamp}]*********************************************************************" \
-                f"\nQ:***\n {question}" \
-                f"\nA:***\n {full_content}\n\n\n\n"
-
-    try:
-        os.makedirs(os.path.dirname(log_path), exist_ok=True)
-        with open(log_path, "a", encoding="utf-8") as log_file:
-            log_file.write(log_entry)
-    except Exception as e:
-        print(f"Error writing to log file: {e}")
+    _write_llmlog(question, full_content)
