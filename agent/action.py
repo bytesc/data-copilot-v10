@@ -62,12 +62,9 @@ def _build_action_prompt(
 
     return f"""You are an action decision maker. Given the current context, decide the SINGLE next action to execute.
 
-Database Overview:
-{db_summary}
-Use `explore_schema` action to explore table schemas and sample data in detail.
-
-Available Functions:
+Some Available Functions:
 {func_catalog}
+Use `explore_functions` action for more available functions. Then use `generate_and_execute` action to call.
 
 The system is working in Think → Action → Act → Observe cycles. You takes the `Action` part.
 Context:

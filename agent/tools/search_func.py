@@ -47,7 +47,7 @@ def get_func_summary_for_agent() -> str:
             if not func:
                 continue
             doc_lines = func.__doc__.splitlines()
-            purpose = doc_lines[2].strip() if len(doc_lines) > 2 else ''
+            purpose = doc_lines[3].strip() if len(doc_lines) > 3 else ''
             if len(purpose) > 80:
                 purpose = purpose[:77] + '...'
             lines.append(f"| `{fname}` | {category} | {purpose} |")

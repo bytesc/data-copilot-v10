@@ -41,12 +41,11 @@ def _event_stream_think(
     think_prompt = f"""You are an autonomous data analysis Thinker. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
 
 Database Overview:
-{db_summary}
-Use `explore_schema` action to explore table schemas and sample data in detail.
+Use `explore_schema` action to explore table schemas and sample data in detail. Then use `generate_and_execute` action to exe_sql
 
-Available Functions:
+Some Available Functions:
 {func_catalog}
-Use `explore_functions` action to get full documentation for all functions. Then use `generate_and_execute` action to call.
+Use `explore_functions` action for more available functions. Then use `generate_and_execute` action to call.
 
 The system is working in Think → Action → Act → Observe cycles. You takes the `Think` part.
 
