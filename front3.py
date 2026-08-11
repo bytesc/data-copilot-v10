@@ -228,7 +228,7 @@ def display_streaming(scope_name: str, collapse_title: str = None):
             if handled:
                 return accumulated
             done_content = event.get("content", "")
-            if not accumulated and done_content:
+            if done_content:
                 accumulated = done_content
             with use_scope(scope_name, clear=True):
                 if collapse_title and accumulated:
@@ -551,6 +551,20 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
                     put_scope(search_scope_name)
                     append_search = display_streaming(search_scope_name, collapse_title=f"Search Results: {action}")
                 append_search(event)
+                if etype == "done":
+                    evt_result = event.get("result") or {}
+                    sf = evt_result.get("selected_fields")
+                    sfuncs = evt_result.get("selected_functions")
+                    if sf is not None:
+                        with use_scope(search_scope_name):
+                            put_collapse("Selected Fields", [
+                                put_markdown(f"```json\n{json.dumps(sf, ensure_ascii=False, indent=2)}\n```", sanitize=False)
+                            ], open=False)
+                    elif sfuncs is not None:
+                        with use_scope(search_scope_name):
+                            put_collapse("Selected Functions", [
+                                put_markdown(f"```json\n{json.dumps(sfuncs, ensure_ascii=False, indent=2)}\n```", sanitize=False)
+                            ], open=False)
             elif sub in ("generate", "code"):
                 if append_code is None:
                     code_scope = f"act_{cycle_index}_code"
@@ -623,11 +637,17 @@ def handle_user_interaction(act_result, conversation_history):
                     options=[{"label": c, "value": c} for c in act_result["choices"]]
                 )
                 conversation_history.append(f"User chose: {user_choice}")
+                put_collapse("User Choice", [
+                    put_markdown(f"**Selected:** {user_choice}", sanitize=False)
+                ], open=False)
                 return {"user_choice": user_choice}
             else:
                 phase_header("user", "USER - Input Required")
                 user_response = input(act_result["full_ans"], type=TEXT)
                 conversation_history.append(f"User response: {user_response}")
+                put_collapse("User Input", [
+                    put_markdown(user_response, sanitize=False)
+                ], open=False)
                 return {"user_response": user_response}
 
         if act_result["paused"]:
@@ -636,6 +656,9 @@ def handle_user_interaction(act_result, conversation_history):
             if not user_input.strip():
                 user_input = "continue"
             conversation_history.append(f"User: {user_input}")
+            put_collapse("User Input", [
+                put_markdown(user_input, sanitize=False)
+            ], open=False)
             return {"user_response": user_input}
 
         if act_result["completed"]:
@@ -680,8 +703,15 @@ def main():
             cycle_index += 1
 
             if cycle_index > max_cycles:
-                put_warning(f"Reached max cycles ({max_cycles}). Stopping.")
-                break
+                put_warning(f"Reached max cycles ({max_cycles}).")
+                question = textarea("What is next?:", value="", type=TEXT, rows=2)
+                if not question.strip():
+                    break
+                put_markdown("## " + question)
+                conversation_history = [f"Q: {question}"]
+                current_plan = {"description": "", "todo": []}
+                cycle_index = 0
+                continue
 
             think_result = run_think_phase(
                 cycle_index, question, conversation_history, session_id,
@@ -703,7 +733,13 @@ def main():
             print(f"[DEBUG] action_result: {json.dumps(action_result, ensure_ascii=False, default=str)}")
             if not action:
                 toast(f"Action failed: {action_result.get('error', 'unknown')}", color='error')
-                break
+                question = textarea("What is next?:", value="", type=TEXT, rows=2)
+                if not question.strip():
+                    break
+                put_markdown("## " + question)
+                conversation_history = [f"Q: {question}"]
+                current_plan = {"description": "", "todo": []}
+                continue
             search_keyword = action_result.get("keyword")
             plan_funcs = action_result.get("funcs")
 
@@ -725,12 +761,8 @@ def main():
 
             if act_result["selected_fields"] is not None:
                 conversation_history.append(f"Selected Fields: {json.dumps(act_result['selected_fields'], ensure_ascii=False)}")
-            if act_result["db_context"]:
-                conversation_history.append(f"DB Context: {act_result['db_context']}")
             if act_result["selected_functions"] is not None:
                 conversation_history.append(f"Selected Functions: {json.dumps(act_result['selected_functions'], ensure_ascii=False)}")
-            if act_result["func_context"]:
-                conversation_history.append(f"Func Context: {act_result['func_context']}")
             function_solved = act_result["function_solved"]
             full_code = act_result["full_code"]
             full_ans = act_result["full_ans"]
@@ -782,10 +814,17 @@ def main():
             else:
                 put_info("Plan has pending tasks. Continuing to next action...")
         except Exception as e:
-            print(f"[ERROR] main loop cycle={cycle_index}, action={action}")
+            action_name = action if 'action' in dir() else '?'
+            print(f"[ERROR] main loop cycle={cycle_index}, action={action_name}")
             traceback.print_exc()
             toast(f"Error: {e}", color='error')
-            break
+            question = textarea("What is next?:", value="", type=TEXT, rows=2)
+            if not question.strip():
+                break
+            put_markdown("## " + question)
+            conversation_history = [f"Q: {question}"]
+            current_plan = {"description": "", "todo": []}
+            continue
 
 
 if __name__ == '__main__':
