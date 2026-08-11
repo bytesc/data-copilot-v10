@@ -512,6 +512,7 @@ def generate_and_execute_stream(question, tables=None, use_all_functions=False, 
             return
 
         if code_retry < code_gen_retries - 1:
+            yield {"type": "error", "content": f"执行出错: {exec_err_msg[:200]}", "phase": "exec"}
             exec_err_context = f"\n\n[Execution Error from previous attempt]\nError: {exec_err_msg}\nFailed code:\n```python\n{full_code}\n```\n\nPlease fix the error and regenerate the code."
             continue
 

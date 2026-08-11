@@ -58,7 +58,7 @@ Rules:
 4. Each step can contain ONE query AND ONE plot, OR multiple queries (any number, but no plotting).
 5. When the user asks to analyze data, ALWAYS prefer querying the database directly.
 6. TABLE MATCHING RULE: Check table comments to match concepts to tables.
-7. Steps involving data retrieval MUST include a "search database" task first.
+7. If "Selected Fields" or "Selected Functions" already exist in the Context, do NOT add "search database" or "search functions" tasks — those are already completed.
 8. Do NOT mention specific function or API names - describe what data to get, not how to get it.
 
 Output ONLY a valid JSON object on a single line:

@@ -584,6 +584,10 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
                     with use_scope(genexec_scope, clear=True):
                         put_markdown(content, sanitize=False)
                 elif etype == "status":
+                    if "重新生成代码" in content:
+                        if current_attempt["code"] or current_attempt["result"] or current_attempt["error"]:
+                            attempts.append(dict(current_attempt))
+                        current_attempt = {"code": "", "result": "", "error": ""}
                     toast(content, color='info')
             elif sub == "exec":
                 if not is_genexec:

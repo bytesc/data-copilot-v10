@@ -53,7 +53,7 @@ Autonomous State Judgment & Update Rules:
 3. ERROR / EXCEPTION (Autonomous Correction): If the context contains error messages, DO NOT ask the user. Keep the failed task in the todo list and modify steps to fix the error.
 4. PARTIAL SUCCESS: If only part of the task was completed, remove completed parts and append new tasks for remaining work.
 5. Keep completed tasks out of the todo list — only include PENDING tasks.
-6. Check the conversation context for selected fields/functions — if they exist, remove schema/function exploration from todo.
+6. EXPLORATION COMPLETION: If the context contains "Selected Fields" (even if empty), ALL schema exploration tasks are DONE — remove them from the todo list. Same for "Selected Functions" and function exploration tasks.
 7. If all tasks are done, set todo to an empty list.
 8. If there are pending tasks, the todo list should contain between 1 and 10 items.
 

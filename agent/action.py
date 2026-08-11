@@ -78,14 +78,16 @@ Output ONLY a valid JSON object on a single line. Choose from:
 
 Decision Rules:
 1. If the plan has an empty todo list, choose ask_question with a polite response to the user.
-2. If the context shows no schema exploration has been done, choose explore_schema. Provide keyword based on the question.
-3. If the context shows no function exploration has been done, choose explore_functions. Provide keyword based on the question.
-4. EXPLORE LIMIT: explore_schema may be called at most twice (once with keyword, once without). If field selections already exist in context, do NOT call explore_schema again.
-5. If both schema and function exploration results exist in context, choose generate_and_execute.
-6. If both exploration attempts are done but the schema lacks the expected structure: if the available data is good enough to attempt an answer, choose generate_and_execute; otherwise, choose ask_question to clarify requirements with the user.
-7. If the plan is complete or no further actions needed, choose attempt_completion.
-8. If you need to ask the user something, choose ask_question or ask_choice.
-9. If you want to pause and show progress, choose summary_and_pause.
+2. EXPLORATION STRATEGY — STRICT 2-ATTEMPT LIMIT:
+   Count "Selected Fields" entries in the Context. Count "Selected Functions" entries.
+   a. 0 "Selected Fields" entries → call explore_schema WITH a keyword based on the question.
+   b. 1 "Selected Fields" entry → call explore_schema WITHOUT keyword (omit "keyword" field entirely) to do a full search. This is the LAST schema attempt.
+   c. 2 "Selected Fields" entries → STOP. NEVER call explore_schema again. Move to explore_functions, generate_and_execute, or ask_question.
+   d. Same rule for explore_functions: max 2 attempts, then STOP.
+3. If both schema and function exploration results exist in context, choose generate_and_execute.
+4. If the plan is complete or no further actions needed, choose attempt_completion.
+5. If you need to ask the user something, choose ask_question or ask_choice.
+6. If you want to pause and show progress, choose summary_and_pause.
 
 JSON:"""
 
