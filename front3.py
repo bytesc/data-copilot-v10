@@ -89,20 +89,11 @@ def think_api_stream(
 def act_api_stream(
     action: str,
     question: str,
-    tables: Optional[List[str]] = None,
-    selected_fields: Optional[dict] = None,
-    selected_functions: Optional[List[str]] = None,
     conversation_history: Optional[List[str]] = None,
     session_id: str = "",
     params: Optional[dict] = None,
 ):
     payload = {"question": question, "action": action, "session_id": session_id}
-    if tables:
-        payload["tables"] = tables
-    if selected_fields is not None:
-        payload["selected_fields"] = selected_fields
-    if selected_functions is not None:
-        payload["selected_functions"] = selected_functions
     if conversation_history:
         payload["conversation_history"] = conversation_history
     if params:
@@ -113,7 +104,6 @@ def act_api_stream(
 def observe_api_stream(
     question: str,
     tables: Optional[List[str]] = None,
-    current_plan: str = "",
     conversation_history: Optional[List[str]] = None,
     cycle_index: int = 0,
     session_id: str = "",
@@ -121,7 +111,6 @@ def observe_api_stream(
     payload = {
         "question": question,
         "session_id": session_id,
-        "current_plan": current_plan,
         "cycle_index": cycle_index,
     }
     if tables:
@@ -137,14 +126,12 @@ def action_api_stream(
     selected_fields: Optional[dict] = None,
     selected_functions: Optional[List[str]] = None,
     conversation_history: Optional[List[str]] = None,
-    current_plan: str = "",
     cycle_index: int = 0,
     session_id: str = "",
 ):
     payload = {
         "question": question,
         "session_id": session_id,
-        "current_plan": current_plan,
         "cycle_index": cycle_index,
     }
     if tables:
@@ -165,7 +152,7 @@ def parse_action_result(events: list) -> dict:
     return {"action": None, "error": "No action result"}
 
 
-def run_action_phase(cycle_index, question, conversation_history, current_plan, session_id):
+def run_action_phase(cycle_index, question, conversation_history, session_id):
     try:
         phase_header("act", f"ACTION - Decide (Cycle {cycle_index})")
         action_scope = f"action_{cycle_index}"
@@ -173,18 +160,21 @@ def run_action_phase(cycle_index, question, conversation_history, current_plan, 
         append_action = display_streaming(action_scope, collapse_title="Decision")
 
         action_events = []
+        raw_decision = ""
         for event in action_api_stream(
             question, SELECT_TABLES,
             conversation_history=conversation_history,
-            current_plan=current_plan,
             cycle_index=cycle_index,
             session_id=session_id,
         ):
             action_events.append(event)
             etype = event.get("type", "")
-            append_action({"type": etype, "content": event.get("content", "")})
+            content = event.get("content", "")
+            if etype == "chunk":
+                raw_decision += content
+            append_action({"type": etype, "content": content})
 
-        return parse_action_result(action_events)
+        return parse_action_result(action_events), raw_decision
     except Exception as e:
         print(f"[ERROR] run_action_phase: cycle={cycle_index}")
         traceback.print_exc()
@@ -297,13 +287,7 @@ def parse_observe_result(events: list) -> dict:
     return {"description": "", "todo": []}
 
 
-def check_plan_complete(plan: dict) -> bool:
-    if not plan:
-        return True
-    todo = plan.get("todo")
-    if todo is None:
-        return True
-    return len(todo) == 0
+
 
 
 def parse_act_result(events: list) -> dict:
@@ -330,7 +314,7 @@ def parse_act_result(events: list) -> dict:
         result = event.get("result")
 
         if etype == "done" and result and isinstance(result, dict):
-            if sub in ("search_db", "search_func"):
+            if sub in ("explore_schema", "explore_functions"):
                 parsed["search_result"] = content
                 parsed["db_context"] = result.get("db_context") or parsed["db_context"]
                 parsed["func_context"] = result.get("func_context") or parsed["func_context"]
@@ -451,6 +435,7 @@ def run_think_phase(cycle_index, question, conversation_history, session_id):
         append_think = display_streaming(think_scope, collapse_title="Plan")
 
         think_events = []
+        raw_plan = ""
         for event in think_api_stream(
             question, SELECT_TABLES,
             conversation_history=conversation_history,
@@ -461,6 +446,8 @@ def run_think_phase(cycle_index, question, conversation_history, session_id):
             etype = event.get("type", "")
             content = event.get("content", "")
             if sub == "plan":
+                if etype == "chunk":
+                    raw_plan += content
                 append_think({"type": etype, "content": content})
 
         result = parse_think_result(think_events)
@@ -468,7 +455,7 @@ def run_think_phase(cycle_index, question, conversation_history, session_id):
             put_collapse("Plan", [
                 put_markdown(_format_plan_display(result), sanitize=False)
             ], open=False)
-        return result
+        return result, raw_plan
     except Exception as e:
         print(f"[ERROR] run_think_phase: cycle={cycle_index}")
         traceback.print_exc()
@@ -516,7 +503,7 @@ def handle_frontend_action(cycle_index, action, action_result):
         raise
 
 
-def run_act_phase(cycle_index, action, full_question, selected_fields, selected_functions, conversation_history, session_id, action_result=None, params=None):
+def run_act_phase(cycle_index, action, full_question, conversation_history, session_id, action_result=None, params=None):
     try:
         if action in FRONTEND_ACTIONS:
             return handle_frontend_action(cycle_index, action, action_result or {})
@@ -539,9 +526,6 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
         for event in act_api_stream(
             action=action,
             question=full_question,
-            tables=SELECT_TABLES,
-            selected_fields=selected_fields,
-            selected_functions=selected_functions,
             conversation_history=conversation_history,
             session_id=session_id,
             params=params,
@@ -551,7 +535,7 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
             etype = event.get("type", "")
             content = event.get("content", "")
 
-            if sub in ("search_db", "search_func"):
+            if sub in ("explore_schema", "explore_functions"):
                 if append_search is None:
                     search_scope_name = f"act_{cycle_index}_search"
                     put_scope(search_scope_name)
@@ -577,17 +561,28 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
                     genexec_scope = f"act_{cycle_index}_genexec"
                     put_scope(genexec_scope)
                     put_loading(shape="grow", color="primary", scope=genexec_scope)
-                if etype == "code_complete":
+                if etype == "code_chunk":
+                    current_attempt["code_chunks"] = current_attempt.get("code_chunks", "") + content
+                    with use_scope(genexec_scope, clear=True):
+                        put_markdown(current_attempt["code_chunks"], sanitize=False)
+                        put_html(CURSOR)
+                elif etype == "code_complete":
                     current_attempt["code"] = content
+                    with use_scope(genexec_scope, clear=True):
+                        put_collapse("Generated Code", [
+                            put_markdown(f"```python\n{content}\n```", sanitize=False)
+                        ], open=False)
                 elif etype == "solved":
                     is_genexec = False
                     with use_scope(genexec_scope, clear=True):
                         put_markdown(content, sanitize=False)
                 elif etype == "status":
                     if "重新生成代码" in content:
-                        if current_attempt["code"] or current_attempt["result"] or current_attempt["error"]:
-                            attempts.append(dict(current_attempt))
+                        if current_attempt.get("code") or current_attempt.get("result") or current_attempt.get("error"):
+                            attempts.append({k: v for k, v in current_attempt.items() if k != "code_chunks"})
                         current_attempt = {"code": "", "result": "", "error": ""}
+                        with use_scope(genexec_scope, clear=True):
+                            put_loading(shape="grow", color="primary", scope=genexec_scope)
                     toast(content, color='info')
             elif sub == "exec":
                 if not is_genexec:
@@ -599,10 +594,27 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
                 else:
                     if etype == "chunk":
                         current_attempt["result"] += content
+                        with use_scope(genexec_scope, clear=True):
+                            if current_attempt.get("code"):
+                                put_collapse("Generated Code", [
+                                    put_markdown(f"```python\n{current_attempt['code']}\n```", sanitize=False)
+                                ], open=False)
+                            put_markdown(current_attempt["result"], sanitize=False)
+                            put_html(CURSOR)
                     elif etype == "error":
                         current_attempt["error"] = content
+                        with use_scope(genexec_scope, clear=True):
+                            if current_attempt.get("code"):
+                                put_collapse("Generated Code", [
+                                    put_markdown(f"```python\n{current_attempt['code']}\n```", sanitize=False)
+                                ], open=False)
+                            if current_attempt.get("result"):
+                                put_collapse("Partial Result", [
+                                    put_markdown(current_attempt["result"], sanitize=False)
+                                ], open=False)
+                            put_warning(f"**Error:** {content}")
                     elif etype == "done":
-                        attempts.append(dict(current_attempt))
+                        attempts.append({k: v for k, v in current_attempt.items() if k != "code_chunks"})
                         current_attempt = {"code": "", "result": "", "error": ""}
                     elif etype == "status":
                         toast(content, color='info')
@@ -648,19 +660,17 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
         raise
 
 
-def run_observe_phase(cycle_index, original_question, current_plan, conversation_history, session_id):
+def run_observe_phase(cycle_index, original_question, conversation_history, session_id):
     try:
         phase_header("observe", f"OBSERVE - Review (Cycle {cycle_index})")
         observe_scope = f"observe_{cycle_index}"
         put_scope(observe_scope)
         append_observe = display_streaming(observe_scope, collapse_title="Updated Plan")
 
-        plan_str = json.dumps(current_plan, ensure_ascii=False) if isinstance(current_plan, dict) else str(current_plan)
-
         observe_events = []
+        raw_review = ""
         for event in observe_api_stream(
             original_question, SELECT_TABLES,
-            current_plan=plan_str,
             conversation_history=conversation_history,
             cycle_index=cycle_index,
             session_id=session_id,
@@ -668,15 +678,18 @@ def run_observe_phase(cycle_index, original_question, current_plan, conversation
             observe_events.append(event)
             sub = event.get("sub_phase", "")
             etype = event.get("type", "")
+            content = event.get("content", "")
             if sub == "review":
-                append_observe({"type": etype, "content": event.get("content", "")})
+                if etype == "chunk":
+                    raw_review += content
+                append_observe({"type": etype, "content": content})
 
         result = parse_observe_result(observe_events)
         with use_scope(observe_scope, clear=True):
             put_collapse("Updated Plan", [
                 put_markdown(_format_plan_display(result), sanitize=False)
             ], open=False)
-        return result
+        return result, raw_review
     except Exception as e:
         print(f"[ERROR] run_observe_phase: cycle={cycle_index}")
         traceback.print_exc()
@@ -751,7 +764,6 @@ def main():
     put_markdown("## " + question)
 
     conversation_history = [f"Q: {question}"]
-    current_plan = {"description": "", "todo": []}
     cycle_index = 0
     max_cycles = 20
 
@@ -766,27 +778,22 @@ def main():
                     break
                 put_markdown("## " + question)
                 conversation_history = [f"Q: {question}"]
-                current_plan = {"description": "", "todo": []}
                 cycle_index = 0
                 continue
 
-            think_result = run_think_phase(
+            think_result, raw_plan = run_think_phase(
                 cycle_index, question, conversation_history, session_id,
             )
-            current_plan = think_result
-            conversation_history = [e for e in conversation_history if not e.startswith("Planner: ")]
-            conversation_history.append(f"Planner: {json.dumps(current_plan, ensure_ascii=False)}")
-
-            if check_plan_complete(current_plan) and cycle_index == 1:
-                current_plan = {"description": "", "todo": []}
+            conversation_history.append(f"[THINK] Plan:\n{raw_plan}")
 
             full_question = "\n".join(conversation_history)
 
-            action_result = run_action_phase(
+            action_result, raw_decision = run_action_phase(
                 cycle_index, question,
-                conversation_history, json.dumps(current_plan, ensure_ascii=False), session_id,
+                conversation_history, session_id,
             )
             action = action_result.get("action")
+            conversation_history.append(f"[ACTION] Decision:\n{raw_decision}")
             print(f"[DEBUG] action_result: {json.dumps(action_result, ensure_ascii=False, default=str)}")
             if not action:
                 toast(f"Action failed: {action_result.get('error', 'unknown')}", color='error')
@@ -795,7 +802,6 @@ def main():
                     break
                 put_markdown("## " + question)
                 conversation_history = [f"Q: {question}"]
-                current_plan = {"description": "", "todo": []}
                 continue
             search_keyword = action_result.get("keyword")
             plan_funcs = action_result.get("funcs")
@@ -806,10 +812,12 @@ def main():
             params = {}
             if search_keyword:
                 params["search_keyword"] = search_keyword
+            params["tables"] = SELECT_TABLES
+            params["selected_fields"] = act_fields
+            params["selected_functions"] = act_funcs
 
             act_result = run_act_phase(
                 cycle_index, action, full_question,
-                act_fields, act_funcs,
                 conversation_history, session_id,
                 action_result=action_result,
                 params=params,
@@ -817,9 +825,11 @@ def main():
             print(f"[DEBUG] act_result: needs_user_input={act_result.get('needs_user_input')}, paused={act_result.get('paused')}, completed={act_result.get('completed')}, function_solved={act_result.get('function_solved')}")
 
             if act_result["selected_fields"] is not None:
-                conversation_history.append(f"Selected Fields: {json.dumps(act_result['selected_fields'], ensure_ascii=False)}")
+                conversation_history.append(f"[ACT explore_schema] Selected Fields: {json.dumps(act_result['selected_fields'], ensure_ascii=False)}")
             if act_result["selected_functions"] is not None:
-                conversation_history.append(f"Selected Functions: {json.dumps(act_result['selected_functions'], ensure_ascii=False)}")
+                conversation_history.append(f"[ACT explore_functions] Selected Functions: {json.dumps(act_result['selected_functions'], ensure_ascii=False)}")
+            if act_result.get("search_result"):
+                conversation_history.append(f"[ACT {action}] Results:\n{act_result['search_result']}")
             function_solved = act_result["function_solved"]
             full_code = act_result["full_code"]
             full_ans = act_result["full_ans"]
@@ -828,17 +838,16 @@ def main():
             if function_solved:
                 solved_ans = act_result["solved_ans"]
                 if solved_ans:
-                    conversation_history.append(f"A: {solved_ans}")
-                    conversation_history = [e for e in conversation_history if not e.startswith("Planner: ")]
+                    conversation_history.append(f"[ACT] Solved Answer:\n{solved_ans}")
                 continue
 
             if full_ans and not exec_error and full_code:
-                conversation_history.append(f"Code Generated: {full_code}")
-                conversation_history.append(f"Exe Result: {full_ans}")
+                conversation_history.append(f"[ACT generate_and_execute] Code:\n{full_code}")
+                conversation_history.append(f"[ACT generate_and_execute] Result:\n{full_ans}")
             elif exec_error:
                 if full_code:
-                    conversation_history.append(f"Code Generated: {full_code}")
-                conversation_history.append(f"Exe Error: {exec_error}")
+                    conversation_history.append(f"[ACT generate_and_execute] Code:\n{full_code}")
+                conversation_history.append(f"[ACT generate_and_execute] Error:\n{exec_error}")
 
             user_interaction = handle_user_interaction(act_result, conversation_history)
             if user_interaction.get("completed"):
@@ -847,18 +856,15 @@ def main():
                     continue
                 put_markdown("## " + question)
                 conversation_history = [f"Q: {question}"]
-                current_plan = {"description": "", "todo": []}
                 continue
 
-            observe_result = run_observe_phase(
+            observe_result, raw_review = run_observe_phase(
                 cycle_index, question,
-                current_plan, conversation_history, session_id,
+                conversation_history, session_id,
             )
 
             if observe_result.get("description"):
-                current_plan = observe_result
-                conversation_history = [e for e in conversation_history if not e.startswith("Planner: ")]
-                conversation_history.append(f"Planner: {json.dumps(current_plan, ensure_ascii=False)}")
+                conversation_history.append(f"[OBSERVE] Review:\n{raw_review}")
         except Exception as e:
             action_name = action if 'action' in dir() else '?'
             print(f"[ERROR] main loop cycle={cycle_index}, action={action_name}")
@@ -869,7 +875,6 @@ def main():
                 break
             put_markdown("## " + question)
             conversation_history = [f"Q: {question}"]
-            current_plan = {"description": "", "todo": []}
             continue
 
 

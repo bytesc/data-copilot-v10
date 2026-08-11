@@ -15,21 +15,16 @@ router = APIRouter()
 
 class ObserveInput(BaseModel):
     question: str
-    tables: Optional[List[str]] = None
     session_id: Optional[str] = None
-    current_plan: Optional[str] = ""
     conversation_history: Optional[List[str]] = None
     cycle_index: int = 0
 
 
 def _event_stream_observe(
     question: str,
-    tables: Optional[List[str]],
     session_id: str,
-    current_plan: str,
     conversation_history: Optional[List[str]],
     cycle_index: int,
-    request_url: str,
 ):
     """Observe phase: LLM reviews execution results and updates the plan."""
     yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'status', 'content': '正在审查执行结果...'}, ensure_ascii=False)}\n\n"
@@ -39,10 +34,7 @@ def _event_stream_observe(
     else:
         context = ""
 
-    observe_prompt = f"""You are an autonomous checklist executor. Your job is to review the execution results of the last step, update the plan accordingly.
-
-Current Plan:
-{current_plan or '(no plan yet)'}
+    observe_prompt = f"""You are an Observer. Your job is to review the execution results of the last step, update the plan accordingly.
 
 Context (includes execution results and errors):
 {context if context else '(no context)'}
@@ -50,12 +42,11 @@ Context (includes execution results and errors):
 Autonomous State Judgment & Update Rules:
 1. ANALYZE RESULT FIRST: Look at the context for execution results and error traces.
 2. SUCCESS: If the result contains the expected data/confirmation without errors, remove that task from the todo list.
-3. ERROR / EXCEPTION (Autonomous Correction): If the context contains error messages, DO NOT ask the user. Keep the failed task in the todo list and modify steps to fix the error.
+3. ERROR / EXCEPTION (Autonomous Correction): If the context contains error messages, DO NOT ask the user. Keep the failed task in the todo list. Do not modify steps to fix the error.
 4. PARTIAL SUCCESS: If only part of the task was completed, remove completed parts and append new tasks for remaining work.
 5. Keep completed tasks out of the todo list — only include PENDING tasks.
-6. EXPLORATION COMPLETION: If the context contains "Selected Fields" (even if empty), ALL schema exploration tasks are DONE — remove them from the todo list. Same for "Selected Functions" and function exploration tasks.
-7. If all tasks are done, set todo to an empty list.
-8. If there are pending tasks, the todo list should contain between 1 and 10 items.
+6. If all tasks are done, set todo to an empty list.
+7. If there are pending tasks, the todo list should contain between 1 and 10 items.
 
 Output ONLY a valid JSON object on a single line:
 {{"description": "Brief review of what happened and updated strategy in markdown...", "todo": ["Remaining task 1", "Remaining task 2"]}}
@@ -75,7 +66,7 @@ If todo is empty, the plan is complete. Keep descriptions concise."""
     log_observe_cycle(session_id, cycle_index, "observe", "review",
                       prompt=observe_prompt[:5000], response=raw[:5000],
                       token_estimate=prompt_length // 3)
-    record_session_operation(session_id, request_url, question, ans=raw, result_type="success", prompt_length=prompt_length)
+    record_session_operation(session_id, "/api/observe/stream/", question, ans=raw, result_type="success", prompt_length=prompt_length)
 
 
 def _parse_plan_json(raw: str) -> dict:
@@ -104,12 +95,9 @@ async def observe_stream_api(request: Request, user_input: ObserveInput):
     return StreamingResponse(
         _event_stream_observe(
             user_input.question,
-            user_input.tables,
             user_input.session_id or "",
-            user_input.current_plan or "",
             user_input.conversation_history,
             user_input.cycle_index,
-            request.url.path,
         ),
         media_type="text/event-stream",
         headers={

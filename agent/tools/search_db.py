@@ -128,7 +128,7 @@ def search_db_markdown(engine, keyword: str, tables=None) -> str:
         return "*(No database tables found)*"
 
     kw_lower = keyword.lower()
-    keywords = [k for k in kw_lower.split() if k]
+    keywords = [k for k in kw_lower.split(",") if k]
     matched_tables = []
     matched_columns = {}
 
@@ -206,7 +206,6 @@ def get_db_summary_for_agent(engine, tables=None) -> str:
         lines.append(f"| **{tname}** | {comment} | {len(col_names)} | {key_preview} |")
 
     lines.append("")
-    lines.append("Use `search_db` to explore table schemas and sample data in detail.")
     return "\n".join(lines)
 
 

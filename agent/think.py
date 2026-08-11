@@ -27,7 +27,6 @@ def _event_stream_think(
     tables: Optional[List[str]],
     session_id: str,
     conversation_history: Optional[List[str]],
-    request_url: str,
 ):
     """Think phase: pure LLM reasoning with custom prompt to generate a plan."""
     log_observe_session(session_id, question=question, status="active")
@@ -40,13 +39,15 @@ def _event_stream_think(
     db_summary = get_db_summary_for_agent(engine, tables)
     func_catalog = get_func_summary_for_agent()
 
-    think_prompt = f"""You are an autonomous data analysis planner. Your job is to take a user's question, analyze the available database and tools, and produce a structured plan.
+    think_prompt = f"""You are an autonomous data analysis planner. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
 
 Database Overview:
 {db_summary}
+Use `explore_schema` action to explore table schemas and sample data in detail.
 
 Available Functions:
 {func_catalog}
+Use `explore_functions` action to get full documentation for all functions. Then use `generate_and_execute` action to call.
 
 Context (includes conversation history and user questions):
 {context}
@@ -57,11 +58,10 @@ Rules:
 3. Mention specific table names and field names in data retrieval tasks.
 4. Each step can contain ONE query AND ONE plot, OR multiple queries (any number, but no plotting).
 5. When the user asks to analyze data, ALWAYS prefer querying the database directly.
-6. TABLE MATCHING RULE: Check table comments to match concepts to tables.
-7. If "Selected Fields" or "Selected Functions" already exist in the Context, do NOT add "search database" or "search functions" tasks — those are already completed.
-8. Do NOT mention specific function or API names - describe what data to get, not how to get it.
+6. Do NOT mention specific function or API names - describe what data to get, not how to get it.
 
-Output ONLY a valid JSON object on a single line:
+Output ONLY a valid JSON object on a single line(no md block):
+
 {{"description": "Brief analysis strategy in markdown...", "todo": ["Task 1", "Task 2", "Task 3"]}}
 
 If the question requires no data analysis (greeting, clarification, etc.), output an empty todo list.
@@ -82,7 +82,7 @@ The todo list contains the actionable steps. Keep task descriptions concise."""
     log_observe_cycle(session_id, 0, "think", "plan",
                       prompt=think_prompt[:5000], response=raw[:5000],
                       token_estimate=prompt_length // 3)
-    record_session_operation(session_id, request_url, question, ans=raw, result_type="success", prompt_length=prompt_length)
+    record_session_operation(session_id, "/api/think/stream/", question, ans=raw, result_type="success", prompt_length=prompt_length)
     log_observe_session(session_id, status="think_done", total_cycles=0, total_tokens=prompt_length // 3)
 
 
@@ -115,7 +115,6 @@ async def think_stream_api(request: Request, user_input: ThinkInput):
             user_input.tables,
             user_input.session_id or "",
             user_input.conversation_history,
-            request.url.path,
         ),
         media_type="text/event-stream",
         headers={

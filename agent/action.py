@@ -23,31 +23,11 @@ class ActionInput(BaseModel):
     tables: Optional[List[str]] = None
     session_id: Optional[str] = None
     conversation_history: Optional[List[str]] = None
-    current_plan: Optional[str] = ""
     cycle_index: int = 0
-
-
-def _extract_plan_text(current_plan: str) -> str:
-    try:
-        plan = json.loads(current_plan)
-        if isinstance(plan, dict):
-            desc = plan.get("description", "")
-            todo = plan.get("todo") or []
-            lines = [desc] if desc else []
-            if todo:
-                lines.append("")
-                lines.append("Pending Tasks:")
-                for t in todo:
-                    lines.append(f"- [ ] {t}")
-            return "\n".join(lines)
-    except (json.JSONDecodeError, TypeError):
-        pass
-    return current_plan or "(no plan yet)"
 
 
 def _build_action_prompt(
     question: str,
-    current_plan: str,
     conversation_history: Optional[List[str]],
 ) -> str:
     context = ""
@@ -56,40 +36,35 @@ def _build_action_prompt(
 
     return f"""You are an action decision maker. Given the current context, decide the SINGLE next action to execute.
 
-Current Plan:
-{_extract_plan_text(current_plan)}
-
 Context:
 {context if context else '(no context)'}
 
-Output ONLY a valid JSON object on a single line. Choose from:
+Output ONLY a valid JSON object on a single line(no md code block). Choose from:
 
-- explore_schema: {{"action": "explore_schema", "keyword": "optional keyword"}}
-  Explore the database schema to select relevant tables and columns. Only include keyword to narrow the scope.
-- explore_functions: {{"action": "explore_functions", "keyword": "optional keyword"}}
-  Explore the available function catalog to select needed functions.
+- explore_schema: {{"action": "explore_schema"}}
+  Explore the database schema and structure. Not used to query data, you should use `generate_and_execute` to exe_sql
+- explore_functions: {{"action": "explore_functions"}}
+  Explore the available function catalog and select needed functions.
 - generate_and_execute: {{"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"]}}
-  funcs: optional list of function names to use. Omit if not needed.
+  Write some python code to call functions. funcs: list of function names to use. 
 - output_text: {{"action": "output_text", "text": "Your response content here..."}}
+  Output some text to the user without stopping the pipline.
 - ask_question: {{"action": "ask_question", "text": "Your question for the user here..."}}
+  Ask the user a question. Use it incase you need some information from user.
 - ask_choice: {{"action": "ask_choice", "text": "Your question here...", "choices": ["option1", "option2"]}}
+  Give user some choices to choice only one of them.
 - summary_and_pause: {{"action": "summary_and_pause", "text": "Your progress summary here..."}}
+  Output some text and stop the pipline.
 - attempt_completion: {{"action": "attempt_completion", "text": "Your final results here..."}}
+  Output some text and stop the pipline in case of completion.
 
 Decision Rules:
 1. If the plan has an empty todo list, choose ask_question with a polite response to the user.
-2. EXPLORATION STRATEGY — STRICT 2-ATTEMPT LIMIT:
-   Count "Selected Fields" entries in the Context. Count "Selected Functions" entries.
-   a. 0 "Selected Fields" entries → call explore_schema WITH a keyword based on the question.
-   b. 1 "Selected Fields" entry → call explore_schema WITHOUT keyword (omit "keyword" field entirely) to do a full search. This is the LAST schema attempt.
-   c. 2 "Selected Fields" entries → STOP. NEVER call explore_schema again. Move to explore_functions, generate_and_execute, or ask_question.
-   d. Same rule for explore_functions: max 2 attempts, then STOP.
-3. If both schema and function exploration results exist in context, choose generate_and_execute.
-4. If the plan is complete or no further actions needed, choose attempt_completion.
-5. If you need to ask the user something, choose ask_question or ask_choice.
-6. If you want to pause and show progress, choose summary_and_pause.
+2. If the plan is complete or no further actions needed, choose attempt_completion.
+3. If you need to ask the user something, choose ask_question or ask_choice.
+4. If you want to pause and show progress, choose summary_and_pause.
 
-JSON:"""
+"""
 
 
 def _event_stream_action(
@@ -97,14 +72,12 @@ def _event_stream_action(
     tables: Optional[List[str]],
     session_id: str,
     conversation_history: Optional[List[str]],
-    current_plan: str,
     cycle_index: int,
-    request_url: str,
 ):
     yield f"data: {json.dumps({'phase': 'action', 'type': 'status', 'content': '正在决策下一步动作...'}, ensure_ascii=False)}\n\n"
 
     prompt = _build_action_prompt(
-        question, current_plan, conversation_history,
+        question, conversation_history,
     )
 
     raw = ""
@@ -157,9 +130,7 @@ async def action_stream_api(request: Request, user_input: ActionInput):
             user_input.tables,
             user_input.session_id or "",
             user_input.conversation_history,
-            user_input.current_plan or "",
             user_input.cycle_index,
-            request.url.path,
         ),
         media_type="text/event-stream",
         headers={

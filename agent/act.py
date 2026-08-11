@@ -21,10 +21,7 @@ router = APIRouter()
 class ActInput(BaseModel):
     question: str
     action: str
-    tables: Optional[List[str]] = None
     session_id: Optional[str] = None
-    selected_fields: Optional[Dict[str, Any]] = None
-    selected_functions: Optional[List[str]] = None
     conversation_history: Optional[List[str]] = None
     params: Optional[Dict[str, Any]] = None
 
@@ -38,34 +35,33 @@ def _build_context(question: str, conversation_history: Optional[List[str]]):
 def _event_stream_act(
     question: str,
     action: str,
-    tables: Optional[List[str]],
     session_id: str,
-    selected_fields: Optional[Dict[str, Any]],
-    selected_functions: Optional[List[str]],
     conversation_history: Optional[List[str]],
-    request_url: str,
     params: Optional[Dict[str, Any]] = None,
 ):
     """Act phase: execute exactly ONE action."""
     full_question = _build_context(question, conversation_history)
     params = params or {}
     search_keyword = params.get("search_keyword")
+    tables = params.get("tables")
+    selected_fields = params.get("selected_fields")
+    selected_functions = params.get("selected_functions")
 
     if action == "explore_schema":
-        yield from _act_search_db(full_question, session_id, tables, search_keyword)
+        yield from _act_explore_schema(full_question, session_id, tables, search_keyword)
 
     elif action == "explore_functions":
-        yield from _act_search_func(full_question, session_id, search_keyword)
+        yield from _act_explore_functions(full_question, session_id, search_keyword)
 
     elif action == "generate_and_execute":
-        yield from _act_generate_and_execute(full_question, session_id, request_url, tables, selected_fields, selected_functions)
+        yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions)
 
     else:
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
 
 
-def _act_search_db(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None):
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'status', 'content': '正在搜索数据库信息...'}, ensure_ascii=False)}\n\n"
+def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None):
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'status', 'content': '正在搜索数据库信息...'}, ensure_ascii=False)}\n\n"
 
     if search_keyword and search_keyword.strip():
         full_schema = search_db_markdown(engine, search_keyword.strip(), tables)
@@ -79,19 +75,21 @@ def _act_search_db(full_question: str, session_id: str, tables, search_keyword: 
 Context:
 {full_question}
 
-Output ONLY a JSON object mapping table names to their needed columns. Use an empty list [] for a table to select all its columns. Use an empty object {{}} to select all tables and all columns. Use {{"__no_db__": true}} if no database query is needed.
+Output ONLY a JSON object mapping table names to their needed columns. Use an empty list [] for a table to select all its columns. 
+Use an empty object {{}} to select all tables and all columns. 
+Use {{"__no_db__": true}} if no database query is needed or no relivent data in the database.
 
 Example:
 ```json
 {{"users": ["id", "name", "email"], "orders": []}}
 ```
 """
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'status', 'content': '正在分析所需字段...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'status', 'content': '正在分析所需字段...'}, ensure_ascii=False)}\n\n"
 
     raw = ""
     for chunk in call_llm_stream(prompt, llm):
         raw += chunk
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
     selected_fields = parse_selected_fields_json(raw) or {}
 
     if selected_fields and not selected_fields.get("__no_db__"):
@@ -101,15 +99,15 @@ Example:
     else:
         display_content = full_schema
 
-    log_observe_cycle(session_id, 0, "act", "search_db",
+    log_observe_cycle(session_id, 0, "act", "explore_schema",
                       prompt=prompt[:5000], response=raw[:5000],
                       token_estimate=len(prompt) // 3)
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
 
-def _act_search_func(full_question: str, session_id: str, search_keyword: Optional[str] = None):
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'status', 'content': '正在搜索函数信息...'}, ensure_ascii=False)}\n\n"
+def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None):
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'status', 'content': '正在搜索函数信息...'}, ensure_ascii=False)}\n\n"
 
     if search_keyword and search_keyword.strip():
         full_catalog = search_func_by_keyword(search_keyword.strip())
@@ -131,12 +129,12 @@ Output ONLY the function names separated by commas. Return "solved" if no functi
 Example:
 exe_sql, get_save_image_path
 """
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'status', 'content': '正在分析所需函数...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'status', 'content': '正在分析所需函数...'}, ensure_ascii=False)}\n\n"
 
     raw = ""
     for chunk in call_llm_stream(prompt, llm):
         raw += chunk
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
     raw_text = raw
     raw = raw.strip()
     if raw == "solved":
@@ -149,14 +147,14 @@ exe_sql, get_save_image_path
     else:
         display_content = "*(No functions selected)*"
 
-    log_observe_cycle(session_id, 0, "act", "search_func",
+    log_observe_cycle(session_id, 0, "act", "explore_functions",
                       prompt=prompt[:5000], response=raw_text[:5000],
                       token_estimate=len(prompt) // 3)
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'done', 'content': display_content, 'result': {'selected_functions': selected_functions, 'func_context': full_catalog}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'done', 'content': display_content, 'result': {'selected_functions': selected_functions, 'func_context': full_catalog}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
 
-def _act_generate_and_execute(full_question: str, session_id: str, request_url: str, tables, selected_fields, selected_functions):
+def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': '正在生成并执行代码...'}, ensure_ascii=False)}\n\n"
     attempt = 1
     total_attempts = 2
@@ -187,9 +185,9 @@ def _act_generate_and_execute(full_question: str, session_id: str, request_url: 
             exec_error = event.get("content", "")
         yield f"data: {json.dumps({**event, 'phase': 'act', 'sub_phase': event.get('phase', 'exec')}, ensure_ascii=False)}\n\n"
     if exec_error:
-        record_session_operation(session_id, request_url, full_question, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500], prompt_length=prompt_length)
+        record_session_operation(session_id, "/api/act/stream/", full_question, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500], prompt_length=prompt_length)
     else:
-        record_session_operation(session_id, request_url, full_question, ans=full_ans, code=full_code, result_type="success", prompt_length=prompt_length)
+        record_session_operation(session_id, "/api/act/stream/", full_question, ans=full_ans, code=full_code, result_type="success", prompt_length=prompt_length)
 
 
 @router.post("/api/act/stream/")
@@ -198,12 +196,8 @@ async def act_stream_api(request: Request, user_input: ActInput):
         _event_stream_act(
             user_input.question,
             user_input.action,
-            user_input.tables,
             user_input.session_id or "",
-            user_input.selected_fields,
-            user_input.selected_functions,
             user_input.conversation_history,
-            request.url.path,
             user_input.params,
         ),
         media_type="text/event-stream",
