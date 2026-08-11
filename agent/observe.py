@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from agent.action import ACTIONS
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
@@ -37,6 +38,9 @@ def _event_stream_observe(
     observe_prompt = f"""You are an objective Observer. Your job is to review the execution results of the last step, update the plan accordingly.
 
 The system is working in Think → Action → Act → Observe cycles. You takes the `Observe` part.
+
+ACTIONS AVAILABLE:
+{ACTIONS}
 
 Context (includes execution results and errors):
 {context if context else '(no context)'}

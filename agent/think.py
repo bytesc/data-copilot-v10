@@ -50,11 +50,11 @@ Use `explore_functions` action to get full documentation for all functions. Then
 
 The system is working in Think → Action → Act → Observe cycles. You takes the `Think` part.
 
-Context (includes conversation history and user questions):
-{context}
-
 ACTIONS AVAILABLE:
 {ACTIONS}
+
+Context (includes conversation history and user questions):
+{context}
 
 Rules:
 1. Each step should be a specific, actionable task.
