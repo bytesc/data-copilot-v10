@@ -41,8 +41,8 @@ CURSOR_CSS = '''
 '''
 
 ACTIONS = {
-    "search_db": "search_db",
-    "search_func": "search_func",
+    "explore_schema": "explore_schema",
+    "explore_functions": "explore_functions",
     "generate_and_execute": "generate_and_execute",
     "output_text": "output_text",
     "ask_question": "ask_question",
@@ -802,17 +802,6 @@ def main():
                 current_plan = observe_result
                 conversation_history = [e for e in conversation_history if not e.startswith("Planner: ")]
                 conversation_history.append(f"Planner: {json.dumps(current_plan, ensure_ascii=False)}")
-
-            if check_plan_complete(current_plan):
-                put_info("Plan complete.")
-                question = textarea("What is next?:", value="", type=TEXT, rows=2)
-                if not question.strip():
-                    continue
-                put_markdown("## " + question)
-                conversation_history = [f"Q: {question}"]
-                current_plan = {"description": "", "todo": []}
-            else:
-                put_info("Plan has pending tasks. Continuing to next action...")
         except Exception as e:
             action_name = action if 'action' in dir() else '?'
             print(f"[ERROR] main loop cycle={cycle_index}, action={action_name}")

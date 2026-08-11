@@ -12,7 +12,7 @@ from data_access.observe_log import log_observe_cycle
 router = APIRouter()
 
 VALID_ACTIONS = [
-    "search_db", "search_func", "generate_and_execute",
+    "explore_schema", "explore_functions", "generate_and_execute",
     "output_text", "ask_question", "ask_choice",
     "summary_and_pause", "attempt_completion",
 ]
@@ -64,9 +64,10 @@ Context:
 
 Output ONLY a valid JSON object on a single line. Choose from:
 
-- search_db: {{"action": "search_db", "keyword": "optional multi-word keyword"}}
-  Only include keyword if you want to narrow the search. Multiple keywords can be space-separated.
-- search_func: {{"action": "search_func", "keyword": "optional keyword"}}
+- explore_schema: {{"action": "explore_schema", "keyword": "optional keyword"}}
+  Explore the database schema to select relevant tables and columns. Only include keyword to narrow the scope.
+- explore_functions: {{"action": "explore_functions", "keyword": "optional keyword"}}
+  Explore the available function catalog to select needed functions.
 - generate_and_execute: {{"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"]}}
   funcs: optional list of function names to use. Omit if not needed.
 - output_text: {{"action": "output_text", "text": "Your response content here..."}}
@@ -77,13 +78,14 @@ Output ONLY a valid JSON object on a single line. Choose from:
 
 Decision Rules:
 1. If the plan has an empty todo list, choose ask_question with a polite response to the user.
-2. If the context shows no database search has been done, choose search_db. Provide keyword based on the question.
-3. If the context shows no function search has been done, choose search_func. Provide keyword based on the question.
-4. If the conversation context shows "No tables or columns found matching keyword", retry search_db WITHOUT keyword.
-5. If both database and functions are ready, choose generate_and_execute.
-6. If the plan is complete or no further actions needed, choose attempt_completion.
-7. If you need to ask the user something, choose ask_question or ask_choice.
-8. If you want to pause and show progress, choose summary_and_pause.
+2. If the context shows no schema exploration has been done, choose explore_schema. Provide keyword based on the question.
+3. If the context shows no function exploration has been done, choose explore_functions. Provide keyword based on the question.
+4. EXPLORE LIMIT: explore_schema may be called at most twice (once with keyword, once without). If field selections already exist in context, do NOT call explore_schema again.
+5. If both schema and function exploration results exist in context, choose generate_and_execute.
+6. If both exploration attempts are done but the schema lacks the expected structure: if the available data is good enough to attempt an answer, choose generate_and_execute; otherwise, choose ask_question to clarify requirements with the user.
+7. If the plan is complete or no further actions needed, choose attempt_completion.
+8. If you need to ask the user something, choose ask_question or ask_choice.
+9. If you want to pause and show progress, choose summary_and_pause.
 
 JSON:"""
 

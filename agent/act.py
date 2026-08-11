@@ -51,10 +51,10 @@ def _event_stream_act(
     params = params or {}
     search_keyword = params.get("search_keyword")
 
-    if action == "search_db":
+    if action == "explore_schema":
         yield from _act_search_db(full_question, session_id, tables, search_keyword)
 
-    elif action == "search_func":
+    elif action == "explore_functions":
         yield from _act_search_func(full_question, session_id, search_keyword)
 
     elif action == "generate_and_execute":
