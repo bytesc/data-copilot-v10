@@ -19,7 +19,6 @@ class ThinkInput(BaseModel):
     question: str
     tables: Optional[List[str]] = None
     session_id: Optional[str] = None
-    selected_fields: Optional[Dict[str, Any]] = None
     conversation_history: Optional[List[str]] = None
 
 
@@ -27,7 +26,6 @@ def _event_stream_think(
     question: str,
     tables: Optional[List[str]],
     session_id: str,
-    selected_fields: Optional[Dict[str, Any]],
     conversation_history: Optional[List[str]],
     request_url: str,
 ):
@@ -43,7 +41,7 @@ def _event_stream_think(
     db_summary = get_db_summary_for_agent(engine, tables)
     func_catalog = get_func_summary_for_agent()
 
-    think_prompt = f"""You are an autonomous data analysis planner. Your job is to take a user's question, analyze the available database and tools, and produce a structured Markdown checklist of actionable steps.
+    think_prompt = f"""You are an autonomous data analysis planner. Your job is to take a user's question, analyze the available database and tools, and produce a structured plan.
 
 Database Overview:
 {db_summary}
@@ -53,47 +51,60 @@ Available Functions:
 
 Rules:
 1. Each step should be a specific, actionable task.
-2. The checklist MUST contain between 1 and 10 steps (inclusive).
-3. Mention specific table names and field names in data retrieval steps.
+2. The todo list should contain between 1 and 10 items. If the question is a simple greeting, chat, or requires no data analysis, set todo to an empty list.
+3. Mention specific table names and field names in data retrieval tasks.
 4. Each step can contain ONE query AND ONE plot, OR multiple queries (any number, but no plotting).
-5. A step CANNOT contain multiple plots or multiple query+plot combinations.
-6. Never mention specific function or API names - describe what data to get, not how to get it.
-7. When the user asks to analyze data, ALWAYS prefer querying the database directly.
-8. TABLE MATCHING RULE: Check table comments to match concepts to tables. Only ask the user if table comments are missing or ambiguous.
-9. Do NOT output any code, code snippets, or conversational text. Output ONLY the Markdown checklist.
-10. BEFORE generate_and_execute, you MUST first call search_db to select relevant tables and columns, and search_func to select needed functions. Never skip these steps.
-11. KEYWORD FALLBACK: When using keyword search, if the keyword returns no results, retry search_db WITHOUT keyword to get the full table overview.
+5. When the user asks to analyze data, ALWAYS prefer querying the database directly.
+6. TABLE MATCHING RULE: Check table comments to match concepts to tables.
+7. Steps involving data retrieval MUST include a "search database" task first.
+8. Do NOT mention specific function or API names - describe what data to get, not how to get it.
 
-After your checklist, output a line starting with NEXT_ACTION: followed by exactly one of:
-- search_db (if you need to explore the database in detail) — optionally add keyword:xxx to search by keyword, space-separate multiple keywords
-- search_func (if you need to explore available functions in detail) — optionally add keyword:xxx
-- generate_and_execute (if ready to execute) — add funcs:exe_sql,load_data to specify functions (must match search_func results). Table and field info is already in context, no need to specify.
-- output_text (if you want to display information or analysis to the user)
-- ask_question (if you need to ask the user a clarifying question)
-- ask_choice (if you need the user to choose from options)
-- summary_and_pause (if you want to summarize progress and pause for user input)
-- attempt_completion (if the entire task is complete and you want to present final results)
+Output ONLY a valid JSON object on a single line:
+{{"description": "Brief analysis strategy in markdown...", "todo": ["Task 1", "Task 2", "Task 3"]}}
 
-Example:
-NEXT_ACTION: generate_and_execute
-funcs: exe_sql, get_save_image_path
+If the question requires no data analysis (greeting, clarification, etc.), output an empty todo list.
+The description should be a short paragraph describing the overall approach.
+The todo list contains the actionable steps. Keep task descriptions concise.
 
 Question: {full_question}"""
 
     prompt_length = len(think_prompt)
-    plan_content = ""
+    raw = ""
 
     yield f"data: {json.dumps({'phase': 'think', 'sub_phase': 'plan', 'type': 'status', 'content': '正在生成分析计划...'}, ensure_ascii=False)}\n\n"
     for chunk in call_llm_stream(think_prompt, llm):
-        plan_content += chunk
+        raw += chunk
         yield f"data: {json.dumps({'phase': 'think', 'sub_phase': 'plan', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
-    yield f"data: {json.dumps({'phase': 'think', 'sub_phase': 'plan', 'type': 'done', 'content': plan_content}, ensure_ascii=False)}\n\n"
+
+    plan_result = _parse_plan_json(raw)
+    yield f"data: {json.dumps({'phase': 'think', 'sub_phase': 'plan', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
 
     log_observe_cycle(session_id, 0, "think", "plan",
-                      prompt=think_prompt[:5000], response=plan_content[:5000],
+                      prompt=think_prompt[:5000], response=raw[:5000],
                       token_estimate=prompt_length // 3)
-    record_session_operation(session_id, request_url, question, ans=plan_content, result_type="success", prompt_length=prompt_length)
+    record_session_operation(session_id, request_url, question, ans=raw, result_type="success", prompt_length=prompt_length)
     log_observe_session(session_id, status="think_done", total_cycles=0, total_tokens=prompt_length // 3)
+
+
+def _parse_plan_json(raw: str) -> dict:
+    raw = raw.strip()
+    for prefix in ('```json', '```'):
+        if raw.startswith(prefix):
+            raw = raw[len(prefix):]
+    for suffix in ('```',):
+        if raw.endswith(suffix):
+            raw = raw[:-len(suffix)]
+    raw = raw.strip()
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError:
+        return {"description": raw, "todo": []}
+    if not isinstance(result, dict):
+        return {"description": raw, "todo": []}
+    return {
+        "description": result.get("description", raw),
+        "todo": result.get("todo") or [],
+    }
 
 
 @router.post("/api/think/stream/")
@@ -103,7 +114,6 @@ async def think_stream_api(request: Request, user_input: ThinkInput):
             user_input.question,
             user_input.tables,
             user_input.session_id or "",
-            user_input.selected_fields,
             user_input.conversation_history,
             request.url.path,
         ),

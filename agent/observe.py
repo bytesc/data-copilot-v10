@@ -17,9 +17,6 @@ class ObserveInput(BaseModel):
     question: str
     tables: Optional[List[str]] = None
     session_id: Optional[str] = None
-    selected_fields: Optional[Dict[str, Any]] = None
-    execution_result: Optional[str] = ""
-    execution_error: Optional[str] = ""
     current_plan: Optional[str] = ""
     conversation_history: Optional[List[str]] = None
     cycle_index: int = 0
@@ -31,9 +28,6 @@ def _event_stream_observe(
     question: str,
     tables: Optional[List[str]],
     session_id: str,
-    selected_fields: Optional[Dict[str, Any]],
-    execution_result: str,
-    execution_error: str,
     current_plan: str,
     conversation_history: Optional[List[str]],
     cycle_index: int,
@@ -52,66 +46,69 @@ def _event_stream_observe(
     db_section = f"\n\nAvailable Database Context:\n{db_context}" if db_context else ""
     func_section = f"\n\nAvailable Functions:\n{func_context}" if func_context else ""
 
-    observe_prompt = f"""You are an autonomous checklist executor. Your job is to review the execution results of the last step, update the checklist accordingly, and output ONLY the updated Markdown checklist.
+    observe_prompt = f"""You are an autonomous checklist executor. Your job is to review the execution results of the last step, update the plan accordingly.
 
 Current Plan:
 {current_plan or '(no plan yet)'}
-
-Execution Result:
-{execution_result[:3000] if execution_result else '(no result)'}
-
-Execution Error:
-{execution_error if execution_error else '(no error)'}
 {db_section}{func_section}
 
-Context:
+Context (includes execution results and errors):
 {context if context else '(no context)'}
 
 Original Question:
 {question}
 
 Autonomous State Judgment & Update Rules:
-1. ANALYZE RESULT FIRST: Look at the Execution Result. Focus on the actual data returned or error traces.
-2. SUCCESS: If the result contains the expected data/confirmation without errors, mark the corresponding checklist step as `- [x]`.
-3. ERROR / EXCEPTION (Autonomous Correction): If the result contains error messages (e.g., KeyError, ValueError, SQL syntax error, missing parameters), DO NOT ask the user. You MUST autonomously modify the failed step to fix the error and keep it as `- [ ]`.
-4. PARTIAL SUCCESS: If only part of the task was completed, mark the completed part `- [x]` and append new `- [ ]` steps for the remaining work.
-5. The checklist MUST contain between 1 and 10 steps (inclusive).
-6. Never mention specific function or API names - describe what data to get, not how to get it.
-7. Do NOT output any code, code snippets, or conversational text. Output ONLY the updated Markdown checklist.
-8. Use [x] to update multiple items if more than one is done. Never return the same list without doing anything!
-9. BEFORE generate_and_execute, you MUST first call search_db to select relevant tables and columns, and search_func to select needed functions. Never skip these steps.
-10. If "Available Database Context" is present above, search_db has already been done — mark schema exploration steps as DONE. If "Available Functions" is present, search_func has been done — mark function exploration steps as DONE. Do NOT call search_db or search_func again.
-11. EXCEPTION: If "Available Database Context" contains "No tables or columns found matching keyword", it means keyword search returned no results. In that case, retry search_db WITHOUT keyword (do NOT add keyword:xxx).
+1. ANALYZE RESULT FIRST: Look at the context for execution results and error traces.
+2. SUCCESS: If the result contains the expected data/confirmation without errors, remove that task from the todo list.
+3. ERROR / EXCEPTION (Autonomous Correction): If the context contains error messages, DO NOT ask the user. Keep the failed task in the todo list and modify steps to fix the error.
+4. PARTIAL SUCCESS: If only part of the task was completed, remove completed parts and append new tasks for remaining work.
+5. Keep completed tasks out of the todo list — only include PENDING tasks.
+6. If "Available Database Context" is present above, search_db has already been done — remove schema exploration from todo.
+7. If "Available Functions" is present, search_func has already been done — remove function exploration from todo.
+8. If all tasks are done, set todo to an empty list.
+9. If there are pending tasks, the todo list should contain between 1 and 10 items.
 
-After your checklist, output a line starting with NEXT_ACTION: followed by exactly one of:
-- search_db (if you need to explore the database in detail) — optionally add keyword:xxx, space-separate multiple keywords
-- search_func (if you need to explore available functions in detail) — optionally add keyword:xxx
-- generate_and_execute (if ready to execute) — add funcs:exe_sql,load_data to specify functions. Table and field info is already in context.
-- output_text (if you want to display information or analysis to the user)
-- ask_question (if you need to ask the user a clarifying question)
-- ask_choice (if you need the user to choose from options)
-- summary_and_pause (if you want to summarize progress and pause for user input)
-- attempt_completion (if the entire task is complete and you want to present final results)
+Output ONLY a valid JSON object on a single line:
+{{"description": "Brief review of what happened and updated strategy in markdown...", "todo": ["Remaining task 1", "Remaining task 2"]}}
 
-Example:
-NEXT_ACTION: generate_and_execute
-funcs: exe_sql, get_save_image_path
-
-Output ONLY the Markdown checklist followed by NEXT_ACTION:"""
+If todo is empty, the plan is complete. Keep descriptions concise."""
 
     prompt_length = len(observe_prompt)
-    plan_content = ""
+    raw = ""
 
     for chunk in call_llm_stream(observe_prompt, llm):
-        plan_content += chunk
+        raw += chunk
         yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
-    yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'done', 'content': plan_content}, ensure_ascii=False)}\n\n"
+
+    plan_result = _parse_plan_json(raw)
+    yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
 
     log_observe_cycle(session_id, cycle_index, "observe", "review",
-                      prompt=observe_prompt[:5000], response=plan_content[:5000],
-                      exec_result=execution_result[:3000], exec_error=execution_error[:1000],
+                      prompt=observe_prompt[:5000], response=raw[:5000],
                       token_estimate=prompt_length // 3)
-    record_session_operation(session_id, request_url, question, ans=plan_content, result_type="success", prompt_length=prompt_length)
+    record_session_operation(session_id, request_url, question, ans=raw, result_type="success", prompt_length=prompt_length)
+
+
+def _parse_plan_json(raw: str) -> dict:
+    raw = raw.strip()
+    for prefix in ('```json', '```'):
+        if raw.startswith(prefix):
+            raw = raw[len(prefix):]
+    for suffix in ('```',):
+        if raw.endswith(suffix):
+            raw = raw[:-len(suffix)]
+    raw = raw.strip()
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError:
+        return {"description": raw, "todo": []}
+    if not isinstance(result, dict):
+        return {"description": raw, "todo": []}
+    return {
+        "description": result.get("description", raw),
+        "todo": result.get("todo") or [],
+    }
 
 
 @router.post("/api/observe/stream/")
@@ -121,9 +118,6 @@ async def observe_stream_api(request: Request, user_input: ObserveInput):
             user_input.question,
             user_input.tables,
             user_input.session_id or "",
-            user_input.selected_fields,
-            user_input.execution_result or "",
-            user_input.execution_error or "",
             user_input.current_plan or "",
             user_input.conversation_history,
             user_input.cycle_index,

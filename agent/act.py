@@ -11,7 +11,7 @@ from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.tools.copilot.sql_code import parse_selected_fields_json
 from agent.tools.search_db import get_db_overview_markdown, search_db_markdown, get_db_summary_for_agent
 from agent.tools.search_func import get_func_catalog_markdown, search_func_by_keyword, get_func_summary_for_agent, get_func_docs_for
-from agent.tools.get_function_info import FUNCTION_DICT, FUNCTION_DESCRIPTION
+from agent.tools.get_function_info import FUNCTION_DICT
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 
@@ -26,9 +26,7 @@ class ActInput(BaseModel):
     selected_fields: Optional[Dict[str, Any]] = None
     selected_functions: Optional[List[str]] = None
     conversation_history: Optional[List[str]] = None
-    user_response: Optional[str] = None
-    user_choice: Optional[str] = None
-    search_keyword: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
 
 
 def _build_context(question: str, conversation_history: Optional[List[str]]):
@@ -47,12 +45,12 @@ def _event_stream_act(
     selected_functions: Optional[List[str]],
     conversation_history: Optional[List[str]],
     request_url: str,
-    user_response: Optional[str] = None,
-    user_choice: Optional[str] = None,
-    search_keyword: Optional[str] = None,
+    params: Optional[Dict[str, Any]] = None,
 ):
     """Act phase: execute exactly ONE action."""
     full_question = _build_context(question, conversation_history)
+    params = params or {}
+    search_keyword = params.get("search_keyword")
 
     if action == "search_db":
         yield from _act_search_db(full_question, session_id, tables, search_keyword)
@@ -62,21 +60,6 @@ def _event_stream_act(
 
     elif action == "generate_and_execute":
         yield from _act_generate_and_execute(full_question, session_id, request_url, tables, selected_fields, selected_functions)
-
-    elif action == "output_text":
-        yield from _act_output_text(full_question, session_id, request_url)
-
-    elif action == "ask_question":
-        yield from _act_ask_question(full_question, session_id, request_url)
-
-    elif action == "ask_choice":
-        yield from _act_ask_choice(full_question, session_id, request_url)
-
-    elif action == "summary_and_pause":
-        yield from _act_summary_and_pause(full_question, session_id, request_url)
-
-    elif action == "attempt_completion":
-        yield from _act_attempt_completion(full_question, session_id, request_url)
 
     else:
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
@@ -106,8 +89,11 @@ Example:
 """
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'status', 'content': '正在分析所需字段...'}, ensure_ascii=False)}\n\n"
 
-    response = call_llm(prompt, llm)
-    selected_fields = parse_selected_fields_json(response.content) or {}
+    raw = ""
+    for chunk in call_llm_stream(prompt, llm):
+        raw += chunk
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+    selected_fields = parse_selected_fields_json(raw) or {}
 
     if selected_fields and not selected_fields.get("__no_db__"):
         display_content = get_db_overview_markdown(engine, tables, include_samples=True, selected_fields=selected_fields)
@@ -117,10 +103,10 @@ Example:
         display_content = full_schema
 
     log_observe_cycle(session_id, 0, "act", "search_db",
-                      prompt=prompt[:5000], response=response.content[:5000],
+                      prompt=prompt[:5000], response=raw[:5000],
                       token_estimate=len(prompt) // 3)
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'done', 'content': display_content, 'db_context': full_schema, 'selected_fields': selected_fields, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_db', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
 
 def _act_search_func(full_question: str, session_id: str, search_keyword: Optional[str] = None):
@@ -148,8 +134,12 @@ exe_sql, get_save_image_path
 """
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'status', 'content': '正在分析所需函数...'}, ensure_ascii=False)}\n\n"
 
-    response = call_llm(prompt, llm)
-    raw = response.content.strip()
+    raw = ""
+    for chunk in call_llm_stream(prompt, llm):
+        raw += chunk
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+    raw_text = raw
+    raw = raw.strip()
     if raw == "solved":
         selected_functions = []
     else:
@@ -161,10 +151,10 @@ exe_sql, get_save_image_path
         display_content = "*(No functions selected)*"
 
     log_observe_cycle(session_id, 0, "act", "search_func",
-                      prompt=prompt[:5000], response=response.content[:5000],
+                      prompt=prompt[:5000], response=raw_text[:5000],
                       token_estimate=len(prompt) // 3)
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'done', 'content': display_content, 'func_context': full_catalog, 'selected_functions': selected_functions, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'search_func', 'type': 'done', 'content': display_content, 'result': {'selected_functions': selected_functions, 'func_context': full_catalog}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
 
 def _act_generate_and_execute(full_question: str, session_id: str, request_url: str, tables, selected_fields, selected_functions):
@@ -180,8 +170,11 @@ def _act_generate_and_execute(full_question: str, session_id: str, request_url: 
     ):
         if event.get("type") == "code_complete" and event.get("phase") == "code":
             full_code = event.get("content", "")
+        if event.get("type") == "solved" and event.get("phase") == "code":
+            full_ans = event.get("content", "")
         if event.get("type") == "done" and event.get("phase") == "exec":
             prompt_length = event.get("prompt_length", 0)
+            event["result"] = {"code": full_code, "exec_result": full_ans, "error": exec_error}
         if event.get("type") == "chunk" and event.get("phase") == "exec":
             full_ans += event.get("content", "")
         if event.get("type") == "error" and event.get("phase") == "exec":
@@ -191,92 +184,6 @@ def _act_generate_and_execute(full_question: str, session_id: str, request_url: 
         record_session_operation(session_id, request_url, full_question, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500], prompt_length=prompt_length)
     else:
         record_session_operation(session_id, request_url, full_question, ans=full_ans, code=full_code, result_type="success", prompt_length=prompt_length)
-
-
-def _act_output_text(full_question: str, session_id: str, request_url: str):
-    prompt = f"""Based on the context and current state, provide a clear and informative response. Include relevant data, analysis, or explanations. Do NOT generate code. Use markdown formatting.
-
-{full_question}"""
-
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'output_text', 'type': 'status', 'content': '正在生成回复...'}, ensure_ascii=False)}\n\n"
-    text_content = ""
-    for chunk in call_llm_stream(prompt, llm):
-        text_content += chunk
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'output_text', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'output_text', 'type': 'done', 'content': text_content}, ensure_ascii=False)}\n\n"
-
-    record_session_operation(session_id, request_url, full_question, ans=text_content, result_type="success", prompt_length=len(prompt))
-
-
-def _act_ask_question(full_question: str, session_id: str, request_url: str):
-    prompt = f"""Based on the context, you need to ask the user a clarifying question to proceed. Output ONLY the question text, nothing else.
-
-{full_question}"""
-
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'ask_question', 'type': 'status', 'content': '需要用户确认...'}, ensure_ascii=False)}\n\n"
-    question_text = ""
-    for chunk in call_llm_stream(prompt, llm):
-        question_text += chunk
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'ask_question', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'ask_question', 'type': 'done', 'content': question_text, 'needs_user_input': True}, ensure_ascii=False)}\n\n"
-
-    record_session_operation(session_id, request_url, full_question, ans=question_text, result_type="success", prompt_length=len(prompt))
-
-
-def _act_ask_choice(full_question: str, session_id: str, request_url: str):
-    prompt = f"""Based on the context, you need to present the user with choices. Output ONLY a JSON object with fields "question" (string) and "choices" (array of 2-5 strings). No other text.
-
-Example: {{"question": "Which table should I use?", "choices": ["table_a", "table_b", "table_c"]}}
-
-{full_question}"""
-
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'ask_choice', 'type': 'status', 'content': '需要用户选择...'}, ensure_ascii=False)}\n\n"
-    raw = ""
-    for chunk in call_llm_stream(prompt, llm):
-        raw += chunk
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'ask_choice', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
-
-    try:
-        parsed = json.loads(raw)
-        question_text = parsed.get("question", "")
-        choices = parsed.get("choices", [])
-    except json.JSONDecodeError:
-        question_text = raw.strip()
-        choices = []
-
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'ask_choice', 'type': 'done', 'content': question_text, 'choices': choices, 'needs_user_input': True}, ensure_ascii=False)}\n\n"
-
-    record_session_operation(session_id, request_url, full_question, ans=raw, result_type="success", prompt_length=len(prompt))
-
-
-def _act_summary_and_pause(full_question: str, session_id: str, request_url: str):
-    prompt = f"""Summarize the current progress: what has been accomplished, what data was found, and what remains to be done. Be concise and clear. Do NOT generate code. Use markdown.
-
-{full_question}"""
-
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'summary', 'type': 'status', 'content': '正在总结进度...'}, ensure_ascii=False)}\n\n"
-    summary = ""
-    for chunk in call_llm_stream(prompt, llm):
-        summary += chunk
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'summary', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'summary', 'type': 'done', 'content': summary, 'paused': True}, ensure_ascii=False)}\n\n"
-
-    record_session_operation(session_id, request_url, full_question, ans=summary, result_type="success", prompt_length=len(prompt))
-
-
-def _act_attempt_completion(full_question: str, session_id: str, request_url: str):
-    prompt = f"""The task is complete. Present the final results, key findings, and conclusions. Use markdown formatting for clarity. Be thorough but concise.
-
-{full_question}"""
-
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'completion', 'type': 'status', 'content': '正在生成最终结果...'}, ensure_ascii=False)}\n\n"
-    final = ""
-    for chunk in call_llm_stream(prompt, llm):
-        final += chunk
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'completion', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'completion', 'type': 'done', 'content': final, 'completed': True}, ensure_ascii=False)}\n\n"
-
-    record_session_operation(session_id, request_url, full_question, ans=final, result_type="success", prompt_length=len(prompt))
 
 
 @router.post("/api/act/stream/")
@@ -291,9 +198,7 @@ async def act_stream_api(request: Request, user_input: ActInput):
             user_input.selected_functions,
             user_input.conversation_history,
             request.url.path,
-            user_input.user_response,
-            user_input.user_choice,
-            user_input.search_keyword,
+            user_input.params,
         ),
         media_type="text/event-stream",
         headers={

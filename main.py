@@ -762,10 +762,12 @@ async def plain_chat_stream(request: Request, user_input: AgentInput):
 from agent.think import router as think_router
 from agent.act import router as act_router
 from agent.observe import router as observe_router
+from agent.action import router as action_router
 
 app.include_router(think_router)
 app.include_router(act_router)
 app.include_router(observe_router)
+app.include_router(action_router)
 
 
 if __name__ == "__main__":

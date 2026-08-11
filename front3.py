@@ -3,6 +3,7 @@ import re
 import random
 import string
 import time
+import traceback
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 import httpx
@@ -50,6 +51,8 @@ ACTIONS = {
     "attempt_completion": "attempt_completion",
 }
 
+FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
+
 
 def _sse_stream(url: str, payload: dict):
     with httpx.stream("POST", url, json=payload, timeout=300.0) as response:
@@ -72,15 +75,12 @@ def _sse_stream(url: str, payload: dict):
 def think_api_stream(
     question: str,
     tables: Optional[List[str]] = None,
-    selected_fields: Optional[dict] = None,
     conversation_history: Optional[List[str]] = None,
     session_id: str = "",
 ):
     payload = {"question": question, "session_id": session_id}
     if tables:
         payload["tables"] = tables
-    if selected_fields is not None:
-        payload["selected_fields"] = selected_fields
     if conversation_history:
         payload["conversation_history"] = conversation_history
     yield from _sse_stream(f"{SERVER_URL}/api/think/stream/", payload)
@@ -94,9 +94,7 @@ def act_api_stream(
     selected_functions: Optional[List[str]] = None,
     conversation_history: Optional[List[str]] = None,
     session_id: str = "",
-    user_response: Optional[str] = None,
-    user_choice: Optional[str] = None,
-    search_keyword: Optional[str] = None,
+    params: Optional[dict] = None,
 ):
     payload = {"question": question, "action": action, "session_id": session_id}
     if tables:
@@ -107,21 +105,14 @@ def act_api_stream(
         payload["selected_functions"] = selected_functions
     if conversation_history:
         payload["conversation_history"] = conversation_history
-    if user_response:
-        payload["user_response"] = user_response
-    if user_choice:
-        payload["user_choice"] = user_choice
-    if search_keyword:
-        payload["search_keyword"] = search_keyword
+    if params:
+        payload["params"] = params
     yield from _sse_stream(f"{SERVER_URL}/api/act/stream/", payload)
 
 
 def observe_api_stream(
     question: str,
     tables: Optional[List[str]] = None,
-    selected_fields: Optional[dict] = None,
-    execution_result: str = "",
-    execution_error: str = "",
     current_plan: str = "",
     conversation_history: Optional[List[str]] = None,
     cycle_index: int = 0,
@@ -132,15 +123,11 @@ def observe_api_stream(
     payload = {
         "question": question,
         "session_id": session_id,
-        "execution_result": execution_result,
-        "execution_error": execution_error,
         "current_plan": current_plan,
         "cycle_index": cycle_index,
     }
     if tables:
         payload["tables"] = tables
-    if selected_fields is not None:
-        payload["selected_fields"] = selected_fields
     if conversation_history:
         payload["conversation_history"] = conversation_history
     if db_context:
@@ -148,6 +135,74 @@ def observe_api_stream(
     if func_context:
         payload["func_context"] = func_context
     yield from _sse_stream(f"{SERVER_URL}/api/observe/stream/", payload)
+
+
+def action_api_stream(
+    question: str,
+    tables: Optional[List[str]] = None,
+    selected_fields: Optional[dict] = None,
+    selected_functions: Optional[List[str]] = None,
+    conversation_history: Optional[List[str]] = None,
+    current_plan: str = "",
+    db_context: Optional[str] = None,
+    func_context: Optional[str] = None,
+    cycle_index: int = 0,
+    session_id: str = "",
+):
+    payload = {
+        "question": question,
+        "session_id": session_id,
+        "current_plan": current_plan,
+        "cycle_index": cycle_index,
+    }
+    if tables:
+        payload["tables"] = tables
+    if selected_fields is not None:
+        payload["selected_fields"] = selected_fields
+    if selected_functions is not None:
+        payload["selected_functions"] = selected_functions
+    if conversation_history:
+        payload["conversation_history"] = conversation_history
+    if db_context:
+        payload["db_context"] = db_context
+    if func_context:
+        payload["func_context"] = func_context
+    yield from _sse_stream(f"{SERVER_URL}/api/action/stream/", payload)
+
+
+def parse_action_result(events: list) -> dict:
+    for event in events:
+        if event.get("type") == "done" and event.get("action_result"):
+            return event["action_result"]
+    return {"action": None, "error": "No action result"}
+
+
+def run_action_phase(cycle_index, question, conversation_history, current_plan, db_context, func_context, session_id):
+    try:
+        phase_header("act", f"ACTION - Decide (Cycle {cycle_index})")
+        action_scope = f"action_{cycle_index}"
+        put_scope(action_scope)
+        append_action = display_streaming(action_scope, collapse_title="Decision")
+
+        action_events = []
+        for event in action_api_stream(
+            question, SELECT_TABLES,
+            conversation_history=conversation_history,
+            current_plan=current_plan,
+            db_context=db_context,
+            func_context=func_context,
+            cycle_index=cycle_index,
+            session_id=session_id,
+        ):
+            action_events.append(event)
+            etype = event.get("type", "")
+            append_action({"type": etype, "content": event.get("content", "")})
+
+        return parse_action_result(action_events)
+    except Exception as e:
+        print(f"[ERROR] run_action_phase: cycle={cycle_index}")
+        traceback.print_exc()
+        raise
 
 
 def display_streaming(scope_name: str, collapse_title: str = None):
@@ -211,30 +266,62 @@ def phase_header(phase: str, title: str):
     put_markdown(f'<div class="phase-header {css_class}">### {title}</div>', sanitize=False)
 
 
+def _parse_plan_json(raw: str) -> dict:
+    try:
+        result = json.loads(raw)
+        if isinstance(result, dict):
+            return {
+                "description": result.get("description", raw),
+                "todo": result.get("todo") or [],
+            }
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return {"description": raw, "todo": []}
+
+
+def _format_plan_display(plan: dict) -> str:
+    lines = [plan.get("description", "")]
+    todo = plan.get("todo") or []
+    if todo:
+        lines.append("\n**Pending Tasks:**")
+        for t in todo:
+            lines.append(f"- [ ] {t}")
+    return "\n".join(lines)
+
+
 def parse_think_result(events: list) -> dict:
-    result = {"plan": "", "next_action": None, "search_keyword": None, "selected_functions": None}
     for event in events:
-        sub = event.get("sub_phase", "")
-        etype = event.get("type", "")
-        content = event.get("content", "")
-        if sub == "plan" and etype == "done":
-            result["plan"] = content
-            match = re.search(r'NEXT_ACTION:\s*(\w+)', content)
-            if match:
-                action = match.group(1)
-                if action in ACTIONS:
-                    result["next_action"] = action
-            kw_match = re.search(r'keyword:\s*(.+?)(?:\n|$)', content)
-            if kw_match:
-                result["search_keyword"] = kw_match.group(1).strip().rstrip(')')
-            func_match = re.search(r'funcs:\s*([\w\s,_]+)', content)
-            if func_match:
-                result["selected_functions"] = [f.strip() for f in func_match.group(1).split(',') if f.strip()]
-    return result
+        if event.get("sub_phase") == "plan" and event.get("type") == "done":
+            plan_result = event.get("plan_result")
+            if plan_result:
+                return plan_result
+            raw = event.get("content", "")
+            return _parse_plan_json(raw)
+    return {"description": "", "todo": []}
+
+
+def parse_observe_result(events: list) -> dict:
+    for event in events:
+        if event.get("sub_phase") == "review" and event.get("type") == "done":
+            plan_result = event.get("plan_result")
+            if plan_result:
+                return plan_result
+            raw = event.get("content", "")
+            return _parse_plan_json(raw)
+    return {"description": "", "todo": []}
+
+
+def check_plan_complete(plan: dict) -> bool:
+    if not plan:
+        return True
+    todo = plan.get("todo")
+    if todo is None:
+        return True
+    return len(todo) == 0
 
 
 def parse_act_result(events: list) -> dict:
-    result = {
+    parsed = {
         "selected_fields": None,
         "selected_functions": None,
         "function_solved": False,
@@ -254,91 +341,52 @@ def parse_act_result(events: list) -> dict:
         sub = event.get("sub_phase", "")
         etype = event.get("type", "")
         content = event.get("content", "")
+        result = event.get("result")
 
-        if sub in ("search_db", "search_func") and etype == "done":
-            result["search_result"] = content
-            result["db_context"] = event.get("db_context") or result["db_context"]
-            result["func_context"] = event.get("func_context") or result["func_context"]
-            sf = event.get("selected_fields")
-            if sf is not None:
-                result["selected_fields"] = sf
-            sfuncs = event.get("selected_functions")
-            if sfuncs is not None:
-                result["selected_functions"] = sfuncs
+        if etype == "done" and result and isinstance(result, dict):
+            if sub in ("search_db", "search_func"):
+                parsed["search_result"] = content
+                parsed["db_context"] = result.get("db_context") or parsed["db_context"]
+                parsed["func_context"] = result.get("func_context") or parsed["func_context"]
+                if result.get("selected_fields") is not None:
+                    parsed["selected_fields"] = result["selected_fields"]
+                if result.get("selected_functions") is not None:
+                    parsed["selected_functions"] = result["selected_functions"]
+            elif sub in ("output_text", "summary", "completion"):
+                parsed["full_ans"] = result.get("text", content)
+                if result.get("paused"):
+                    parsed["paused"] = True
+                if result.get("completed"):
+                    parsed["completed"] = True
+            elif sub == "exec":
+                parsed["full_code"] = result.get("code", "")
+                parsed["full_ans"] = result.get("exec_result", "")
+                parsed["exec_error"] = result.get("error")
+                if result.get("solved_ans"):
+                    parsed["solved_ans"] = result["solved_ans"]
+            elif sub == "ask_question":
+                parsed["full_ans"] = result.get("text", content)
+                if result.get("needs_user_input"):
+                    parsed["needs_user_input"] = True
+            elif sub == "ask_choice":
+                parsed["full_ans"] = result.get("text", content)
+                parsed["choices"] = result.get("choices", [])
+                if result.get("needs_user_input"):
+                    parsed["needs_user_input"] = True
+        elif etype in ("chunk", "code_chunk"):
+            if sub in ("output_text", "summary", "completion"):
+                parsed["full_ans"] += content
+            if sub == "exec":
+                parsed["full_ans"] += content
+        elif sub == "code" and etype == "code_complete":
+            parsed["full_code"] = content
+        elif sub == "code" and etype == "solved":
+            parsed["solved_ans"] = content
+            parsed["function_solved"] = True
+        elif sub == "exec" and etype == "error":
+            parsed["exec_error"] = content
 
-        if sub in ("output_text", "summary", "completion") and etype == "chunk":
-            result["full_ans"] += content
-        if sub in ("output_text", "summary", "completion") and etype == "done":
-            result["full_ans"] = content
-
-        if sub == "code" and etype == "code_complete":
-            result["full_code"] = content
-        if sub == "code" and etype == "solved":
-            result["solved_ans"] = content
-        if sub == "exec" and etype == "chunk":
-            result["full_ans"] += content
-        if sub == "exec" and etype == "error":
-            result["exec_error"] = content
-
-        if sub == "ask_question" and etype == "done":
-            result["full_ans"] = content
-            if event.get("needs_user_input"):
-                result["needs_user_input"] = True
-
-        if sub == "ask_choice" and etype == "done":
-            result["full_ans"] = content
-            result["choices"] = event.get("choices", [])
-            if event.get("needs_user_input"):
-                result["needs_user_input"] = True
-
-        if sub == "summary" and etype == "done":
-            if event.get("paused"):
-                result["paused"] = True
-
-        if sub == "completion" and etype == "done":
-            if event.get("completed"):
-                result["completed"] = True
-
-    return result
-
-
-def parse_observe_result(events: list) -> dict:
-    result = {"updated_plan": "", "next_action": None, "search_keyword": None, "selected_functions": None}
-    for event in events:
-        sub = event.get("sub_phase", "")
-        etype = event.get("type", "")
-        content = event.get("content", "")
-        if sub == "review" and etype == "done":
-            result["updated_plan"] = content
-            match = re.search(r'NEXT_ACTION:\s*(\w+)', content)
-            if match:
-                action = match.group(1)
-                if action in ACTIONS:
-                    result["next_action"] = action
-            kw_match = re.search(r'keyword:\s*(.+?)(?:\n|$)', content)
-            if kw_match:
-                result["search_keyword"] = kw_match.group(1).strip().rstrip(')')
-            func_match = re.search(r'funcs:\s*([\w\s,_]+)', content)
-            if func_match:
-                result["selected_functions"] = [f.strip() for f in func_match.group(1).split(',') if f.strip()]
-    return result
-
-
-def check_plan_complete(plan: str) -> bool:
-    if not plan:
-        return True
-    pending = re.findall(r'- \[ \]', plan)
-    return len(pending) == 0
-
-
-def determine_next_action(plan_result: dict, selected_fields, selected_functions):
-    if plan_result.get("next_action"):
-        return plan_result["next_action"]
-    if selected_fields is None:
-        return "search_db"
-    if selected_functions is None:
-        return "search_func"
-    return "generate_and_execute"
+    return parsed
 
 
 def handle_csv_upload():
@@ -408,161 +456,221 @@ def show_db_overview():
                 put_table([rows.columns.tolist()] + rows.values.tolist())
 
 
-def run_think_phase(cycle_index, question, selected_fields, conversation_history, session_id):
-    label = f"THINK - Planning" if cycle_index == 0 else f"THINK - New Planning (Cycle {cycle_index + 1})"
-    phase_header("think", label)
-    think_scope = f"think_{cycle_index}"
-    put_scope(think_scope)
-    append_think = display_streaming(think_scope, collapse_title="Plan")
+def run_think_phase(cycle_index, question, conversation_history, session_id):
+    try:
+        label = f"THINK - Planning" if cycle_index == 0 else f"THINK - Planning (Cycle {cycle_index})"
+        phase_header("think", label)
+        think_scope = f"think_{cycle_index}"
+        put_scope(think_scope)
+        append_think = display_streaming(think_scope, collapse_title="Plan")
 
-    think_events = []
-    for event in think_api_stream(
-        question, SELECT_TABLES,
-        selected_fields=selected_fields,
-        conversation_history=conversation_history,
-        session_id=session_id,
-    ):
-        think_events.append(event)
-        sub = event.get("sub_phase", "")
-        etype = event.get("type", "")
-        content = event.get("content", "")
-        if sub == "plan":
-            append_think({"type": etype, "content": content})
+        think_events = []
+        for event in think_api_stream(
+            question, SELECT_TABLES,
+            conversation_history=conversation_history,
+            session_id=session_id,
+        ):
+            think_events.append(event)
+            sub = event.get("sub_phase", "")
+            etype = event.get("type", "")
+            content = event.get("content", "")
+            if sub == "plan":
+                append_think({"type": etype, "content": content})
 
-    return parse_think_result(think_events)
-
-
-def run_act_phase(cycle_index, action, full_question, selected_fields, selected_functions, conversation_history, session_id, user_response=None, user_choice=None, search_keyword=None):
-    phase_header("act", f"ACT - {action} (Cycle {cycle_index})")
-    act_scope = f"act_{cycle_index}"
-    put_scope(act_scope)
-
-    act_events = []
-    append_exec = None
-    append_code = None
-    append_search = None
-    search_scope_name = None
-    for event in act_api_stream(
-        action=action,
-        question=full_question,
-        tables=SELECT_TABLES,
-        selected_fields=selected_fields,
-        selected_functions=selected_functions,
-        conversation_history=conversation_history,
-        session_id=session_id,
-        user_response=user_response,
-        user_choice=user_choice,
-        search_keyword=search_keyword,
-    ):
-        act_events.append(event)
-        sub = event.get("sub_phase", "")
-        etype = event.get("type", "")
-        content = event.get("content", "")
-
-        if sub in ("search_db", "search_func"):
-            if append_search is None:
-                search_scope_name = f"act_{cycle_index}_search"
-                put_scope(search_scope_name)
-                append_search = display_streaming(search_scope_name, collapse_title=f"Search Results: {action}")
-            append_search(event)
-            if etype == "done":
-                sf = event.get("selected_fields")
-                sfuncs = event.get("selected_functions")
-                if sf is not None:
-                    with use_scope(search_scope_name):
-                        put_text(f"Selection ({action}):")
-                        put_markdown(f"```json\n{json.dumps(sf, ensure_ascii=False, indent=2)}\n```", sanitize=False)
-                elif sfuncs is not None:
-                    with use_scope(search_scope_name):
-                        put_text(f"Selection ({action}):")
-                        put_markdown(f"```json\n{json.dumps(sfuncs, ensure_ascii=False, indent=2)}\n```", sanitize=False)
-        elif sub in ("generate", "code"):
-            if append_code is None:
-                code_scope = f"act_{cycle_index}_code"
-                put_scope(code_scope)
-                append_code = display_streaming(code_scope, collapse_title="Generated Code")
-            append_code(event)
-        elif sub == "exec":
-            if append_exec is None:
-                exec_scope = f"act_{cycle_index}_exec"
-                put_scope(exec_scope)
-                append_exec = display_streaming(exec_scope)
-            append_exec(event)
-        elif sub in ("output_text", "summary", "completion", "ask_question", "ask_choice"):
-            if append_exec is None:
-                out_scope = f"act_{cycle_index}_out"
-                put_scope(out_scope)
-                append_exec = display_streaming(out_scope)
-            append_exec(event)
-
-    return parse_act_result(act_events)
+        result = parse_think_result(think_events)
+        with use_scope(think_scope, clear=True):
+            put_collapse("Plan", [
+                put_markdown(_format_plan_display(result), sanitize=False)
+            ], open=False)
+        return result
+    except Exception as e:
+        print(f"[ERROR] run_think_phase: cycle={cycle_index}")
+        traceback.print_exc()
+        raise
 
 
-def run_observe_phase(cycle_index, original_question, selected_fields, full_ans, exec_error, current_plan, conversation_history, session_id, db_context=None, func_context=None):
-    phase_header("observe", f"OBSERVE - Review (Cycle {cycle_index})")
-    observe_scope = f"observe_{cycle_index}"
-    put_scope(observe_scope)
-    append_observe = display_streaming(observe_scope, collapse_title="Updated Plan")
+def handle_frontend_action(cycle_index, action, action_result):
+    try:
+        text = action_result.get("text") or ""
+        choices = action_result.get("choices") or []
 
-    observe_events = []
-    for event in observe_api_stream(
-        original_question, SELECT_TABLES,
-        selected_fields=selected_fields,
-        execution_result=full_ans,
-        execution_error=exec_error or "",
-        current_plan=current_plan,
-        conversation_history=conversation_history,
-        cycle_index=cycle_index,
-        session_id=session_id,
-        db_context=db_context,
-        func_context=func_context,
-    ):
-        observe_events.append(event)
-        sub = event.get("sub_phase", "")
-        etype = event.get("type", "")
-        if sub == "review":
-            append_observe({"type": etype, "content": event.get("content", "")})
+        phase_header("act", f"ACT - {action} (Cycle {cycle_index})")
+        act_scope = f"act_{cycle_index}"
+        put_scope(act_scope)
 
-    return parse_observe_result(observe_events)
+        result = {
+            "selected_fields": None, "selected_functions": None,
+            "function_solved": False, "full_code": "", "full_ans": text,
+            "exec_error": None, "solved_ans": "",
+            "needs_user_input": False, "choices": choices,
+            "paused": False, "completed": False,
+            "db_context": None, "func_context": None, "search_result": None,
+        }
+
+        if action == "output_text":
+            put_collapse("Output", [put_markdown(text, sanitize=False)], open=False)
+        elif action == "ask_question":
+            put_collapse("Question", [put_markdown(text, sanitize=False)], open=True)
+            result["needs_user_input"] = True
+        elif action == "ask_choice":
+            put_collapse("Choice", [put_markdown(text, sanitize=False)], open=True)
+            result["needs_user_input"] = True
+        elif action == "summary_and_pause":
+            put_collapse("Summary", [put_markdown(text, sanitize=False)], open=True)
+            result["paused"] = True
+        elif action == "attempt_completion":
+            put_collapse("Completion", [put_markdown(text, sanitize=False)], open=False)
+            result["completed"] = True
+
+        return result
+    except Exception as e:
+        print(f"[ERROR] handle_frontend_action: action={action}, cycle={cycle_index}")
+        print(f"[ERROR] action_result={json.dumps(action_result, ensure_ascii=False, default=str)}")
+        traceback.print_exc()
+        raise
+
+
+def run_act_phase(cycle_index, action, full_question, selected_fields, selected_functions, conversation_history, session_id, action_result=None, params=None):
+    try:
+        if action in FRONTEND_ACTIONS:
+            return handle_frontend_action(cycle_index, action, action_result or {})
+
+        phase_header("act", f"ACT - {action} (Cycle {cycle_index})")
+        act_scope = f"act_{cycle_index}"
+        put_scope(act_scope)
+
+        act_events = []
+        append_exec = None
+        append_code = None
+        append_search = None
+        search_scope_name = None
+        for event in act_api_stream(
+            action=action,
+            question=full_question,
+            tables=SELECT_TABLES,
+            selected_fields=selected_fields,
+            selected_functions=selected_functions,
+            conversation_history=conversation_history,
+            session_id=session_id,
+            params=params,
+        ):
+            act_events.append(event)
+            sub = event.get("sub_phase", "")
+            etype = event.get("type", "")
+            content = event.get("content", "")
+
+            if sub in ("search_db", "search_func"):
+                if append_search is None:
+                    search_scope_name = f"act_{cycle_index}_search"
+                    put_scope(search_scope_name)
+                    append_search = display_streaming(search_scope_name, collapse_title=f"Search Results: {action}")
+                append_search(event)
+            elif sub in ("generate", "code"):
+                if append_code is None:
+                    code_scope = f"act_{cycle_index}_code"
+                    put_scope(code_scope)
+                    append_code = display_streaming(code_scope, collapse_title="Generated Code")
+                append_code(event)
+            elif sub == "exec":
+                if append_exec is None:
+                    exec_scope = f"act_{cycle_index}_exec"
+                    put_scope(exec_scope)
+                    append_exec = display_streaming(exec_scope, collapse_title="Execution Output")
+                append_exec(event)
+            elif sub in ("output_text", "summary", "completion", "ask_question", "ask_choice"):
+                if append_exec is None:
+                    out_scope = f"act_{cycle_index}_out"
+                    put_scope(out_scope)
+                    append_exec = display_streaming(out_scope, collapse_title="Output")
+                append_exec(event)
+
+        return parse_act_result(act_events)
+    except Exception as e:
+        print(f"[ERROR] run_act_phase: action={action}, cycle={cycle_index}")
+        traceback.print_exc()
+        raise
+
+
+def run_observe_phase(cycle_index, original_question, current_plan, conversation_history, session_id, db_context=None, func_context=None):
+    try:
+        phase_header("observe", f"OBSERVE - Review (Cycle {cycle_index})")
+        observe_scope = f"observe_{cycle_index}"
+        put_scope(observe_scope)
+        append_observe = display_streaming(observe_scope, collapse_title="Updated Plan")
+
+        plan_str = json.dumps(current_plan, ensure_ascii=False) if isinstance(current_plan, dict) else str(current_plan)
+
+        observe_events = []
+        for event in observe_api_stream(
+            original_question, SELECT_TABLES,
+            current_plan=plan_str,
+            conversation_history=conversation_history,
+            cycle_index=cycle_index,
+            session_id=session_id,
+            db_context=db_context,
+            func_context=func_context,
+        ):
+            observe_events.append(event)
+            sub = event.get("sub_phase", "")
+            etype = event.get("type", "")
+            if sub == "review":
+                append_observe({"type": etype, "content": event.get("content", "")})
+
+        result = parse_observe_result(observe_events)
+        with use_scope(observe_scope, clear=True):
+            put_collapse("Updated Plan", [
+                put_markdown(_format_plan_display(result), sanitize=False)
+            ], open=False)
+        return result
+    except Exception as e:
+        print(f"[ERROR] run_observe_phase: cycle={cycle_index}")
+        traceback.print_exc()
+        raise
 
 
 def handle_user_interaction(act_result, conversation_history):
     """Handle user-facing actions: ask_question, ask_choice, summary_and_pause."""
-    if act_result["needs_user_input"]:
-        if act_result["choices"]:
-            phase_header("user", "USER - Choice Required")
-            user_choice = radio(
-                act_result["full_ans"],
-                options=[{"label": c, "value": c} for c in act_result["choices"]]
-            )
-            conversation_history.append(f"User chose: {user_choice}")
-            return {"user_choice": user_choice}
-        else:
-            phase_header("user", "USER - Input Required")
-            user_response = input(act_result["full_ans"], type=TEXT)
-            conversation_history.append(f"User response: {user_response}")
-            return {"user_response": user_response}
+    try:
+        if act_result["needs_user_input"]:
+            if act_result["choices"]:
+                phase_header("user", "USER - Choice Required")
+                user_choice = radio(
+                    act_result["full_ans"],
+                    options=[{"label": c, "value": c} for c in act_result["choices"]]
+                )
+                conversation_history.append(f"User chose: {user_choice}")
+                return {"user_choice": user_choice}
+            else:
+                phase_header("user", "USER - Input Required")
+                user_response = input(act_result["full_ans"], type=TEXT)
+                conversation_history.append(f"User response: {user_response}")
+                return {"user_response": user_response}
 
-    if act_result["paused"]:
-        put_info("Paused. Enter a new instruction or click Continue.")
-        user_input = textarea("Continue or new instruction:", value="continue", type=TEXT, rows=2)
-        if not user_input.strip():
-            user_input = "continue"
-        conversation_history.append(f"User: {user_input}")
-        return {"user_response": user_input}
+        if act_result["paused"]:
+            put_info("Paused. Enter a new instruction or click Continue.")
+            user_input = textarea("Continue or new instruction:", value="continue", type=TEXT, rows=2)
+            if not user_input.strip():
+                user_input = "continue"
+            conversation_history.append(f"User: {user_input}")
+            return {"user_response": user_input}
 
-    if act_result["completed"]:
-        put_success("Task completed.")
-        return {"completed": True}
+        if act_result["completed"]:
+            put_success("Task completed.")
+            return {"completed": True}
 
-    return {}
+        return {}
+    except Exception as e:
+        print(f"[ERROR] handle_user_interaction: needs_user_input={act_result.get('needs_user_input')}, paused={act_result.get('paused')}, completed={act_result.get('completed')}")
+        print(f"[ERROR] act_result keys={list(act_result.keys())}")
+        traceback.print_exc()
+        raise
 
 
 def main():
     global SELECT_TABLES, SELECT_LABELS
     put_html(CURSOR_CSS)
-    put_markdown("# Data-Copilot v3 (Think → Act → Observe)")
-    put_markdown("*One action per cycle. LLM-driven via NEXT_ACTION directive.*")
+    put_markdown("# Data-Copilot v3 (Think → Action → Act → Observe)")
+    put_markdown("*One action per cycle. Action phase decides next step via LLM.*")
 
     put_markdown("### Control Panel")
     put_buttons(['Upload CSV File', 'Upload Document File'],
@@ -580,117 +688,138 @@ def main():
 
     conversation_history = [f"Q: {question}"]
     original_question = question
-    current_plan = ""
+    current_plan = {"description": "", "todo": []}
     selected_fields = None
     selected_functions = None
     db_context = None
     func_context = None
     cycle_index = 0
-
-    think_result = run_think_phase(
-        cycle_index, question, selected_fields, conversation_history, session_id,
-    )
-    current_plan = think_result.get("plan", "")
-    if current_plan:
-        conversation_history.append(f"Planner: {current_plan}")
+    max_cycles = 20
 
     while True:
-        cycle_index += 1
-        full_question = f"Context:\n" + "\n".join(conversation_history) + f"\n\nCurrent Question:\n{original_question}"
+        try:
+            cycle_index += 1
 
-        action = determine_next_action(think_result, selected_fields, selected_functions)
-        search_keyword = think_result.get("search_keyword")
-        plan_funcs = think_result.get("selected_functions")
-
-        act_funcs = plan_funcs if plan_funcs is not None else selected_functions
-        act_fields = {"__no_db__": True} if action == "generate_and_execute" else selected_fields
-
-        act_result = run_act_phase(
-            cycle_index, action, full_question,
-            act_fields, act_funcs,
-            conversation_history, session_id,
-            search_keyword=search_keyword,
-        )
-
-        if act_result["db_context"]:
-            db_context = act_result["db_context"]
-        if act_result["func_context"]:
-            func_context = act_result["func_context"]
-        if act_result["selected_fields"] is not None:
-            selected_fields = act_result["selected_fields"]
-        if act_result["selected_functions"] is not None:
-            selected_functions = act_result["selected_functions"]
-        function_solved = act_result["function_solved"]
-        full_code = act_result["full_code"]
-        full_ans = act_result["full_ans"]
-        exec_error = act_result["exec_error"]
-
-        if function_solved:
-            solved_ans = act_result["solved_ans"]
-            if solved_ans:
-                conversation_history.append(f"A: {solved_ans}")
-                conversation_history = [e for e in conversation_history if not e.startswith("Planner: ")]
-            current_plan = ""
-            continue
-
-        if full_ans and not exec_error and full_code:
-            conversation_history.append(f"Code Generated: {full_code}")
-            conversation_history.append(f"Exe Result: {full_ans}")
-        elif exec_error:
-            if full_code:
-                conversation_history.append(f"Code Generated: {full_code}")
-            conversation_history.append(f"Exe Error: {exec_error}")
-
-        user_interaction = handle_user_interaction(act_result, conversation_history)
-        if user_interaction.get("completed"):
-            question = textarea("What is next?:", value="", type=TEXT, rows=2)
-            if not question.strip():
-                continue
-            put_markdown("## " + question)
-            conversation_history.append(f"Q: {question}")
-            original_question = question
+            if cycle_index > max_cycles:
+                put_warning(f"Reached max cycles ({max_cycles}). Stopping.")
+                break
 
             think_result = run_think_phase(
-                cycle_index, question, selected_fields, conversation_history, session_id,
+                cycle_index, question, conversation_history, session_id,
             )
-            current_plan = think_result.get("plan", "")
-            if current_plan:
-                conversation_history = [e for e in conversation_history if not e.startswith("Planner: ")]
-                conversation_history.append(f"Planner: {current_plan}")
-            continue
-
-        observe_result = run_observe_phase(
-            cycle_index, original_question, selected_fields,
-            full_ans, exec_error, current_plan,
-            conversation_history, session_id,
-            db_context=db_context, func_context=func_context,
-        )
-
-        if observe_result.get("updated_plan"):
-            current_plan = observe_result["updated_plan"]
+            current_plan = think_result
             conversation_history = [e for e in conversation_history if not e.startswith("Planner: ")]
-            conversation_history.append(f"Planner: {current_plan}")
+            conversation_history.append(f"Planner: {json.dumps(current_plan, ensure_ascii=False)}")
 
-        think_result = observe_result
+            if check_plan_complete(current_plan) and cycle_index == 1:
+                current_plan = {"description": "", "todo": []}
 
-        if check_plan_complete(current_plan):
-            put_info("Plan complete.")
-            question = textarea("What is next?:", value="", type=TEXT, rows=2)
-            if not question.strip():
-                continue
-            put_markdown("## " + question)
-            conversation_history.append(f"Q: {question}")
-            original_question = question
+            full_question = f"Context:\n" + "\n".join(conversation_history) + f"\n\nCurrent Question:\n{original_question}"
 
-            think_result = run_think_phase(
-                cycle_index, question, selected_fields, conversation_history, session_id,
+            action_result = run_action_phase(
+                cycle_index, original_question,
+                conversation_history, json.dumps(current_plan, ensure_ascii=False), db_context, func_context, session_id,
             )
-            current_plan = think_result.get("plan", "")
-            if current_plan:
+            action = action_result.get("action")
+            print(f"[DEBUG] action_result: {json.dumps(action_result, ensure_ascii=False, default=str)}")
+            if not action:
+                toast(f"Action failed: {action_result.get('error', 'unknown')}", color='error')
+                break
+            search_keyword = action_result.get("keyword")
+            plan_funcs = action_result.get("funcs")
+
+            act_funcs = plan_funcs if plan_funcs is not None else selected_functions
+            act_fields = {"__no_db__": True} if action == "generate_and_execute" else selected_fields
+
+            params = {}
+            if search_keyword:
+                params["search_keyword"] = search_keyword
+
+            act_result = run_act_phase(
+                cycle_index, action, full_question,
+                act_fields, act_funcs,
+                conversation_history, session_id,
+                action_result=action_result,
+                params=params,
+            )
+            print(f"[DEBUG] act_result: needs_user_input={act_result.get('needs_user_input')}, paused={act_result.get('paused')}, completed={act_result.get('completed')}, function_solved={act_result.get('function_solved')}")
+
+            if act_result["db_context"]:
+                db_context = act_result["db_context"]
+            if act_result["func_context"]:
+                func_context = act_result["func_context"]
+            if act_result["selected_fields"] is not None:
+                selected_fields = act_result["selected_fields"]
+                conversation_history.append(f"Selected Fields: {json.dumps(selected_fields, ensure_ascii=False)}")
+            if act_result["selected_functions"] is not None:
+                selected_functions = act_result["selected_functions"]
+                conversation_history.append(f"Selected Functions: {json.dumps(selected_functions, ensure_ascii=False)}")
+            function_solved = act_result["function_solved"]
+            full_code = act_result["full_code"]
+            full_ans = act_result["full_ans"]
+            exec_error = act_result["exec_error"]
+
+            if function_solved:
+                solved_ans = act_result["solved_ans"]
+                if solved_ans:
+                    conversation_history.append(f"A: {solved_ans}")
+                    conversation_history = [e for e in conversation_history if not e.startswith("Planner: ")]
+                continue
+
+            if full_ans and not exec_error and full_code:
+                conversation_history.append(f"Code Generated: {full_code}")
+                conversation_history.append(f"Exe Result: {full_ans}")
+            elif exec_error:
+                if full_code:
+                    conversation_history.append(f"Code Generated: {full_code}")
+                conversation_history.append(f"Exe Error: {exec_error}")
+
+            user_interaction = handle_user_interaction(act_result, conversation_history)
+            if user_interaction.get("completed"):
+                question = textarea("What is next?:", value="", type=TEXT, rows=2)
+                if not question.strip():
+                    continue
+                put_markdown("## " + question)
+                conversation_history.append(f"Q: {question}")
+                original_question = question
+                current_plan = {"description": "", "todo": []}
+                selected_fields = None
+                selected_functions = None
+                db_context = None
+                func_context = None
+                continue
+
+            observe_result = run_observe_phase(
+                cycle_index, original_question,
+                current_plan, conversation_history, session_id,
+                db_context=db_context, func_context=func_context,
+            )
+
+            if observe_result.get("description"):
+                current_plan = observe_result
                 conversation_history = [e for e in conversation_history if not e.startswith("Planner: ")]
-                conversation_history.append(f"Planner: {current_plan}")
-        else:
-            put_info("Plan has pending tasks. Continuing to next action...")
+                conversation_history.append(f"Planner: {json.dumps(current_plan, ensure_ascii=False)}")
+
+            if check_plan_complete(current_plan):
+                put_info("Plan complete.")
+                question = textarea("What is next?:", value="", type=TEXT, rows=2)
+                if not question.strip():
+                    continue
+                put_markdown("## " + question)
+                conversation_history.append(f"Q: {question}")
+                original_question = question
+                current_plan = {"description": "", "todo": []}
+                selected_fields = None
+                selected_functions = None
+                db_context = None
+                func_context = None
+            else:
+                put_info("Plan has pending tasks. Continuing to next action...")
+        except Exception as e:
+            print(f"[ERROR] main loop cycle={cycle_index}, action={action}")
+            traceback.print_exc()
+            toast(f"Error: {e}", color='error')
+            break
 
 
 if __name__ == '__main__':
