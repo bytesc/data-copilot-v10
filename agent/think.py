@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from agent.action import ACTIONS
 from agent.tools.tools_def import engine, llm
 from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
@@ -47,8 +48,13 @@ Available Functions:
 {func_catalog}
 Use `explore_functions` action to get full documentation for all functions. Then use `generate_and_execute` action to call.
 
+The system is working in Think → Action → Act → Observe cycles. You takes the `Think` part.
+
 Context (includes conversation history and user questions):
 {context}
+
+ACTIONS AVAILABLE:
+{ACTIONS}
 
 Rules:
 1. Each step should be a specific, actionable task.

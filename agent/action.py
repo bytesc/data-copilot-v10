@@ -27,6 +27,25 @@ class ActionInput(BaseModel):
     conversation_history: Optional[List[str]] = None
     cycle_index: int = 0
 
+ACTIONS="""
+
+- explore_schema: {{"action": "explore_schema"}}
+  Explore the database schema and structure based on previous context. Not used to query data, you should use `generate_and_execute` to exe_sql.
+- explore_functions: {{"action": "explore_functions"}}
+  Explore the available function catalog and select needed functions based on previous context.
+- generate_and_execute: {{"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"]}}
+  Write some python code to call functions. funcs: list of function names to use. 
+- output_text: {{"action": "output_text", "text": "Your response content here..."}}
+  Output some text to the user without stopping the pipline.
+- ask_question: {{"action": "ask_question", "text": "Your question for the user here..."}}
+  Ask the user a question. Use it incase you need some information from user.
+- ask_choice: {{"action": "ask_choice", "text": "Your question here...", "choices": ["option1", "option2"]}}
+  Give user some choices to choice only one of them.
+- summary_and_pause: {{"action": "summary_and_pause", "text": "Your progress summary here..."}}
+  Output some text and stop the pipline.
+- attempt_completion: {{"action": "attempt_completion", "text": "Your final results here..."}}
+  Output some text and stop the pipline in case of completion.
+"""
 
 def _build_action_prompt(
     question: str,
@@ -47,29 +66,14 @@ Use `explore_schema` action to explore table schemas and sample data in detail.
 
 Available Functions:
 {func_catalog}
-Use `explore_functions` action to get full documentation for all functions. Then use `generate_and_execute` action to call.
 
+The system is working in Think → Action → Act → Observe cycles. You takes the `Action` part.
 Context:
 {context if context else '(no context)'}
 
 Output ONLY a valid JSON object on a single line(no md code block). Choose from:
 
-- explore_schema: {{"action": "explore_schema"}}
-  Explore the database schema and structure based on previous context. Not used to query data, you should use `generate_and_execute` to exe_sql.
-- explore_functions: {{"action": "explore_functions"}}
-  Explore the available function catalog and select needed functions based on previous context.
-- generate_and_execute: {{"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"]}}
-  Write some python code to call functions. funcs: list of function names to use. 
-- output_text: {{"action": "output_text", "text": "Your response content here..."}}
-  Output some text to the user without stopping the pipline.
-- ask_question: {{"action": "ask_question", "text": "Your question for the user here..."}}
-  Ask the user a question. Use it incase you need some information from user.
-- ask_choice: {{"action": "ask_choice", "text": "Your question here...", "choices": ["option1", "option2"]}}
-  Give user some choices to choice only one of them.
-- summary_and_pause: {{"action": "summary_and_pause", "text": "Your progress summary here..."}}
-  Output some text and stop the pipline.
-- attempt_completion: {{"action": "attempt_completion", "text": "Your final results here..."}}
-  Output some text and stop the pipline in case of completion.
+{ACTIONS}
 
 Decision Rules:
 1. If the plan has an empty todo list, choose ask_question with a polite response to the user.
