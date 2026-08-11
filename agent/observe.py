@@ -34,7 +34,7 @@ def _event_stream_observe(
     else:
         context = ""
 
-    observe_prompt = f"""You are an Observer. Your job is to review the execution results of the last step, update the plan accordingly.
+    observe_prompt = f"""You are an objective Observer. Your job is to review the execution results of the last step, update the plan accordingly.
 
 Context (includes execution results and errors):
 {context if context else '(no context)'}
@@ -47,6 +47,10 @@ Autonomous State Judgment & Update Rules:
 5. Keep completed tasks out of the todo list — only include PENDING tasks.
 6. If all tasks are done, set todo to an empty list.
 7. If there are pending tasks, the todo list should contain between 1 and 10 items.
+8. Your job is an objective Observer, do not be creative to new solutions.
+
+- `explore_schema` returns all relevant data structure and schema in the database at a time based on previous context. NO need to perform explore_schema with the same input again.
+- `explore_functions` returns all relevant available python function catalog at a time based on previous context. NO need to perform explore_functions with the same input again.
 
 Output ONLY a valid JSON object on a single line:
 {{"description": "Brief review of what happened and updated strategy in markdown...", "todo": ["Remaining task 1", "Remaining task 2"]}}

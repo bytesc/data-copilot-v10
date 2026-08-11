@@ -17,14 +17,12 @@ router = APIRouter()
 
 class ThinkInput(BaseModel):
     question: str
-    tables: Optional[List[str]] = None
     session_id: Optional[str] = None
     conversation_history: Optional[List[str]] = None
 
 
 def _event_stream_think(
     question: str,
-    tables: Optional[List[str]],
     session_id: str,
     conversation_history: Optional[List[str]],
 ):
@@ -36,10 +34,10 @@ def _event_stream_think(
     else:
         context = question
 
-    db_summary = get_db_summary_for_agent(engine, tables)
+    db_summary = get_db_summary_for_agent(engine)
     func_catalog = get_func_summary_for_agent()
 
-    think_prompt = f"""You are an autonomous data analysis planner. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
+    think_prompt = f"""You are an autonomous data analysis Thinker. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
 
 Database Overview:
 {db_summary}
@@ -54,7 +52,7 @@ Context (includes conversation history and user questions):
 
 Rules:
 1. Each step should be a specific, actionable task.
-2. The todo list should contain between 1 and 10 items. If the question is a simple greeting, chat, or requires no data analysis, set todo to an empty list.
+2. The todo list should contain between 1 and 10 items. If the question is a simple greeting, chat, summary or requires no data analysis, set todo to an empty list. If all tasks are done, set todo to an empty list.
 3. Mention specific table names and field names in data retrieval tasks.
 4. Each step can contain ONE query AND ONE plot, OR multiple queries (any number, but no plotting).
 5. When the user asks to analyze data, ALWAYS prefer querying the database directly.
@@ -112,7 +110,6 @@ async def think_stream_api(request: Request, user_input: ThinkInput):
     return StreamingResponse(
         _event_stream_think(
             user_input.question,
-            user_input.tables,
             user_input.session_id or "",
             user_input.conversation_history,
         ),

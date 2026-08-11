@@ -5,9 +5,12 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from agent.tools.search_db import get_db_summary_for_agent
+from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.observe_log import log_observe_cycle
+from agent.tools.tools_def import engine
 
 router = APIRouter()
 
@@ -20,7 +23,6 @@ VALID_ACTIONS = [
 
 class ActionInput(BaseModel):
     question: str
-    tables: Optional[List[str]] = None
     session_id: Optional[str] = None
     conversation_history: Optional[List[str]] = None
     cycle_index: int = 0
@@ -34,7 +36,18 @@ def _build_action_prompt(
     if conversation_history:
         context = "\n".join(conversation_history)
 
+    db_summary = get_db_summary_for_agent(engine)
+    func_catalog = get_func_summary_for_agent()
+
     return f"""You are an action decision maker. Given the current context, decide the SINGLE next action to execute.
+
+Database Overview:
+{db_summary}
+Use `explore_schema` action to explore table schemas and sample data in detail.
+
+Available Functions:
+{func_catalog}
+Use `explore_functions` action to get full documentation for all functions. Then use `generate_and_execute` action to call.
 
 Context:
 {context if context else '(no context)'}
@@ -42,9 +55,9 @@ Context:
 Output ONLY a valid JSON object on a single line(no md code block). Choose from:
 
 - explore_schema: {{"action": "explore_schema"}}
-  Explore the database schema and structure. Not used to query data, you should use `generate_and_execute` to exe_sql
+  Explore the database schema and structure based on previous context. Not used to query data, you should use `generate_and_execute` to exe_sql.
 - explore_functions: {{"action": "explore_functions"}}
-  Explore the available function catalog and select needed functions.
+  Explore the available function catalog and select needed functions based on previous context.
 - generate_and_execute: {{"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"]}}
   Write some python code to call functions. funcs: list of function names to use. 
 - output_text: {{"action": "output_text", "text": "Your response content here..."}}
@@ -63,13 +76,15 @@ Decision Rules:
 2. If the plan is complete or no further actions needed, choose attempt_completion.
 3. If you need to ask the user something, choose ask_question or ask_choice.
 4. If you want to pause and show progress, choose summary_and_pause.
+5. `generate_and_execute` is the major action to solve complex problems.
+6. `explore_schema` returns all relevant data structure and schema in the database at a time based on previous context. DO NOT try to perform two explore_schema with the same consecutively.
+7. `explore_functions` returns all relevant available python function catalog at a time based on previous context. DO NOT try to perform two explore_functions with the same consecutively.
 
 """
 
 
 def _event_stream_action(
     question: str,
-    tables: Optional[List[str]],
     session_id: str,
     conversation_history: Optional[List[str]],
     cycle_index: int,
@@ -127,7 +142,6 @@ async def action_stream_api(request: Request, user_input: ActionInput):
     return StreamingResponse(
         _event_stream_action(
             user_input.question,
-            user_input.tables,
             user_input.session_id or "",
             user_input.conversation_history,
             user_input.cycle_index,

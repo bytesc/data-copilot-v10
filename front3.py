@@ -1,11 +1,10 @@
 import json
-import re
 import random
 import string
 import time
 import traceback
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 import httpx
 
 from pywebio.input import input, TEXT, textarea, file_upload, radio
@@ -25,7 +24,6 @@ from utils.get_config import config_data
 SERVER_URL = f"http://127.0.0.1:{config_data['server_port']}"
 
 SELECT_TABLES = []
-SELECT_LABELS = []
 
 CURSOR = '<span class="blink-cursor">|</span> <span class="thinking-text">Thinking...</span>'
 CURSOR_CSS = '''
@@ -74,13 +72,10 @@ def _sse_stream(url: str, payload: dict):
 
 def think_api_stream(
     question: str,
-    tables: Optional[List[str]] = None,
     conversation_history: Optional[List[str]] = None,
     session_id: str = "",
 ):
     payload = {"question": question, "session_id": session_id}
-    if tables:
-        payload["tables"] = tables
     if conversation_history:
         payload["conversation_history"] = conversation_history
     yield from _sse_stream(f"{SERVER_URL}/api/think/stream/", payload)
@@ -103,7 +98,6 @@ def act_api_stream(
 
 def observe_api_stream(
     question: str,
-    tables: Optional[List[str]] = None,
     conversation_history: Optional[List[str]] = None,
     cycle_index: int = 0,
     session_id: str = "",
@@ -113,8 +107,6 @@ def observe_api_stream(
         "session_id": session_id,
         "cycle_index": cycle_index,
     }
-    if tables:
-        payload["tables"] = tables
     if conversation_history:
         payload["conversation_history"] = conversation_history
     yield from _sse_stream(f"{SERVER_URL}/api/observe/stream/", payload)
@@ -122,7 +114,6 @@ def observe_api_stream(
 
 def action_api_stream(
     question: str,
-    tables: Optional[List[str]] = None,
     selected_fields: Optional[dict] = None,
     selected_functions: Optional[List[str]] = None,
     conversation_history: Optional[List[str]] = None,
@@ -134,8 +125,6 @@ def action_api_stream(
         "session_id": session_id,
         "cycle_index": cycle_index,
     }
-    if tables:
-        payload["tables"] = tables
     if selected_fields is not None:
         payload["selected_fields"] = selected_fields
     if selected_functions is not None:
@@ -162,7 +151,7 @@ def run_action_phase(cycle_index, question, conversation_history, session_id):
         action_events = []
         raw_decision = ""
         for event in action_api_stream(
-            question, SELECT_TABLES,
+            question,
             conversation_history=conversation_history,
             cycle_index=cycle_index,
             session_id=session_id,
@@ -437,7 +426,7 @@ def run_think_phase(cycle_index, question, conversation_history, session_id):
         think_events = []
         raw_plan = ""
         for event in think_api_stream(
-            question, SELECT_TABLES,
+            question,
             conversation_history=conversation_history,
             session_id=session_id,
         ):
@@ -670,7 +659,7 @@ def run_observe_phase(cycle_index, original_question, conversation_history, sess
         observe_events = []
         raw_review = ""
         for event in observe_api_stream(
-            original_question, SELECT_TABLES,
+            original_question,
             conversation_history=conversation_history,
             cycle_index=cycle_index,
             session_id=session_id,
@@ -744,7 +733,7 @@ def handle_user_interaction(act_result, conversation_history):
 
 
 def main():
-    global SELECT_TABLES, SELECT_LABELS
+    global SELECT_TABLES
     put_html(CURSOR_CSS)
     put_markdown("# Data-Copilot v3 (Think → Action → Act → Observe)")
     put_markdown("*One action per cycle. Action phase decides next step via LLM.*")
@@ -781,7 +770,7 @@ def main():
                 cycle_index = 0
                 continue
 
-            think_result, raw_plan = run_think_phase(
+            _, raw_plan = run_think_phase(
                 cycle_index, question, conversation_history, session_id,
             )
             conversation_history.append(f"[THINK] Plan:\n{raw_plan}")
