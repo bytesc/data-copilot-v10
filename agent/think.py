@@ -34,9 +34,8 @@ def _event_stream_think(
 
     if conversation_history:
         context = "\n".join(conversation_history)
-        full_question = f"Context:\n{context}\n\nCurrent Question:\n{question}"
     else:
-        full_question = question
+        context = question
 
     db_summary = get_db_summary_for_agent(engine, tables)
     func_catalog = get_func_summary_for_agent()
@@ -48,6 +47,9 @@ Database Overview:
 
 Available Functions:
 {func_catalog}
+
+Context (includes conversation history and user questions):
+{context}
 
 Rules:
 1. Each step should be a specific, actionable task.
@@ -64,9 +66,7 @@ Output ONLY a valid JSON object on a single line:
 
 If the question requires no data analysis (greeting, clarification, etc.), output an empty todo list.
 The description should be a short paragraph describing the overall approach.
-The todo list contains the actionable steps. Keep task descriptions concise.
-
-Question: {full_question}"""
+The todo list contains the actionable steps. Keep task descriptions concise."""
 
     prompt_length = len(think_prompt)
     raw = ""

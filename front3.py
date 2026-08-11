@@ -117,8 +117,6 @@ def observe_api_stream(
     conversation_history: Optional[List[str]] = None,
     cycle_index: int = 0,
     session_id: str = "",
-    db_context: Optional[str] = None,
-    func_context: Optional[str] = None,
 ):
     payload = {
         "question": question,
@@ -130,10 +128,6 @@ def observe_api_stream(
         payload["tables"] = tables
     if conversation_history:
         payload["conversation_history"] = conversation_history
-    if db_context:
-        payload["db_context"] = db_context
-    if func_context:
-        payload["func_context"] = func_context
     yield from _sse_stream(f"{SERVER_URL}/api/observe/stream/", payload)
 
 
@@ -144,8 +138,6 @@ def action_api_stream(
     selected_functions: Optional[List[str]] = None,
     conversation_history: Optional[List[str]] = None,
     current_plan: str = "",
-    db_context: Optional[str] = None,
-    func_context: Optional[str] = None,
     cycle_index: int = 0,
     session_id: str = "",
 ):
@@ -163,10 +155,6 @@ def action_api_stream(
         payload["selected_functions"] = selected_functions
     if conversation_history:
         payload["conversation_history"] = conversation_history
-    if db_context:
-        payload["db_context"] = db_context
-    if func_context:
-        payload["func_context"] = func_context
     yield from _sse_stream(f"{SERVER_URL}/api/action/stream/", payload)
 
 
@@ -177,7 +165,7 @@ def parse_action_result(events: list) -> dict:
     return {"action": None, "error": "No action result"}
 
 
-def run_action_phase(cycle_index, question, conversation_history, current_plan, db_context, func_context, session_id):
+def run_action_phase(cycle_index, question, conversation_history, current_plan, session_id):
     try:
         phase_header("act", f"ACTION - Decide (Cycle {cycle_index})")
         action_scope = f"action_{cycle_index}"
@@ -189,8 +177,6 @@ def run_action_phase(cycle_index, question, conversation_history, current_plan, 
             question, SELECT_TABLES,
             conversation_history=conversation_history,
             current_plan=current_plan,
-            db_context=db_context,
-            func_context=func_context,
             cycle_index=cycle_index,
             session_id=session_id,
         ):
@@ -591,7 +577,7 @@ def run_act_phase(cycle_index, action, full_question, selected_fields, selected_
         raise
 
 
-def run_observe_phase(cycle_index, original_question, current_plan, conversation_history, session_id, db_context=None, func_context=None):
+def run_observe_phase(cycle_index, original_question, current_plan, conversation_history, session_id):
     try:
         phase_header("observe", f"OBSERVE - Review (Cycle {cycle_index})")
         observe_scope = f"observe_{cycle_index}"
@@ -607,8 +593,6 @@ def run_observe_phase(cycle_index, original_question, current_plan, conversation
             conversation_history=conversation_history,
             cycle_index=cycle_index,
             session_id=session_id,
-            db_context=db_context,
-            func_context=func_context,
         ):
             observe_events.append(event)
             sub = event.get("sub_phase", "")
@@ -687,12 +671,7 @@ def main():
     put_markdown("## " + question)
 
     conversation_history = [f"Q: {question}"]
-    original_question = question
     current_plan = {"description": "", "todo": []}
-    selected_fields = None
-    selected_functions = None
-    db_context = None
-    func_context = None
     cycle_index = 0
     max_cycles = 20
 
@@ -714,11 +693,11 @@ def main():
             if check_plan_complete(current_plan) and cycle_index == 1:
                 current_plan = {"description": "", "todo": []}
 
-            full_question = f"Context:\n" + "\n".join(conversation_history) + f"\n\nCurrent Question:\n{original_question}"
+            full_question = "\n".join(conversation_history)
 
             action_result = run_action_phase(
-                cycle_index, original_question,
-                conversation_history, json.dumps(current_plan, ensure_ascii=False), db_context, func_context, session_id,
+                cycle_index, question,
+                conversation_history, json.dumps(current_plan, ensure_ascii=False), session_id,
             )
             action = action_result.get("action")
             print(f"[DEBUG] action_result: {json.dumps(action_result, ensure_ascii=False, default=str)}")
@@ -728,8 +707,8 @@ def main():
             search_keyword = action_result.get("keyword")
             plan_funcs = action_result.get("funcs")
 
-            act_funcs = plan_funcs if plan_funcs is not None else selected_functions
-            act_fields = {"__no_db__": True} if action == "generate_and_execute" else selected_fields
+            act_funcs = plan_funcs
+            act_fields = {"__no_db__": True} if action == "generate_and_execute" else None
 
             params = {}
             if search_keyword:
@@ -744,16 +723,14 @@ def main():
             )
             print(f"[DEBUG] act_result: needs_user_input={act_result.get('needs_user_input')}, paused={act_result.get('paused')}, completed={act_result.get('completed')}, function_solved={act_result.get('function_solved')}")
 
-            if act_result["db_context"]:
-                db_context = act_result["db_context"]
-            if act_result["func_context"]:
-                func_context = act_result["func_context"]
             if act_result["selected_fields"] is not None:
-                selected_fields = act_result["selected_fields"]
-                conversation_history.append(f"Selected Fields: {json.dumps(selected_fields, ensure_ascii=False)}")
+                conversation_history.append(f"Selected Fields: {json.dumps(act_result['selected_fields'], ensure_ascii=False)}")
+            if act_result["db_context"]:
+                conversation_history.append(f"DB Context: {act_result['db_context']}")
             if act_result["selected_functions"] is not None:
-                selected_functions = act_result["selected_functions"]
-                conversation_history.append(f"Selected Functions: {json.dumps(selected_functions, ensure_ascii=False)}")
+                conversation_history.append(f"Selected Functions: {json.dumps(act_result['selected_functions'], ensure_ascii=False)}")
+            if act_result["func_context"]:
+                conversation_history.append(f"Func Context: {act_result['func_context']}")
             function_solved = act_result["function_solved"]
             full_code = act_result["full_code"]
             full_ans = act_result["full_ans"]
@@ -780,19 +757,13 @@ def main():
                 if not question.strip():
                     continue
                 put_markdown("## " + question)
-                conversation_history.append(f"Q: {question}")
-                original_question = question
+                conversation_history = [f"Q: {question}"]
                 current_plan = {"description": "", "todo": []}
-                selected_fields = None
-                selected_functions = None
-                db_context = None
-                func_context = None
                 continue
 
             observe_result = run_observe_phase(
-                cycle_index, original_question,
+                cycle_index, question,
                 current_plan, conversation_history, session_id,
-                db_context=db_context, func_context=func_context,
             )
 
             if observe_result.get("description"):
@@ -806,13 +777,8 @@ def main():
                 if not question.strip():
                     continue
                 put_markdown("## " + question)
-                conversation_history.append(f"Q: {question}")
-                original_question = question
+                conversation_history = [f"Q: {question}"]
                 current_plan = {"description": "", "todo": []}
-                selected_fields = None
-                selected_functions = None
-                db_context = None
-                func_context = None
             else:
                 put_info("Plan has pending tasks. Continuing to next action...")
         except Exception as e:

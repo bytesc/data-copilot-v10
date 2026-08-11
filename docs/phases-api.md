@@ -1,6 +1,6 @@
 # Phases API 文档
 
-四步循环：**Think → Action → Act → Observe**，每轮全部执行。
+四步循环：**Think → Action → Act → Observe**，每轮全部执行。所有上下文统一通过 `conversation_history` 传递。
 
 ---
 
@@ -49,19 +49,17 @@ data: {"phase":"think","sub_phase":"plan","type":"done","content":"原始 JSON",
 端点：`POST /api/action/stream/`  
 响应：`Content-Type: text/event-stream`
 
-根据当前上下文（计划、状态、数据库上下文），决定下一步执行哪个动作。
+根据当前上下文（计划、对话历史），决定下一步执行哪个动作。
 
 ### 请求体
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `question` | string | 是 | 原始问题 |
+| `question` | string | 是 | 用户问题 |
 | `tables` | [string] | 否 | 可用的表名列表 |
 | `session_id` | string | 否 | 会话 ID |
-| `conversation_history` | [string] | 否 | 对话历史（包含 selected_fields、selected_functions 等状态） |
+| `conversation_history` | [string] | 否 | 对话历史（包含 selected_fields、selected_functions、db_context、func_context 等所有上下文） |
 | `current_plan` | string | 是 | Think/Observe 输出的 JSON 字符串 |
-| `db_context` | string | 否 | search_db 返回的原始数据库上下文 |
-| `func_context` | string | 否 | search_func 返回的原始函数目录 |
 | `cycle_index` | int | 否 | 当前循环序号 |
 
 ### 响应 SSE 事件
@@ -115,14 +113,12 @@ data: {"phase":"action","type":"done","content":"原始 JSON","action_result":{.
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `question` | string | 是 | 原始问题 |
+| `question` | string | 是 | 用户问题 |
 | `tables` | [string] | 否 | 可用的表名列表 |
 | `session_id` | string | 否 | 会话 ID |
 | `current_plan` | string | 是 | Think/Observe 输出的 JSON 字符串 |
-| `conversation_history` | [string] | 否 | 对话历史（包含执行结果、错误等所有上下文） |
+| `conversation_history` | [string] | 否 | 对话历史（包含执行结果、错误、selected_fields、selected_functions 等所有上下文） |
 | `cycle_index` | int | 否 | 当前循环序号 |
-| `db_context` | string | 否 | search_db 返回的原始数据库上下文 |
-| `func_context` | string | 否 | search_func 返回的原始函数目录 |
 
 ### 响应 SSE 事件
 
@@ -161,7 +157,7 @@ data: {"phase":"observe","sub_phase":"review","type":"done","content":"原始 JS
 ┌──────────────────────────────────────────────────┐
 │                  Action (决策)                      │
 │  输入: question, conversation_history,             │
-│        current_plan, db_context, func_context      │
+│        current_plan                                │
 │  输出: {action, keyword?, funcs?, text?, choices?} │
 └──────────────────────┬───────────────────────────┘
                        │
@@ -175,13 +171,14 @@ data: {"phase":"observe","sub_phase":"review","type":"done","content":"原始 JS
 │    "Selected Fields: {json}"                       │
 │    "Selected Functions: {json}"                    │
 │    "Exe Result: {text}" / "Exe Error: {text}"      │
+│    "User response: {text}" / "User chose: {text}"   │
 └──────────────────────┬───────────────────────────┘
                        │
                        ▼
 ┌──────────────────────────────────────────────────┐
 │                 Observe (审查)                      │
 │  输入: question, conversation_history,             │
-│        current_plan, db_context, func_context      │
+│        current_plan                                │
 │  输出: {description, todo} → 写入 conversation_history │
 └──────────────────────┬───────────────────────────┘
                        │
@@ -190,7 +187,7 @@ data: {"phase":"observe","sub_phase":"review","type":"done","content":"原始 JS
 
 ### 状态传递
 
-所有状态通过 `conversation_history` 传递，无需特殊管理：
+所有状态统一通过 `conversation_history` 传递，前端不再维护独立状态变量：
 
 | 状态 | 写入方式 | 内容 |
 |------|---------|------|
@@ -199,5 +196,10 @@ data: {"phase":"observe","sub_phase":"review","type":"done","content":"原始 JS
 | `selected_functions` | `conversation_history` | `"Selected Functions: {json}"` |
 | `execution_result` | `conversation_history` | `"Exe Result: {text}"` |
 | `execution_error` | `conversation_history` | `"Exe Error: {text}"` |
-| `db_context` | 内部变量 | 传递给 Action/Observe 提示上下文 |
-| `func_context` | 内部变量 | 传递给 Action/Observe 提示上下文 |
+| `user_input` | `conversation_history` | `"User response: {text}"` / `"User chose: {text}"` |
+| `new_question` | `conversation_history` | `"Q: {text}"` |
+
+### 断路保护
+
+- 最大循环次数：20 轮
+- 首轮 Think 返回空 todo 时，清空 plan 继续走 Action 流程（由 Action 决定 `ask_question` 或 `attempt_completion`）

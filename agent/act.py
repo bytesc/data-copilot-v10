@@ -31,8 +31,7 @@ class ActInput(BaseModel):
 
 def _build_context(question: str, conversation_history: Optional[List[str]]):
     if conversation_history:
-        context = "\n".join(conversation_history)
-        return f"Context:\n{context}\n\nCurrent Question:\n{question}"
+        return "\n".join(conversation_history)
     return question
 
 
@@ -77,7 +76,7 @@ def _act_search_db(full_question: str, session_id: str, tables, search_keyword: 
 
 {full_schema}
 
-Question:
+Context:
 {full_question}
 
 Output ONLY a JSON object mapping table names to their needed columns. Use an empty list [] for a table to select all its columns. Use an empty object {{}} to select all tables and all columns. Use {{"__no_db__": true}} if no database query is needed.
@@ -122,7 +121,7 @@ def _act_search_func(full_question: str, session_id: str, search_keyword: Option
 
 {full_catalog}
 
-Question:
+Context:
 {full_question}
 
 Available functions: {func_names}

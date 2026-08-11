@@ -15,11 +15,11 @@ Action 分为两类：**后端 action**（调用 `POST /api/act/stream/`）和**
 
 ```json
 {
-  "question": "string - 完整上下文+问题",
+  "question": "string - 对话历史上下文",
   "action": "string - 动作名称",
   "session_id": "string",
   "tables": ["table1"],
-  "conversation_history": ["Q: ...", "Planner: ..."],
+  "conversation_history": ["Q: ...", "Planner: ...", "Selected Fields: ..."],
   "selected_fields": {"table1": ["col1"]},
   "selected_functions": ["exe_sql"],
   "params": {}
@@ -28,13 +28,13 @@ Action 分为两类：**后端 action**（调用 `POST /api/act/stream/`）和**
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `question` | string | 完整上下文+问题 |
+| `question` | string | 对话历史上下文（`"\n".join(conversation_history)`） |
 | `action` | string | 动作名称 |
 | `session_id` | string | 会话 ID |
 | `tables` | [string] | 可选，限制搜索的表名列表 |
 | `conversation_history` | [string] | 对话历史 |
-| `selected_fields` | object | 当前已选中的表字段（来自之前的 search_db） |
-| `selected_functions` | [string] | 当前已选中的函数（来自之前的 search_func） |
+| `selected_fields` | object | 可选，当前已选中的表字段（来自之前的 search_db） |
+| `selected_functions` | [string] | 可选，当前已选中的函数（来自之前的 search_func） |
 | `params` | object | 动作特定参数，结构取决于 action |
 
 ---
@@ -204,7 +204,7 @@ data: {"phase":"act","sub_phase":"exec","type":"done","content":"","result":{...
 {"action": "ask_question", "text": "请问您想查询哪个表的数据？"}
 ```
 
-**前端行为：** 显示问题文本，弹出输入框等待用户输入，将输入作为 `user_response` 传给下一轮 Act。
+**前端行为：** 显示问题文本，弹出输入框等待用户输入。输入写入 `conversation_history` 为 `"User response: {text}"`，继续下一循环。
 
 ---
 
@@ -221,7 +221,7 @@ data: {"phase":"act","sub_phase":"exec","type":"done","content":"","result":{...
 }
 ```
 
-**前端行为：** 显示问题和选项，等待用户选择，将选择作为 `user_choice` 传给下一轮 Act。
+**前端行为：** 显示问题和选项，等待用户选择。选择写入 `conversation_history` 为 `"User chose: {text}"`，继续下一循环。
 
 ---
 
@@ -234,7 +234,7 @@ data: {"phase":"act","sub_phase":"exec","type":"done","content":"","result":{...
 {"action": "summary_and_pause", "text": "已完成数据查询，共找到 100 条记录..."}
 ```
 
-**前端行为：** 显示总结文本，弹出输入框等待用户指令，将输入作为 `user_response` 传给下一轮 Act。
+**前端行为：** 显示总结文本，弹出输入框等待用户指令。输入写入 `conversation_history` 为 `"User: {text}"`，继续下一循环。
 
 ---
 
@@ -247,7 +247,7 @@ data: {"phase":"act","sub_phase":"exec","type":"done","content":"","result":{...
 {"action": "attempt_completion", "text": "分析完成。主要发现：1. ..."}
 ```
 
-**前端行为：** 显示最终结果文本，弹出"下一步?"输入框等待新问题。
+**前端行为：** 显示最终结果文本，弹出"下一步?"输入框等待新问题。新问题重置 `conversation_history` 为 `["Q: {new_question}"]`。
 
 ---
 

@@ -20,8 +20,6 @@ class ObserveInput(BaseModel):
     current_plan: Optional[str] = ""
     conversation_history: Optional[List[str]] = None
     cycle_index: int = 0
-    db_context: Optional[str] = None
-    func_context: Optional[str] = None
 
 
 def _event_stream_observe(
@@ -32,8 +30,6 @@ def _event_stream_observe(
     conversation_history: Optional[List[str]],
     cycle_index: int,
     request_url: str,
-    db_context: Optional[str] = None,
-    func_context: Optional[str] = None,
 ):
     """Observe phase: LLM reviews execution results and updates the plan."""
     yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'status', 'content': '正在审查执行结果...'}, ensure_ascii=False)}\n\n"
@@ -43,20 +39,13 @@ def _event_stream_observe(
     else:
         context = ""
 
-    db_section = f"\n\nAvailable Database Context:\n{db_context}" if db_context else ""
-    func_section = f"\n\nAvailable Functions:\n{func_context}" if func_context else ""
-
     observe_prompt = f"""You are an autonomous checklist executor. Your job is to review the execution results of the last step, update the plan accordingly.
 
 Current Plan:
 {current_plan or '(no plan yet)'}
-{db_section}{func_section}
 
 Context (includes execution results and errors):
 {context if context else '(no context)'}
-
-Original Question:
-{question}
 
 Autonomous State Judgment & Update Rules:
 1. ANALYZE RESULT FIRST: Look at the context for execution results and error traces.
@@ -64,10 +53,9 @@ Autonomous State Judgment & Update Rules:
 3. ERROR / EXCEPTION (Autonomous Correction): If the context contains error messages, DO NOT ask the user. Keep the failed task in the todo list and modify steps to fix the error.
 4. PARTIAL SUCCESS: If only part of the task was completed, remove completed parts and append new tasks for remaining work.
 5. Keep completed tasks out of the todo list — only include PENDING tasks.
-6. If "Available Database Context" is present above, search_db has already been done — remove schema exploration from todo.
-7. If "Available Functions" is present, search_func has already been done — remove function exploration from todo.
-8. If all tasks are done, set todo to an empty list.
-9. If there are pending tasks, the todo list should contain between 1 and 10 items.
+6. Check the conversation context for selected fields/functions — if they exist, remove schema/function exploration from todo.
+7. If all tasks are done, set todo to an empty list.
+8. If there are pending tasks, the todo list should contain between 1 and 10 items.
 
 Output ONLY a valid JSON object on a single line:
 {{"description": "Brief review of what happened and updated strategy in markdown...", "todo": ["Remaining task 1", "Remaining task 2"]}}
@@ -122,8 +110,6 @@ async def observe_stream_api(request: Request, user_input: ObserveInput):
             user_input.conversation_history,
             user_input.cycle_index,
             request.url.path,
-            user_input.db_context,
-            user_input.func_context,
         ),
         media_type="text/event-stream",
         headers={

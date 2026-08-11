@@ -24,8 +24,6 @@ class ActionInput(BaseModel):
     session_id: Optional[str] = None
     conversation_history: Optional[List[str]] = None
     current_plan: Optional[str] = ""
-    db_context: Optional[str] = None
-    func_context: Optional[str] = None
     cycle_index: int = 0
 
 
@@ -50,28 +48,19 @@ def _extract_plan_text(current_plan: str) -> str:
 def _build_action_prompt(
     question: str,
     current_plan: str,
-    db_context: Optional[str],
-    func_context: Optional[str],
     conversation_history: Optional[List[str]],
 ) -> str:
     context = ""
     if conversation_history:
         context = "\n".join(conversation_history)
 
-    db_section = f"\n\nDatabase Context:\n{db_context}" if db_context else ""
-    func_section = f"\n\nAvailable Functions:\n{func_context}" if func_context else ""
-
     return f"""You are an action decision maker. Given the current context, decide the SINGLE next action to execute.
 
 Current Plan:
 {_extract_plan_text(current_plan)}
-{db_section}{func_section}
 
 Context:
 {context if context else '(no context)'}
-
-Question:
-{question}
 
 Output ONLY a valid JSON object on a single line. Choose from:
 
@@ -90,7 +79,7 @@ Decision Rules:
 1. If the plan has an empty todo list, choose ask_question with a polite response to the user.
 2. If the context shows no database search has been done, choose search_db. Provide keyword based on the question.
 3. If the context shows no function search has been done, choose search_func. Provide keyword based on the question.
-4. If Database Context shows "No tables or columns found matching keyword", retry search_db WITHOUT keyword.
+4. If the conversation context shows "No tables or columns found matching keyword", retry search_db WITHOUT keyword.
 5. If both database and functions are ready, choose generate_and_execute.
 6. If the plan is complete or no further actions needed, choose attempt_completion.
 7. If you need to ask the user something, choose ask_question or ask_choice.
@@ -105,16 +94,13 @@ def _event_stream_action(
     session_id: str,
     conversation_history: Optional[List[str]],
     current_plan: str,
-    db_context: Optional[str],
-    func_context: Optional[str],
     cycle_index: int,
     request_url: str,
 ):
     yield f"data: {json.dumps({'phase': 'action', 'type': 'status', 'content': '正在决策下一步动作...'}, ensure_ascii=False)}\n\n"
 
     prompt = _build_action_prompt(
-        question, current_plan,
-        db_context, func_context, conversation_history,
+        question, current_plan, conversation_history,
     )
 
     raw = ""
@@ -168,8 +154,6 @@ async def action_stream_api(request: Request, user_input: ActionInput):
             user_input.session_id or "",
             user_input.conversation_history,
             user_input.current_plan or "",
-            user_input.db_context,
-            user_input.func_context,
             user_input.cycle_index,
             request.url.path,
         ),
