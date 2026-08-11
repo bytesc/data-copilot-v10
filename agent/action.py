@@ -27,7 +27,8 @@ class ActionInput(BaseModel):
     conversation_history: Optional[List[str]] = None
     cycle_index: int = 0
 
-ACTIONS="""
+
+ACTIONS = """
 
 - explore_schema: {{"action": "explore_schema"}}
   Explore the database schema and structure based on previous context. Not used to query data, you should use `generate_and_execute` to exe_sql.
@@ -47,9 +48,10 @@ ACTIONS="""
   Output some text and stop the pipline in case of completion.
 """
 
+
 def _build_action_prompt(
-    question: str,
-    conversation_history: Optional[List[str]],
+        question: str,
+        conversation_history: Optional[List[str]],
 ) -> str:
     context = ""
     if conversation_history:
@@ -88,10 +90,10 @@ Decision Rules:
 
 
 def _event_stream_action(
-    question: str,
-    session_id: str,
-    conversation_history: Optional[List[str]],
-    cycle_index: int,
+        question: str,
+        session_id: str,
+        conversation_history: Optional[List[str]],
+        cycle_index: int,
 ):
     yield f"data: {json.dumps({'phase': 'action', 'type': 'status', 'content': '正在决策下一步动作...'}, ensure_ascii=False)}\n\n"
 
