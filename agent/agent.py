@@ -273,7 +273,8 @@ def generate_and_execute_stream(question, tables=None, retries=2,
         code = insert_lines_into_function(code, function_import)
         code = insert_lines_into_function(code, IMPORTANT_MODULE)
         code = insert_lines_into_function(code, THIRD_MODULE)
-        print("\n[Generated Code]:\n", code)
+        # code += " err test "
+        # print("\n[Generated Code]:\n", code)
 
         yield {"type": "chunk", "sub_type": "code_complete", "content": code, "phase": "act", "sub_phase": "code"}
 

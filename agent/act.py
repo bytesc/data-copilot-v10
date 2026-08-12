@@ -160,7 +160,7 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
     full_ans = ""
     exec_error = None
     for event in generate_and_execute_stream(
-        full_question, tables, True,
+        full_question, tables, retries=2,
         selected_fields=selected_fields,
         selected_functions=selected_functions,
     ):

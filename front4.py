@@ -256,7 +256,7 @@ def _format_plan_display(plan: dict) -> str:
 
 def parse_think_result(events: list) -> dict:
     for event in events:
-        if event.get("sub_phase") == "plan" and event.get("type") == "done":
+        if event.get("type") == "done":
             plan_result = event.get("plan_result")
             if plan_result:
                 return plan_result
@@ -267,16 +267,13 @@ def parse_think_result(events: list) -> dict:
 
 def parse_observe_result(events: list) -> dict:
     for event in events:
-        if event.get("sub_phase") == "review" and event.get("type") == "done":
+        if event.get("type") == "done":
             plan_result = event.get("plan_result")
             if plan_result:
                 return plan_result
             raw = event.get("content", "")
             return _parse_plan_json(raw)
     return {"description": "", "todo": []}
-
-
-
 
 
 def parse_act_result(events: list) -> dict:
@@ -337,12 +334,12 @@ def parse_act_result(events: list) -> dict:
                 parsed["full_ans"] += content
             if sub == "exec":
                 parsed["full_ans"] += content
-        elif sub == "code" and etype == "code_complete":
+        elif sub == "code" and event.get("sub_type") == "code_complete":
             parsed["full_code"] = content
         elif sub == "code" and etype == "solved":
             parsed["solved_ans"] = content
             parsed["function_solved"] = True
-        elif sub == "exec" and etype == "error":
+        elif sub == "exec" and event.get("sub_type") == "code_exe_error":
             parsed["exec_error"] = content
 
     return parsed
@@ -431,13 +428,11 @@ def run_think_phase(cycle_index, question, conversation_history, session_id):
             session_id=session_id,
         ):
             think_events.append(event)
-            sub = event.get("sub_phase", "")
             etype = event.get("type", "")
             content = event.get("content", "")
-            if sub == "plan":
-                if etype == "chunk":
-                    raw_plan += content
-                append_think({"type": etype, "content": content})
+            if etype == "chunk":
+                raw_plan += content
+            append_think({"type": etype, "content": content})
 
         result = parse_think_result(think_events)
         with use_scope(think_scope, clear=True):
@@ -522,6 +517,7 @@ def run_act_phase(cycle_index, action, full_question, conversation_history, sess
             act_events.append(event)
             sub = event.get("sub_phase", "")
             etype = event.get("type", "")
+            sub_type = event.get("sub_type", "")
             content = event.get("content", "")
 
             if sub in ("explore_schema", "explore_functions"):
@@ -550,23 +546,27 @@ def run_act_phase(cycle_index, action, full_question, conversation_history, sess
                     genexec_scope = f"act_{cycle_index}_genexec"
                     put_scope(genexec_scope)
                     put_loading(shape="grow", color="primary", scope=genexec_scope)
-                if etype == "code_chunk":
+                if sub_type == "code_chunk":
                     current_attempt["code_chunks"] = current_attempt.get("code_chunks", "") + content
                     with use_scope(genexec_scope, clear=True):
                         put_markdown(current_attempt["code_chunks"], sanitize=False)
                         put_html(CURSOR)
-                elif etype == "code_complete":
+                elif sub_type == "code_complete":
                     current_attempt["code"] = content
                     with use_scope(genexec_scope, clear=True):
                         put_collapse("Generated Code", [
                             put_markdown(f"```python\n{content}\n```", sanitize=False)
                         ], open=False)
+                elif sub_type == "code_gen_error":
+                    current_attempt["error"] = content
+                    with use_scope(genexec_scope, clear=True):
+                        put_warning(f"**Code Generation Error:** {content}")
                 elif etype == "solved":
                     is_genexec = False
                     with use_scope(genexec_scope, clear=True):
                         put_markdown(content, sanitize=False)
-                elif etype == "status":
-                    if "重新生成代码" in content:
+                elif etype in ("msg", "status"):
+                    if "重新生成代码" in content or "retry" in content.lower():
                         if current_attempt.get("code") or current_attempt.get("result") or current_attempt.get("error"):
                             attempts.append({k: v for k, v in current_attempt.items() if k != "code_chunks"})
                         current_attempt = {"code": "", "result": "", "error": ""}
@@ -581,7 +581,7 @@ def run_act_phase(cycle_index, action, full_question, conversation_history, sess
                         append_exec = display_streaming(exec_scope, collapse_title="Execution Output")
                     append_exec(event)
                 else:
-                    if etype == "chunk":
+                    if sub_type == "exec_chunk":
                         current_attempt["result"] += content
                         with use_scope(genexec_scope, clear=True):
                             if current_attempt.get("code"):
@@ -590,7 +590,7 @@ def run_act_phase(cycle_index, action, full_question, conversation_history, sess
                                 ], open=False)
                             put_markdown(current_attempt["result"], sanitize=False)
                             put_html(CURSOR)
-                    elif etype == "error":
+                    elif sub_type == "code_exe_error":
                         current_attempt["error"] = content
                         with use_scope(genexec_scope, clear=True):
                             if current_attempt.get("code"):
@@ -605,7 +605,7 @@ def run_act_phase(cycle_index, action, full_question, conversation_history, sess
                     elif etype == "done":
                         attempts.append({k: v for k, v in current_attempt.items() if k != "code_chunks"})
                         current_attempt = {"code": "", "result": "", "error": ""}
-                    elif etype == "status":
+                    elif etype in ("msg", "status"):
                         toast(content, color='info')
             elif sub in ("output_text", "summary", "completion", "ask_question", "ask_choice"):
                 if append_exec is None:
@@ -613,6 +613,9 @@ def run_act_phase(cycle_index, action, full_question, conversation_history, sess
                     put_scope(out_scope)
                     append_exec = display_streaming(out_scope, collapse_title="Output")
                 append_exec(event)
+
+        if is_genexec and (current_attempt.get("code") or current_attempt.get("result") or current_attempt.get("error")):
+            attempts.append({k: v for k, v in current_attempt.items() if k != "code_chunks"})
 
         if is_genexec and genexec_scope and attempts:
             with use_scope(genexec_scope, clear=True):
@@ -665,13 +668,11 @@ def run_observe_phase(cycle_index, original_question, conversation_history, sess
             session_id=session_id,
         ):
             observe_events.append(event)
-            sub = event.get("sub_phase", "")
             etype = event.get("type", "")
             content = event.get("content", "")
-            if sub == "review":
-                if etype == "chunk":
-                    raw_review += content
-                append_observe({"type": etype, "content": content})
+            if etype == "chunk":
+                raw_review += content
+            append_observe({"type": etype, "content": content})
 
         result = parse_observe_result(observe_events)
         with use_scope(observe_scope, clear=True):
@@ -686,7 +687,6 @@ def run_observe_phase(cycle_index, original_question, conversation_history, sess
 
 
 def handle_user_interaction(act_result, conversation_history):
-    """Handle user-facing actions: ask_question, ask_choice, summary_and_pause."""
     try:
         if act_result["needs_user_input"]:
             if act_result["choices"]:
@@ -735,7 +735,7 @@ def handle_user_interaction(act_result, conversation_history):
 def main():
     global SELECT_TABLES
     put_html(CURSOR_CSS)
-    put_markdown("# Data-Copilot v3 (Think → Action → Act → Observe)")
+    put_markdown("# Data-Copilot v4 (Think → Action → Act → Observe)")
     put_markdown("*One action per cycle. Action phase decides next step via LLM.*")
 
     put_markdown("### Control Panel")
@@ -868,4 +868,4 @@ def main():
 
 
 if __name__ == '__main__':
-    start_server(main, port=8039, debug=True)
+    start_server(main, port=8040, debug=True)

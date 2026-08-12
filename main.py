@@ -22,8 +22,6 @@ from data_access.insert_data_from_csv import process_csv_to_database
 from utils.get_config import config_data
 
 from agent.agent import  generate_and_execute_stream, get_db
-from agent.summary import get_ans_summary
-from agent.ans_review import get_ans_review
 from utils.process_file import process_file_content
 from data_access.session_log import record_session_operation, create_session_log_table
 from data_access.observe_log import (
@@ -89,78 +87,6 @@ class ReviewInput(BaseModel):
 
 
 
-
-
-
-
-@app.post("/api/review/")
-async def get_code(request: Request, user_input: ReviewInput):
-    loop = asyncio.get_event_loop()
-    ans = await loop.run_in_executor(
-        executor,
-        get_ans_review,
-        user_input.question,
-        user_input.ans,
-        user_input.code
-    )
-    print(ans)
-    if ans:
-        processed_data = {
-            "question": user_input.question,
-            "ans": ans,
-            "type": "success",
-            "msg": "处理成功",
-            "session_id": user_input.session_id or ""
-        }
-        record_session_operation(
-            user_input.session_id, request.url.path,
-            user_input.question, ans, "", "success", "处理成功"
-        )
-    else:
-        processed_data = {
-            "question": user_input.question,
-            "ans": "",
-            "type": "error",
-            "msg": "处理失败，请换个问法吧",
-            "session_id": user_input.session_id or ""
-        }
-        record_session_operation(
-            user_input.session_id, request.url.path,
-            user_input.question, "", "", "error", "处理失败，请换个问法吧"
-        )
-    return JSONResponse(content=processed_data)
-
-
-@app.post("/api/agent-summary/")
-async def agent_summary(request: Request, user_input: AgentInput):
-    loop = asyncio.get_event_loop()
-    ans = await loop.run_in_executor(executor, get_ans_summary, user_input.question)
-    print(ans)
-    if ans:
-        processed_data = {
-            "question": user_input.question,
-            "ans": ans,
-            "type": "success",
-            "msg": "处理成功",
-            "session_id": user_input.session_id or ""
-        }
-        record_session_operation(
-            user_input.session_id, request.url.path,
-            user_input.question, ans, "", "success", "处理成功"
-        )
-    else:
-        processed_data = {
-            "question": user_input.question,
-            "ans": "",
-            "type": "error",
-            "msg": "处理失败，请换个问法吧",
-            "session_id": user_input.session_id or ""
-        }
-        record_session_operation(
-            user_input.session_id, request.url.path,
-            user_input.question, "", "", "error", "处理失败，请换个问法吧"
-        )
-    return JSONResponse(content=processed_data)
 
 
 
