@@ -68,10 +68,10 @@ If todo is empty, the plan is complete. Keep descriptions concise."""
 
     for chunk in call_llm_stream(observe_prompt, llm):
         raw += chunk
-        yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'phase': 'observe',  'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
     plan_result = _parse_plan_json(raw)
-    yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'observe', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
 
     log_observe_cycle(session_id, cycle_index, "observe", "review",
                       prompt=observe_prompt[:5000], response=raw[:5000],

@@ -74,13 +74,13 @@ The todo list contains the actionable steps. Keep task descriptions concise."""
     prompt_length = len(think_prompt)
     raw = ""
 
-    yield f"data: {json.dumps({'phase': 'think', 'sub_phase': 'plan', 'type': 'status', 'content': '正在生成分析计划...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'think', 'type': 'msg', 'content': '正在生成分析计划...'}, ensure_ascii=False)}\n\n"
     for chunk in call_llm_stream(think_prompt, llm):
         raw += chunk
-        yield f"data: {json.dumps({'phase': 'think', 'sub_phase': 'plan', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'phase': 'think', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
     plan_result = _parse_plan_json(raw)
-    yield f"data: {json.dumps({'phase': 'think', 'sub_phase': 'plan', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'think', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
 
     log_observe_cycle(session_id, 0, "think", "plan",
                       prompt=think_prompt[:5000], response=raw[:5000],

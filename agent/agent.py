@@ -35,7 +35,7 @@ def get_db():
     return get_db_info_prompt(engine, example=True, simple=True)
 
 
-def get_cot_code_prompt(question, tables=None, use_all_functions=False, selected_fields=None, selected_functions=None):
+def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_functions=None):
     rag_ans = ""
     knowledge = ""
     rag_ans = get_base_knowledge()
@@ -54,6 +54,11 @@ def get_cot_code_prompt(question, tables=None, use_all_functions=False, selected
                 if assist_functions:
                     for assist_function in assist_functions:
                         function_set.add(assist_function)
+        for main_function in selected_functions:
+            assist_functions = ASSIST_FUNCTION_DICT.get(main_function)
+            if assist_functions:
+                for assist_function in assist_functions:
+                    function_set.add(assist_function)
         for func_name in IMPORTANT_FUNC:
             func = FUNCTION_DICT.get(func_name)
             if func:
@@ -64,17 +69,12 @@ def get_cot_code_prompt(question, tables=None, use_all_functions=False, selected
             if import_list:
                 function_import.append(import_list)
     else:
-        function_set, function_info, function_import = get_function_info(question, llm, use_all_functions)
-    # print(function_info)
-    if function_info == "solved":
-        return "solved", rag_ans, []
-    # print(function_info)
+        function_set, function_info, function_import = get_function_info(question, llm, use_all_functions=True)
 
     database = ""
     if query_database in function_set or exe_sql in function_set:
         if selected_fields and selected_fields.get("__no_db__"):
             database = ""
-            selected_fields = None
         else:
             data_prompt = get_db_info_prompt(engine, tables=tables, simple=True, example=False, selected_fields=selected_fields)
             database = "\nThe database content: \n" + data_prompt + "\n"
@@ -210,136 +210,6 @@ Here is the functions you can import and use:
     return cot_prompt, rag_ans, function_import
 
 
-def cot_agent(question, tables=None, use_all_functions=False, retries=2, print_rows=5, selected_fields=None):
-    exp = None
-    code = None
-    for i in range(retries):
-        cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions, selected_fields)
-        print(rag_ans)
-        # print(cot_prompt)
-        if cot_prompt == "solved":
-            return rag_ans, ""
-        else:
-            err_msg = ""
-            for j in range(retries):
-                code = get_py_code(cot_prompt + err_msg, llm)
-                # print(code)
-                # code = insert_yield_statements(code)
-                code = insert_lines_into_function(code, function_import)
-                code = insert_lines_into_function(code, IMPORTANT_MODULE)
-                code = insert_lines_into_function(code, THIRD_MODULE)
-                print(code)
-                if code is None:
-                    continue
-                try:
-                    result = execute_py_code(code)
-                    cot_ans = ""
-                    for item in result:
-                        # print(item)
-                        if isinstance(item, pd.DataFrame):
-                            if item.index.size > 10:
-                                cot_ans += df_to_markdown(item.head(print_rows)) + \
-                                           "\nfirst {} rows of {}".format(print_rows, len(item)) + \
-                                           "\nthe data above are just slice example, download csv to get full data\n"
-                            else:
-                                cot_ans += df_to_markdown(item)
-                            html_link = pd_to_walker(item)
-                            csv_link = pd_to_csv(item)
-                            # cot_ans += wrap_html_url_with_markdown_link(html_link)
-                            cot_ans += wrap_html_url_with_html_a(html_link)
-                            cot_ans += wrap_csv_url_with_html_a(csv_link)
-                        elif isinstance(item, str) and is_png_url(item):
-                            cot_ans += "\n" + wrap_png_url_with_markdown_image(item) + "\n"
-                        elif isinstance(item, str) and is_local_png_path(item):
-                            cot_ans += "\n" + wrap_png_url_with_markdown_image(STATIC_URL + item[2:]) + "\n"
-                        elif is_iframe_tag(str(item)):
-                            cot_ans += "\n" + str(item) + "\n"
-                        else:
-                            cot_ans += "\n" + str(item) + "\n"
-                        print(item)
-
-                    ans = ""
-                    # if rag_ans and rag_ans != "":
-                    #     ans += "### Base knowledge: \n" + rag_ans + "\n\n"
-                    ans += "### Result: \n" + cot_ans + "\n"
-                    # print(ans)
-                    # review_ans = get_ans_review(question, ans, code)
-                    # ans += "## Summarize and review: \n" + review_ans + "\n"
-
-                    logging.info(f"Question: {question}\nAnswer: {ans}\nCode: {code}\n")
-
-                    return ans, code
-                except Exception as e:
-                    err_msg = "\n" + str(e) + "\n```python\n" + code + "\n```\n"
-                    exp = str(e)
-                    print(e)
-                    continue
-    return exp, code
-
-
-def exe_cot_code(code, retries=2, print_rows=5):
-    for j in range(retries):
-        if code is None:
-            continue
-        cot_ans = ""
-        try:
-            result = execute_py_code(code)
-            for item in result:
-                if item is None:
-                    item = " "
-                print(item)
-                if isinstance(item, pd.DataFrame):
-                    if item.index.size > 10:
-                        cot_ans += df_to_markdown(item.head(print_rows)) + \
-                                   "\nfirst {} rows of {}".format(print_rows, len(item)) + \
-                                   "\nthe data above are just slice example, download csv to get full data\n"
-                    else:
-                        cot_ans += df_to_markdown(item)
-                    html_link = pd_to_walker(item)
-                    csv_link = pd_to_csv(item)
-                    # cot_ans += wrap_html_url_with_markdown_link(html_link)
-                    cot_ans += wrap_html_url_with_html_a(html_link)
-                    cot_ans += wrap_csv_url_with_html_a(csv_link)
-                elif isinstance(item, str) and is_png_url(item):
-                    cot_ans += "\n" + wrap_png_url_with_markdown_image(item) + "\n"
-                elif isinstance(item, str) and is_iframe_tag(item):
-                    html_map = str(item)
-                    cot_ans += "\n" + html_map + "\n"
-                else:
-                    cot_ans += "\n" + str(item) + "\n"
-
-        except Exception as e:
-            print("Error:", e)
-            if j < retries:
-                continue
-        # ans = "### Base knowledge: \n" + rag_ans + "\n\n"
-        ans = "### Result: \n" + cot_ans + "\n"
-        # print(ans)
-        return ans
-    return None
-
-
-def get_cot_code(question, retries=2):
-    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question)
-    print(rag_ans)
-    # print(cot_prompt)
-    if cot_prompt == "solved":
-        return rag_ans, None
-    else:
-        err_msg = ""
-        for j in range(retries):
-            code = get_py_code(cot_prompt + err_msg, llm)
-            # print(code)
-            # code = insert_yield_statements(code)
-            code = insert_lines_into_function(code, function_import)
-            code = insert_lines_into_function(code, IMPORTANT_MODULE)
-            code = insert_lines_into_function(code, THIRD_MODULE)
-            print(code)
-            if code is None:
-                continue
-            return code
-
-
 def format_yield_item(item, print_rows=5):
     if isinstance(item, pd.DataFrame):
         if item.index.size > 10:
@@ -363,32 +233,41 @@ def format_yield_item(item, print_rows=5):
         return "\n" + str(item) + "\n"
 
 
-def generate_code_stream(question, tables=None, use_all_functions=False, retries=2, selected_fields=None, selected_functions=None):
-    yield {"type": "status", "content": "正在分析问题..."}
+def generate_and_execute_stream(question, tables=None, retries=2,
+                                 selected_fields=None, selected_functions=None, print_rows=5,
+                                 ):
+    yield {"type": "msg", "content": "正在分析问题...", "phase": "act", "sub_phase": "code"}
 
-    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions, selected_fields, selected_functions)
+    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, selected_fields, selected_functions)
     prompt_length = len(cot_prompt)
 
-    if cot_prompt == "solved":
-        yield {"type": "solved", "content": rag_ans}
-        yield {"type": "done", "content": "", "prompt_length": 0}
-        return
+    error_msg = ""
 
-    yield {"type": "status", "content": "正在生成代码..."}
+    for i in range(retries):
+        if i > 0:
+            yield {"type": "msg", "content": "执行出错，正在根据错误信息重新生成代码...", "phase": "act", "sub_phase": "code"}
+        else:
+            yield {"type": "msg", "content": "正在生成代码...", "phase": "act", "sub_phase": "code"}
 
-    full_prompt = cot_prompt
-    err_msg = ""
-    for j in range(retries):
-        current_prompt = full_prompt + err_msg
+        full_prompt = cot_prompt + error_msg
         raw_content = ""
-        for chunk in call_llm_stream(current_prompt, llm):
+        for chunk in call_llm_stream(full_prompt, llm):
             raw_content += chunk
-            yield {"type": "code_chunk", "content": chunk}
+            yield {"type": "chunk", "sub_type": "code_chunk", "content": chunk, "phase": "act", "sub_phase": "code"}
 
         code = parse_generated_python_code(raw_content)
         if code is None:
-            yield {"type": "error", "content": "代码解析失败，正在重试..."}
-            err_msg = "\n代码解析失败，请确保代码在 ```python 代码块中。\n"
+            yield {"type": "chunk", "sub_type": "code_gen_error", "content": "code generation error", "phase": "act", "sub_phase": "code"}
+            error_msg = """
+        code should only be in a md code block: 
+        ```python
+        def func(data_dict):
+            import pandas as pd
+            import math
+            # some python code
+            # access dataframes like: df1 = data_dict['key1']
+        without any additional comments, explanations or cmds !!!
+        """
             continue
 
         code = insert_lines_into_function(code, function_import)
@@ -396,125 +275,27 @@ def generate_code_stream(question, tables=None, use_all_functions=False, retries
         code = insert_lines_into_function(code, THIRD_MODULE)
         print("\n[Generated Code]:\n", code)
 
-        yield {"type": "code_complete", "content": code}
-        yield {"type": "done", "content": "", "prompt_length": prompt_length}
-        return
+        yield {"type": "chunk", "sub_type": "code_complete", "content": code, "phase": "act", "sub_phase": "code"}
 
-    yield {"type": "error", "content": "代码生成失败"}
-    yield {"type": "done", "content": "", "prompt_length": prompt_length}
+        yield {"type": "msg", "content": "正在执行代码...", "phase": "act", "sub_phase": "exec"}
 
-
-def execute_code_stream(code, retries=2, print_rows=5):
-    yield {"type": "status", "content": "正在执行代码..."}
-
-    err_msg = ""
-    for j in range(retries):
-        current_code = code
+        error_msg = ""
+        formatted_result = ""
         try:
-            result = execute_py_code(current_code)
+            result = execute_py_code(code)
             for item in result:
                 formatted = format_yield_item(item, print_rows)
-                yield {"type": "chunk", "content": formatted}
-                print(item)
-
-            yield {"type": "done", "content": ""}
-            logging.info(f"Code executed successfully.\nCode: {code}\n")
-            return
+                formatted_result += formatted
+                formatted_result += "\n"
+                yield {"type": "chunk", "sub_type": "exec_chunk", "content": formatted, "phase": "act", "sub_phase": "exec"}
         except Exception as e:
-            err_msg = str(e)
+            error_msg = str(e)
             print(f"Execution error: {e}")
-            yield {"type": "status", "content": f"执行出错: {str(e)[:150]}..."}
-            if j < retries - 1:
-                yield {"type": "status", "content": "正在重试..."}
+            yield {"type": "chunk", "sub_type": "code_exe_error", "content": error_msg, "phase": "act", "sub_phase": "exec"}
             continue
 
-    yield {"type": "error", "content": f"执行失败: {err_msg[:200]}"}
-    yield {"type": "done", "content": ""}
+        yield {"type": "chunk", "sub_type": "exec_complete", "content": formatted_result, "phase": "act", "sub_phase": "exec"}
+        yield {"type": "done", "content": formatted_result, "phase": "act", "sub_phase": "exec"}
 
+    yield {"type": "error", "content": "generate_and_execute_stream_error", "phase": "act"}
 
-def generate_and_execute_stream(question, tables=None, use_all_functions=False, retries=2,
-                                 selected_fields=None, selected_functions=None, print_rows=5,
-                                 code_gen_retries=2):
-    yield {"type": "status", "content": "正在分析问题...", "phase": "code"}
-
-    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, use_all_functions, selected_fields, selected_functions)
-    prompt_length = len(cot_prompt)
-
-    if cot_prompt == "solved":
-        yield {"type": "solved", "content": rag_ans, "phase": "code"}
-        yield {"type": "done", "content": "", "prompt_length": 0, "phase": "exec"}
-        return
-
-    exec_err_context = ""
-
-    for code_retry in range(code_gen_retries):
-        if code_retry > 0:
-            yield {"type": "status", "content": "执行出错，正在根据错误信息重新生成代码...", "phase": "code"}
-        else:
-            yield {"type": "status", "content": "正在生成代码...", "phase": "code"}
-
-        full_prompt = cot_prompt + exec_err_context
-        err_msg = ""
-        full_code = None
-
-        for j in range(retries):
-            current_prompt = full_prompt + err_msg
-            raw_content = ""
-            for chunk in call_llm_stream(current_prompt, llm):
-                raw_content += chunk
-                yield {"type": "code_chunk", "content": chunk, "phase": "code"}
-
-            code = parse_generated_python_code(raw_content)
-            if code is None:
-                yield {"type": "status", "content": "代码解析失败，正在重试...", "phase": "code"}
-                err_msg = "\n代码解析失败，请确保代码在 ```python 代码块中。\n"
-                continue
-
-            code = insert_lines_into_function(code, function_import)
-            code = insert_lines_into_function(code, IMPORTANT_MODULE)
-            code = insert_lines_into_function(code, THIRD_MODULE)
-            print("\n[Generated Code]:\n", code)
-
-            yield {"type": "code_complete", "content": code, "phase": "code"}
-            full_code = code
-            break
-
-        if full_code is None:
-            if code_retry < code_gen_retries - 1:
-                continue
-            yield {"type": "error", "content": "代码生成失败", "phase": "exec"}
-            yield {"type": "done", "content": "", "prompt_length": prompt_length, "phase": "exec"}
-            return
-
-        yield {"type": "status", "content": "正在执行代码...", "phase": "exec"}
-
-        execution_success = False
-        exec_err_msg = ""
-        for j in range(retries):
-            try:
-                result = execute_py_code(full_code)
-                for item in result:
-                    formatted = format_yield_item(item, print_rows)
-                    yield {"type": "chunk", "content": formatted, "phase": "exec"}
-                    print(item)
-                execution_success = True
-                break
-            except Exception as e:
-                exec_err_msg = str(e)
-                print(f"Execution error: {e}")
-                if j < retries - 1:
-                    yield {"type": "status", "content": f"执行出错，正在重试({j+1}/{retries})...", "phase": "exec"}
-                continue
-
-        if execution_success:
-            yield {"type": "done", "content": "", "prompt_length": prompt_length, "phase": "exec"}
-            logging.info(f"Code executed successfully.\nCode: {full_code}\n")
-            return
-
-        if code_retry < code_gen_retries - 1:
-            yield {"type": "error", "content": f"执行出错: {exec_err_msg[:200]}", "phase": "exec"}
-            exec_err_context = f"\n\n[Execution Error from previous attempt]\nError: {exec_err_msg}\nFailed code:\n```python\n{full_code}\n```\n\nPlease fix the error and regenerate the code."
-            continue
-
-    yield {"type": "error", "content": f"执行失败: {exec_err_msg[:200]}", "phase": "exec"}
-    yield {"type": "done", "content": "", "prompt_length": prompt_length, "phase": "exec"}

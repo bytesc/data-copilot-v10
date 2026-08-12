@@ -61,7 +61,7 @@ def _event_stream_act(
 
 
 def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None):
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'status', 'content': '正在搜索数据库信息...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': '正在搜索数据库信息...'}, ensure_ascii=False)}\n\n"
 
     if search_keyword and search_keyword.strip():
         full_schema = search_db_markdown(engine, search_keyword.strip(), tables)
@@ -84,7 +84,7 @@ Example:
 {{"users": ["id", "name", "email"], "orders": []}}
 ```
 """
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'status', 'content': '正在分析所需字段...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': '正在分析所需字段...'}, ensure_ascii=False)}\n\n"
 
     raw = ""
     for chunk in call_llm_stream(prompt, llm):
@@ -107,7 +107,7 @@ Example:
 
 
 def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None):
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'status', 'content': '正在搜索函数信息...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'msg', 'content': '正在搜索函数信息...'}, ensure_ascii=False)}\n\n"
 
     if search_keyword and search_keyword.strip():
         full_catalog = search_func_by_keyword(search_keyword.strip())
@@ -156,38 +156,26 @@ exe_sql, get_save_image_path
 
 def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': '正在生成并执行代码...'}, ensure_ascii=False)}\n\n"
-    attempt = 1
-    total_attempts = 2
     full_code = ""
     full_ans = ""
     exec_error = None
-    prompt_length = 0
     for event in generate_and_execute_stream(
         full_question, tables, True,
         selected_fields=selected_fields,
         selected_functions=selected_functions,
     ):
-        if event.get("type") == "status" and "重新生成代码" in event.get("content", ""):
-            attempt += 1
-        event["attempt"] = attempt
-        event["total_attempts"] = total_attempts
-
-        if event.get("type") == "code_complete" and event.get("phase") == "code":
-            full_code = event.get("content", "")
-        if event.get("type") == "solved" and event.get("phase") == "code":
-            full_ans = event.get("content", "")
-        if event.get("type") == "done" and event.get("phase") == "exec":
-            prompt_length = event.get("prompt_length", 0)
-            event["result"] = {"code": full_code, "exec_result": full_ans, "error": exec_error}
-        if event.get("type") == "chunk" and event.get("phase") == "exec":
+        if event.get("sub_type") == "code_chunk":
+            full_code += event.get("content", "")
+        if event.get("sub_type") == "exec_chunk":
             full_ans += event.get("content", "")
-        if event.get("type") == "error" and event.get("phase") == "exec":
+        if event.get("sub_type") == "code_gen_error" and event.get("phase") == "exec":
             exec_error = event.get("content", "")
-        yield f"data: {json.dumps({**event, 'phase': 'act', 'sub_phase': event.get('phase', 'exec')}, ensure_ascii=False)}\n\n"
+
+        yield f"data: {json.dumps({**event}, ensure_ascii=False)}\n\n"
     if exec_error:
-        record_session_operation(session_id, "/api/act/stream/", full_question, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500], prompt_length=prompt_length)
+        record_session_operation(session_id, "/api/act/stream/", full_question, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500])
     else:
-        record_session_operation(session_id, "/api/act/stream/", full_question, ans=full_ans, code=full_code, result_type="success", prompt_length=prompt_length)
+        record_session_operation(session_id, "/api/act/stream/", full_question, ans=full_ans, code=full_code, result_type="success")
 
 
 @router.post("/api/act/stream/")

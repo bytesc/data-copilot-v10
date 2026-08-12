@@ -92,7 +92,7 @@ def _event_stream_action(
         conversation_history: Optional[List[str]],
         cycle_index: int,
 ):
-    yield f"data: {json.dumps({'phase': 'action', 'type': 'status', 'content': '正在决策下一步动作...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': '正在决策下一步动作...'}, ensure_ascii=False)}\n\n"
 
     prompt = _build_action_prompt(
         question, conversation_history,
