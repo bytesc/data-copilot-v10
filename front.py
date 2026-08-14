@@ -951,7 +951,8 @@ def main():
                         put_html(CURSOR)
 
             elif phase == "document" and etype == "done":
-                download_url = event.get("download_url", "")
+                download_url_md = event.get("download_url_md", event.get("download_url", ""))
+                download_url_docx = event.get("download_url_docx", "")
                 full_document = content
                 with use_scope(doc_scope, clear=True):
                     put_collapse("Document Outline", [
@@ -969,8 +970,13 @@ def main():
                     put_collapse("Full Document", [
                         put_markdown(full_document, sanitize=False)
                     ], open=True)
-                    if download_url:
-                        put_html(f'<a href="{download_url}?download=1" style="display:inline-block;margin-top:12px;padding:8px 16px;background:#4a90d9;color:#fff;border-radius:4px;text-decoration:none;" target="_blank">Download Document (.md)</a>')
+                    if download_url_md or download_url_docx:
+                        put_html('<div style="margin-top:12px;display:flex;gap:8px;">')
+                        if download_url_md:
+                            put_html(f'<a href="{download_url_md}?download=1" style="display:inline-block;padding:8px 16px;background:#4a90d9;color:#fff;border-radius:4px;text-decoration:none;" target="_blank">Download (.md)</a>')
+                        if download_url_docx:
+                            put_html(f'<a href="{download_url_docx}?download=1" style="display:inline-block;padding:8px 16px;background:#28a745;color:#fff;border-radius:4px;text-decoration:none;" target="_blank">Download (.docx)</a>')
+                        put_html('</div>')
                 if full_document:
                     toast("Document generated successfully!", color='success')
                 else:

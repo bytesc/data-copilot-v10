@@ -1,10 +1,17 @@
 import json
 import os
-from typing import List, Optional
+import re
+import io
+from typing import List, Optional, Set
 
+import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from docx import Document
+from docx.shared import Inches, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
@@ -47,11 +54,154 @@ Rules:
 3. You may mention data sources and filtering criteria when relevant to the business context
 4. Do NOT include code snippets, SQL queries, Python code, or any technical implementation details
 5. Do NOT describe the agent's execution process, tool calls, or workflow steps
-6. If the conversation history contains successfully generated charts or images (URLs like tmp_imgs/*.png), only include the images that are directly relevant to this specific section's topic — do NOT repeat the same image across multiple sections
+6. If the conversation history contains successfully generated charts or images (URLs like tmp_imgs/*.png), only include the images that are directly relevant to this specific section's topic — do NOT repeat the same image across multiple sections. If the prompt lists "already used" images, strictly avoid including them.
 7. The entire document MUST be written in the same language as the user's original question in the conversation history
 8. Keep the content focused on the section topic
 9. Be thorough but concise
 10. Use proper markdown headings, lists, and tables as needed (but no code blocks)"""
+
+
+def _extract_image_urls(text: str) -> Set[str]:
+    return set(re.findall(r'!\[[^\]]*\]\(([^)]+)\)', text))
+
+
+def _download_image_bytes(url: str) -> bytes:
+    local_match = re.search(r'tmp_imgs/([^\s/]+\.(?:png|jpg|jpeg|gif|bmp|webp))', url, re.IGNORECASE)
+    if local_match:
+        local_path = os.path.join("tmp_imgs", local_match.group(1))
+        if os.path.isfile(local_path):
+            with open(local_path, "rb") as f:
+                return f.read()
+    try:
+        resp = httpx.get(url, timeout=15, follow_redirects=True)
+        if resp.status_code == 200:
+            return resp.content
+    except Exception:
+        pass
+    return b""
+
+
+def _markdown_to_docx(markdown_text: str, output_path: str):
+    doc = Document()
+    style = doc.styles['Normal']
+    style.font.size = Pt(11)
+    style.font.name = 'Calibri'
+
+    lines = markdown_text.split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        if not stripped:
+            i += 1
+            continue
+
+        heading_match = re.match(r'^(#{1,6})\s+(.+)$', stripped)
+        if heading_match:
+            level = len(heading_match.group(1))
+            text = heading_match.group(2)
+            p = doc.add_heading(level=min(level, 3))
+            _add_inline_runs(p, text)
+            i += 1
+            continue
+
+        ul_match = re.match(r'^[-*+]\s+(.+)$', stripped)
+        if ul_match:
+            p = doc.add_paragraph(style='List Bullet')
+            _add_inline_runs(p, ul_match.group(1))
+            i += 1
+            continue
+
+        ol_match = re.match(r'^\d+\.\s+(.+)$', stripped)
+        if ol_match:
+            p = doc.add_paragraph(style='List Number')
+            _add_inline_runs(p, ol_match.group(1))
+            i += 1
+            continue
+
+        img_match = re.match(r'^!\[([^\]]*)\]\(([^)]+)\)$', stripped)
+        if img_match:
+            alt_text = img_match.group(1)
+            img_url = img_match.group(2)
+            img_bytes = _download_image_bytes(img_url)
+            if img_bytes:
+                try:
+                    img_stream = io.BytesIO(img_bytes)
+                    doc.add_picture(img_stream, width=Inches(5.5))
+                    last_paragraph = doc.paragraphs[-1] if doc.paragraphs else doc.add_paragraph()
+                    last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    if alt_text:
+                        caption = doc.add_paragraph()
+                        caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        run = caption.add_run(alt_text)
+                        run.font.size = Pt(9)
+                        run.italic = True
+                except Exception:
+                    p = doc.add_paragraph()
+                    run = p.add_run(f'[Image: {alt_text}]')
+                    run.italic = True
+            else:
+                p = doc.add_paragraph()
+                run = p.add_run(f'[Image: {alt_text}]')
+                run.italic = True
+            i += 1
+            continue
+
+        if stripped.startswith('|') and '|' in stripped[1:]:
+            table_rows = []
+            while i < len(lines) and lines[i].strip().startswith('|'):
+                row_line = lines[i].strip()
+                if re.match(r'^[\|\s\-:]+$', row_line):
+                    i += 1
+                    continue
+                cells = [c.strip() for c in row_line.split('|')[1:-1]]
+                table_rows.append(cells)
+                i += 1
+            if table_rows:
+                table = doc.add_table(rows=len(table_rows), cols=len(table_rows[0]))
+                table.style = 'Light Grid Accent 1'
+                for ri, row in enumerate(table_rows):
+                    for ci, cell_text in enumerate(row):
+                        cell = table.rows[ri].cells[ci]
+                        cell.text = ''
+                        p = cell.paragraphs[0]
+                        _add_inline_runs(p, cell_text)
+            continue
+
+        p = doc.add_paragraph()
+        _add_inline_runs(p, stripped)
+        i += 1
+
+    doc.save(output_path)
+
+
+def _add_inline_runs(paragraph, text: str):
+    pattern = re.compile(r'(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\))')
+    last_end = 0
+    for m in pattern.finditer(text):
+        if m.start() > last_end:
+            paragraph.add_run(text[last_end:m.start()])
+        if m.group(2):
+            run = paragraph.add_run(m.group(2))
+            run.bold = True
+        elif m.group(3):
+            run = paragraph.add_run(m.group(3))
+            run.italic = True
+        elif m.group(4):
+            run = paragraph.add_run(m.group(4))
+            run.font.name = 'Consolas'
+            run.font.size = Pt(10)
+        elif m.group(5):
+            run = paragraph.add_run(f'[Image: {m.group(5)}]')
+            run.italic = True
+            run.font.size = Pt(9)
+        elif m.group(7):
+            run = paragraph.add_run(m.group(7))
+            run.underline = True
+        last_end = m.end()
+    if last_end < len(text):
+        paragraph.add_run(text[last_end:])
 
 
 def _parse_outline_json(raw: str) -> dict:
@@ -101,17 +251,23 @@ Conversation History:
         return
 
     document_parts = []
+    used_images: Set[str] = set()
     for i, part in enumerate(parts):
         heading = part.get("heading", f"Part {i + 1}")
         description = part.get("description", "")
 
         yield f"data: {json.dumps({'phase': 'part', 'type': 'msg', 'content': f'Generating part {i + 1}/{len(parts)}: {heading}', 'part_index': i, 'heading': heading}, ensure_ascii=False)}\n\n"
 
+        used_hint = ""
+        if used_images:
+            used_list = "\n".join(f"- {url}" for url in sorted(used_images))
+            used_hint = f"\n\nIMPORTANT: The following images have already been used in previous sections. Do NOT include them again:\n{used_list}\n"
+
         part_prompt = f"""{PART_SYSTEM}
 
 Document Title: {title}
 Section Heading: {heading}
-Section Description: {description}
+Section Description: {description}{used_hint}
 
 Conversation History:
 {context}
@@ -123,6 +279,9 @@ Write the content for the section "{heading}" in markdown format. Do NOT include
             part_raw += chunk
             yield f"data: {json.dumps({'phase': 'part', 'type': 'chunk', 'content': chunk, 'part_index': i}, ensure_ascii=False)}\n\n"
 
+        new_images = _extract_image_urls(part_raw)
+        used_images.update(new_images)
+
         document_parts.append((heading, part_raw))
         yield f"data: {json.dumps({'phase': 'part', 'type': 'done', 'content': part_raw, 'part_index': i, 'heading': heading}, ensure_ascii=False)}\n\n"
 
@@ -130,16 +289,21 @@ Write the content for the section "{heading}" in markdown format. Do NOT include
     for heading, content in document_parts:
         full_document += f"## {heading}\n\n{content}\n\n"
 
-    file_name = f"doc_{generate_random_string(8)}.md"
+    file_name = f"doc_{generate_random_string(8)}"
     os.makedirs("tmp_imgs", exist_ok=True)
-    file_path = os.path.join("tmp_imgs", file_name)
-    with open(file_path, "w", encoding="utf-8") as f:
+
+    md_path = os.path.join("tmp_imgs", file_name + ".md")
+    with open(md_path, "w", encoding="utf-8") as f:
         f.write(full_document)
 
-    static_url = config_data.get("static_path", "http://127.0.0.1:8009/")
-    download_url = static_url.rstrip("/") + "/tmp_imgs/" + file_name
+    docx_path = os.path.join("tmp_imgs", file_name + ".docx")
+    _markdown_to_docx(full_document, docx_path)
 
-    yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'title': title, 'parts_count': len(parts), 'file_name': file_name, 'download_url': download_url}, ensure_ascii=False)}\n\n"
+    static_url = config_data.get("static_path", "http://127.0.0.1:8009/")
+    download_url_md = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".md"
+    download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx"
+
+    yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'title': title, 'parts_count': len(parts), 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx}, ensure_ascii=False)}\n\n"
 
 
 @router.post("/api/generate-document/stream/")
