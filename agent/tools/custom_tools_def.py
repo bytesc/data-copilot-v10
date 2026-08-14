@@ -2,6 +2,8 @@ import json
 from typing import List, Tuple, Optional, Dict, Union
 
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
 from agent.utils.llm_access.LLM import get_llm

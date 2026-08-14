@@ -26,6 +26,7 @@ STATIC_URL = config_data['static_path']
 IMPORTANT_MODULE = ["import math"]
 THIRD_MODULE = ["import pandas as pd", "import numpy as np",
                 "import PIL", "import matplotlib",
+                "matplotlib.use('Agg')",
                 "import matplotlib.pyplot as plt", "import seaborn as sns"]
 
 # print(get_db_info_prompt(engine, simple=True, example=False))
@@ -96,6 +97,7 @@ Here is the functions you can import and use:
         import numpy as np
         import PIL
         import matplotlib
+        matplotlib.use('Agg')
         import matplotlib.pyplot as plt
         import seaborn as sns
         # generate code to perform operations from here

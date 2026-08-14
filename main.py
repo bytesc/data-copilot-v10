@@ -1,3 +1,6 @@
+import os
+os.environ['MPLBACKEND'] = 'Agg'
+
 import asyncio
 import json
 import mimetypes
@@ -6,7 +9,6 @@ from typing import List, Optional, Dict, Any
 import pandas as pd
 import sqlalchemy
 import uvicorn
-import os
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi import File, UploadFile, HTTPException
@@ -36,6 +38,17 @@ create_observe_log_tables()
 # engine = sqlalchemy.create_engine(DATABASE_URL)
 
 app = FastAPI()
+
+import logging
+import traceback
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.error(f"Unhandled exception: {exc}\n{traceback.format_exc()}")
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error", "detail": str(exc)}
+    )
 
 # 创建线程池，处理同步任务
 executor = ThreadPoolExecutor(max_workers=10)
@@ -413,11 +426,14 @@ from agent.think import router as think_router
 from agent.act import router as act_router
 from agent.observe import router as observe_router
 from agent.action import router as action_router
+from agent.document_generator import router as document_router
 
 app.include_router(think_router)
 app.include_router(act_router)
 app.include_router(observe_router)
 app.include_router(action_router)
+
+app.include_router(document_router)
 
 
 if __name__ == "__main__":

@@ -228,6 +228,17 @@ def action_api_stream(
     yield from _sse_stream(f"{SERVER_URL}/api/action/stream/", payload)
 
 
+def generate_document_api_stream(
+    conversation_history: List[str],
+    session_id: str = "",
+):
+    payload = {
+        "conversation_history": conversation_history,
+        "session_id": session_id,
+    }
+    yield from _sse_stream(f"{SERVER_URL}/api/generate-document/stream/", payload)
+
+
 def parse_action_result(events: list) -> dict:
     for event in events:
         if event.get("type") == "done" and event.get("action_result"):
@@ -843,10 +854,35 @@ def main():
     put_markdown("*One action per cycle. Action phase decides next step via LLM.*")
 
     put_markdown("### Control Panel")
-    put_buttons(['Upload CSV File', 'Upload Document File'],
-                onclick=[lambda: handle_csv_upload(), lambda: handle_doc_upload()])
+    put_buttons(['Upload CSV File', 'Upload Document File', 'Generate Summary Document'],
+                onclick=[lambda: handle_csv_upload(), lambda: handle_doc_upload(), lambda: handle_generate_document()])
 
     show_db_overview()
+
+    def handle_generate_document():
+        if not conversation_history or len(conversation_history) <= 1:
+            toast("No conversation to summarize. Please ask a question first.", color='warn')
+            return
+        with put_loading(shape="grow", color="primary"):
+            full_document = ""
+            for event in generate_document_api_stream(conversation_history, session_id):
+                phase = event.get("phase", "")
+                etype = event.get("type", "")
+                if phase == "outline" and etype == "done":
+                    outline = event.get("outline", {})
+                    title = outline.get("title", "")
+                    parts_count = len(outline.get("parts", []))
+                    toast(f"Outline generated: {title} ({parts_count} parts)", color='success')
+                elif phase == "part" and etype == "msg":
+                    toast(event.get("content", ""), color='info')
+                elif phase == "document" and etype == "done":
+                    full_document = event.get("content", "")
+        if full_document:
+            put_markdown("### Generated Summary Document")
+            put_markdown(full_document)
+            toast("Document generated successfully!", color='success')
+        else:
+            toast("Failed to generate document.", color='error')
 
     session_id = datetime.now().strftime("%Y%m%d%H%M%S") + "".join(
         random.choices(string.ascii_letters, k=8)

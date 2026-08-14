@@ -66,8 +66,10 @@ def insert_lines_into_function(code_str: str, lines_to_insert: list) -> str:
     # 在换行符后添加换行符，为插入代码做准备
     code_str = code_str[:newline_index + 1] + '\n' + code_str[newline_index + 1:]
     # 插入每一行代码，每行代码前添加四个空格作为缩进
+    insert_pos = newline_index + 2
     for line in lines_to_insert:
-        code_str = code_str[:newline_index + 2] + '    ' + line + '\n' + code_str[newline_index + 2:]
+        code_str = code_str[:insert_pos] + '    ' + line + '\n' + code_str[insert_pos:]
+        insert_pos += len('    ' + line + '\n')
     return code_str
 
 

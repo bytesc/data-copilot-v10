@@ -19,6 +19,7 @@ def func(data):
     import numpy as np
     import PIL
     import matplotlib
+    matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     plt.rcParams['font.family'] = 'SimHei' 
     # please keep the code above!
@@ -55,6 +56,7 @@ def func(data_dict):
     import numpy as np
     import PIL
     import matplotlib
+    matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     plt.rcParams['font.family'] = 'SimHei'
     # please keep the code above!

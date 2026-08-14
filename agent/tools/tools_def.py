@@ -257,6 +257,7 @@ def get_save_image_path() -> str:
             import numpy as np
             import PIL
             import matplotlib
+            matplotlib.use('Agg')
             import matplotlib.pyplot as plt
             plt.rcParams['font.family'] = 'SimHei'
 
