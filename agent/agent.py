@@ -208,13 +208,13 @@ Here is the functions you can import and use:
 
     cot_prompt = pre_prompt + function_prompt + str(function_info) + \
                  module_prompt + example_code + remind_prompt + \
-                 database + knowledge + "question:" + question
+                 database + knowledge + " \nContext:\n" + question
     return cot_prompt, rag_ans, function_import
 
 
 def format_yield_item(item, print_rows=5):
     if isinstance(item, pd.DataFrame):
-        if item.index.size > 10:
+        if item.index.size > 50:
             text = df_to_markdown(item.head(print_rows)) + \
                    "\nfirst {} rows of {}".format(print_rows, len(item)) + \
                    "\nthe data above are just slice example, download csv to get full data\n"

@@ -175,9 +175,18 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
             full_code += event.get("content", "")
         if event.get("sub_type") == "exec_chunk":
             full_ans += event.get("content", "")
-        if event.get("sub_type") == "code_gen_error" and event.get("phase") == "exec":
+        if event.get("sub_type") == "code_exe_error":
             exec_error = event.get("content", "")
 
+        if event.get("type") == "done" and event.get("sub_phase") == "exec":
+            event = {
+                **event,
+                "result": {
+                    "code": event.get("code", full_code),
+                    "exec_result": event.get("content", full_ans),
+                    "error": exec_error,
+                }
+            }
         yield f"data: {json.dumps({**event}, ensure_ascii=False)}\n\n"
     if exec_error:
         record_session_operation(session_id, "/api/act/stream/", full_question, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500])

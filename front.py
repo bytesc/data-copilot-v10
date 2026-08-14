@@ -441,6 +441,7 @@ def parse_act_result(events: list) -> dict:
                 parsed["full_ans"] += content
             if sub == "exec":
                 parsed["full_ans"] += content
+                parsed["exec_error"] = None
         elif sub == "code" and event.get("sub_type") == "code_complete":
             parsed["full_code"] = content
         elif sub == "code" and etype == "solved":
