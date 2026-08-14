@@ -296,7 +296,7 @@ def generate_and_execute_stream(question, tables=None, retries=2,
             continue
 
         yield {"type": "chunk", "sub_type": "exec_complete", "content": formatted_result, "phase": "act", "sub_phase": "exec"}
-        yield {"type": "done", "content": formatted_result, "phase": "act", "sub_phase": "exec"}
+        yield {"type": "done", "code": code, "content": formatted_result, "phase": "act", "sub_phase": "exec"}
 
     yield {"type": "error", "content": "generate_and_execute_stream_error", "phase": "act"}
 
