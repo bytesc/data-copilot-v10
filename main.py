@@ -59,18 +59,18 @@ STATIC_PATH = f"/{STATIC_FOLDER}"
 
 # http://127.0.0.1:8003/tmp_imgs/mlkjcvep.png
 @app.get(f"/{STATIC_FOLDER}/{{filename}}")
-async def read_static_file(request: Request, filename: str):
+async def read_static_file(request: Request, filename: str, download: str = None):
     filepath = os.path.join(STATIC_FOLDER, filename)
     if os.path.isfile(filepath):
-        # 猜测文件的MIME类型
         content_type, _ = mimetypes.guess_type(filepath)
         if content_type is None:
-            content_type = "application/octet-stream"  # 默认为二进制流，如果无法确定类型
-        # 读取文件内容
+            content_type = "application/octet-stream"
+        headers = {}
+        if download is not None:
+            headers["Content-Disposition"] = f'attachment; filename="{filename}"'
         with open(filepath, "rb") as file:
             file_content = file.read()
-        # 返回Response对象，文件内容作为字节流发送
-        return Response(content=file_content, media_type=content_type)
+        return Response(content=file_content, media_type=content_type, headers=headers)
     else:
         return {"error": "File not found"}
 

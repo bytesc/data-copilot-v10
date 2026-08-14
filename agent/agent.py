@@ -39,7 +39,7 @@ def get_db():
 def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_functions=None):
     rag_ans = ""
     knowledge = ""
-    rag_ans = get_base_knowledge()
+    # rag_ans = get_base_knowledge()
     knowledge = "\nBase knowledge: \n" + rag_ans + "\n"
     # print(rag_ans)
 
@@ -174,16 +174,24 @@ Here is the functions you can import and use:
     - yield the path with single line :`yield path` , never yield the path in other str or tuple.
 
     - CRITICAL: Category Overflow Handling (MUST DO BEFORE PLOTTING):
-        1. BEFORE creating any chart, check the number of unique categories in the data that will appear on x-axis or y-axis
-        2. If categories > 10, you MUST:
-           a) First yield a message: "Due to too many categories (N found), only the first/top 10 items are displayed. Please modify your question if you want to see specific items, e.g., 'show only the top 5' or 'show only categories A, B, C'."
-           b) Then ACTUALLY filter the data to keep only top 10 (by count/frequency) or first 10
-           c) Only AFTER filtering, create the plot
-        3. If labels are still long after filtering, rotate them: plt.xticks(rotation=45) or plt.xticks(rotation=90)
-        4. For long category names, consider horizontal bar chart (kind='barh') instead of vertical
-        5. NEVER rotate labels without first filtering the data - rotation alone does not solve overcrowding!
-
-    Data Standardization and Entity Alignment.
+      1. BEFORE creating ANY chart with categorical labels (pie, bar, barh, boxplot, line, scatter, heatmap, radar, etc.), 
+         check the number of unique categories that will appear as labels.
+      2. If categories > 10, you MUST:
+         a) First yield a message: "⚠️ Due to too many categories ({N} found), only the first/top 10 items are displayed. 
+            Please modify your question if you want to see specific items, e.g., 'show only the top 5' or 'show only categories A, B, C'."
+         b) THEN filter the data to keep only top 10 (by count/frequency) or first 10
+         c) ONLY AFTER filtering, create the plot
+      3. For pie charts specifically:
+         - If categories > 5, consider using "explode" to highlight key slices
+         - If categories > 8, consider using "wedgeprops" to increase spacing
+         - Always show percentages instead of raw values for readability
+      4. For labels that are still long after filtering:
+         - Rotate labels: plt.xticks(rotation=45) or plt.xticks(rotation=90)
+         - Use abbreviations or wrap text (e.g., '\n'.join(textwrap.wrap(label, 10)))
+         - For pie charts, use legend instead of direct labels when categories > 5
+      5. NEVER skip filtering and go directly to rotation/abbreviation - 
+         that only masks the problem without solving overcrowding!
+        Data Standardization and Entity Alignment.
 
     - The user's query terms may NOT match the actual values stored in the database. You MUST handle this mismatch:
         1. BEFORE querying, check the actual values in the database using DISTINCT or sample queries to understand the data format

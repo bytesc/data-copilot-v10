@@ -864,26 +864,117 @@ def main():
         if not conversation_history or len(conversation_history) <= 1:
             toast("No conversation to summarize. Please ask a question first.", color='warn')
             return
-        with put_loading(shape="grow", color="primary"):
-            full_document = ""
-            for event in generate_document_api_stream(conversation_history, session_id):
-                phase = event.get("phase", "")
-                etype = event.get("type", "")
-                if phase == "outline" and etype == "done":
-                    outline = event.get("outline", {})
-                    title = outline.get("title", "")
-                    parts_count = len(outline.get("parts", []))
-                    toast(f"Outline generated: {title} ({parts_count} parts)", color='success')
-                elif phase == "part" and etype == "msg":
-                    toast(event.get("content", ""), color='info')
-                elif phase == "document" and etype == "done":
-                    full_document = event.get("content", "")
-        if full_document:
-            put_markdown("### Generated Summary Document")
-            put_markdown(full_document)
-            toast("Document generated successfully!", color='success')
-        else:
-            toast("Failed to generate document.", color='error')
+
+        doc_scope = f"generate_doc_{int(time.time() * 1000)}"
+        put_scope(doc_scope)
+        with use_scope(doc_scope):
+            put_loading(shape="grow", color="primary")
+
+        outline_raw = ""
+        outline_done = False
+        outline_data = {}
+        part_accumulator = ""
+        current_part_index = -1
+        completed_parts = []
+        part_headings = []
+        download_url = ""
+
+        for event in generate_document_api_stream(conversation_history, session_id):
+            phase = event.get("phase", "")
+            etype = event.get("type", "")
+            content = event.get("content", "")
+
+            if phase == "outline":
+                if etype == "chunk":
+                    outline_raw += content
+                    with use_scope(doc_scope, clear=True):
+                        put_collapse("Document Outline (generating...)", [
+                            put_markdown(outline_raw, sanitize=False),
+                            put_html(CURSOR)
+                        ], open=True)
+                elif etype == "done":
+                    outline_done = True
+                    outline_data = event.get("outline", {})
+                    part_headings = [
+                        p.get("heading", f"Part {i + 1}")
+                        for i, p in enumerate(outline_data.get("parts", []))
+                    ]
+                    with use_scope(doc_scope, clear=True):
+                        put_collapse("Document Outline", [
+                            put_markdown(f"**Title:** {outline_data.get('title', '')}", sanitize=False),
+                            put_markdown(f"**Parts:** {len(part_headings)}", sanitize=False),
+                            put_markdown(
+                                "\n".join(f"{i + 1}. {h}" for i, h in enumerate(part_headings)),
+                                sanitize=False
+                            )
+                        ], open=False)
+                elif etype == "error":
+                    with use_scope(doc_scope, clear=True):
+                        put_warning(f"**Outline Error:** {content}")
+
+            elif phase == "part":
+                part_index = event.get("part_index", -1)
+
+                if etype == "msg":
+                    current_part_index = part_index
+                    part_accumulator = ""
+                    heading = event.get("heading", f"Part {part_index + 1}")
+                    with use_scope(doc_scope, clear=True):
+                        for pi, (ph, ptext) in enumerate(completed_parts):
+                            put_collapse(f"Part {pi + 1}: {ph}", [
+                                put_markdown(ptext, sanitize=False)
+                            ], open=False)
+                        put_markdown(f"### Part {part_index + 1}: {heading} (generating...)", sanitize=False)
+                        put_html(CURSOR)
+
+                elif etype == "chunk":
+                    part_accumulator += content
+                    heading = part_headings[part_index] if part_index < len(part_headings) else f"Part {part_index + 1}"
+                    with use_scope(doc_scope, clear=True):
+                        for pi, (ph, ptext) in enumerate(completed_parts):
+                            put_collapse(f"Part {pi + 1}: {ph}", [
+                                put_markdown(ptext, sanitize=False)
+                            ], open=False)
+                        put_markdown(f"### Part {part_index + 1}: {heading} (generating...)", sanitize=False)
+                        put_markdown(part_accumulator, sanitize=False)
+                        put_html(CURSOR)
+
+                elif etype == "done":
+                    heading = part_headings[part_index] if part_index < len(part_headings) else f"Part {part_index + 1}"
+                    completed_parts.append((heading, part_accumulator))
+                    with use_scope(doc_scope, clear=True):
+                        for pi, (ph, ptext) in enumerate(completed_parts):
+                            put_collapse(f"Part {pi + 1}: {ph}", [
+                                put_markdown(ptext, sanitize=False)
+                            ], open=False)
+                        put_markdown(f"### Part {part_index + 2}/{len(part_headings)}: (waiting...)", sanitize=False)
+                        put_html(CURSOR)
+
+            elif phase == "document" and etype == "done":
+                download_url = event.get("download_url", "")
+                full_document = content
+                with use_scope(doc_scope, clear=True):
+                    put_collapse("Document Outline", [
+                        put_markdown(f"**Title:** {outline_data.get('title', '')}", sanitize=False),
+                        put_markdown(f"**Parts:** {len(part_headings)}", sanitize=False),
+                        put_markdown(
+                            "\n".join(f"{i + 1}. {h}" for i, h in enumerate(part_headings)),
+                            sanitize=False
+                        )
+                    ], open=False)
+                    for pi, (ph, ptext) in enumerate(completed_parts):
+                        put_collapse(f"Part {pi + 1}: {ph}", [
+                            put_markdown(ptext, sanitize=False)
+                        ], open=False)
+                    put_collapse("Full Document", [
+                        put_markdown(full_document, sanitize=False)
+                    ], open=True)
+                    if download_url:
+                        put_html(f'<a href="{download_url}?download=1" style="display:inline-block;margin-top:12px;padding:8px 16px;background:#4a90d9;color:#fff;border-radius:4px;text-decoration:none;" target="_blank">Download Document (.md)</a>')
+                if full_document:
+                    toast("Document generated successfully!", color='success')
+                else:
+                    toast("Failed to generate document.", color='error')
 
     session_id = datetime.now().strftime("%Y%m%d%H%M%S") + "".join(
         random.choices(string.ascii_letters, k=8)

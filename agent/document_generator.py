@@ -1,4 +1,5 @@
 import json
+import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Request
@@ -7,6 +8,8 @@ from pydantic import BaseModel
 
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
+from agent.utils.pd_to_walker import generate_random_string
+from agent.utils.get_config import config_data
 
 router = APIRouter()
 
@@ -16,12 +19,16 @@ class DocumentInput(BaseModel):
     session_id: Optional[str] = None
 
 
-OUTLINE_SYSTEM = """You are a document outline generator. Based on the conversation history between a user and a data analysis AI assistant, generate a structured outline for a summary document.
+OUTLINE_SYSTEM = """You are a business document outline generator. Based on the conversation history between a user and a data analysis AI assistant, generate a structured outline for a business summary document.
 
 The outline should:
-1. Have a clear, descriptive title
-2. Break the conversation into logical parts (typically 3-8 parts)
-3. Each part should have a heading and a brief description of what to cover
+1. Have a clear, business-oriented title that reflects the analytical goal
+2. Break the conversation into logical parts (typically 3-8 parts), focusing on business insights and conclusions
+3. Each part should have a heading and a brief description of what business content to cover
+
+IMPORTANT:
+- This is a business summary document. The outline should focus on business analysis, data insights, and conclusions. Do NOT include sections about code, SQL queries, technical implementation details, or agent execution process.
+- The entire document MUST be written in the same language as the user's original question in the conversation history.
 
 Output ONLY a valid JSON object (no markdown, no code blocks):
 {
@@ -32,14 +39,19 @@ Output ONLY a valid JSON object (no markdown, no code blocks):
 }"""
 
 
-PART_SYSTEM = """You are a professional document writer. Based on the conversation history between a user and a data analysis AI assistant, write the content for a specific section of a summary document.
+PART_SYSTEM = """You are a professional business document writer. Based on the conversation history between a user and a data analysis AI assistant, write the content for a specific section of a business summary document.
 
 Rules:
 1. Write in markdown format
-2. Include relevant details, data, code snippets, and conclusions from the conversation
-3. Keep the content focused on the section topic
-4. Be thorough but concise
-5. Use proper markdown headings, lists, tables, and code blocks as needed"""
+2. Focus on business insights, data analysis results, trends, patterns, and conclusions
+3. You may mention data sources and filtering criteria when relevant to the business context
+4. Do NOT include code snippets, SQL queries, Python code, or any technical implementation details
+5. Do NOT describe the agent's execution process, tool calls, or workflow steps
+6. If the conversation history contains successfully generated charts or images (URLs like tmp_imgs/*.png), only include the images that are directly relevant to this specific section's topic — do NOT repeat the same image across multiple sections
+7. The entire document MUST be written in the same language as the user's original question in the conversation history
+8. Keep the content focused on the section topic
+9. Be thorough but concise
+10. Use proper markdown headings, lists, and tables as needed (but no code blocks)"""
 
 
 def _parse_outline_json(raw: str) -> dict:
@@ -118,7 +130,16 @@ Write the content for the section "{heading}" in markdown format. Do NOT include
     for heading, content in document_parts:
         full_document += f"## {heading}\n\n{content}\n\n"
 
-    yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'title': title, 'parts_count': len(parts)}, ensure_ascii=False)}\n\n"
+    file_name = f"doc_{generate_random_string(8)}.md"
+    os.makedirs("tmp_imgs", exist_ok=True)
+    file_path = os.path.join("tmp_imgs", file_name)
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(full_document)
+
+    static_url = config_data.get("static_path", "http://127.0.0.1:8009/")
+    download_url = static_url.rstrip("/") + "/tmp_imgs/" + file_name
+
+    yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'title': title, 'parts_count': len(parts), 'file_name': file_name, 'download_url': download_url}, ensure_ascii=False)}\n\n"
 
 
 @router.post("/api/generate-document/stream/")
