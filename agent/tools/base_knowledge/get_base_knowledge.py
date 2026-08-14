@@ -23,6 +23,10 @@ DB_BRIEF = _read_doc("db_brief.md")
 DB_QUERY_GUIDE = _read_doc("db_quiery_guide.md")
 
 
+
+BASE = _read_doc("base_knowledge.md")
+
+
 def get_base_knowledge(key=""):
-    knowledge = ""
+    knowledge = BASE
     return knowledge

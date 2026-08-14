@@ -9,6 +9,9 @@ exports/
 tmp_imgs/*.png
 tmp_imgs/*.html
 tmp_imgs/*.csv
+tmp_imgs/*.docx
+tmp_imgs/*.md
+
 
 temp.png
 temp.html
