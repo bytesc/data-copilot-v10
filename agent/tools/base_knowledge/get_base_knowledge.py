@@ -1,4 +1,3 @@
-
 import os
 
 _KNOWLEDGE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -9,7 +8,11 @@ def _read_doc(filename):
     try:
         filepath = os.path.join(_DOCS_DIR, filename)
         with open(filepath, "r", encoding="utf-8") as f:
-            return f.read()
+            content = f.read()
+            if content.strip() != "":
+                return f"```markdown\n{content}\n```"
+            else:
+                return ""
     except Exception as e:
         print(f"[WARNING] Failed to read {filename}: {e}")
         return ""
@@ -18,7 +21,6 @@ def _read_doc(filename):
 DB_BRIEF = _read_doc("db_brief.md")
 
 DB_QUERY_GUIDE = _read_doc("db_quiery_guide.md")
-
 
 
 def get_base_knowledge(key=""):
