@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.action import ACTIONS
-from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF
+from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, get_base_knowledge
 from agent.tools.tools_def import engine, llm
 from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
@@ -38,8 +38,11 @@ def _event_stream_think(
 
     db_summary = get_db_summary_for_agent(engine)
     func_catalog = get_func_summary_for_agent()
+    base_knowledge = get_base_knowledge()
 
     think_prompt = f"""You are an autonomous data analysis Thinker. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
+
+{base_knowledge}
 
 Database Information:
 {DB_BRIEF}
