@@ -83,10 +83,11 @@ Context:
 Output ONLY a JSON object mapping table names to their needed columns. Use an empty list [] for a table to select all its columns. 
 Use an empty object {{}} to select all tables and all columns. 
 Use {{"__no_db__": true}} if no database query is needed or no relivent data in the database.
+Include a "plan" field describing the query plan in text.
 
 Example:
 ```json
-{{"users": ["id", "name", "email"], "orders": []}}
+{{"users": ["id", "name", "email"], "orders": [], "plan": "Query the users table to get customer IDs and emails, then join with orders table to find purchase records"}}
 ```
 """
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': '正在分析所需字段...'}, ensure_ascii=False)}\n\n"
@@ -96,6 +97,7 @@ Example:
         raw += chunk
         yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
     selected_fields = parse_selected_fields_json(raw) or {}
+    explore_plan = selected_fields.pop("plan", "") if isinstance(selected_fields, dict) else ""
 
     if selected_fields and not selected_fields.get("__no_db__"):
         display_content = get_db_overview_markdown(engine, tables, include_samples=True, selected_fields=selected_fields)
@@ -108,7 +110,7 @@ Example:
                       prompt=prompt[:5000], response=raw[:5000],
                       token_estimate=len(prompt) // 3)
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema, 'explore_plan': explore_plan}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
 
 def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None):
