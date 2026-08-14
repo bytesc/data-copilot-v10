@@ -560,7 +560,9 @@ def run_act_phase(cycle_index, action, full_question, conversation_history, sess
                 elif sub_type == "code_gen_error":
                     current_attempt["error"] = content
                     with use_scope(genexec_scope, clear=True):
-                        put_warning(f"**Code Generation Error:** {content}")
+                        put_collapse("Generated Code", [
+                            put_markdown(f"**Code Generation Error:** {content}", sanitize=False)
+                        ], open=False)
                 elif etype == "solved":
                     is_genexec = False
                     with use_scope(genexec_scope, clear=True):
@@ -633,13 +635,13 @@ def run_act_phase(cycle_index, action, full_question, conversation_history, sess
                         sections.append(put_collapse(
                             f"Result (Attempt {attempt_num})",
                             [put_markdown(att["result"], sanitize=False)],
-                            open=False
+                            open=True
                         ))
                     if att.get("error"):
                         sections.append(put_collapse(
                             f"Error (Attempt {attempt_num})",
                             [put_warning(f"**Error:** {att['error']}")],
-                            open=True
+                            open=False
                         ))
                     status = "❌" if att.get("error") else "✅" if att.get("result") else ""
                     title = f"Attempt {attempt_num} {status}".strip()
