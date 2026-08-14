@@ -23,6 +23,32 @@ from utils.get_config import config_data
 
 SERVER_URL = f"http://127.0.0.1:{config_data['server_port']}"
 
+HISTORY_RETENTION = {
+    "think": 3,
+    "action": 3,
+    "act_code": 1,
+    "act_result": 999,
+    "act_error": 1,
+    "act_explore_db": 999,
+    "act_explore_func": 999,
+    "act_search_result": 3,
+    "act_solved": 999,
+    "act_output_text": 999,
+    "act_ask_question": 999,
+    "act_ask_choice": 999,
+    "act_summary_and_pause": 999,
+    "act_attempt_completion": 999,
+    "observe": 3,
+    "observe_explore_schema": 3,
+    "observe_explore_functions": 3,
+    "observe_generate_and_execute": 3,
+    "observe_output_text": 3,
+    "observe_ask_question": 3,
+    "observe_ask_choice": 3,
+    "observe_summary_and_pause": 3,
+    "observe_attempt_completion": 3,
+}
+
 SELECT_TABLES = []
 
 CURSOR = '<span class="blink-cursor">|</span> <span class="thinking-text">Thinking...</span>'
@@ -50,6 +76,74 @@ ACTIONS = {
 }
 
 FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
+
+
+def _get_history_category(entry: str) -> Optional[str]:
+    if entry.startswith("[THINK]"):
+        return "think"
+    if entry.startswith("[ACTION]"):
+        return "action"
+    if entry.startswith("[ACT explore_schema]"):
+        return "act_explore_db"
+    if entry.startswith("[ACT explore_functions]"):
+        return "act_explore_func"
+    if entry.startswith("[ACT generate_and_execute] Code:"):
+        return "act_code"
+    if entry.startswith("[ACT generate_and_execute] Result:"):
+        return "act_result"
+    if entry.startswith("[ACT generate_and_execute] Error:"):
+        return "act_error"
+    if entry.startswith("[ACT] Solved"):
+        return "act_solved"
+    if entry.startswith("[ACT "):
+        rest = entry[5:]
+        end_bracket = rest.find("]")
+        if end_bracket > 0:
+            action_name = rest[:end_bracket]
+            if action_name in FRONTEND_ACTIONS:
+                return f"act_{action_name}"
+        return "act_search_result"
+    if entry.startswith("[OBSERVE "):
+        rest = entry[9:]
+        end_bracket = rest.find("]")
+        if end_bracket > 0:
+            action_name = rest[:end_bracket]
+            return f"observe_{action_name}"
+    if entry.startswith("[OBSERVE]"):
+        return "observe"
+    return None
+
+
+def _get_retention_limit(category: str) -> Optional[int]:
+    if category in HISTORY_RETENTION:
+        return HISTORY_RETENTION[category]
+    if category.startswith("observe_"):
+        return HISTORY_RETENTION.get("observe")
+    if category.startswith("act_"):
+        return HISTORY_RETENTION.get("act_search_result")
+    return None
+
+
+def trim_conversation_history(history: List[str]):
+    keep_indices = set()
+    from_end_counts = {}
+
+    for i in range(len(history) - 1, -1, -1):
+        cat = _get_history_category(history[i])
+        if cat is None:
+            keep_indices.add(i)
+            continue
+
+        limit = _get_retention_limit(cat)
+        if limit is None:
+            keep_indices.add(i)
+            continue
+
+        from_end_counts[cat] = from_end_counts.get(cat, 0) + 1
+        if from_end_counts[cat] <= limit:
+            keep_indices.add(i)
+
+    history[:] = [history[i] for i in sorted(keep_indices)]
 
 
 def _sse_stream(url: str, payload: dict):
@@ -292,6 +386,7 @@ def parse_act_result(events: list) -> dict:
         "db_context": None,
         "func_context": None,
         "search_result": None,
+        "explore_plan": "",
     }
     for event in events:
         sub = event.get("sub_phase", "")
@@ -304,6 +399,7 @@ def parse_act_result(events: list) -> dict:
                 parsed["search_result"] = content
                 parsed["db_context"] = result.get("db_context") or parsed["db_context"]
                 parsed["func_context"] = result.get("func_context") or parsed["func_context"]
+                parsed["explore_plan"] = result.get("explore_plan") or parsed["explore_plan"]
                 if result.get("selected_fields") is not None:
                     parsed["selected_fields"] = result["selected_fields"]
                 if result.get("selected_functions") is not None:
@@ -530,6 +626,12 @@ def run_act_phase(cycle_index, action, full_question, conversation_history, sess
                     evt_result = event.get("result") or {}
                     sf = evt_result.get("selected_fields")
                     sfuncs = evt_result.get("selected_functions")
+                    explore_plan = evt_result.get("explore_plan")
+                    if explore_plan:
+                        with use_scope(search_scope_name):
+                            put_collapse("Query Plan", [
+                                put_markdown(explore_plan, sanitize=False)
+                            ], open=True)
                     if sf is not None:
                         with use_scope(search_scope_name):
                             put_collapse("Selected Fields", [
@@ -772,6 +874,8 @@ def main():
                 cycle_index = 0
                 continue
 
+            trim_conversation_history(conversation_history)
+
             _, raw_plan = run_think_phase(
                 cycle_index, question, conversation_history, session_id,
             )
@@ -817,6 +921,8 @@ def main():
 
             if act_result["selected_fields"] is not None:
                 conversation_history.append(f"[ACT explore_schema] Selected Fields: {json.dumps(act_result['selected_fields'], ensure_ascii=False)}")
+            if act_result.get("explore_plan"):
+                conversation_history.append(f"[ACT explore_schema] Query Plan:\n{act_result['explore_plan']}")
             if act_result["selected_functions"] is not None:
                 conversation_history.append(f"[ACT explore_functions] Selected Functions: {json.dumps(act_result['selected_functions'], ensure_ascii=False)}")
             if act_result.get("search_result"):
@@ -839,6 +945,8 @@ def main():
                 if full_code:
                     conversation_history.append(f"[ACT generate_and_execute] Code:\n{full_code}")
                 conversation_history.append(f"[ACT generate_and_execute] Error:\n{exec_error}")
+            elif full_ans and action in FRONTEND_ACTIONS:
+                conversation_history.append(f"[ACT {action}] Output:\n{full_ans}")
 
             user_interaction = handle_user_interaction(act_result, conversation_history)
             if user_interaction.get("completed"):
@@ -855,7 +963,7 @@ def main():
             )
 
             if observe_result.get("description"):
-                conversation_history.append(f"[OBSERVE] Review:\n{raw_review}")
+                conversation_history.append(f"[OBSERVE {action}] Review:\n{raw_review}")
         except Exception as e:
             action_name = action if 'action' in dir() else '?'
             print(f"[ERROR] main loop cycle={cycle_index}, action={action_name}")
@@ -870,4 +978,4 @@ def main():
 
 
 if __name__ == '__main__':
-    start_server(main, port=8039, debug=True)
+    start_server(main, port=8040, debug=True)
