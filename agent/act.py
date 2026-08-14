@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.agent import generate_and_execute_stream
+from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE
 from agent.tools.tools_def import engine, llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.tools.copilot.sql_code import parse_selected_fields_json
@@ -69,6 +70,10 @@ def _act_explore_schema(full_question: str, session_id: str, tables, search_keyw
         full_schema = get_db_overview_markdown(engine, tables, include_samples=True)
 
     prompt = f"""Analyze the following database schema and the user's question to select the relevant tables and columns.
+
+{DB_BRIEF}
+
+{DB_QUERY_GUIDE}
 
 {full_schema}
 
