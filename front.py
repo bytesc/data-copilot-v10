@@ -1051,12 +1051,9 @@ def main():
                 escaped = entry.replace("`", "\\`").replace("$", "\\$")
                 put_markdown(escaped, sanitize=False)
 
-        user_input = textarea("Continue or enter new instruction:", type=TEXT, rows=2)
-        if user_input.strip():
-            conversation_history.append(f"User: {user_input}")
-        put_markdown("## " + (question or "Continued Session"))
-        toast("Session restored. Continuing conversation...", color='success')
+        toast("Session restored. Enter your next question below.", color='success')
 
+    _resumed = False
     session_id = datetime.now().strftime("%Y%m%d%H%M%S") + "".join(
         random.choices(string.ascii_letters, k=8)
     )
@@ -1065,10 +1062,13 @@ def main():
     question = textarea("Enter your question here:", type=TEXT, rows=2)
     put_markdown("## " + question)
 
-    conversation_history = [f"Q: {question}"]
-    cycle_index = 0
-    max_cycles = 20
-    _resumed = False
+    if _resumed:
+        conversation_history.append(f"Q: {question}")
+        _resumed = False
+    else:
+        conversation_history = [f"Q: {question}"]
+        cycle_index = 0
+    max_cycles = 200
 
     while True:
         try:
