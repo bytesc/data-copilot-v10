@@ -1,33 +1,32 @@
 <template>
   <div class="app-container">
-    <aside class="left-panel" :class="{ collapsed: isPanelCollapsed }">
+    <div class="content-row">
       <div class="panel-toggle" @click="isPanelCollapsed = !isPanelCollapsed">
         {{ isPanelCollapsed ? '▶' : '◀' }}
       </div>
-      <LeftPanel
-        :session-id="chat.sessionId.value"
-        :is-running="chat.isRunning.value"
-        :server-url="chat.serverUrl.value"
-        @upload-csv="showUploadCsv = true"
-        @upload-doc="showUploadDoc = true"
-        @resume-session="showResume = true"
-        @generate-doc="chat.generateDocument()"
-        @new-session="chat.reset()"
-      />
-    </aside>
-    <div class="main-area">
+      <aside class="left-panel" :class="{ collapsed: isPanelCollapsed }">
+        <LeftPanel
+          :session-id="chat.sessionId.value"
+          :is-running="chat.isRunning.value"
+          :server-url="chat.serverUrl.value"
+          @upload-csv="showUploadCsv = true"
+          @upload-doc="showUploadDoc = true"
+          @resume-session="showResume = true"
+          @generate-doc="chat.generateDocument()"
+          @new-session="chat.reset()"
+        />
+      </aside>
       <main class="chat-area">
         <ChatArea :chat="chat" />
       </main>
-      <IcpArea />
-    </div>
-
-    <aside class="right-panel" :class="{ collapsed: isRightPanelCollapsed }">
+      <aside class="right-panel" :class="{ collapsed: isRightPanelCollapsed }">
+        <RightPanel :files="chat.generatedFiles.value" />
+      </aside>
       <div class="panel-toggle right" @click="isRightPanelCollapsed = !isRightPanelCollapsed">
         {{ isRightPanelCollapsed ? '◀' : '▶' }}
       </div>
-      <RightPanel :files="chat.generatedFiles.value" />
-    </aside>
+    </div>
+    <IcpArea />
 
     <UploadModal
       v-if="showUploadCsv"
