@@ -9,7 +9,7 @@ from agent.action import ACTIONS
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
-from data_access.observe_log import log_observe_cycle, update_session_history
+from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context
 
@@ -33,8 +33,9 @@ def _event_stream_observe(
     """Observe phase: LLM reviews execution results and updates the plan."""
     yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'status', 'content': '正在审查执行结果...'}, ensure_ascii=False)}\n\n"
 
+    trimmed = prepare_trimmed_context(session_id, conversation_history)
     if conversation_history:
-        context = history_to_text(prepare_trimmed_context(session_id, conversation_history))
+        context = history_to_text(trimmed)
     else:
         context = ""
 
@@ -80,7 +81,6 @@ If todo is empty, the plan is complete. Keep descriptions concise."""
                       prompt=observe_prompt[:5000], response=raw[:5000],
                       token_estimate=prompt_length // 3)
     record_session_operation(session_id, "/api/observe/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
-    update_session_history(session_id, conversation_history or [])
 
 
 def _parse_plan_json(raw: str) -> dict:

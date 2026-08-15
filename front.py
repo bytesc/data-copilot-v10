@@ -206,6 +206,8 @@ def run_action_phase(cycle_index, question, conversation_history, session_id):
                 raw_decision += content
             append_action({"type": etype, "content": content})
 
+        with use_scope(action_scope, clear=True):
+            render_history_entry({"role": "assistant", "type": "action_decision", "content": raw_decision})
         return parse_action_result(action_events), raw_decision
     except Exception as e:
         print(f"[ERROR] run_action_phase: cycle={cycle_index}")
@@ -272,6 +274,199 @@ def display_streaming(scope_name: str, collapse_title: str = None):
 def phase_header(phase: str, title: str):
     css_class = f"phase-{phase}" if phase in ("think", "act", "observe", "user") else ""
     put_markdown(f'<div class="phase-header {css_class}">### {title}</div>', sanitize=False)
+
+
+def _entry_header(entry: dict):
+    role = entry.get("role", "")
+    entry_type = entry.get("type", "")
+    if role == "user":
+        utype = entry.get("type", "question")
+        if utype == "choice":
+            return "user", "USER - Choice"
+        if utype == "response":
+            return "user", "USER - Response"
+        if utype == "input":
+            return "user", "USER - Input"
+        return None, None
+    if entry_type == "think":
+        return "think", "THINK - Planning"
+    if entry_type == "action_decision":
+        return "act", "ACTION - Decide"
+    if entry_type == "observe":
+        return "observe", "OBSERVE - Review"
+    if entry_type == "act":
+        action = entry.get("action", "")
+        return "act", f"ACT - {action}" if action else "ACT"
+    if entry_type == "document":
+        return "act", "DOCUMENT"
+    return "act", "Entry"
+
+
+def render_history_entry(entry: dict):
+    role = entry.get("role", "")
+    entry_type = entry.get("type", "")
+
+    if role == "user":
+        utype = entry.get("type", "question")
+        content = entry.get("content", "")
+        if utype == "choice":
+            put_collapse("User Choice", [
+                put_markdown(f"**Selected:** {content}", sanitize=False)
+            ], open=False)
+        elif utype == "response":
+            put_collapse("User Input", [
+                put_markdown(content, sanitize=False)
+            ], open=False)
+        elif utype == "input":
+            put_collapse("User Input", [
+                put_markdown(content, sanitize=False)
+            ], open=False)
+        else:
+            put_markdown("## " + content)
+        return
+
+    if entry_type == "think":
+        plan = _parse_plan_json(entry.get("content", ""))
+        put_collapse("Plan", [
+            put_markdown(_format_plan_display(plan), sanitize=False)
+        ], open=False)
+        return
+
+    if entry_type == "action_decision":
+        put_collapse("Decision", [
+            put_markdown(entry.get("content", ""), sanitize=False)
+        ], open=False)
+        return
+
+    if entry_type == "observe":
+        plan = _parse_plan_json(entry.get("content", ""))
+        put_collapse("Updated Plan", [
+            put_markdown(_format_plan_display(plan), sanitize=False)
+        ], open=False)
+        return
+
+    if entry_type == "act":
+        action = entry.get("action", "")
+
+        if action == "explore_schema":
+            explore_plan = entry.get("explore_plan")
+            selected_fields = entry.get("selected_fields")
+            search_result = entry.get("search_result")
+            if explore_plan:
+                put_collapse("Query Plan", [
+                    put_markdown(explore_plan, sanitize=False)
+                ], open=True)
+            if selected_fields is not None:
+                put_collapse("Selected Fields", [
+                    put_markdown(f"```json\n{json.dumps(selected_fields, ensure_ascii=False, indent=2)}\n```", sanitize=False)
+                ], open=False)
+            if search_result:
+                put_collapse("Search Results: explore_schema", [
+                    put_markdown(search_result, sanitize=False)
+                ], open=False)
+            return
+
+        if action == "explore_functions":
+            selected_functions = entry.get("selected_functions")
+            search_result = entry.get("search_result")
+            if selected_functions is not None:
+                put_collapse("Selected Functions", [
+                    put_markdown(f"```json\n{json.dumps(selected_functions, ensure_ascii=False, indent=2)}\n```", sanitize=False)
+                ], open=False)
+            if search_result:
+                put_collapse("Search Results: explore_functions", [
+                    put_markdown(search_result, sanitize=False)
+                ], open=False)
+            return
+
+        if action == "generate_and_execute":
+            attempts = entry.get("attempts")
+            if attempts:
+                for i, att in enumerate(attempts):
+                    attempt_num = i + 1
+                    sections = []
+                    if att.get("code"):
+                        sections.append(put_collapse(
+                            f"Code (Attempt {attempt_num})",
+                            [put_markdown(f"```python\n{att['code']}\n```", sanitize=False)],
+                            open=False
+                        ))
+                    if att.get("result"):
+                        sections.append(put_collapse(
+                            f"Result (Attempt {attempt_num})",
+                            [put_markdown(att["result"], sanitize=False)],
+                            open=True
+                        ))
+                    if att.get("error"):
+                        sections.append(put_collapse(
+                            f"Error (Attempt {attempt_num})",
+                            [put_warning(f"**Error:** {att['error']}")],
+                            open=False
+                        ))
+                    status = "❌" if att.get("error") else "✅" if att.get("result") else ""
+                    title = f"Attempt {attempt_num} {status}".strip()
+                    put_collapse(title, sections, open=(i == len(attempts) - 1))
+            else:
+                code = entry.get("code")
+                result = entry.get("result")
+                error = entry.get("error")
+                if code:
+                    put_collapse("Code", [
+                        put_markdown(f"```python\n{code}\n```", sanitize=False)
+                    ], open=False)
+                if result:
+                    put_collapse("Result", [
+                        put_markdown(result, sanitize=False)
+                    ], open=True)
+                if error:
+                    put_collapse("Error", [
+                        put_warning(f"**Error:** {error}")
+                    ], open=False)
+            return
+
+        if action == "solved":
+            put_markdown(entry.get("solved_ans", ""), sanitize=False)
+            return
+
+        text = entry.get("text", "")
+        if action == "output_text":
+            put_collapse("Output", [put_markdown(text, sanitize=False)], open=False)
+        elif action == "ask_question":
+            put_collapse("Question", [put_markdown(text, sanitize=False)], open=True)
+        elif action == "ask_choice":
+            put_collapse("Choice", [put_markdown(text, sanitize=False)], open=True)
+        elif action == "summary_and_pause":
+            put_collapse("Summary", [put_markdown(text, sanitize=False)], open=True)
+        elif action == "attempt_completion":
+            put_collapse("Completion", [put_markdown(text, sanitize=False)], open=False)
+        else:
+            search_result = entry.get("search_result")
+            if search_result:
+                put_collapse(f"Search Results: {action}", [
+                    put_markdown(search_result, sanitize=False)
+                ], open=False)
+            else:
+                put_markdown(json.dumps(entry, ensure_ascii=False, indent=2), sanitize=False)
+        return
+
+    if entry_type == "document":
+        put_markdown(entry.get("content", ""), sanitize=False)
+        return
+
+    put_markdown(json.dumps(entry, ensure_ascii=False, indent=2), sanitize=False)
+
+
+def render_history(history):
+    for entry in history:
+        try:
+            phase, title = _entry_header(entry)
+            if phase:
+                phase_header(phase, title)
+            render_history_entry(entry)
+        except Exception as e:
+            print(f"[ERROR] render_history_entry failed: {e}")
+            traceback.print_exc()
+            put_markdown(json.dumps(entry, ensure_ascii=False, indent=2), sanitize=False)
 
 
 def _parse_plan_json(raw: str) -> dict:
@@ -392,70 +587,84 @@ def parse_act_result(events: list) -> dict:
 
 
 def handle_csv_upload():
-    file_info = file_upload(
-        "Please select a CSV file to upload",
-        accept=".csv",
-        help_text="Select the CSV file you want to upload"
-    )
-    if not file_info:
-        return
-    table_name = input("Enter table name (optional, default is 'uploaded_data')",
-                       type=TEXT, placeholder="uploaded_data", required=False)
-    if not table_name:
-        table_name = "uploaded_data"
-    with put_loading(shape="grow", color="primary"):
-        result = upload_csv_api(file_info['content'], table_name)
-    if result.get('type') == "error" or result.get('error'):
-        toast(f"Upload failed: {result}", color='error')
-    else:
-        toast("File uploaded successfully!", color='success')
-        put_markdown("### Upload Results")
-        put_markdown(f"Table name: `{result.get('table_name', table_name)}`")
-        put_markdown(f"Row count: {result.get('row_count', 'N/A')}")
+    try:
+        file_info = file_upload(
+            "Please select a CSV file to upload",
+            accept=".csv",
+            help_text="Select the CSV file you want to upload"
+        )
+        if not file_info:
+            return
+        table_name = input("Enter table name (optional, default is 'uploaded_data')",
+                           type=TEXT, placeholder="uploaded_data", required=False)
+        if not table_name:
+            table_name = "uploaded_data"
+        with put_loading(shape="grow", color="primary"):
+            result = upload_csv_api(file_info['content'], table_name)
+        if result.get('type') == "error" or result.get('error'):
+            toast(f"Upload failed: {result}", color='error')
+        else:
+            toast("File uploaded successfully!", color='success')
+            put_markdown("### Upload Results")
+            put_markdown(f"Table name: `{result.get('table_name', table_name)}`")
+            put_markdown(f"Row count: {result.get('row_count', 'N/A')}")
+    except Exception as e:
+        print(f"[ERROR] handle_csv_upload: {e}")
+        traceback.print_exc()
+        toast(f"上传失败: {e}", color='error')
 
 
 def handle_doc_upload():
-    file_info = file_upload(
-        "Please select a document file to upload (txt, doc, docx, pdf)",
-        accept=".txt,.doc,.docx,.pdf",
-        help_text="Select the document file you want to upload"
-    )
-    if not file_info:
-        return
-    table_name = input("Enter table name (optional, default is 'uploaded_data')",
-                       type=TEXT, placeholder="uploaded_data", required=False)
-    if not table_name:
-        table_name = "uploaded_data"
-    with put_loading(shape="grow", color="primary"):
-        result = upload_doc_api(file_info['content'], file_info['filename'], table_name)
-    if result.get('error'):
-        toast(f"Upload failed: {result.get('error')}", color='error')
-    else:
-        toast("File uploaded successfully!", color='success')
-        put_markdown("### Upload Results")
-        put_markdown(f"Table name: `{result.get('table_name', table_name)}`")
-        put_markdown(f"Preview: {result.get('preview', 'N/A')}")
+    try:
+        file_info = file_upload(
+            "Please select a document file to upload (txt, doc, docx, pdf)",
+            accept=".txt,.doc,.docx,.pdf",
+            help_text="Select the document file you want to upload"
+        )
+        if not file_info:
+            return
+        table_name = input("Enter table name (optional, default is 'uploaded_data')",
+                           type=TEXT, placeholder="uploaded_data", required=False)
+        if not table_name:
+            table_name = "uploaded_data"
+        with put_loading(shape="grow", color="primary"):
+            result = upload_doc_api(file_info['content'], file_info['filename'], table_name)
+        if result.get('error'):
+            toast(f"Upload failed: {result.get('error')}", color='error')
+        else:
+            toast("File uploaded successfully!", color='success')
+            put_markdown("### Upload Results")
+            put_markdown(f"Table name: `{result.get('table_name', table_name)}`")
+            put_markdown(f"Preview: {result.get('preview', 'N/A')}")
+    except Exception as e:
+        print(f"[ERROR] handle_doc_upload: {e}")
+        traceback.print_exc()
+        toast(f"上传失败: {e}", color='error')
 
 
 def show_db_overview():
-    put_markdown("### Data View")
-    with put_collapse("Tables Overview"):
-        all_comments = get_all_comments_from_table()
-        first_five_rows = get_rows_from_all_tables()
-        for table_name, rows in first_five_rows.items():
-            with put_collapse(f" table {table_name}"):
-                if table_name in all_comments:
-                    table_comment = all_comments[table_name].get('table_comment', '')
-                    if table_comment:
-                        put_text(f"{table_comment}")
-                    columns = all_comments[table_name].get('columns', {})
-                    if columns:
-                        comment_table = [["Column Name", "Comment"]]
-                        for col_name, comment in columns.items():
-                            comment_table.append([col_name, comment])
-                        put_table(comment_table)
-                put_text(f"table {table_name} first 5 rows:")
-                put_table([rows.columns.tolist()] + rows.values.tolist())
+    try:
+        put_markdown("### Data View")
+        with put_collapse("Tables Overview"):
+            all_comments = get_all_comments_from_table()
+            first_five_rows = get_rows_from_all_tables()
+            for table_name, rows in first_five_rows.items():
+                with put_collapse(f" table {table_name}"):
+                    if table_name in all_comments:
+                        table_comment = all_comments[table_name].get('table_comment', '')
+                        if table_comment:
+                            put_text(f"{table_comment}")
+                        columns = all_comments[table_name].get('columns', {})
+                        if columns:
+                            comment_table = [["Column Name", "Comment"]]
+                            for col_name, comment in columns.items():
+                                comment_table.append([col_name, comment])
+                            put_table(comment_table)
+                    put_text(f"table {table_name} first 5 rows:")
+                    put_table([rows.columns.tolist()] + rows.values.tolist())
+    except Exception as e:
+        print(f"[ERROR] show_db_overview: {e}")
+        traceback.print_exc()
 
 
 def run_think_phase(cycle_index, question, conversation_history, session_id):
@@ -482,9 +691,7 @@ def run_think_phase(cycle_index, question, conversation_history, session_id):
 
         result = parse_think_result(think_events)
         with use_scope(think_scope, clear=True):
-            put_collapse("Plan", [
-                put_markdown(_format_plan_display(result), sanitize=False)
-            ], open=False)
+            render_history_entry({"role": "assistant", "type": "think", "content": raw_plan})
         return result, raw_plan
     except Exception as e:
         print(f"[ERROR] run_think_phase: cycle={cycle_index}")
@@ -699,7 +906,9 @@ def run_act_phase(cycle_index, action, full_question, conversation_history, sess
                     title = f"Attempt {attempt_num} {status}".strip()
                     put_collapse(title, sections, open=(i == len(attempts) - 1))
 
-        return parse_act_result(act_events)
+        parsed = parse_act_result(act_events)
+        parsed["attempts"] = attempts
+        return parsed
     except Exception as e:
         print(f"[ERROR] run_act_phase: action={action}, cycle={cycle_index}")
         traceback.print_exc()
@@ -730,9 +939,7 @@ def run_observe_phase(cycle_index, original_question, conversation_history, sess
 
         result = parse_observe_result(observe_events)
         with use_scope(observe_scope, clear=True):
-            put_collapse("Updated Plan", [
-                put_markdown(_format_plan_display(result), sanitize=False)
-            ], open=False)
+            render_history_entry({"role": "assistant", "type": "observe", "action": "", "content": raw_review})
         return result, raw_review
     except Exception as e:
         print(f"[ERROR] run_observe_phase: cycle={cycle_index}")
@@ -802,46 +1009,102 @@ def main():
     show_db_overview()
 
     def handle_generate_document():
-        if not conversation_history or len(conversation_history) <= 1:
-            toast("No conversation to summarize. Please ask a question first.", color='warn')
-            return
+        try:
+            if not conversation_history or len(conversation_history) <= 1:
+                toast("No conversation to summarize. Please ask a question first.", color='warn')
+                return
 
-        toast("正在生成文档...", color='info')
+            toast("正在生成文档...", color='info')
 
-        doc_scope = f"generate_doc_{int(time.time() * 1000)}"
-        put_scope(doc_scope)
-        with use_scope(doc_scope):
-            put_loading(shape="grow", color="primary")
+            doc_scope = f"generate_doc_{int(time.time() * 1000)}"
+            put_scope(doc_scope)
+            with use_scope(doc_scope):
+                put_loading(shape="grow", color="primary")
 
-        outline_raw = ""
-        outline_done = False
-        outline_data = {}
-        part_accumulator = ""
-        current_part_index = -1
-        completed_parts = []
-        part_headings = []
-        download_url = ""
+            outline_raw = ""
+            outline_done = False
+            outline_data = {}
+            part_accumulator = ""
+            current_part_index = -1
+            completed_parts = []
+            part_headings = []
+            download_url = ""
 
-        for event in generate_document_api_stream(conversation_history, session_id):
-            phase = event.get("phase", "")
-            etype = event.get("type", "")
-            content = event.get("content", "")
+            for event in generate_document_api_stream(conversation_history, session_id):
+                phase = event.get("phase", "")
+                etype = event.get("type", "")
+                content = event.get("content", "")
 
-            if phase == "outline":
-                if etype == "chunk":
-                    outline_raw += content
-                    with use_scope(doc_scope, clear=True):
-                        put_collapse("Document Outline (generating...)", [
-                            put_markdown(outline_raw, sanitize=False),
+                if phase == "outline":
+                    if etype == "chunk":
+                        outline_raw += content
+                        with use_scope(doc_scope, clear=True):
+                            put_collapse("Document Outline (generating...)", [
+                                put_markdown(outline_raw, sanitize=False),
+                                put_html(CURSOR)
+                            ], open=True)
+                    elif etype == "done":
+                        outline_done = True
+                        outline_data = event.get("outline", {})
+                        part_headings = [
+                            p.get("heading", f"Part {i + 1}")
+                            for i, p in enumerate(outline_data.get("parts", []))
+                        ]
+                        with use_scope(doc_scope, clear=True):
+                            put_collapse("Document Outline", [
+                                put_markdown(f"**Title:** {outline_data.get('title', '')}", sanitize=False),
+                                put_markdown(f"**Parts:** {len(part_headings)}", sanitize=False),
+                                put_markdown(
+                                    "\n".join(f"{i + 1}. {h}" for i, h in enumerate(part_headings)),
+                                    sanitize=False
+                                )
+                            ], open=False)
+                    elif etype == "error":
+                        with use_scope(doc_scope, clear=True):
+                            put_warning(f"**Outline Error:** {content}")
+
+                elif phase == "part":
+                    part_index = event.get("part_index", -1)
+
+                    if etype == "msg":
+                        current_part_index = part_index
+                        part_accumulator = ""
+                        heading = event.get("heading", f"Part {part_index + 1}")
+                        with use_scope(doc_scope, clear=True):
+                            for pi, (ph, ptext) in enumerate(completed_parts):
+                                put_collapse(f"Part {pi + 1}: {ph}", [
+                                    put_markdown(ptext, sanitize=False)
+                                ], open=False)
+                            put_markdown(f"### Part {part_index + 1}: {heading} (generating...)", sanitize=False)
                             put_html(CURSOR)
-                        ], open=True)
-                elif etype == "done":
-                    outline_done = True
-                    outline_data = event.get("outline", {})
-                    part_headings = [
-                        p.get("heading", f"Part {i + 1}")
-                        for i, p in enumerate(outline_data.get("parts", []))
-                    ]
+
+                    elif etype == "chunk":
+                        part_accumulator += content
+                        heading = part_headings[part_index] if part_index < len(part_headings) else f"Part {part_index + 1}"
+                        with use_scope(doc_scope, clear=True):
+                            for pi, (ph, ptext) in enumerate(completed_parts):
+                                put_collapse(f"Part {pi + 1}: {ph}", [
+                                    put_markdown(ptext, sanitize=False)
+                                ], open=False)
+                            put_markdown(f"### Part {part_index + 1}: {heading} (generating...)", sanitize=False)
+                            put_markdown(part_accumulator, sanitize=False)
+                            put_html(CURSOR)
+
+                    elif etype == "done":
+                        heading = part_headings[part_index] if part_index < len(part_headings) else f"Part {part_index + 1}"
+                        completed_parts.append((heading, part_accumulator))
+                        with use_scope(doc_scope, clear=True):
+                            for pi, (ph, ptext) in enumerate(completed_parts):
+                                put_collapse(f"Part {pi + 1}: {ph}", [
+                                    put_markdown(ptext, sanitize=False)
+                                ], open=False)
+                            put_markdown(f"### Part {part_index + 2}/{len(part_headings)}: (waiting...)", sanitize=False)
+                            put_html(CURSOR)
+
+                elif phase == "document" and etype == "done":
+                    download_url_md = event.get("download_url_md", event.get("download_url", ""))
+                    download_url_docx = event.get("download_url_docx", "")
+                    full_document = content
                     with use_scope(doc_scope, clear=True):
                         put_collapse("Document Outline", [
                             put_markdown(f"**Title:** {outline_data.get('title', '')}", sanitize=False),
@@ -851,112 +1114,64 @@ def main():
                                 sanitize=False
                             )
                         ], open=False)
-                elif etype == "error":
-                    with use_scope(doc_scope, clear=True):
-                        put_warning(f"**Outline Error:** {content}")
-
-            elif phase == "part":
-                part_index = event.get("part_index", -1)
-
-                if etype == "msg":
-                    current_part_index = part_index
-                    part_accumulator = ""
-                    heading = event.get("heading", f"Part {part_index + 1}")
-                    with use_scope(doc_scope, clear=True):
                         for pi, (ph, ptext) in enumerate(completed_parts):
                             put_collapse(f"Part {pi + 1}: {ph}", [
                                 put_markdown(ptext, sanitize=False)
                             ], open=False)
-                        put_markdown(f"### Part {part_index + 1}: {heading} (generating...)", sanitize=False)
-                        put_html(CURSOR)
-
-                elif etype == "chunk":
-                    part_accumulator += content
-                    heading = part_headings[part_index] if part_index < len(part_headings) else f"Part {part_index + 1}"
-                    with use_scope(doc_scope, clear=True):
-                        for pi, (ph, ptext) in enumerate(completed_parts):
-                            put_collapse(f"Part {pi + 1}: {ph}", [
-                                put_markdown(ptext, sanitize=False)
-                            ], open=False)
-                        put_markdown(f"### Part {part_index + 1}: {heading} (generating...)", sanitize=False)
-                        put_markdown(part_accumulator, sanitize=False)
-                        put_html(CURSOR)
-
-                elif etype == "done":
-                    heading = part_headings[part_index] if part_index < len(part_headings) else f"Part {part_index + 1}"
-                    completed_parts.append((heading, part_accumulator))
-                    with use_scope(doc_scope, clear=True):
-                        for pi, (ph, ptext) in enumerate(completed_parts):
-                            put_collapse(f"Part {pi + 1}: {ph}", [
-                                put_markdown(ptext, sanitize=False)
-                            ], open=False)
-                        put_markdown(f"### Part {part_index + 2}/{len(part_headings)}: (waiting...)", sanitize=False)
-                        put_html(CURSOR)
-
-            elif phase == "document" and etype == "done":
-                download_url_md = event.get("download_url_md", event.get("download_url", ""))
-                download_url_docx = event.get("download_url_docx", "")
-                full_document = content
-                with use_scope(doc_scope, clear=True):
-                    put_collapse("Document Outline", [
-                        put_markdown(f"**Title:** {outline_data.get('title', '')}", sanitize=False),
-                        put_markdown(f"**Parts:** {len(part_headings)}", sanitize=False),
-                        put_markdown(
-                            "\n".join(f"{i + 1}. {h}" for i, h in enumerate(part_headings)),
-                            sanitize=False
-                        )
-                    ], open=False)
-                    for pi, (ph, ptext) in enumerate(completed_parts):
-                        put_collapse(f"Part {pi + 1}: {ph}", [
-                            put_markdown(ptext, sanitize=False)
-                        ], open=False)
-                    put_collapse("Full Document", [
-                        put_markdown(full_document, sanitize=False)
-                    ], open=True)
-                    if download_url_md or download_url_docx:
-                        put_html('<div style="margin-top:12px;display:flex;gap:8px;">')
-                        if download_url_md:
-                            put_html(f'<a href="{download_url_md}?download=1" style="display:inline-block;padding:8px 16px;background:#4a90d9;color:#fff;border-radius:4px;text-decoration:none;" target="_blank">Download (.md)</a>')
-                        if download_url_docx:
-                            put_html(f'<a href="{download_url_docx}?download=1" style="display:inline-block;padding:8px 16px;background:#28a745;color:#fff;border-radius:4px;text-decoration:none;" target="_blank">Download (.docx)</a>')
-                        put_html('</div>')
-                if full_document:
-                    toast("Document generated successfully!", color='success')
-                else:
-                    toast("Failed to generate document.", color='error')
+                        put_collapse("Full Document", [
+                            put_markdown(full_document, sanitize=False)
+                        ], open=True)
+                        if download_url_md or download_url_docx:
+                            put_html('<div style="margin-top:12px;display:flex;gap:8px;">')
+                            if download_url_md:
+                                put_html(f'<a href="{download_url_md}?download=1" style="display:inline-block;padding:8px 16px;background:#4a90d9;color:#fff;border-radius:4px;text-decoration:none;" target="_blank">Download (.md)</a>')
+                            if download_url_docx:
+                                put_html(f'<a href="{download_url_docx}?download=1" style="display:inline-block;padding:8px 16px;background:#28a745;color:#fff;border-radius:4px;text-decoration:none;" target="_blank">Download (.docx)</a>')
+                            put_html('</div>')
+                    if full_document:
+                        toast("Document generated successfully!", color='success')
+                    else:
+                        toast("Failed to generate document.", color='error')
+        except Exception as e:
+            print(f"[ERROR] handle_generate_document: {e}")
+            traceback.print_exc()
+            toast(f"生成文档失败: {e}", color='error')
 
     def handle_resume_session():
         nonlocal session_id, question, conversation_history, cycle_index, _resumed
-        sid = input("Enter session ID to resume:", type=TEXT, required=True)
-        if not sid.strip():
-            return
+        try:
+            sid = input("Enter session ID to resume:", type=TEXT, required=True)
+            if not sid.strip():
+                return
 
-        loading_scope = f"resume_loading_{int(time.time() * 1000)}"
-        put_scope(loading_scope)
-        with use_scope(loading_scope):
-            put_loading(shape="grow", color="primary")
-        data = fetch_session_history_api(sid.strip())
-        with use_scope(loading_scope, clear=True):
-            pass
-        if data is None:
-            toast("Session not found or failed to load.", color='error')
-            return
+            loading_scope = f"resume_loading_{int(time.time() * 1000)}"
+            put_scope(loading_scope)
+            with use_scope(loading_scope):
+                put_loading(shape="grow", color="primary")
+            data = fetch_session_history_api(sid.strip())
+            with use_scope(loading_scope, clear=True):
+                pass
+            if data is None:
+                toast("Session not found or failed to load.", color='error')
+                return
 
-        session_id = data["session_id"]
-        question = data.get("question", "")
-        conversation_history = data.get("conversation_history", [])
-        cycle_index = data.get("cycle_count", 0)
-        _resumed = True
+            session_id = data["session_id"]
+            question = data.get("question", "")
+            conversation_history = data.get("conversation_history", [])
+            cycle_index = data.get("cycle_count", 0)
+            _resumed = True
 
-        put_markdown(f"### Session Restored: `{session_id}`")
-        put_markdown(f"**Original question:** {question}")
-        put_markdown(f"**Cycles completed:** {cycle_index}")
+            put_markdown(f"### Session Restored: `{session_id}`")
+            put_markdown(f"**Original question:** {question}")
+            put_markdown(f"**Cycles completed:** {cycle_index}")
 
-        with put_collapse("Conversation History", open=False):
-            for entry in conversation_history:
-                put_markdown(json.dumps(entry, ensure_ascii=False, indent=2), sanitize=False)
+            render_history(conversation_history)
 
-        toast("Session restored. Enter your next question below.", color='success')
+            toast("Session restored. Enter your next question below.", color='success')
+        except Exception as e:
+            print(f"[ERROR] handle_resume_session: {e}")
+            traceback.print_exc()
+            toast(f"恢复会话失败: {e}", color='error')
 
     _resumed = False
     conversation_history = []
@@ -1068,12 +1283,18 @@ def main():
                     conversation_history.append({"role": "assistant", "type": "act", "action": "solved", "solved_ans": solved_ans})
                 continue
 
+            attempts = act_result.get("attempts")
             if full_ans and not exec_error and full_code:
-                conversation_history.append({"role": "assistant", "type": "act", "action": "generate_and_execute", "code": full_code, "result": full_ans})
+                entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "code": full_code, "result": full_ans}
             elif exec_error:
                 entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "error": exec_error}
                 if full_code:
                     entry["code"] = full_code
+            else:
+                entry = None
+            if entry is not None:
+                if attempts:
+                    entry["attempts"] = attempts
                 conversation_history.append(entry)
             elif full_ans and action in FRONTEND_ACTIONS:
                 conversation_history.append({"role": "assistant", "type": "act", "action": action, "text": full_ans})

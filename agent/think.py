@@ -12,7 +12,7 @@ from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
-from data_access.observe_log import log_observe_cycle, log_observe_session, update_session_history
+from data_access.observe_log import log_observe_cycle, log_observe_session
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context
 
@@ -34,8 +34,9 @@ def _event_stream_think(
     """Think phase: pure LLM reasoning with custom prompt to generate a plan."""
     log_observe_session(session_id, question=question, status="active")
 
+    trimmed = prepare_trimmed_context(session_id, conversation_history)
     if conversation_history:
-        context = history_to_text(prepare_trimmed_context(session_id, conversation_history))
+        context = history_to_text(trimmed)
     else:
         context = question
 
@@ -95,7 +96,6 @@ The todo list contains the actionable steps. Keep task descriptions concise."""
                       token_estimate=prompt_length // 3)
     record_session_operation(session_id, "/api/think/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
     log_observe_session(session_id, status="think_done", total_tokens=prompt_length // 3)
-    update_session_history(session_id, conversation_history or [])
 
 
 def _parse_plan_json(raw: str) -> dict:

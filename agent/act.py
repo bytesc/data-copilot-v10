@@ -14,7 +14,7 @@ from agent.tools.search_db import get_db_overview_markdown, search_db_markdown, 
 from agent.tools.search_func import get_func_catalog_markdown, search_func_by_keyword, get_func_summary_for_agent, get_func_docs_for
 from agent.tools.get_function_info import FUNCTION_DICT
 from data_access.session_log import record_session_operation
-from data_access.observe_log import log_observe_cycle, update_session_history
+from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context
 
@@ -30,8 +30,9 @@ class ActInput(BaseModel):
 
 
 def _build_context(question: str, conversation_history: Optional[List[dict]], session_id: str = ""):
+    trimmed = prepare_trimmed_context(session_id, conversation_history)
     if conversation_history:
-        return history_to_text(prepare_trimmed_context(session_id, conversation_history))
+        return history_to_text(trimmed)
     return question
 
 
@@ -62,8 +63,6 @@ def _event_stream_act(
 
     else:
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
-
-    update_session_history(session_id, conversation_history or [])
 
 
 def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None):

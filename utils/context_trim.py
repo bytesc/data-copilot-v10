@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from data_access.observe_log import save_trimmed_context
+from data_access.observe_log import save_session_context
 
 
 FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
@@ -102,5 +102,5 @@ def prepare_trimmed_context(session_id: str, conversation_history: Optional[List
     history = conversation_history or []
     trimmed = trim_conversation_history(history)
     if session_id:
-        save_trimmed_context(session_id, trimmed)
+        save_session_context(session_id, history, trimmed)
     return trimmed

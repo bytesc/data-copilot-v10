@@ -153,12 +153,12 @@ def log_observe_session(session_id, question="", status="active", total_tokens=0
         print(f"记录会话日志失败: {e}")
 
 
-def update_session_history(session_id, conversation_history):
+def save_session_context(session_id, conversation_history, trimmed_context):
     if not session_id:
         return
     try:
-        import json
-        history_json = json.dumps(conversation_history, ensure_ascii=False)
+        history_json = json.dumps(conversation_history or [], ensure_ascii=False)
+        context_json = json.dumps(trimmed_context or [], ensure_ascii=False)
         with sys_engine.connect() as conn:
             existing = conn.execute(
                 select(observe_session_log).where(
@@ -171,31 +171,6 @@ def update_session_history(session_id, conversation_history):
                         observe_session_log.c.session_id == session_id
                     ).values(
                         conversation_history=history_json,
-                        updated_at=datetime.now(),
-                    )
-                )
-            conn.commit()
-    except Exception as e:
-        print(f"更新会话历史失败: {e}")
-
-
-def save_trimmed_context(session_id, trimmed_context):
-    if not session_id:
-        return
-    try:
-        import json
-        context_json = json.dumps(trimmed_context, ensure_ascii=False)
-        with sys_engine.connect() as conn:
-            existing = conn.execute(
-                select(observe_session_log).where(
-                    observe_session_log.c.session_id == session_id
-                )
-            ).fetchone()
-            if existing:
-                conn.execute(
-                    observe_session_log.update().where(
-                        observe_session_log.c.session_id == session_id
-                    ).values(
                         trimmed_context=context_json,
                         updated_at=datetime.now(),
                     )
@@ -204,6 +179,7 @@ def save_trimmed_context(session_id, trimmed_context):
                 conn.execute(
                     insert(observe_session_log).values(
                         session_id=session_id,
+                        conversation_history=history_json,
                         trimmed_context=context_json,
                         created_at=datetime.now(),
                         updated_at=datetime.now(),
@@ -211,7 +187,7 @@ def save_trimmed_context(session_id, trimmed_context):
                 )
             conn.commit()
     except Exception as e:
-        print(f"保存裁剪上下文失败: {e}")
+        print(f"保存会话上下文失败: {e}")
 
 
 def get_session_history(session_id, limit=50):
