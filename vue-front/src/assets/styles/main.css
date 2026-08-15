@@ -25,6 +25,22 @@
   --radius-sm: 4px;
 }
 
+:root[data-theme='light'] {
+  --bg-primary: #f5f6fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #eef0f5;
+  --bg-hover: #e3e6ef;
+  --text-primary: #1c1e2a;
+  --text-secondary: #4a4e62;
+  --text-muted: #8a8fa3;
+  --accent-blue: #2f6fb0;
+  --accent-green: #3d8a3d;
+  --accent-orange: #d98324;
+  --accent-red: #c94f4b;
+  --accent-cyan: #2f9dbb;
+  --border-color: #d6d9e3;
+}
+
 html, body {
   height: 100%;
   font-family: var(--font-sans);
@@ -116,6 +132,39 @@ html, body {
 
 .panel-toggle:hover {
   background: var(--bg-hover);
+}
+
+.theme-toggle {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--text-secondary);
+  z-index: 100;
+  transition: background 0.2s, color 0.2s;
+}
+
+.theme-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.theme-toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .left-panel-inner {

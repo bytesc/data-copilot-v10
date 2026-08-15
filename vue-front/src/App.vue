@@ -29,6 +29,16 @@
     </div>
     <IcpArea />
 
+    <button class="theme-toggle" :title="isDark ? '切换到亮色主题' : '切换到暗色主题'" @click="toggleTheme">
+      <svg v-if="isDark" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+      </svg>
+      <svg v-else viewBox="0 0 24 24">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+    </button>
+
     <UploadModal
       v-if="showUploadCsv"
       type="csv"
@@ -51,7 +61,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useChat } from '@/composables/useChat.js'
 import LeftPanel from '@/components/LeftPanel.vue'
 import RightPanel from '@/components/RightPanel.vue'
@@ -66,6 +76,25 @@ const isRightPanelCollapsed = ref(false)
 const showUploadCsv = ref(false)
 const showUploadDoc = ref(false)
 const showResume = ref(false)
+
+const isDark = ref(true)
+
+function applyTheme() {
+  const theme = isDark.value ? 'dark' : 'light'
+  document.documentElement.setAttribute('data-theme', theme)
+  localStorage.setItem('theme', theme)
+}
+
+function toggleTheme() {
+  isDark.value = !isDark.value
+  applyTheme()
+}
+
+onMounted(() => {
+  const saved = localStorage.getItem('theme')
+  isDark.value = saved !== 'light'
+  applyTheme()
+})
 
 function onResume(sessionData) {
   showResume.value = false
