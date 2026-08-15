@@ -47,3 +47,16 @@ CREATE TABLE IF NOT EXISTS `observe_cycle_log` (
   INDEX `idx_session_id` (`session_id`),
   INDEX `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='观察周期日志表';
+
+CREATE TABLE IF NOT EXISTS `report_generation_log` (
+  `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `session_id` VARCHAR(255) NOT NULL COMMENT '会话ID',
+  `file_name` VARCHAR(512) COMMENT '生成的文件名',
+  `chat_history` LONGTEXT COMMENT '输入的聊天历史(JSON)',
+  `outline` LONGTEXT COMMENT '生成的大纲',
+  `full_text` LONGTEXT COMMENT '生成的全文',
+  `created_at` DATETIME COMMENT '记录时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_session_id` (`session_id`),
+  INDEX `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='报告生成日志表';

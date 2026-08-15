@@ -32,10 +32,12 @@ from data_access.observe_log import (
     create_observe_log_tables, log_observe_cycle, log_observe_session,
     list_sessions, reconstruct_conversation_history
 )
+from data_access.report_log import create_report_log_table
 
 # 启动时确保会话操作记录表已创建
 create_session_log_table()
 create_observe_log_tables()
+create_report_log_table()
 
 # DATABASE_URL = config_data['mysql']
 # engine = sqlalchemy.create_engine(DATABASE_URL)

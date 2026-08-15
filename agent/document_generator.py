@@ -19,6 +19,7 @@ from agent.utils.pd_to_walker import generate_random_string
 from agent.utils.get_config import config_data
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
+from data_access.report_log import record_report_generation
 from utils.front_utils import history_to_text
 
 router = APIRouter()
@@ -321,6 +322,14 @@ Write the content for the section "{heading}" in markdown format. Do NOT include
         request_json, full_document[:5000], "",
         "success", f"文档生成完成: {title}, 共{len(parts)}部分",
         prompt_length=len(context)
+    )
+
+    record_report_generation(
+        session_id=session_id,
+        file_name=file_name,
+        chat_history=json.dumps(conversation_history, ensure_ascii=False),
+        outline=outline_raw,
+        full_text=full_document,
     )
 
 
