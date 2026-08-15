@@ -118,6 +118,11 @@ async def exe_sql(request: Request, user_input: AgentInput):
         user_input.session_id, request.url.path,
         user_input.question, str(ans), "", "success", "处理成功"
     )
+    log_observe_cycle(
+        user_input.session_id or "", 0, "execute", "exe_sql",
+        exec_code=user_input.question,
+        exec_result=str(ans)[:10000],
+    )
 
     return JSONResponse(content=processed_data)
 

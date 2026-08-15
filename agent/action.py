@@ -10,6 +10,7 @@ from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.observe_log import log_observe_cycle
+from data_access.session_log import record_session_operation
 from agent.tools.tools_def import engine
 
 router = APIRouter()
@@ -109,6 +110,22 @@ def _event_stream_action(
     log_observe_cycle(session_id, cycle_index, "action", "decide",
                       prompt=prompt[:5000], response=raw[:5000],
                       token_estimate=len(prompt) // 3)
+
+    action = action_result.get("action")
+    if action:
+        record_session_operation(
+            session_id, "/api/action/stream/",
+            question, str(action_result), "",
+            "success", f"决定动作: {action}",
+            prompt_length=len(prompt)
+        )
+    else:
+        record_session_operation(
+            session_id, "/api/action/stream/",
+            question, str(action_result), "",
+            "error", action_result.get("error", "未知错误"),
+            prompt_length=len(prompt)
+        )
 
 
 def _parse_action_json(raw: str) -> dict:

@@ -17,6 +17,8 @@ from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.utils.pd_to_walker import generate_random_string
 from agent.utils.get_config import config_data
+from data_access.session_log import record_session_operation
+from data_access.observe_log import log_observe_cycle
 
 router = APIRouter()
 
@@ -243,6 +245,10 @@ Conversation History:
     outline = _parse_outline_json(outline_raw)
     yield f"data: {json.dumps({'phase': 'outline', 'type': 'done', 'content': outline_raw, 'outline': outline}, ensure_ascii=False)}\n\n"
 
+    log_observe_cycle(session_id, 0, "generate_document", "outline",
+                      prompt=outline_prompt[:10000], response=outline_raw[:10000],
+                      token_estimate=len(outline_prompt) // 3)
+
     parts = outline.get("parts", [])
     title = outline.get("title", "Summary Document")
 
@@ -285,6 +291,10 @@ Write the content for the section "{heading}" in markdown format. Do NOT include
         document_parts.append((heading, part_raw))
         yield f"data: {json.dumps({'phase': 'part', 'type': 'done', 'content': part_raw, 'part_index': i, 'heading': heading}, ensure_ascii=False)}\n\n"
 
+        log_observe_cycle(session_id, i + 1, "generate_document", "part",
+                          prompt=part_prompt[:10000], response=part_raw[:10000],
+                          token_estimate=len(part_prompt) // 3)
+
     full_document = f"# {title}\n\n"
     for heading, content in document_parts:
         full_document += f"## {heading}\n\n{content}\n\n"
@@ -304,6 +314,13 @@ Write the content for the section "{heading}" in markdown format. Do NOT include
     download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx"
 
     yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'title': title, 'parts_count': len(parts), 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx}, ensure_ascii=False)}\n\n"
+
+    record_session_operation(
+        session_id, "/api/generate-document/stream/",
+        context[:500], full_document[:5000], "",
+        "success", f"文档生成完成: {title}, 共{len(parts)}部分",
+        prompt_length=len(context)
+    )
 
 
 @router.post("/api/generate-document/stream/")
