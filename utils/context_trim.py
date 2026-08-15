@@ -104,3 +104,12 @@ def prepare_trimmed_context(session_id: str, conversation_history: Optional[List
     if session_id:
         save_session_context(session_id, history, trimmed)
     return trimmed
+
+
+def save_session_step(session_id: str, conversation_history: Optional[List[dict]], new_entries: List[dict]) -> List[dict]:
+    history = list(conversation_history or [])
+    history.extend(new_entries)
+    trimmed = trim_conversation_history(history)
+    if session_id:
+        save_session_context(session_id, history, trimmed)
+    return history

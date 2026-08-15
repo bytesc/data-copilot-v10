@@ -2,6 +2,7 @@ from datetime import datetime
 from sqlalchemy import (
     Table, Column, Integer, String, Text, DateTime, MetaData, insert, select, desc, func
 )
+from sqlalchemy.dialects.mysql import LONGTEXT
 import json
 
 from data_access.sys_db_conn import sys_engine
@@ -34,8 +35,8 @@ observe_session_log = Table(
     Column("status", String(50), comment="会话状态"),
     Column("total_cycles", Integer, comment="总循环次数"),
     Column("total_tokens", Integer, comment="总token数"),
-    Column("conversation_history", Text, comment="完整对话上下文(JSON数组)"),
-    Column("trimmed_context", Text, comment="送给LLM的裁剪后上下文(JSON数组)"),
+    Column("conversation_history", LONGTEXT, comment="完整对话上下文(JSON数组)"),
+    Column("trimmed_context", LONGTEXT, comment="送给LLM的裁剪后上下文(JSON数组)"),
     Column("created_at", DateTime, comment="创建时间"),
     Column("updated_at", DateTime, comment="更新时间"),
 )
@@ -43,8 +44,8 @@ observe_session_log = Table(
 
 def create_observe_log_tables():
     metadata.create_all(sys_engine)
-    _ensure_column_exists(sys_engine, "observe_session_log", "conversation_history", "TEXT COMMENT 'conversation history' AFTER total_tokens")
-    _ensure_column_exists(sys_engine, "observe_session_log", "trimmed_context", "TEXT COMMENT 'trimmed context for LLM' AFTER conversation_history")
+    _ensure_column_exists(sys_engine, "observe_session_log", "conversation_history", "LONGTEXT COMMENT 'conversation history' AFTER total_tokens")
+    _ensure_column_exists(sys_engine, "observe_session_log", "trimmed_context", "LONGTEXT COMMENT 'trimmed context for LLM' AFTER conversation_history")
 
 
 def _ensure_column_exists(engine, table_name, column_name, column_def):
@@ -57,8 +58,14 @@ def _ensure_column_exists(engine, table_name, column_name, column_def):
         )
         cursor = conn.cursor()
         cursor.execute(f"SHOW COLUMNS FROM {table_name} LIKE '{column_name}'")
-        if not cursor.fetchone():
+        row = cursor.fetchone()
+        if not row:
             cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}")
+        else:
+            current_type = (row[1] or "").upper()
+            target_type = column_def.split()[0].upper()
+            if current_type != target_type:
+                cursor.execute(f"ALTER TABLE {table_name} MODIFY COLUMN {column_name} {column_def}")
         conn.commit()
         conn.close()
     except Exception:

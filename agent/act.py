@@ -16,7 +16,7 @@ from agent.tools.get_function_info import FUNCTION_DICT
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
-from utils.context_trim import prepare_trimmed_context
+from utils.context_trim import prepare_trimmed_context, save_session_step
 
 router = APIRouter()
 
@@ -36,6 +36,38 @@ def _build_context(question: str, conversation_history: Optional[List[dict]], se
     return question
 
 
+def _build_act_entries(action: str, act_data: dict) -> List[dict]:
+    entries = []
+    if action == "explore_schema":
+        entry = {"role": "assistant", "type": "act", "action": "explore_schema"}
+        if act_data.get("selected_fields") is not None:
+            entry["selected_fields"] = act_data["selected_fields"]
+        if act_data.get("explore_plan"):
+            entry["explore_plan"] = act_data["explore_plan"]
+        if act_data.get("search_result"):
+            entry["search_result"] = act_data["search_result"]
+        entries.append(entry)
+    elif action == "explore_functions":
+        entry = {"role": "assistant", "type": "act", "action": "explore_functions"}
+        if act_data.get("selected_functions") is not None:
+            entry["selected_functions"] = act_data["selected_functions"]
+        if act_data.get("search_result"):
+            entry["search_result"] = act_data["search_result"]
+        entries.append(entry)
+    elif action == "generate_and_execute":
+        full_code = act_data.get("full_code", "")
+        full_ans = act_data.get("full_ans", "")
+        exec_error = act_data.get("exec_error")
+        if full_ans and not exec_error and full_code:
+            entries.append({"role": "assistant", "type": "act", "action": "generate_and_execute", "code": full_code, "result": full_ans})
+        elif exec_error:
+            entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "error": exec_error}
+            if full_code:
+                entry["code"] = full_code
+            entries.append(entry)
+    return entries
+
+
 def _event_stream_act(
     question: str,
     action: str,
@@ -52,17 +84,22 @@ def _event_stream_act(
     selected_fields = params.get("selected_fields")
     selected_functions = params.get("selected_functions")
 
+    act_data = {}
     if action == "explore_schema":
-        yield from _act_explore_schema(full_question, session_id, tables, search_keyword)
+        act_data = yield from _act_explore_schema(full_question, session_id, tables, search_keyword)
 
     elif action == "explore_functions":
-        yield from _act_explore_functions(full_question, session_id, search_keyword)
+        act_data = yield from _act_explore_functions(full_question, session_id, search_keyword)
 
     elif action == "generate_and_execute":
-        yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions, request_json)
+        act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions, request_json)
 
     else:
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
+
+    new_entries = _build_act_entries(action, act_data)
+    if new_entries:
+        save_session_step(session_id, conversation_history, new_entries)
 
 
 def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None):
@@ -121,6 +158,8 @@ Example:
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema, 'explore_plan': explore_plan}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
+    return {"selected_fields": selected_fields, "explore_plan": explore_plan, "search_result": display_content}
+
 
 def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'msg', 'content': '正在搜索函数信息...'}, ensure_ascii=False)}\n\n"
@@ -170,6 +209,8 @@ exe_sql, get_save_image_path
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'done', 'content': display_content, 'result': {'selected_functions': selected_functions, 'func_context': full_catalog}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
+    return {"selected_functions": selected_functions, "search_result": display_content}
+
 
 def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions, request_json: str = ""):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': '正在生成并执行代码...'}, ensure_ascii=False)}\n\n"
@@ -183,17 +224,21 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
     ):
         if event.get("sub_type") == "code_chunk":
             full_code += event.get("content", "")
+        if event.get("sub_type") == "code_complete":
+            full_code = event.get("content", "")
         if event.get("sub_type") == "exec_chunk":
             full_ans += event.get("content", "")
         if event.get("sub_type") == "code_exe_error":
             exec_error = event.get("content", "")
 
         if event.get("type") == "done" and event.get("sub_phase") == "exec":
+            full_code = event.get("code", full_code)
+            full_ans = event.get("content", full_ans)
             event = {
                 **event,
                 "result": {
-                    "code": event.get("code", full_code),
-                    "exec_result": event.get("content", full_ans),
+                    "code": full_code,
+                    "exec_result": full_ans,
                     "error": exec_error,
                 }
             }
@@ -209,6 +254,8 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
         log_observe_cycle(session_id, 0, "act", "generate_and_execute",
                           prompt=full_question[:10000], response=full_code[:10000],
                           exec_code=full_code[:10000], exec_result=full_ans[:10000])
+
+    return {"full_code": full_code, "full_ans": full_ans, "exec_error": exec_error}
 
 
 @router.post("/api/act/stream/")

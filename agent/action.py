@@ -13,7 +13,7 @@ from data_access.observe_log import log_observe_cycle
 from data_access.session_log import record_session_operation
 from agent.tools.tools_def import engine
 from utils.front_utils import history_to_text
-from utils.context_trim import prepare_trimmed_context
+from utils.context_trim import prepare_trimmed_context, save_session_step
 
 router = APIRouter()
 
@@ -131,6 +131,8 @@ def _event_stream_action(
             "error", action_result.get("error", "未知错误"),
             prompt_length=len(prompt)
         )
+
+    save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "action_decision", "content": raw}])
 
 
 def _parse_action_json(raw: str) -> dict:
