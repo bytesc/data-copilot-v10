@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import (
-    Table, Column, Integer, String, Text, DateTime, MetaData, insert, select, desc, func
+    Table, Column, Integer, String, DateTime, MetaData, insert, select, desc, func
 )
 from sqlalchemy.dialects.mysql import LONGTEXT
 import json
@@ -17,12 +17,12 @@ observe_cycle_log = Table(
     Column("cycle_index", Integer, nullable=False, comment="循环序号"),
     Column("phase", String(50), nullable=False, comment="阶段: think/execute/observe"),
     Column("sub_phase", String(100), comment="子阶段: filter_db/filter_func/plan/gen_code/exec_code/result"),
-    Column("prompt", Text, comment="发送给LLM的prompt"),
-    Column("response", Text, comment="LLM返回的响应"),
+    Column("prompt", LONGTEXT, comment="发送给LLM的prompt"),
+    Column("response", LONGTEXT, comment="LLM返回的响应"),
     Column("user_decision", String(50), comment="用户决策: approve/reject/edit/skip"),
-    Column("exec_code", Text, comment="执行的代码"),
-    Column("exec_result", Text, comment="执行结果"),
-    Column("exec_error", Text, comment="执行错误"),
+    Column("exec_code", LONGTEXT, comment="执行的代码"),
+    Column("exec_result", LONGTEXT, comment="执行结果"),
+    Column("exec_error", LONGTEXT, comment="执行错误"),
     Column("token_estimate", Integer, comment="token估算"),
     Column("created_at", DateTime, comment="记录时间"),
 )
@@ -31,7 +31,7 @@ observe_session_log = Table(
     "observe_session_log", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("session_id", String(255), nullable=False, comment="会话ID"),
-    Column("question", Text, comment="用户问题"),
+    Column("question", LONGTEXT, comment="用户问题"),
     Column("status", String(50), comment="会话状态"),
     Column("total_cycles", Integer, comment="总循环次数"),
     Column("total_tokens", Integer, comment="总token数"),
@@ -44,6 +44,12 @@ observe_session_log = Table(
 
 def create_observe_log_tables():
     metadata.create_all(sys_engine)
+    _ensure_column_exists(sys_engine, "observe_cycle_log", "prompt", "LONGTEXT COMMENT 'prompt'")
+    _ensure_column_exists(sys_engine, "observe_cycle_log", "response", "LONGTEXT COMMENT 'response'")
+    _ensure_column_exists(sys_engine, "observe_cycle_log", "exec_code", "LONGTEXT COMMENT 'exec_code'")
+    _ensure_column_exists(sys_engine, "observe_cycle_log", "exec_result", "LONGTEXT COMMENT 'exec_result'")
+    _ensure_column_exists(sys_engine, "observe_cycle_log", "exec_error", "LONGTEXT COMMENT 'exec_error'")
+    _ensure_column_exists(sys_engine, "observe_session_log", "question", "LONGTEXT COMMENT 'question'")
     _ensure_column_exists(sys_engine, "observe_session_log", "conversation_history", "LONGTEXT COMMENT 'conversation history' AFTER total_tokens")
     _ensure_column_exists(sys_engine, "observe_session_log", "trimmed_context", "LONGTEXT COMMENT 'trimmed context for LLM' AFTER conversation_history")
 

@@ -1,4 +1,7 @@
 import os
+from sqlalchemy import select
+from data_access.sys_db_conn import sys_engine
+from data_access.base_knowledge_db import base_knowledge
 
 _KNOWLEDGE_DIR = os.path.dirname(os.path.abspath(__file__))
 _DOCS_DIR = os.path.join(_KNOWLEDGE_DIR, "knowledge_docs")
@@ -30,3 +33,14 @@ BASE = _read_doc("base_knowledge.md")
 def get_base_knowledge(key=""):
     knowledge = BASE
     return knowledge
+
+
+def get_base_knowledge_db(key=""):
+    try:
+        with sys_engine.connect() as conn:
+            result = conn.execute(select(base_knowledge))
+            rows = result.fetchall()
+            return {row.key: row.value for row in rows}
+    except Exception as e:
+        print(f"[WARNING] Failed to read base_knowledge from db: {e}")
+        return {}
