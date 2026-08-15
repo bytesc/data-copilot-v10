@@ -369,7 +369,7 @@ export function useChat() {
         currentSubContent = ''
       }
 
-      if (etype === 'chunk' || etype === 'code_chunk') {
+      if ((etype === 'chunk' || etype === 'code_chunk') && event.sub_type !== 'exec_complete') {
         currentSubContent += content
         updateStreamingSubPhase(msgId, currentSubPhase, currentSubContent)
       } else if (etype === 'done') {
@@ -512,7 +512,14 @@ export function useChat() {
     if (idx !== -1) {
       const msg = messages.value[idx]
       if (!msg.subPhases) msg.subPhases = []
-      msg.subPhases.push({ name: subPhase, content, streaming: false, isError: false })
+      const existing = msg.subPhases.find(s => s.name === subPhase)
+      if (existing) {
+        existing.content = content
+        existing.streaming = false
+        existing.isError = false
+      } else {
+        msg.subPhases.push({ name: subPhase, content, streaming: false, isError: false })
+      }
     }
   }
 

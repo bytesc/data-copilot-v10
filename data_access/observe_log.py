@@ -212,6 +212,13 @@ def get_session_history(session_id, limit=50):
         return []
 
 
+def _serialize_row(row_dict):
+    return {
+        k: v.isoformat() if isinstance(v, datetime) else v
+        for k, v in row_dict.items()
+    }
+
+
 def list_sessions(limit=50):
     try:
         with sys_engine.connect() as conn:
@@ -220,7 +227,7 @@ def list_sessions(limit=50):
                 .order_by(desc(observe_session_log.c.updated_at))
                 .limit(limit)
             ).fetchall()
-            return [dict(row._mapping) for row in result]
+            return [_serialize_row(dict(row._mapping)) for row in result]
     except Exception as e:
         print(f"查询会话列表失败: {e}")
         return []
@@ -235,7 +242,7 @@ def get_session_operations(session_id, limit=200):
                 .order_by(session_operation_log.c.created_at)
                 .limit(limit)
             ).fetchall()
-            return [dict(row._mapping) for row in result]
+            return [_serialize_row(dict(row._mapping)) for row in result]
     except Exception as e:
         print(f"查询操作日志失败: {e}")
         return []
@@ -250,7 +257,7 @@ def get_session_cycles(session_id, limit=200):
                 .order_by(observe_cycle_log.c.created_at)
                 .limit(limit)
             ).fetchall()
-            return [dict(row._mapping) for row in result]
+            return [_serialize_row(dict(row._mapping)) for row in result]
     except Exception as e:
         print(f"查询周期日志失败: {e}")
         return []

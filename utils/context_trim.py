@@ -101,8 +101,6 @@ def trim_conversation_history(history: List[dict]) -> List[dict]:
 def prepare_trimmed_context(session_id: str, conversation_history: Optional[List[dict]]) -> List[dict]:
     history = conversation_history or []
     trimmed = trim_conversation_history(history)
-    if session_id:
-        save_session_context(session_id, history, trimmed)
     return trimmed
 
 

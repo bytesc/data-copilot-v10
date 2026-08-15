@@ -350,6 +350,10 @@ html, body {
   padding: 8px 0 8px 8px;
   border-left: 2px solid var(--border-color);
   margin-left: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .plan-display {
@@ -618,6 +622,12 @@ html, body {
   margin-bottom: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-title:hover {
+  color: var(--text-primary);
 }
 
 .loading-text {
@@ -870,6 +880,37 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.manual-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.manual-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.manual-input:focus {
+  border-color: var(--accent-blue);
+}
+
+.manual-input::placeholder {
+  color: var(--text-muted);
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 12px;
 }
 
 .session-item {

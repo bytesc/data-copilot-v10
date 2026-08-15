@@ -47,21 +47,23 @@
       </template>
 
       <template v-else-if="message.type === 'assistant'">
-        <details v-if="message.collapsed" class="msg-collapse" :open="!message.collapsed">
-          <summary class="collapse-summary">{{ assistantSummary }}</summary>
-          <div class="collapse-body">
-            <div v-if="message.phase === 'think' || message.phase === 'observe'">
-              <div v-if="message.planResult" class="plan-display" v-html="formattedPlan"></div>
+        <template v-if="message.phase === 'act'">
+          <ActMessage :message="message" />
+        </template>
+        <template v-else>
+          <details v-if="message.collapsed" class="msg-collapse" :open="!message.collapsed">
+            <summary class="collapse-summary">{{ assistantSummary }}</summary>
+            <div class="collapse-body">
+              <div v-if="message.phase === 'think' || message.phase === 'observe'">
+                <div v-if="message.planResult" class="plan-display" v-html="formattedPlan"></div>
+                <div v-else v-html="renderedContent"></div>
+              </div>
+              <div v-else-if="message.phase === 'action_decision'" v-html="renderedContent"></div>
               <div v-else v-html="renderedContent"></div>
             </div>
-            <div v-else-if="message.phase === 'action_decision'" v-html="renderedContent"></div>
-            <div v-else-if="message.phase === 'act'">
-              <ActMessage :message="message" />
-            </div>
-            <div v-else v-html="renderedContent"></div>
-          </div>
-        </details>
-        <div v-else class="message-body" v-html="renderedContent"></div>
+          </details>
+          <div v-else class="message-body" v-html="renderedContent"></div>
+        </template>
       </template>
 
       <template v-else-if="message.type === 'stream'">

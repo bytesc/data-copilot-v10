@@ -3,17 +3,34 @@
     <div class="modal-content">
       <h3>Resume Session</h3>
       <div class="modal-body">
-        <div v-if="!selectedSession" class="sessions-list">
-          <div v-if="loading" class="loading-text">Loading sessions...</div>
-          <div v-else-if="sessions.length === 0" class="empty-text">No sessions found</div>
-          <div
-            v-for="s in sessions"
-            :key="s.session_id"
-            class="session-item"
-            @click="selectSession(s)"
-          >
-            <div class="session-id">{{ s.session_id }}</div>
-            <div class="session-meta" v-if="s.question">{{ s.question }}</div>
+        <div v-if="!selectedSession">
+          <div class="manual-input-row">
+            <input
+              v-model="manualSessionId"
+              type="text"
+              class="manual-input"
+              placeholder="Enter session ID manually..."
+              @keyup.enter="resumeManualSession"
+            />
+            <button
+              class="btn-primary btn-sm"
+              :disabled="!manualSessionId.trim() || manualLoading"
+              @click="resumeManualSession"
+            >Go</button>
+          </div>
+          <div v-if="manualError" class="error-text">{{ manualError }}</div>
+          <div class="sessions-list">
+            <div v-if="loading" class="loading-text">Loading sessions...</div>
+            <div v-else-if="sessions.length === 0" class="empty-text">No sessions found</div>
+            <div
+              v-for="s in sessions"
+              :key="s.session_id"
+              class="session-item"
+              @click="selectSession(s)"
+            >
+              <div class="session-id">{{ s.session_id }}</div>
+              <div class="session-meta" v-if="s.question">{{ s.question }}</div>
+            </div>
           </div>
         </div>
         <div v-else class="session-detail">
@@ -48,6 +65,9 @@ const selectedSession = ref(null)
 const loading = ref(false)
 const loadingDetail = ref(false)
 const detailError = ref(null)
+const manualSessionId = ref('')
+const manualLoading = ref(false)
+const manualError = ref(null)
 
 onMounted(async () => {
   loading.value = true
@@ -62,6 +82,26 @@ onMounted(async () => {
 
 function selectSession(s) {
   selectedSession.value = s
+  manualError.value = null
+}
+
+async function resumeManualSession() {
+  const sid = manualSessionId.value.trim()
+  if (!sid) return
+  manualLoading.value = true
+  manualError.value = null
+  try {
+    const data = await fetchSessionHistory(sid)
+    if (!data) {
+      manualError.value = 'Session not found or failed to load'
+      return
+    }
+    emit('resume', data)
+  } catch (e) {
+    manualError.value = `Failed to load session: ${e.message}`
+  } finally {
+    manualLoading.value = false
+  }
 }
 
 async function resumeSession() {

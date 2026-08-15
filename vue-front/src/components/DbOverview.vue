@@ -1,30 +1,32 @@
 <template>
   <div class="db-overview">
-    <h3 class="section-title">Data View</h3>
-    <div v-if="loading" class="loading-text">Loading...</div>
-    <div v-else-if="error" class="error-text">{{ error }}</div>
-    <div v-else class="tables-list">
-      <div v-for="table in tables" :key="table.name" class="table-item">
-        <details class="table-details">
-          <summary class="table-name">📊 {{ table.name }}</summary>
-          <div class="table-content">
-            <p v-if="table.comment" class="table-comment">{{ table.comment }}</p>
-            <div v-if="table.columns?.length" class="columns-section">
-              <h4>Columns</h4>
-              <table class="columns-table">
-                <thead>
-                  <tr><th>Column</th><th>Comment</th></tr>
-                </thead>
-                <tbody>
-                  <tr v-for="col in table.columns" :key="col.name">
-                    <td>{{ col.name }}</td>
-                    <td>{{ col.comment || '' }}</td>
-                  </tr>
-                </tbody>
-              </table>
+    <h3 class="section-title" @click="collapsed = !collapsed">Data View {{ collapsed ? '▶' : '▼' }}</h3>
+    <div v-show="!collapsed">
+      <div v-if="loading" class="loading-text">Loading...</div>
+      <div v-else-if="error" class="error-text">{{ error }}</div>
+      <div v-else class="tables-list">
+        <div v-for="table in tables" :key="table.name" class="table-item">
+          <details class="table-details">
+            <summary class="table-name">📊 {{ table.name }}</summary>
+            <div class="table-content">
+              <p v-if="table.comment" class="table-comment">{{ table.comment }}</p>
+              <div v-if="table.columns?.length" class="columns-section">
+                <h4>Columns</h4>
+                <table class="columns-table">
+                  <thead>
+                    <tr><th>Column</th><th>Comment</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="col in table.columns" :key="col.name">
+                      <td>{{ col.name }}</td>
+                      <td>{{ col.comment || '' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        </details>
+          </details>
+        </div>
       </div>
     </div>
   </div>
@@ -40,6 +42,7 @@ const props = defineProps({
 const tables = ref([])
 const loading = ref(false)
 const error = ref(null)
+const collapsed = ref(false)
 
 onMounted(async () => {
   loading.value = true
