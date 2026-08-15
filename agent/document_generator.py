@@ -227,7 +227,7 @@ def _parse_outline_json(raw: str) -> dict:
     }
 
 
-def _event_stream_generate_document(conversation_history: List[str], session_id: str):
+def _event_stream_generate_document(conversation_history: List[str], session_id: str, request_json: str = ""):
     context = "\n".join(conversation_history)
 
     yield f"data: {json.dumps({'phase': 'outline', 'type': 'msg', 'content': 'Generating document outline...'}, ensure_ascii=False)}\n\n"
@@ -317,7 +317,7 @@ Write the content for the section "{heading}" in markdown format. Do NOT include
 
     record_session_operation(
         session_id, "/api/generate-document/stream/",
-        context[:500], full_document[:5000], "",
+        request_json, full_document[:5000], "",
         "success", f"文档生成完成: {title}, 共{len(parts)}部分",
         prompt_length=len(context)
     )
@@ -329,6 +329,7 @@ async def generate_document_stream_api(request: Request, user_input: DocumentInp
         _event_stream_generate_document(
             user_input.conversation_history,
             user_input.session_id or "",
+            user_input.model_dump_json(),
         ),
         media_type="text/event-stream",
         headers={

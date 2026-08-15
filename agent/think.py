@@ -12,7 +12,7 @@ from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
-from data_access.observe_log import log_observe_cycle, log_observe_session
+from data_access.observe_log import log_observe_cycle, log_observe_session, update_session_history
 
 router = APIRouter()
 
@@ -27,6 +27,7 @@ def _event_stream_think(
     question: str,
     session_id: str,
     conversation_history: Optional[List[str]],
+    request_json: str = "",
 ):
     """Think phase: pure LLM reasoning with custom prompt to generate a plan."""
     log_observe_session(session_id, question=question, status="active")
@@ -90,8 +91,9 @@ The todo list contains the actionable steps. Keep task descriptions concise."""
     log_observe_cycle(session_id, 0, "think", "plan",
                       prompt=think_prompt[:5000], response=raw[:5000],
                       token_estimate=prompt_length // 3)
-    record_session_operation(session_id, "/api/think/stream/", question, ans=raw, result_type="success", prompt_length=prompt_length)
-    log_observe_session(session_id, status="think_done", total_cycles=0, total_tokens=prompt_length // 3)
+    record_session_operation(session_id, "/api/think/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
+    log_observe_session(session_id, status="think_done", total_tokens=prompt_length // 3)
+    update_session_history(session_id, conversation_history or [])
 
 
 def _parse_plan_json(raw: str) -> dict:
@@ -122,6 +124,7 @@ async def think_stream_api(request: Request, user_input: ThinkInput):
             user_input.question,
             user_input.session_id or "",
             user_input.conversation_history,
+            user_input.model_dump_json(),
         ),
         media_type="text/event-stream",
         headers={

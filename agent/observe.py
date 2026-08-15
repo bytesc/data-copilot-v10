@@ -9,7 +9,7 @@ from agent.action import ACTIONS
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
-from data_access.observe_log import log_observe_cycle
+from data_access.observe_log import log_observe_cycle, update_session_history
 
 router = APIRouter()
 
@@ -26,6 +26,7 @@ def _event_stream_observe(
     session_id: str,
     conversation_history: Optional[List[str]],
     cycle_index: int,
+    request_json: str = "",
 ):
     """Observe phase: LLM reviews execution results and updates the plan."""
     yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'status', 'content': '正在审查执行结果...'}, ensure_ascii=False)}\n\n"
@@ -76,7 +77,8 @@ If todo is empty, the plan is complete. Keep descriptions concise."""
     log_observe_cycle(session_id, cycle_index, "observe", "review",
                       prompt=observe_prompt[:5000], response=raw[:5000],
                       token_estimate=prompt_length // 3)
-    record_session_operation(session_id, "/api/observe/stream/", question, ans=raw, result_type="success", prompt_length=prompt_length)
+    record_session_operation(session_id, "/api/observe/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
+    update_session_history(session_id, conversation_history or [])
 
 
 def _parse_plan_json(raw: str) -> dict:
@@ -108,6 +110,7 @@ async def observe_stream_api(request: Request, user_input: ObserveInput):
             user_input.session_id or "",
             user_input.conversation_history,
             user_input.cycle_index,
+            user_input.model_dump_json(),
         ),
         media_type="text/event-stream",
         headers={

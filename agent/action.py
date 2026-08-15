@@ -9,7 +9,7 @@ from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
-from data_access.observe_log import log_observe_cycle
+from data_access.observe_log import log_observe_cycle, update_session_history
 from data_access.session_log import record_session_operation
 from agent.tools.tools_def import engine
 
@@ -92,6 +92,7 @@ def _event_stream_action(
         session_id: str,
         conversation_history: Optional[List[str]],
         cycle_index: int,
+        request_json: str = "",
 ):
     yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': '正在决策下一步动作...'}, ensure_ascii=False)}\n\n"
 
@@ -115,17 +116,19 @@ def _event_stream_action(
     if action:
         record_session_operation(
             session_id, "/api/action/stream/",
-            question, str(action_result), "",
+            request_json, str(action_result), "",
             "success", f"决定动作: {action}",
             prompt_length=len(prompt)
         )
     else:
         record_session_operation(
             session_id, "/api/action/stream/",
-            question, str(action_result), "",
+            request_json, str(action_result), "",
             "error", action_result.get("error", "未知错误"),
             prompt_length=len(prompt)
         )
+
+    update_session_history(session_id, conversation_history or [])
 
 
 def _parse_action_json(raw: str) -> dict:
@@ -165,6 +168,7 @@ async def action_stream_api(request: Request, user_input: ActionInput):
             user_input.session_id or "",
             user_input.conversation_history,
             user_input.cycle_index,
+            user_input.model_dump_json(),
         ),
         media_type="text/event-stream",
         headers={

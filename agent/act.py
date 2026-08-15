@@ -14,7 +14,7 @@ from agent.tools.search_db import get_db_overview_markdown, search_db_markdown, 
 from agent.tools.search_func import get_func_catalog_markdown, search_func_by_keyword, get_func_summary_for_agent, get_func_docs_for
 from agent.tools.get_function_info import FUNCTION_DICT
 from data_access.session_log import record_session_operation
-from data_access.observe_log import log_observe_cycle
+from data_access.observe_log import log_observe_cycle, update_session_history
 
 router = APIRouter()
 
@@ -39,6 +39,7 @@ def _event_stream_act(
     session_id: str,
     conversation_history: Optional[List[str]],
     params: Optional[Dict[str, Any]] = None,
+    request_json: str = "",
 ):
     """Act phase: execute exactly ONE action."""
     full_question = _build_context(question, conversation_history)
@@ -55,10 +56,12 @@ def _event_stream_act(
         yield from _act_explore_functions(full_question, session_id, search_keyword)
 
     elif action == "generate_and_execute":
-        yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions)
+        yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions, request_json)
 
     else:
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
+
+    update_session_history(session_id, conversation_history or [])
 
 
 def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None):
@@ -112,6 +115,7 @@ Example:
 
     log_observe_cycle(session_id, 0, "act", "explore_schema",
                       prompt=prompt[:5000], response=raw[:5000],
+                      exec_result=display_content[:10000],
                       token_estimate=len(prompt) // 3)
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema, 'explore_plan': explore_plan}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
@@ -160,12 +164,13 @@ exe_sql, get_save_image_path
 
     log_observe_cycle(session_id, 0, "act", "explore_functions",
                       prompt=prompt[:5000], response=raw_text[:5000],
+                      exec_result=display_content[:10000],
                       token_estimate=len(prompt) // 3)
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'done', 'content': display_content, 'result': {'selected_functions': selected_functions, 'func_context': full_catalog}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
 
-def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions):
+def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions, request_json: str = ""):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': '正在生成并执行代码...'}, ensure_ascii=False)}\n\n"
     full_code = ""
     full_ans = ""
@@ -193,9 +198,16 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
             }
         yield f"data: {json.dumps({**event}, ensure_ascii=False)}\n\n"
     if exec_error:
-        record_session_operation(session_id, "/api/act/stream/", full_question, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500])
+        record_session_operation(session_id, "/api/act/stream/", request_json, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500])
+        log_observe_cycle(session_id, 0, "act", "generate_and_execute",
+                          prompt=full_question[:10000], response=full_code[:10000],
+                          exec_code=full_code[:10000], exec_result=full_ans[:10000],
+                          exec_error=exec_error[:2000])
     else:
-        record_session_operation(session_id, "/api/act/stream/", full_question, ans=full_ans, code=full_code, result_type="success")
+        record_session_operation(session_id, "/api/act/stream/", request_json, ans=full_ans, code=full_code, result_type="success")
+        log_observe_cycle(session_id, 0, "act", "generate_and_execute",
+                          prompt=full_question[:10000], response=full_code[:10000],
+                          exec_code=full_code[:10000], exec_result=full_ans[:10000])
 
 
 @router.post("/api/act/stream/")
@@ -207,6 +219,7 @@ async def act_stream_api(request: Request, user_input: ActInput):
             user_input.session_id or "",
             user_input.conversation_history,
             user_input.params,
+            user_input.model_dump_json(),
         ),
         media_type="text/event-stream",
         headers={

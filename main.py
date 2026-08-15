@@ -27,7 +27,8 @@ from agent.agent import  generate_and_execute_stream, get_db
 from utils.process_file import process_file_content
 from data_access.session_log import record_session_operation, create_session_log_table
 from data_access.observe_log import (
-    create_observe_log_tables, log_observe_cycle, log_observe_session
+    create_observe_log_tables, log_observe_cycle, log_observe_session,
+    list_sessions, reconstruct_conversation_history
 )
 
 # 启动时确保会话操作记录表已创建
@@ -96,7 +97,40 @@ class ReviewInput(BaseModel):
     session_id: Optional[str] = None
 
 
+class UserInputLog(BaseModel):
+    session_id: str
+    cycle_index: int = 0
+    user_input: str
+
 # print(get_db())
+
+
+@app.get("/api/sessions/")
+async def get_sessions(request: Request, limit: int = 50):
+    sessions = list_sessions(limit)
+    return JSONResponse(content={"sessions": sessions})
+
+
+@app.get("/api/session/{session_id}/history")
+async def get_session_history(request: Request, session_id: str):
+    result = reconstruct_conversation_history(session_id)
+    if result is None:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Session not found"}
+        )
+    return JSONResponse(content=result)
+
+
+@app.post("/api/log-user-input/")
+async def log_user_input(request: Request, user_input: UserInputLog):
+    log_observe_cycle(
+        user_input.session_id, user_input.cycle_index,
+        "user", "input",
+        user_decision=user_input.user_input[:2000],
+    )
+    return JSONResponse(content={"status": "ok"})
+
 
 
 
@@ -116,7 +150,7 @@ async def exe_sql(request: Request, user_input: AgentInput):
     }
     record_session_operation(
         user_input.session_id, request.url.path,
-        user_input.question, str(ans), "", "success", "处理成功"
+        user_input.model_dump_json(), str(ans), "", "success", "处理成功"
     )
     log_observe_cycle(
         user_input.session_id or "", 0, "execute", "exe_sql",
@@ -142,7 +176,7 @@ async def get_graph_api(request: Request, user_input: AgentInputDict):
         }
         record_session_operation(
             user_input.session_id, request.url.path,
-            user_input.question, ans, "", "success", "处理成功"
+            user_input.model_dump_json(), ans, "", "success", "处理成功"
         )
     else:
         processed_data = {
@@ -154,7 +188,7 @@ async def get_graph_api(request: Request, user_input: AgentInputDict):
         }
         record_session_operation(
             user_input.session_id, request.url.path,
-            user_input.question, "", "", "error", "处理失败，请换个问法吧"
+            user_input.model_dump_json(), "", "", "error", "处理失败，请换个问法吧"
         )
     return JSONResponse(content=processed_data)
 
@@ -255,7 +289,7 @@ async def filter_db_fields_api(request: Request, user_input: AgentInput):
     return JSONResponse(content=processed_data)
 
 
-def _event_stream_filter_db_fields(question: str, tables: Optional[List[str]], session_id: str = "", request_url: str = ""):
+def _event_stream_filter_db_fields(question: str, tables: Optional[List[str]], session_id: str = "", request_url: str = "", request_json: str = ""):
     full_content = ""
     prompt_length = 0
     for event in filter_db_fields_stream(question, engine, llm, tables):
@@ -264,13 +298,13 @@ def _event_stream_filter_db_fields(question: str, tables: Optional[List[str]], s
         if event.get("type") in ("done", "error"):
             prompt_length = event.get("prompt_length", 0)
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success", prompt_length=prompt_length)
+    record_session_operation(session_id, request_url, request_json, ans=full_content, result_type="success", prompt_length=prompt_length)
 
 
 @app.post("/api/filter-db-fields/stream/")
 async def filter_db_fields_stream_api(request: Request, user_input: AgentInput):
     return StreamingResponse(
-        _event_stream_filter_db_fields(user_input.question, user_input.tables, user_input.session_id or "", request.url.path),
+        _event_stream_filter_db_fields(user_input.question, user_input.tables, user_input.session_id or "", request.url.path, user_input.model_dump_json()),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -280,7 +314,7 @@ async def filter_db_fields_stream_api(request: Request, user_input: AgentInput):
     )
 
 
-def _event_stream_filter_functions(question: str, session_id: str = "", request_url: str = ""):
+def _event_stream_filter_functions(question: str, session_id: str = "", request_url: str = "", request_json: str = ""):
     full_content = ""
     prompt_length = 0
     for event in filter_functions_stream(question, llm):
@@ -289,13 +323,13 @@ def _event_stream_filter_functions(question: str, session_id: str = "", request_
         if event.get("type") == "done":
             prompt_length = event.get("prompt_length", 0)
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success", prompt_length=prompt_length)
+    record_session_operation(session_id, request_url, request_json, ans=full_content, result_type="success", prompt_length=prompt_length)
 
 
 @app.post("/api/filter-functions/stream/")
 async def filter_functions_stream_api(request: Request, user_input: AgentInput):
     return StreamingResponse(
-        _event_stream_filter_functions(user_input.question, user_input.session_id or "", request.url.path),
+        _event_stream_filter_functions(user_input.question, user_input.session_id or "", request.url.path, user_input.model_dump_json()),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -363,7 +397,7 @@ async def upload_txt(
 
 
 
-def _event_stream_generate_and_execute(question: str, tables: Optional[List[str]], selected_fields: Optional[Dict[str, Any]] = None, selected_functions: Optional[List[str]] = None, session_id: str = "", request_url: str = ""):
+def _event_stream_generate_and_execute(question: str, tables: Optional[List[str]], selected_fields: Optional[Dict[str, Any]] = None, selected_functions: Optional[List[str]] = None, session_id: str = "", request_url: str = "", request_json: str = ""):
     full_code = ""
     full_ans = ""
     exec_error = None
@@ -376,9 +410,9 @@ def _event_stream_generate_and_execute(question: str, tables: Optional[List[str]
             exec_error = event.get("content", "")
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
     if exec_error:
-        record_session_operation(session_id, request_url, question, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500])
+        record_session_operation(session_id, request_url, request_json, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500])
     else:
-        record_session_operation(session_id, request_url, question, ans=full_ans, code=full_code, result_type="success")
+        record_session_operation(session_id, request_url, request_json, ans=full_ans, code=full_code, result_type="success")
 
 
 
@@ -390,7 +424,7 @@ class CodeInput(BaseModel):
 @app.post("/api/generate-and-execute/stream/")
 async def generate_and_execute_stream_api(request: Request, user_input: AgentInput):
     return StreamingResponse(
-        _event_stream_generate_and_execute(user_input.question, user_input.tables, user_input.selected_fields, user_input.selected_functions, user_input.session_id or "", request.url.path),
+        _event_stream_generate_and_execute(user_input.question, user_input.tables, user_input.selected_fields, user_input.selected_functions, user_input.session_id or "", request.url.path, user_input.model_dump_json()),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -401,7 +435,7 @@ async def generate_and_execute_stream_api(request: Request, user_input: AgentInp
 
 
 
-def _event_stream_plain_chat(question: str, tables=None, selected_fields=None, session_id: str = "", request_url: str = ""):
+def _event_stream_plain_chat(question: str, tables=None, selected_fields=None, session_id: str = "", request_url: str = "", request_json: str = ""):
     full_content = ""
     prompt_length = 0
     for chunk in get_plain_chat_stream(question, tables, selected_fields):
@@ -411,13 +445,13 @@ def _event_stream_plain_chat(question: str, tables=None, selected_fields=None, s
         full_content += chunk
         yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
     yield f"data: {json.dumps({'type': 'done', 'content': ''}, ensure_ascii=False)}\n\n"
-    record_session_operation(session_id, request_url, question, ans=full_content, result_type="success", prompt_length=prompt_length)
+    record_session_operation(session_id, request_url, request_json, ans=full_content, result_type="success", prompt_length=prompt_length)
 
 
 @app.post("/api/plain-chat/stream/")
 async def plain_chat_stream(request: Request, user_input: AgentInput):
     return StreamingResponse(
-        _event_stream_plain_chat(user_input.question, user_input.tables, user_input.selected_fields, user_input.session_id or "", request.url.path),
+        _event_stream_plain_chat(user_input.question, user_input.tables, user_input.selected_fields, user_input.session_id or "", request.url.path, user_input.model_dump_json()),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

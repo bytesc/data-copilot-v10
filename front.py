@@ -23,6 +23,38 @@ from utils.get_config import config_data
 
 SERVER_URL = f"http://127.0.0.1:{config_data['server_port']}"
 
+
+def fetch_sessions_api(limit: int = 50):
+    try:
+        resp = httpx.get(f"{SERVER_URL}/api/sessions/", params={"limit": limit}, timeout=10)
+        if resp.status_code == 200:
+            return resp.json().get("sessions", [])
+    except Exception as e:
+        print(f"获取会话列表失败: {e}")
+    return []
+
+
+def fetch_session_history_api(session_id: str):
+    try:
+        resp = httpx.get(f"{SERVER_URL}/api/session/{session_id}/history", timeout=30)
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as e:
+        print(f"获取会话历史失败: {e}")
+    return None
+
+
+def log_user_input_api(session_id: str, cycle_index: int, user_input: str):
+    try:
+        httpx.post(
+            f"{SERVER_URL}/api/log-user-input/",
+            json={"session_id": session_id, "cycle_index": cycle_index, "user_input": user_input},
+            timeout=5,
+        )
+    except Exception as e:
+        print(f"记录用户输入失败: {e}")
+
+
 HISTORY_RETENTION = {
     "think": 3,
     "action": 3,
@@ -802,7 +834,7 @@ def run_observe_phase(cycle_index, original_question, conversation_history, sess
         raise
 
 
-def handle_user_interaction(act_result, conversation_history):
+def handle_user_interaction(act_result, conversation_history, session_id, cycle_index):
     try:
         if act_result["needs_user_input"]:
             if act_result["choices"]:
@@ -812,6 +844,7 @@ def handle_user_interaction(act_result, conversation_history):
                     options=[{"label": c, "value": c} for c in act_result["choices"]]
                 )
                 conversation_history.append(f"User chose: {user_choice}")
+                log_user_input_api(session_id, cycle_index, f"User chose: {user_choice}")
                 put_collapse("User Choice", [
                     put_markdown(f"**Selected:** {user_choice}", sanitize=False)
                 ], open=False)
@@ -820,6 +853,7 @@ def handle_user_interaction(act_result, conversation_history):
                 phase_header("user", "USER - Input Required")
                 user_response = input(act_result["full_ans"], type=TEXT)
                 conversation_history.append(f"User response: {user_response}")
+                log_user_input_api(session_id, cycle_index, f"User response: {user_response}")
                 put_collapse("User Input", [
                     put_markdown(user_response, sanitize=False)
                 ], open=False)
@@ -831,6 +865,7 @@ def handle_user_interaction(act_result, conversation_history):
             if not user_input.strip():
                 user_input = "continue"
             conversation_history.append(f"User: {user_input}")
+            log_user_input_api(session_id, cycle_index, f"User: {user_input}")
             put_collapse("User Input", [
                 put_markdown(user_input, sanitize=False)
             ], open=False)
@@ -855,8 +890,8 @@ def main():
     put_markdown("*One action per cycle. Action phase decides next step via LLM.*")
 
     put_markdown("### Control Panel")
-    put_buttons(['Upload CSV File', 'Upload Document File', 'Generate Summary Document'],
-                onclick=[lambda: handle_csv_upload(), lambda: handle_doc_upload(), lambda: handle_generate_document()])
+    put_buttons(['Upload CSV File', 'Upload Document File', 'Resume Session', 'Generate Summary Document'],
+                onclick=[lambda: handle_csv_upload(), lambda: handle_doc_upload(), lambda: handle_resume_session(), lambda: handle_generate_document()])
 
     show_db_overview()
 
@@ -864,6 +899,8 @@ def main():
         if not conversation_history or len(conversation_history) <= 1:
             toast("No conversation to summarize. Please ask a question first.", color='warn')
             return
+
+        toast("正在生成文档...", color='info')
 
         doc_scope = f"generate_doc_{int(time.time() * 1000)}"
         put_scope(doc_scope)
@@ -982,6 +1019,44 @@ def main():
                 else:
                     toast("Failed to generate document.", color='error')
 
+    def handle_resume_session():
+        nonlocal session_id, question, conversation_history, cycle_index, _resumed
+        sid = input("Enter session ID to resume:", type=TEXT, required=True)
+        if not sid.strip():
+            return
+
+        loading_scope = f"resume_loading_{int(time.time() * 1000)}"
+        put_scope(loading_scope)
+        with use_scope(loading_scope):
+            put_loading(shape="grow", color="primary")
+        data = fetch_session_history_api(sid.strip())
+        with use_scope(loading_scope, clear=True):
+            pass
+        if data is None:
+            toast("Session not found or failed to load.", color='error')
+            return
+
+        session_id = data["session_id"]
+        question = data.get("question", "")
+        conversation_history = data.get("conversation_history", [])
+        cycle_index = data.get("cycle_count", 0)
+        _resumed = True
+
+        put_markdown(f"### Session Restored: `{session_id}`")
+        put_markdown(f"**Original question:** {question}")
+        put_markdown(f"**Cycles completed:** {cycle_index}")
+
+        with put_collapse("Conversation History", open=False):
+            for entry in conversation_history:
+                escaped = entry.replace("`", "\\`").replace("$", "\\$")
+                put_markdown(escaped, sanitize=False)
+
+        user_input = textarea("Continue or enter new instruction:", type=TEXT, rows=2)
+        if user_input.strip():
+            conversation_history.append(f"User: {user_input}")
+        put_markdown("## " + (question or "Continued Session"))
+        toast("Session restored. Continuing conversation...", color='success')
+
     session_id = datetime.now().strftime("%Y%m%d%H%M%S") + "".join(
         random.choices(string.ascii_letters, k=8)
     )
@@ -993,6 +1068,7 @@ def main():
     conversation_history = [f"Q: {question}"]
     cycle_index = 0
     max_cycles = 20
+    _resumed = False
 
     while True:
         try:
@@ -1004,7 +1080,11 @@ def main():
                 if not question.strip():
                     break
                 put_markdown("## " + question)
-                conversation_history = [f"Q: {question}"]
+                if _resumed:
+                    conversation_history.append(f"Q: {question}")
+                    _resumed = False
+                else:
+                    conversation_history = [f"Q: {question}"]
                 cycle_index = 0
                 continue
 
@@ -1030,7 +1110,11 @@ def main():
                 if not question.strip():
                     break
                 put_markdown("## " + question)
-                conversation_history = [f"Q: {question}"]
+                if _resumed:
+                    conversation_history.append(f"Q: {question}")
+                    _resumed = False
+                else:
+                    conversation_history = [f"Q: {question}"]
                 continue
             search_keyword = action_result.get("keyword")
             plan_funcs = action_result.get("funcs")
@@ -1082,13 +1166,17 @@ def main():
             elif full_ans and action in FRONTEND_ACTIONS:
                 conversation_history.append(f"[ACT {action}] Output:\n{full_ans}")
 
-            user_interaction = handle_user_interaction(act_result, conversation_history)
+            user_interaction = handle_user_interaction(act_result, conversation_history, session_id, cycle_index)
             if user_interaction.get("completed"):
                 question = textarea("What is next?:", value="", type=TEXT, rows=2)
                 if not question.strip():
                     continue
                 put_markdown("## " + question)
-                conversation_history = [f"Q: {question}"]
+                if _resumed:
+                    conversation_history.append(f"Q: {question}")
+                    _resumed = False
+                else:
+                    conversation_history = [f"Q: {question}"]
                 continue
 
             observe_result, raw_review = run_observe_phase(
@@ -1107,7 +1195,11 @@ def main():
             if not question.strip():
                 break
             put_markdown("## " + question)
-            conversation_history = [f"Q: {question}"]
+            if _resumed:
+                conversation_history.append(f"Q: {question}")
+                _resumed = False
+            else:
+                conversation_history = [f"Q: {question}"]
             continue
 
 
