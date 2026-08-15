@@ -23,4 +23,6 @@ llmlog/*.txt
 agent/tools/base_knowledge/knowledge_docs/*.md
 agent/tools/base_knowledge/knowledge_docs/*.txt
 
+./vue-front/node_modules
+
 .kilo

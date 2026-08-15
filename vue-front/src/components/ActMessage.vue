@@ -1,0 +1,186 @@
+<template>
+  <div class="act-message">
+    <template v-if="message.action === 'explore_schema'">
+      <details v-if="message.explore_plan || message.parsed?.explore_plan" class="msg-collapse" open>
+        <summary class="collapse-summary">Query Plan</summary>
+        <div class="collapse-body" v-html="renderMd(message.explore_plan || message.parsed?.explore_plan)"></div>
+      </details>
+      <details v-if="hasSelectedFields" class="msg-collapse">
+        <summary class="collapse-summary">Selected Fields</summary>
+        <div class="collapse-body">
+          <pre><code>{{ formatJson(selectedFields) }}</code></pre>
+        </div>
+      </details>
+      <details v-if="hasSearchResult" class="msg-collapse">
+        <summary class="collapse-summary">Search Results: explore_schema</summary>
+        <div class="collapse-body" v-html="renderMd(searchResult)"></div>
+      </details>
+    </template>
+
+    <template v-else-if="message.action === 'explore_functions'">
+      <details v-if="hasSelectedFunctions" class="msg-collapse">
+        <summary class="collapse-summary">Selected Functions</summary>
+        <div class="collapse-body">
+          <pre><code>{{ formatJson(selectedFunctions) }}</code></pre>
+        </div>
+      </details>
+      <details v-if="hasSearchResult" class="msg-collapse">
+        <summary class="collapse-summary">Search Results: explore_functions</summary>
+        <div class="collapse-body" v-html="renderMd(searchResult)"></div>
+      </details>
+    </template>
+
+    <template v-else-if="message.action === 'generate_and_execute'">
+      <template v-if="attempts.length">
+        <div v-for="(att, i) in attempts" :key="i" class="attempt-block">
+          <details class="msg-collapse" :open="i === attempts.length - 1">
+            <summary class="collapse-summary">
+              Attempt {{ i + 1 }}
+              <span v-if="att.error" class="attempt-status error">❌</span>
+              <span v-else-if="att.result" class="attempt-status success">✅</span>
+            </summary>
+            <div class="collapse-body">
+              <details v-if="att.code" class="msg-collapse">
+                <summary class="collapse-summary">Code (Attempt {{ i + 1 }})</summary>
+                <div class="collapse-body">
+                  <pre><code class="language-python">{{ att.code }}</code></pre>
+                </div>
+              </details>
+              <details v-if="att.result" class="msg-collapse" open>
+                <summary class="collapse-summary">Result (Attempt {{ i + 1 }})</summary>
+                <div class="collapse-body" v-html="renderMd(att.result)"></div>
+              </details>
+              <div v-if="att.error" class="error-block">
+                <strong>Error:</strong> {{ att.error }}
+              </div>
+            </div>
+          </details>
+        </div>
+      </template>
+      <template v-else>
+        <details v-if="message.code" class="msg-collapse">
+          <summary class="collapse-summary">Code</summary>
+          <div class="collapse-body">
+            <pre><code class="language-python">{{ message.code }}</code></pre>
+          </div>
+        </details>
+        <details v-if="message.result" class="msg-collapse" open>
+          <summary class="collapse-summary">Result</summary>
+          <div class="collapse-body" v-html="renderMd(message.result)"></div>
+        </details>
+        <div v-if="message.error" class="error-block">
+          <strong>Error:</strong> {{ message.error }}
+        </div>
+      </template>
+    </template>
+
+    <template v-else-if="message.action === 'solved'">
+      <div class="solved-content" v-html="renderMd(message.solved_ans || '')"></div>
+    </template>
+
+    <template v-else-if="isFrontendAction">
+      <details class="msg-collapse" :open="!message.collapsed">
+        <summary class="collapse-summary">{{ frontendActionLabel }}</summary>
+        <div class="collapse-body" v-html="renderMd(message.text || '')"></div>
+      </details>
+    </template>
+
+    <template v-else>
+      <details v-if="hasSearchResult" class="msg-collapse">
+        <summary class="collapse-summary">Search Results: {{ message.action }}</summary>
+        <div class="collapse-body" v-html="renderMd(searchResult)"></div>
+      </details>
+      <div v-else class="raw-content">
+        <pre><code>{{ formatJson(message) }}</code></pre>
+      </div>
+    </template>
+
+    <template v-if="message.subPhases?.length">
+      <div v-for="sub in message.subPhases" :key="sub.name" class="sub-phase">
+        <details class="msg-collapse" :open="sub.name === 'output_text' || sub.name === 'summary' || sub.name === 'completion'">
+          <summary class="collapse-summary">{{ subPhaseLabel(sub.name) }}</summary>
+          <div class="collapse-body">
+            <div v-if="sub.name === 'explore_schema' || sub.name === 'explore_functions'">
+              <div v-html="renderMd(sub.content)"></div>
+            </div>
+            <div v-else v-html="renderMd(sub.content)"></div>
+            <span v-if="sub.streaming" class="blink-cursor">|</span>
+          </div>
+        </details>
+      </div>
+    </template>
+  </div>
+</template>
+
+<script setup>
+import { computed } from 'vue'
+import { renderMarkdown } from '@/utils/markdown.js'
+
+const props = defineProps({
+  message: { type: Object, required: true },
+})
+
+const FRONTEND_ACTIONS = ['output_text', 'ask_question', 'ask_choice', 'summary_and_pause', 'attempt_completion']
+
+const isFrontendAction = computed(() => FRONTEND_ACTIONS.includes(props.message.action))
+
+const frontendActionLabel = computed(() => {
+  const a = props.message.action
+  if (a === 'output_text') return 'Output'
+  if (a === 'ask_question') return 'Question'
+  if (a === 'ask_choice') return 'Choice'
+  if (a === 'summary_and_pause') return 'Summary'
+  if (a === 'attempt_completion') return 'Completion'
+  return a
+})
+
+const attempts = computed(() => {
+  return props.message.attempts || props.message.parsed?.attempts || []
+})
+
+const selectedFields = computed(() => {
+  return props.message.selected_fields || props.message.parsed?.selected_fields
+})
+
+const hasSelectedFields = computed(() => selectedFields.value != null)
+
+const selectedFunctions = computed(() => {
+  return props.message.selected_functions || props.message.parsed?.selected_functions
+})
+
+const hasSelectedFunctions = computed(() => selectedFunctions.value != null)
+
+const searchResult = computed(() => {
+  return props.message.search_result || props.message.parsed?.search_result
+})
+
+const hasSearchResult = computed(() => !!searchResult.value)
+
+function renderMd(text) {
+  return renderMarkdown(text || '')
+}
+
+function formatJson(obj) {
+  try {
+    return JSON.stringify(obj, null, 2)
+  } catch {
+    return String(obj)
+  }
+}
+
+function subPhaseLabel(name) {
+  const labels = {
+    explore_schema: 'Search Results: explore_schema',
+    explore_functions: 'Search Results: explore_functions',
+    generate: 'Generated Code',
+    code: 'Generated Code',
+    exec: 'Execution Output',
+    output_text: 'Output',
+    summary: 'Summary',
+    completion: 'Completion',
+    ask_question: 'Question',
+    ask_choice: 'Choice',
+  }
+  return labels[name] || name
+}
+</script>

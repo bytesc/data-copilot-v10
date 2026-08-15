@@ -21,6 +21,8 @@ from agent.plain_chat import get_plain_chat, get_plain_chat_stream
 from agent.data_comment import get_llm_data_comment
 
 from data_access.insert_data_from_csv import process_csv_to_database
+from data_access.read_db import get_all_comments_from_table
+from data_access.db_conn import engine
 from utils.get_config import config_data
 
 from agent.agent import  generate_and_execute_stream, get_db
@@ -109,6 +111,49 @@ class UserInputLog(BaseModel):
 async def get_sessions(request: Request, limit: int = 50):
     sessions = list_sessions(limit)
     return JSONResponse(content={"sessions": sessions})
+
+
+@app.get("/api/db-overview/")
+async def get_db_overview(request: Request):
+    def _get_overview():
+        import pandas as pd
+        from sqlalchemy import text, inspect
+        from sqlalchemy.exc import SQLAlchemyError
+        inspector = inspect(engine)
+        table_names = inspector.get_table_names()
+        tables = []
+        for table_name in table_names:
+            try:
+                table_comment = inspector.get_table_comment(table_name)
+                columns = inspector.get_columns(table_name)
+                cols = []
+                for col in columns:
+                    cols.append({"name": col["name"], "comment": col.get("comment", "") or ""})
+                rows = []
+                try:
+                    with engine.connect() as conn:
+                        df = pd.read_sql(text(f"SELECT * FROM `{table_name}` LIMIT 5"), conn)
+                        for _, row in df.iterrows():
+                            rows.append({k: str(v) if v is not None else "" for k, v in row.items()})
+                except Exception:
+                    pass
+                tables.append({
+                    "name": table_name,
+                    "comment": (table_comment or {}).get("text", "") or "",
+                    "columns": cols,
+                    "rows": rows,
+                })
+            except SQLAlchemyError as e:
+                tables.append({
+                    "name": table_name,
+                    "comment": "",
+                    "columns": [],
+                    "rows": [],
+                })
+        return {"tables": tables}
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(executor, _get_overview)
+    return JSONResponse(content=result)
 
 
 @app.get("/api/session/{session_id}/history")
