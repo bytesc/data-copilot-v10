@@ -15,6 +15,7 @@ from agent.tools.search_func import get_func_catalog_markdown, search_func_by_ke
 from agent.tools.get_function_info import FUNCTION_DICT
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, update_session_history
+from utils.front_utils import history_to_text
 
 router = APIRouter()
 
@@ -23,13 +24,13 @@ class ActInput(BaseModel):
     question: str
     action: str
     session_id: Optional[str] = None
-    conversation_history: Optional[List[str]] = None
+    conversation_history: Optional[List[dict]] = None
     params: Optional[Dict[str, Any]] = None
 
 
-def _build_context(question: str, conversation_history: Optional[List[str]]):
+def _build_context(question: str, conversation_history: Optional[List[dict]]):
     if conversation_history:
-        return "\n".join(conversation_history)
+        return history_to_text(conversation_history)
     return question
 
 
@@ -37,7 +38,7 @@ def _event_stream_act(
     question: str,
     action: str,
     session_id: str,
-    conversation_history: Optional[List[str]],
+    conversation_history: Optional[List[dict]],
     params: Optional[Dict[str, Any]] = None,
     request_json: str = "",
 ):

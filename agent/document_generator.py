@@ -19,12 +19,13 @@ from agent.utils.pd_to_walker import generate_random_string
 from agent.utils.get_config import config_data
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
+from utils.front_utils import history_to_text
 
 router = APIRouter()
 
 
 class DocumentInput(BaseModel):
-    conversation_history: List[str]
+    conversation_history: List[dict]
     session_id: Optional[str] = None
 
 
@@ -227,8 +228,8 @@ def _parse_outline_json(raw: str) -> dict:
     }
 
 
-def _event_stream_generate_document(conversation_history: List[str], session_id: str, request_json: str = ""):
-    context = "\n".join(conversation_history)
+def _event_stream_generate_document(conversation_history: List[dict], session_id: str, request_json: str = ""):
+    context = history_to_text(conversation_history)
 
     yield f"data: {json.dumps({'phase': 'outline', 'type': 'msg', 'content': 'Generating document outline...'}, ensure_ascii=False)}\n\n"
 

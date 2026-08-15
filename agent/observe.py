@@ -10,6 +10,7 @@ from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, update_session_history
+from utils.front_utils import history_to_text
 
 router = APIRouter()
 
@@ -17,14 +18,14 @@ router = APIRouter()
 class ObserveInput(BaseModel):
     question: str
     session_id: Optional[str] = None
-    conversation_history: Optional[List[str]] = None
+    conversation_history: Optional[List[dict]] = None
     cycle_index: int = 0
 
 
 def _event_stream_observe(
     question: str,
     session_id: str,
-    conversation_history: Optional[List[str]],
+    conversation_history: Optional[List[dict]],
     cycle_index: int,
     request_json: str = "",
 ):
@@ -32,7 +33,7 @@ def _event_stream_observe(
     yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'status', 'content': '正在审查执行结果...'}, ensure_ascii=False)}\n\n"
 
     if conversation_history:
-        context = "\n".join(conversation_history)
+        context = history_to_text(conversation_history)
     else:
         context = ""
 

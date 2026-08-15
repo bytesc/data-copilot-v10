@@ -35,6 +35,7 @@ observe_session_log = Table(
     Column("total_cycles", Integer, comment="总循环次数"),
     Column("total_tokens", Integer, comment="总token数"),
     Column("conversation_history", Text, comment="完整对话上下文(JSON数组)"),
+    Column("trimmed_context", Text, comment="送给LLM的裁剪后上下文(JSON数组)"),
     Column("created_at", DateTime, comment="创建时间"),
     Column("updated_at", DateTime, comment="更新时间"),
 )
@@ -43,6 +44,7 @@ observe_session_log = Table(
 def create_observe_log_tables():
     metadata.create_all(sys_engine)
     _ensure_column_exists(sys_engine, "observe_session_log", "conversation_history", "TEXT COMMENT 'conversation history' AFTER total_tokens")
+    _ensure_column_exists(sys_engine, "observe_session_log", "trimmed_context", "TEXT COMMENT 'trimmed context for LLM' AFTER conversation_history")
 
 
 def _ensure_column_exists(engine, table_name, column_name, column_def):
@@ -175,6 +177,41 @@ def update_session_history(session_id, conversation_history):
             conn.commit()
     except Exception as e:
         print(f"更新会话历史失败: {e}")
+
+
+def save_trimmed_context(session_id, trimmed_context):
+    if not session_id:
+        return
+    try:
+        import json
+        context_json = json.dumps(trimmed_context, ensure_ascii=False)
+        with sys_engine.connect() as conn:
+            existing = conn.execute(
+                select(observe_session_log).where(
+                    observe_session_log.c.session_id == session_id
+                )
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    observe_session_log.update().where(
+                        observe_session_log.c.session_id == session_id
+                    ).values(
+                        trimmed_context=context_json,
+                        updated_at=datetime.now(),
+                    )
+                )
+            else:
+                conn.execute(
+                    insert(observe_session_log).values(
+                        session_id=session_id,
+                        trimmed_context=context_json,
+                        created_at=datetime.now(),
+                        updated_at=datetime.now(),
+                    )
+                )
+            conn.commit()
+    except Exception as e:
+        print(f"保存裁剪上下文失败: {e}")
 
 
 def get_session_history(session_id, limit=50):
@@ -317,14 +354,14 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
 
     history = []
     if question:
-        history.append(f"Q: {question}")
+        history.append({"role": "user", "type": "question", "content": question})
 
     for ts, etype, entry in all_entries:
         if etype == "op":
             ep = entry.get("api_endpoint", "")
             if ep == "/api/generate-document/stream/":
                 msg = entry.get("msg", "")
-                history.append(f"[DOCUMENT] {msg}")
+                history.append({"role": "assistant", "type": "document", "content": msg})
         elif etype == "cycle":
             phase = entry.get("phase", "")
             sub_phase = entry.get("sub_phase", "")
@@ -335,31 +372,51 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
             user_decision = entry.get("user_decision", "") or ""
             if phase == "think" and sub_phase == "plan":
                 if response:
-                    history.append(f"[THINK] Plan:\n{response}")
+                    history.append({"role": "assistant", "type": "think", "content": response})
             elif phase == "action" and sub_phase == "decide":
                 if response:
-                    history.append(f"[ACTION] Decision:\n{response}")
+                    history.append({"role": "assistant", "type": "action_decision", "content": response})
                     action_type, action_text = _parse_action_decision(response)
                     if action_type and action_text:
-                        history.append(f"[ACT {action_type}] Output:\n{action_text}")
+                        act_entry = {"role": "assistant", "type": "act", "action": action_type, "text": action_text}
+                        if action_type == "ask_question":
+                            act_entry["needs_user_input"] = True
+                        elif action_type == "ask_choice":
+                            act_entry["needs_user_input"] = True
+                            act_entry["choices"] = []
+                        elif action_type == "summary_and_pause":
+                            act_entry["paused"] = True
+                        elif action_type == "attempt_completion":
+                            act_entry["completed"] = True
+                        history.append(act_entry)
             elif phase == "observe" and sub_phase == "review":
                 if response:
-                    history.append(f"[OBSERVE] Review:\n{response}")
+                    history.append({"role": "assistant", "type": "observe", "action": "", "content": response})
             elif phase == "act" and sub_phase == "explore_schema":
                 if exec_result:
-                    history.append(f"[ACT explore_schema] Results:\n{exec_result}")
+                    history.append({"role": "assistant", "type": "act", "action": "explore_schema", "search_result": exec_result})
             elif phase == "act" and sub_phase == "explore_functions":
                 if exec_result:
-                    history.append(f"[ACT explore_functions] Results:\n{exec_result}")
+                    history.append({"role": "assistant", "type": "act", "action": "explore_functions", "search_result": exec_result})
             elif phase == "act" and sub_phase == "generate_and_execute":
+                act_entry = {"role": "assistant", "type": "act", "action": "generate_and_execute"}
                 if exec_code:
-                    history.append(f"[ACT generate_and_execute] Code:\n{exec_code}")
+                    act_entry["code"] = exec_code
                 if exec_error:
-                    history.append(f"[ACT generate_and_execute] Error:\n{exec_error}")
+                    act_entry["error"] = exec_error
                 elif exec_result:
-                    history.append(f"[ACT generate_and_execute] Result:\n{exec_result}")
+                    act_entry["result"] = exec_result
+                if act_entry.get("code") or act_entry.get("result") or act_entry.get("error"):
+                    history.append(act_entry)
             elif phase == "user" and sub_phase == "input":
                 if user_decision:
-                    history.append(user_decision)
+                    if user_decision.startswith("User chose: "):
+                        history.append({"role": "user", "type": "choice", "content": user_decision[12:]})
+                    elif user_decision.startswith("User response: "):
+                        history.append({"role": "user", "type": "response", "content": user_decision[15:]})
+                    elif user_decision.startswith("User: "):
+                        history.append({"role": "user", "type": "input", "content": user_decision[6:]})
+                    else:
+                        history.append({"role": "user", "type": "input", "content": user_decision})
 
     return history

@@ -16,8 +16,9 @@ from pywebio.output import (
 from pywebio import start_server
 
 from data_access.read_db import get_rows_from_all_tables, get_table_comments_dict, get_all_comments_from_table
+from data_access.observe_log import save_trimmed_context
 from utils.front_utils import (
-    upload_csv_api, upload_doc_api,
+    upload_csv_api, upload_doc_api, history_to_text,
 )
 from utils.get_config import config_data
 
@@ -110,38 +111,36 @@ ACTIONS = {
 FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
 
 
-def _get_history_category(entry: str) -> Optional[str]:
-    if entry.startswith("[THINK]"):
+def _get_entry_category(entry: dict) -> Optional[str]:
+    role = entry.get("role", "")
+    entry_type = entry.get("type", "")
+    if role == "user":
+        return None
+    if entry_type == "think":
         return "think"
-    if entry.startswith("[ACTION]"):
+    if entry_type == "action_decision":
         return "action"
-    if entry.startswith("[ACT explore_schema]"):
-        return "act_explore_db"
-    if entry.startswith("[ACT explore_functions]"):
-        return "act_explore_func"
-    if entry.startswith("[ACT generate_and_execute] Code:"):
-        return "act_code"
-    if entry.startswith("[ACT generate_and_execute] Result:"):
-        return "act_result"
-    if entry.startswith("[ACT generate_and_execute] Error:"):
-        return "act_error"
-    if entry.startswith("[ACT] Solved"):
-        return "act_solved"
-    if entry.startswith("[ACT "):
-        rest = entry[5:]
-        end_bracket = rest.find("]")
-        if end_bracket > 0:
-            action_name = rest[:end_bracket]
-            if action_name in FRONTEND_ACTIONS:
-                return f"act_{action_name}"
+    if entry_type == "act":
+        action = entry.get("action", "")
+        if action == "explore_schema":
+            return "act_explore_db"
+        if action == "explore_functions":
+            return "act_explore_func"
+        if action == "generate_and_execute":
+            if entry.get("code"):
+                return "act_code"
+            if entry.get("error"):
+                return "act_error"
+            return "act_result"
+        if action == "solved":
+            return "act_solved"
+        if action in FRONTEND_ACTIONS:
+            return f"act_{action}"
         return "act_search_result"
-    if entry.startswith("[OBSERVE "):
-        rest = entry[9:]
-        end_bracket = rest.find("]")
-        if end_bracket > 0:
-            action_name = rest[:end_bracket]
-            return f"observe_{action_name}"
-    if entry.startswith("[OBSERVE]"):
+    if entry_type == "observe":
+        action = entry.get("action", "")
+        if action:
+            return f"observe_{action}"
         return "observe"
     return None
 
@@ -156,12 +155,12 @@ def _get_retention_limit(category: str) -> Optional[int]:
     return None
 
 
-def trim_conversation_history(history: List[str]):
+def trim_conversation_history(history: List[dict]):
     keep_indices = set()
     from_end_counts = {}
 
     for i in range(len(history) - 1, -1, -1):
-        cat = _get_history_category(history[i])
+        cat = _get_entry_category(history[i])
         if cat is None:
             keep_indices.add(i)
             continue
@@ -198,7 +197,7 @@ def _sse_stream(url: str, payload: dict):
 
 def think_api_stream(
     question: str,
-    conversation_history: Optional[List[str]] = None,
+    conversation_history: Optional[List[dict]] = None,
     session_id: str = "",
 ):
     payload = {"question": question, "session_id": session_id}
@@ -210,7 +209,7 @@ def think_api_stream(
 def act_api_stream(
     action: str,
     question: str,
-    conversation_history: Optional[List[str]] = None,
+    conversation_history: Optional[List[dict]] = None,
     session_id: str = "",
     params: Optional[dict] = None,
 ):
@@ -224,7 +223,7 @@ def act_api_stream(
 
 def observe_api_stream(
     question: str,
-    conversation_history: Optional[List[str]] = None,
+    conversation_history: Optional[List[dict]] = None,
     cycle_index: int = 0,
     session_id: str = "",
 ):
@@ -242,7 +241,7 @@ def action_api_stream(
     question: str,
     selected_fields: Optional[dict] = None,
     selected_functions: Optional[List[str]] = None,
-    conversation_history: Optional[List[str]] = None,
+    conversation_history: Optional[List[dict]] = None,
     cycle_index: int = 0,
     session_id: str = "",
 ):
@@ -261,7 +260,7 @@ def action_api_stream(
 
 
 def generate_document_api_stream(
-    conversation_history: List[str],
+    conversation_history: List[dict],
     session_id: str = "",
 ):
     payload = {
@@ -843,7 +842,7 @@ def handle_user_interaction(act_result, conversation_history, session_id, cycle_
                     act_result["full_ans"],
                     options=[{"label": c, "value": c} for c in act_result["choices"]]
                 )
-                conversation_history.append(f"User chose: {user_choice}")
+                conversation_history.append({"role": "user", "type": "choice", "content": user_choice})
                 log_user_input_api(session_id, cycle_index, f"User chose: {user_choice}")
                 put_collapse("User Choice", [
                     put_markdown(f"**Selected:** {user_choice}", sanitize=False)
@@ -852,7 +851,7 @@ def handle_user_interaction(act_result, conversation_history, session_id, cycle_
             else:
                 phase_header("user", "USER - Input Required")
                 user_response = input(act_result["full_ans"], type=TEXT)
-                conversation_history.append(f"User response: {user_response}")
+                conversation_history.append({"role": "user", "type": "response", "content": user_response})
                 log_user_input_api(session_id, cycle_index, f"User response: {user_response}")
                 put_collapse("User Input", [
                     put_markdown(user_response, sanitize=False)
@@ -864,7 +863,7 @@ def handle_user_interaction(act_result, conversation_history, session_id, cycle_
             user_input = textarea("Continue or new instruction:", value="continue", type=TEXT, rows=2)
             if not user_input.strip():
                 user_input = "continue"
-            conversation_history.append(f"User: {user_input}")
+            conversation_history.append({"role": "user", "type": "input", "content": user_input})
             log_user_input_api(session_id, cycle_index, f"User: {user_input}")
             put_collapse("User Input", [
                 put_markdown(user_input, sanitize=False)
@@ -1048,8 +1047,7 @@ def main():
 
         with put_collapse("Conversation History", open=False):
             for entry in conversation_history:
-                escaped = entry.replace("`", "\\`").replace("$", "\\$")
-                put_markdown(escaped, sanitize=False)
+                put_markdown(json.dumps(entry, ensure_ascii=False, indent=2), sanitize=False)
 
         toast("Session restored. Enter your next question below.", color='success')
 
@@ -1063,12 +1061,12 @@ def main():
     put_markdown("## " + question)
 
     if _resumed:
-        conversation_history.append(f"Q: {question}")
+        conversation_history.append({"role": "user", "type": "question", "content": question})
         _resumed = False
     else:
-        conversation_history = [f"Q: {question}"]
+        conversation_history = [{"role": "user", "type": "question", "content": question}]
         cycle_index = 0
-    max_cycles = 200
+    max_cycles = 999
 
     while True:
         try:
@@ -1081,28 +1079,29 @@ def main():
                     break
                 put_markdown("## " + question)
                 if _resumed:
-                    conversation_history.append(f"Q: {question}")
+                    conversation_history.append({"role": "user", "type": "question", "content": question})
                     _resumed = False
                 else:
-                    conversation_history = [f"Q: {question}"]
+                    conversation_history = [{"role": "user", "type": "question", "content": question}]
                 cycle_index = 0
                 continue
 
             trim_conversation_history(conversation_history)
+            save_trimmed_context(session_id, conversation_history)
 
             _, raw_plan = run_think_phase(
                 cycle_index, question, conversation_history, session_id,
             )
-            conversation_history.append(f"[THINK] Plan:\n{raw_plan}")
+            conversation_history.append({"role": "assistant", "type": "think", "content": raw_plan})
 
-            full_question = "\n".join(conversation_history)
+            full_question = history_to_text(conversation_history)
 
             action_result, raw_decision = run_action_phase(
                 cycle_index, question,
                 conversation_history, session_id,
             )
             action = action_result.get("action")
-            conversation_history.append(f"[ACTION] Decision:\n{raw_decision}")
+            conversation_history.append({"role": "assistant", "type": "action_decision", "content": raw_decision})
             print(f"[DEBUG] action_result: {json.dumps(action_result, ensure_ascii=False, default=str)}")
             if not action:
                 toast(f"Action failed: {action_result.get('error', 'unknown')}", color='error')
@@ -1111,10 +1110,10 @@ def main():
                     break
                 put_markdown("## " + question)
                 if _resumed:
-                    conversation_history.append(f"Q: {question}")
+                    conversation_history.append({"role": "user", "type": "question", "content": question})
                     _resumed = False
                 else:
-                    conversation_history = [f"Q: {question}"]
+                    conversation_history = [{"role": "user", "type": "question", "content": question}]
                 continue
             search_keyword = action_result.get("keyword")
             plan_funcs = action_result.get("funcs")
@@ -1138,13 +1137,21 @@ def main():
             print(f"[DEBUG] act_result: needs_user_input={act_result.get('needs_user_input')}, paused={act_result.get('paused')}, completed={act_result.get('completed')}, function_solved={act_result.get('function_solved')}")
 
             if act_result["selected_fields"] is not None:
-                conversation_history.append(f"[ACT explore_schema] Selected Fields: {json.dumps(act_result['selected_fields'], ensure_ascii=False)}")
+                conversation_history.append({"role": "assistant", "type": "act", "action": "explore_schema", "selected_fields": act_result["selected_fields"]})
             if act_result.get("explore_plan"):
-                conversation_history.append(f"[ACT explore_schema] Query Plan:\n{act_result['explore_plan']}")
+                existing = conversation_history[-1] if conversation_history and conversation_history[-1].get("action") == "explore_schema" else None
+                if existing:
+                    existing["explore_plan"] = act_result["explore_plan"]
+                else:
+                    conversation_history.append({"role": "assistant", "type": "act", "action": "explore_schema", "explore_plan": act_result["explore_plan"]})
             if act_result["selected_functions"] is not None:
-                conversation_history.append(f"[ACT explore_functions] Selected Functions: {json.dumps(act_result['selected_functions'], ensure_ascii=False)}")
+                conversation_history.append({"role": "assistant", "type": "act", "action": "explore_functions", "selected_functions": act_result["selected_functions"]})
             if act_result.get("search_result"):
-                conversation_history.append(f"[ACT {action}] Results:\n{act_result['search_result']}")
+                existing = conversation_history[-1] if conversation_history else None
+                if existing and existing.get("role") == "assistant" and existing.get("type") == "act" and existing.get("action") == action:
+                    existing["search_result"] = act_result["search_result"]
+                else:
+                    conversation_history.append({"role": "assistant", "type": "act", "action": action, "search_result": act_result["search_result"]})
             function_solved = act_result["function_solved"]
             full_code = act_result["full_code"]
             full_ans = act_result["full_ans"]
@@ -1153,18 +1160,18 @@ def main():
             if function_solved:
                 solved_ans = act_result["solved_ans"]
                 if solved_ans:
-                    conversation_history.append(f"[ACT] Solved Answer:\n{solved_ans}")
+                    conversation_history.append({"role": "assistant", "type": "act", "action": "solved", "solved_ans": solved_ans})
                 continue
 
             if full_ans and not exec_error and full_code:
-                conversation_history.append(f"[ACT generate_and_execute] Code:\n{full_code}")
-                conversation_history.append(f"[ACT generate_and_execute] Result:\n{full_ans}")
+                conversation_history.append({"role": "assistant", "type": "act", "action": "generate_and_execute", "code": full_code, "result": full_ans})
             elif exec_error:
+                entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "error": exec_error}
                 if full_code:
-                    conversation_history.append(f"[ACT generate_and_execute] Code:\n{full_code}")
-                conversation_history.append(f"[ACT generate_and_execute] Error:\n{exec_error}")
+                    entry["code"] = full_code
+                conversation_history.append(entry)
             elif full_ans and action in FRONTEND_ACTIONS:
-                conversation_history.append(f"[ACT {action}] Output:\n{full_ans}")
+                conversation_history.append({"role": "assistant", "type": "act", "action": action, "text": full_ans})
 
             user_interaction = handle_user_interaction(act_result, conversation_history, session_id, cycle_index)
             if user_interaction.get("completed"):
@@ -1173,10 +1180,10 @@ def main():
                     continue
                 put_markdown("## " + question)
                 if _resumed:
-                    conversation_history.append(f"Q: {question}")
+                    conversation_history.append({"role": "user", "type": "question", "content": question})
                     _resumed = False
                 else:
-                    conversation_history = [f"Q: {question}"]
+                    conversation_history = [{"role": "user", "type": "question", "content": question}]
                 continue
 
             observe_result, raw_review = run_observe_phase(
@@ -1185,7 +1192,7 @@ def main():
             )
 
             if observe_result.get("description"):
-                conversation_history.append(f"[OBSERVE {action}] Review:\n{raw_review}")
+                conversation_history.append({"role": "assistant", "type": "observe", "action": action, "content": raw_review})
         except Exception as e:
             action_name = action if 'action' in dir() else '?'
             print(f"[ERROR] main loop cycle={cycle_index}, action={action_name}")
@@ -1196,10 +1203,10 @@ def main():
                 break
             put_markdown("## " + question)
             if _resumed:
-                conversation_history.append(f"Q: {question}")
+                conversation_history.append({"role": "user", "type": "question", "content": question})
                 _resumed = False
             else:
-                conversation_history = [f"Q: {question}"]
+                conversation_history = [{"role": "user", "type": "question", "content": question}]
             continue
 
 

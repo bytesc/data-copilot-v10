@@ -12,6 +12,7 @@ from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.observe_log import log_observe_cycle, update_session_history
 from data_access.session_log import record_session_operation
 from agent.tools.tools_def import engine
+from utils.front_utils import history_to_text
 
 router = APIRouter()
 
@@ -25,7 +26,7 @@ VALID_ACTIONS = [
 class ActionInput(BaseModel):
     question: str
     session_id: Optional[str] = None
-    conversation_history: Optional[List[str]] = None
+    conversation_history: Optional[List[dict]] = None
     cycle_index: int = 0
 
 
@@ -52,11 +53,11 @@ ACTIONS = """
 
 def _build_action_prompt(
         question: str,
-        conversation_history: Optional[List[str]],
+        conversation_history: Optional[List[dict]],
 ) -> str:
     context = ""
     if conversation_history:
-        context = "\n".join(conversation_history)
+        context = history_to_text(conversation_history)
 
     db_summary = get_db_summary_for_agent(engine)
     func_catalog = get_func_summary_for_agent()
@@ -90,7 +91,7 @@ Decision Rules:
 def _event_stream_action(
         question: str,
         session_id: str,
-        conversation_history: Optional[List[str]],
+        conversation_history: Optional[List[dict]],
         cycle_index: int,
         request_json: str = "",
 ):

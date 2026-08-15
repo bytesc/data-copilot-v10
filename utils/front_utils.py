@@ -16,6 +16,65 @@ import requests
 from utils.get_config import config_data
 
 
+FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
+
+
+def history_to_text(history: List[dict]) -> str:
+    lines = []
+    for entry in history:
+        role = entry.get("role", "")
+        entry_type = entry.get("type", "")
+        if role == "user":
+            utype = entry.get("type", "question")
+            content = entry.get("content", "")
+            if utype == "question":
+                lines.append(f"Q: {content}")
+            elif utype == "choice":
+                lines.append(f"User chose: {content}")
+            elif utype == "response":
+                lines.append(f"User response: {content}")
+            elif utype == "input":
+                lines.append(f"User: {content}")
+        elif entry_type == "think":
+            lines.append(f"[THINK] Plan:\n{entry.get('content', '')}")
+        elif entry_type == "action_decision":
+            lines.append(f"[ACTION] Decision:\n{entry.get('content', '')}")
+        elif entry_type == "act":
+            action = entry.get("action", "")
+            if action == "explore_schema":
+                if entry.get("selected_fields") is not None:
+                    lines.append(f"[ACT explore_schema] Selected Fields: {json.dumps(entry['selected_fields'], ensure_ascii=False)}")
+                if entry.get("explore_plan"):
+                    lines.append(f"[ACT explore_schema] Query Plan:\n{entry['explore_plan']}")
+                if entry.get("search_result"):
+                    lines.append(f"[ACT explore_schema] Results:\n{entry['search_result']}")
+            elif action == "explore_functions":
+                if entry.get("selected_functions") is not None:
+                    lines.append(f"[ACT explore_functions] Selected Functions: {json.dumps(entry['selected_functions'], ensure_ascii=False)}")
+                if entry.get("search_result"):
+                    lines.append(f"[ACT explore_functions] Results:\n{entry['search_result']}")
+            elif action == "generate_and_execute":
+                if entry.get("code"):
+                    lines.append(f"[ACT generate_and_execute] Code:\n{entry['code']}")
+                if entry.get("error"):
+                    lines.append(f"[ACT generate_and_execute] Error:\n{entry['error']}")
+                elif entry.get("result"):
+                    lines.append(f"[ACT generate_and_execute] Result:\n{entry['result']}")
+            elif action == "solved":
+                if entry.get("solved_ans"):
+                    lines.append(f"[ACT] Solved Answer:\n{entry['solved_ans']}")
+            elif action in FRONTEND_ACTIONS:
+                if entry.get("text"):
+                    lines.append(f"[ACT {action}] Output:\n{entry['text']}")
+            else:
+                if entry.get("search_result"):
+                    lines.append(f"[ACT {action}] Results:\n{entry['search_result']}")
+        elif entry_type == "observe":
+            action = entry.get("action", "")
+            lines.append(f"[OBSERVE {action}] Review:\n{entry.get('content', '')}")
+    return "\n".join(lines)
+
+
 def ai_agent_api(question: str, tables: Optional[List[str]] = None, path: str = "/api/ask-agent/",
                  url="http://127.0.0.1:" + str(config_data["server_port"]), session_id: str = ""):
     with httpx.Client(timeout=300.0) as client:
@@ -384,26 +443,47 @@ def export_full_to_word(conversation_history):
     doc.add_paragraph()
 
     for entry in conversation_history:
-        if entry.startswith('Q: '):
-            doc.add_heading('Question:', level=2)
-            doc.add_paragraph(entry[3:])
-        elif entry.startswith('A: '):
-            doc.add_heading('Answer:', level=2)
-            markdown_to_word(doc, entry[3:])
-        elif entry.startswith('Code Generated: '):
-            doc.add_heading('Generated Code:', level=2)
-            code_para = doc.add_paragraph()
-            code_run = code_para.add_run(entry[16:])
-            code_run.font.name = 'Courier New'
-            code_run.font.size = Pt(10)
-        elif entry.startswith('Exe Result: '):
-            doc.add_heading('Execution Result:', level=2)
-            markdown_to_word(doc, entry[12:])
-        elif entry.startswith('Planner: '):
-            doc.add_heading('Plan:', level=2)
-            markdown_to_word(doc, entry[9:])
+        if isinstance(entry, dict):
+            entry_type = entry.get("type", "")
+            content = entry.get("content", "")
+            if entry_type == "question":
+                doc.add_heading('Question:', level=2)
+                doc.add_paragraph(content)
+            elif entry_type == "think":
+                doc.add_heading('Plan:', level=2)
+                markdown_to_word(doc, content)
+            elif entry_type == "act":
+                action = entry.get("action", "")
+                code = entry.get("code", "")
+                result = entry.get("result", "")
+                error = entry.get("error", "")
+                text = entry.get("text", "")
+                solved_ans = entry.get("solved_ans", "")
+                if code:
+                    doc.add_heading('Generated Code:', level=2)
+                    code_para = doc.add_paragraph()
+                    code_run = code_para.add_run(code)
+                    code_run.font.name = 'Courier New'
+                    code_run.font.size = Pt(10)
+                if result:
+                    doc.add_heading('Execution Result:', level=2)
+                    markdown_to_word(doc, result)
+                if error:
+                    doc.add_heading('Error:', level=2)
+                    doc.add_paragraph(error)
+                if text:
+                    doc.add_heading(f'Output ({action}):', level=2)
+                    markdown_to_word(doc, text)
+                if solved_ans:
+                    doc.add_heading('Solved Answer:', level=2)
+                    markdown_to_word(doc, solved_ans)
+            elif entry_type == "observe":
+                doc.add_heading('Review:', level=2)
+                markdown_to_word(doc, content)
+            else:
+                doc.add_paragraph(json.dumps(entry, ensure_ascii=False, indent=2))
         else:
-            doc.add_paragraph(entry)
+            doc.add_paragraph(str(entry))
 
         doc.add_paragraph('_' * 50)
 
@@ -429,10 +509,21 @@ def export_essentials_to_word(conversation_history):
     answers = []
 
     for entry in conversation_history:
-        if entry.startswith('Q: ') and first_question is None:
-            first_question = entry[3:]
-        elif entry.startswith('A: '):
-            answers.append(entry[3:])
+        if isinstance(entry, dict):
+            if entry.get("type") == "question" and first_question is None:
+                first_question = entry.get("content", "")
+            elif entry.get("type") == "act":
+                text = entry.get("text", "")
+                result = entry.get("result", "")
+                solved_ans = entry.get("solved_ans", "")
+                if text:
+                    answers.append(text)
+                if result:
+                    answers.append(result)
+                if solved_ans:
+                    answers.append(solved_ans)
+        else:
+            answers.append(str(entry))
 
     if first_question:
         doc.add_paragraph(first_question)

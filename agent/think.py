@@ -13,6 +13,7 @@ from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, log_observe_session, update_session_history
+from utils.front_utils import history_to_text
 
 router = APIRouter()
 
@@ -20,20 +21,20 @@ router = APIRouter()
 class ThinkInput(BaseModel):
     question: str
     session_id: Optional[str] = None
-    conversation_history: Optional[List[str]] = None
+    conversation_history: Optional[List[dict]] = None
 
 
 def _event_stream_think(
     question: str,
     session_id: str,
-    conversation_history: Optional[List[str]],
+    conversation_history: Optional[List[dict]],
     request_json: str = "",
 ):
     """Think phase: pure LLM reasoning with custom prompt to generate a plan."""
     log_observe_session(session_id, question=question, status="active")
 
     if conversation_history:
-        context = "\n".join(conversation_history)
+        context = history_to_text(conversation_history)
     else:
         context = question
 
