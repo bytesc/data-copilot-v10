@@ -13,6 +13,13 @@ export async function fetchSessionHistory(sessionId) {
   return res.json()
 }
 
+export async function fetchGeneratedFiles(sessionId) {
+  const res = await fetch(`${BASE_URL}/session/${sessionId}/generated-files`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const data = await res.json()
+  return data.files || []
+}
+
 export async function logUserInput(sessionId, cycleIndex, userInput) {
   await fetch(`${BASE_URL}/log-user-input/`, {
     method: 'POST',

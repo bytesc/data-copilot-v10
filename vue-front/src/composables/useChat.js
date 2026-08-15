@@ -1,7 +1,7 @@
 import { ref, reactive, computed } from 'vue'
 import {
   thinkStream, actionStream, actStream, observeStream,
-  logUserInput, generateDocumentStream,
+  logUserInput, generateDocumentStream, fetchGeneratedFiles,
 } from '@/utils/api.js'
 
 export function useChat() {
@@ -18,6 +18,7 @@ export function useChat() {
   const isCompleted = ref(false)
 
   const messages = ref([])
+  const generatedFiles = ref([])
 
   const serverUrl = ref('http://127.0.0.1:8009')
 
@@ -637,6 +638,13 @@ export function useChat() {
     for (const entry of conversationHistory.value) {
       renderHistoryEntry(entry)
     }
+
+    try {
+      const files = await fetchGeneratedFiles(sessionId.value)
+      generatedFiles.value = files
+    } catch {
+      generatedFiles.value = []
+    }
   }
 
   function renderHistoryEntry(entry) {
@@ -759,6 +767,13 @@ export function useChat() {
           downloadUrlDocx: event.download_url_docx || '',
           completedParts: [...completedParts],
         })
+        generatedFiles.value.push({
+          id: docMsgId,
+          title: outlineData?.title || 'Document',
+          downloadUrlMd: event.download_url_md || event.download_url || '',
+          downloadUrlDocx: event.download_url_docx || '',
+          createdAt: Date.now(),
+        })
       }
     }
   }
@@ -780,6 +795,7 @@ export function useChat() {
     awaitingInput.value = false
     inputPrompt.value = ''
     inputChoices.value = []
+    generatedFiles.value = []
     sessionId.value = generateSessionId()
     question.value = ''
   }
@@ -788,6 +804,7 @@ export function useChat() {
     sessionId,
     question,
     messages,
+    generatedFiles,
     isRunning,
     isCompleted,
     isPaused,

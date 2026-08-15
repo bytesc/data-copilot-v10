@@ -76,11 +76,9 @@
             @click="onSubmitQuestion"
           >Send</button>
         </div>
-        <div class="context-info-row">
-          <div class="context-info-label">ICP 赔案号 · 附加说明</div>
-        </div>
       </div>
-    </div>
+
+      </div>
   </div>
 </template>
 

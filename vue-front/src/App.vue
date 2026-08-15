@@ -15,9 +15,19 @@
         @new-session="chat.reset()"
       />
     </aside>
-    <main class="chat-area">
-      <ChatArea :chat="chat" />
-    </main>
+    <div class="main-area">
+      <main class="chat-area">
+        <ChatArea :chat="chat" />
+      </main>
+      <IcpArea />
+    </div>
+
+    <aside class="right-panel" :class="{ collapsed: isRightPanelCollapsed }">
+      <div class="panel-toggle right" @click="isRightPanelCollapsed = !isRightPanelCollapsed">
+        {{ isRightPanelCollapsed ? '◀' : '▶' }}
+      </div>
+      <RightPanel :files="chat.generatedFiles.value" />
+    </aside>
 
     <UploadModal
       v-if="showUploadCsv"
@@ -44,12 +54,15 @@
 import { ref } from 'vue'
 import { useChat } from '@/composables/useChat.js'
 import LeftPanel from '@/components/LeftPanel.vue'
+import RightPanel from '@/components/RightPanel.vue'
 import ChatArea from '@/components/ChatArea.vue'
+import IcpArea from '@/components/IcpArea.vue'
 import UploadModal from '@/components/UploadModal.vue'
 import ResumeModal from '@/components/ResumeModal.vue'
 
 const chat = useChat()
 const isPanelCollapsed = ref(false)
+const isRightPanelCollapsed = ref(false)
 const showUploadCsv = ref(false)
 const showUploadDoc = ref(false)
 const showResume = ref(false)

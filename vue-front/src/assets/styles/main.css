@@ -62,6 +62,33 @@ html, body {
   overflow: hidden;
 }
 
+.right-panel {
+  width: var(--panel-width);
+  min-width: var(--panel-width);
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  position: relative;
+  transition: width 0.3s, min-width 0.3s;
+}
+
+.right-panel.collapsed {
+  width: 0;
+  min-width: 0;
+  border-left: none;
+  overflow: hidden;
+}
+
+.panel-toggle.right {
+  right: auto;
+  left: -20px;
+  border-left: 1px solid var(--border-color);
+  border-right: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
 .panel-toggle {
   position: absolute;
   top: 12px;
@@ -187,6 +214,14 @@ html, body {
 
 .btn-icon {
   font-size: 14px;
+}
+
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .chat-area {
@@ -463,6 +498,12 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.icp-area {
+  border-top: 1px solid var(--border-color);
+  padding: 10px 20px;
+  background: var(--bg-secondary);
 }
 
 .context-info-row {
@@ -997,14 +1038,74 @@ html, body {
     display: none;
   }
 
-  .chat-area {
-    flex: 1;
-  }
-
   .send-btn {
     padding: 10px 16px;
     font-size: 13px;
   }
+
+  .right-panel {
+    display: none;
+  }
+}
+
+.right-panel-inner {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.right-panel-header {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.right-panel-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 16px 0;
+  text-align: center;
+}
+
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-item {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-title {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  word-break: break-word;
+}
+
+.file-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.file-actions .download-btn {
+  padding: 4px 10px;
+  font-size: 12px;
 }
 
 ::-webkit-scrollbar {
