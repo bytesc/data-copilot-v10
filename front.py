@@ -16,7 +16,6 @@ from pywebio.output import (
 from pywebio import start_server
 
 from data_access.read_db import get_rows_from_all_tables, get_table_comments_dict, get_all_comments_from_table
-from data_access.observe_log import save_trimmed_context
 from utils.front_utils import (
     upload_csv_api, upload_doc_api, history_to_text,
 )
@@ -56,32 +55,6 @@ def log_user_input_api(session_id: str, cycle_index: int, user_input: str):
         print(f"记录用户输入失败: {e}")
 
 
-HISTORY_RETENTION = {
-    "think": 3,
-    "action": 3,
-    "act_code": 1,
-    "act_result": 999,
-    "act_error": 1,
-    "act_explore_db": 999,
-    "act_explore_func": 999,
-    "act_search_result": 3,
-    "act_solved": 999,
-    "act_output_text": 999,
-    "act_ask_question": 999,
-    "act_ask_choice": 999,
-    "act_summary_and_pause": 999,
-    "act_attempt_completion": 999,
-    "observe": 3,
-    "observe_explore_schema": 3,
-    "observe_explore_functions": 3,
-    "observe_generate_and_execute": 3,
-    "observe_output_text": 3,
-    "observe_ask_question": 3,
-    "observe_ask_choice": 3,
-    "observe_summary_and_pause": 3,
-    "observe_attempt_completion": 3,
-}
-
 SELECT_TABLES = []
 
 CURSOR = '<span class="blink-cursor">|</span> <span class="thinking-text">Thinking...</span>'
@@ -109,72 +82,6 @@ ACTIONS = {
 }
 
 FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
-
-
-def _get_entry_category(entry: dict) -> Optional[str]:
-    role = entry.get("role", "")
-    entry_type = entry.get("type", "")
-    if role == "user":
-        return None
-    if entry_type == "think":
-        return "think"
-    if entry_type == "action_decision":
-        return "action"
-    if entry_type == "act":
-        action = entry.get("action", "")
-        if action == "explore_schema":
-            return "act_explore_db"
-        if action == "explore_functions":
-            return "act_explore_func"
-        if action == "generate_and_execute":
-            if entry.get("code"):
-                return "act_code"
-            if entry.get("error"):
-                return "act_error"
-            return "act_result"
-        if action == "solved":
-            return "act_solved"
-        if action in FRONTEND_ACTIONS:
-            return f"act_{action}"
-        return "act_search_result"
-    if entry_type == "observe":
-        action = entry.get("action", "")
-        if action:
-            return f"observe_{action}"
-        return "observe"
-    return None
-
-
-def _get_retention_limit(category: str) -> Optional[int]:
-    if category in HISTORY_RETENTION:
-        return HISTORY_RETENTION[category]
-    if category.startswith("observe_"):
-        return HISTORY_RETENTION.get("observe")
-    if category.startswith("act_"):
-        return HISTORY_RETENTION.get("act_search_result")
-    return None
-
-
-def trim_conversation_history(history: List[dict]):
-    keep_indices = set()
-    from_end_counts = {}
-
-    for i in range(len(history) - 1, -1, -1):
-        cat = _get_entry_category(history[i])
-        if cat is None:
-            keep_indices.add(i)
-            continue
-
-        limit = _get_retention_limit(cat)
-        if limit is None:
-            keep_indices.add(i)
-            continue
-
-        from_end_counts[cat] = from_end_counts.get(cat, 0) + 1
-        if from_end_counts[cat] <= limit:
-            keep_indices.add(i)
-
-    history[:] = [history[i] for i in sorted(keep_indices)]
 
 
 def _sse_stream(url: str, payload: dict):
@@ -1086,9 +993,6 @@ def main():
                     conversation_history = [{"role": "user", "type": "question", "content": question}]
                 cycle_index = 0
                 continue
-
-            trim_conversation_history(conversation_history)
-            save_trimmed_context(session_id, conversation_history)
 
             _, raw_plan = run_think_phase(
                 cycle_index, question, conversation_history, session_id,

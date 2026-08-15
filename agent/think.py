@@ -14,6 +14,7 @@ from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, log_observe_session, update_session_history
 from utils.front_utils import history_to_text
+from utils.context_trim import prepare_trimmed_context
 
 router = APIRouter()
 
@@ -34,7 +35,7 @@ def _event_stream_think(
     log_observe_session(session_id, question=question, status="active")
 
     if conversation_history:
-        context = history_to_text(conversation_history)
+        context = history_to_text(prepare_trimmed_context(session_id, conversation_history))
     else:
         context = question
 

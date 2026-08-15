@@ -16,6 +16,7 @@ from agent.tools.get_function_info import FUNCTION_DICT
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, update_session_history
 from utils.front_utils import history_to_text
+from utils.context_trim import prepare_trimmed_context
 
 router = APIRouter()
 
@@ -28,9 +29,9 @@ class ActInput(BaseModel):
     params: Optional[Dict[str, Any]] = None
 
 
-def _build_context(question: str, conversation_history: Optional[List[dict]]):
+def _build_context(question: str, conversation_history: Optional[List[dict]], session_id: str = ""):
     if conversation_history:
-        return history_to_text(conversation_history)
+        return history_to_text(prepare_trimmed_context(session_id, conversation_history))
     return question
 
 
@@ -43,7 +44,7 @@ def _event_stream_act(
     request_json: str = "",
 ):
     """Act phase: execute exactly ONE action."""
-    full_question = _build_context(question, conversation_history)
+    full_question = _build_context(question, conversation_history, session_id)
     params = params or {}
     search_keyword = params.get("search_keyword")
     tables = params.get("tables")

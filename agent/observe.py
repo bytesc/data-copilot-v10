@@ -11,6 +11,7 @@ from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, update_session_history
 from utils.front_utils import history_to_text
+from utils.context_trim import prepare_trimmed_context
 
 router = APIRouter()
 
@@ -33,7 +34,7 @@ def _event_stream_observe(
     yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'status', 'content': '正在审查执行结果...'}, ensure_ascii=False)}\n\n"
 
     if conversation_history:
-        context = history_to_text(conversation_history)
+        context = history_to_text(prepare_trimmed_context(session_id, conversation_history))
     else:
         context = ""
 

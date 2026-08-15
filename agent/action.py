@@ -13,6 +13,7 @@ from data_access.observe_log import log_observe_cycle, update_session_history
 from data_access.session_log import record_session_operation
 from agent.tools.tools_def import engine
 from utils.front_utils import history_to_text
+from utils.context_trim import prepare_trimmed_context
 
 router = APIRouter()
 
@@ -54,10 +55,11 @@ ACTIONS = """
 def _build_action_prompt(
         question: str,
         conversation_history: Optional[List[dict]],
+        session_id: str = "",
 ) -> str:
     context = ""
     if conversation_history:
-        context = history_to_text(conversation_history)
+        context = history_to_text(prepare_trimmed_context(session_id, conversation_history))
 
     db_summary = get_db_summary_for_agent(engine)
     func_catalog = get_func_summary_for_agent()
@@ -98,7 +100,7 @@ def _event_stream_action(
     yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': '正在决策下一步动作...'}, ensure_ascii=False)}\n\n"
 
     prompt = _build_action_prompt(
-        question, conversation_history,
+        question, conversation_history, session_id,
     )
 
     raw = ""
