@@ -1052,6 +1052,7 @@ def main():
         toast("Session restored. Enter your next question below.", color='success')
 
     _resumed = False
+    conversation_history = []
     session_id = datetime.now().strftime("%Y%m%d%H%M%S") + "".join(
         random.choices(string.ascii_letters, k=8)
     )
