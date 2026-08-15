@@ -1,30 +1,31 @@
 <template>
   <div class="app-container">
     <div class="content-row">
-      <div class="panel-toggle" @click="isPanelCollapsed = !isPanelCollapsed">
-        {{ isPanelCollapsed ? '▶' : '◀' }}
-      </div>
-      <aside class="left-panel" :class="{ collapsed: isPanelCollapsed }">
-        <LeftPanel
-          :session-id="chat.sessionId.value"
-          :is-running="chat.isRunning.value"
-          :server-url="chat.serverUrl.value"
-          @upload-csv="showUploadCsv = true"
-          @upload-doc="showUploadDoc = true"
-          @resume-session="showResume = true"
-          @generate-doc="chat.generateDocument()"
-          @new-session="chat.reset()"
-        />
-      </aside>
+<aside class="left-panel" :class="{ collapsed: isPanelCollapsed }">
+          <div class="panel-toggle" @click="isPanelCollapsed = !isPanelCollapsed">
+            {{ isPanelCollapsed ? '▶' : '◀' }}
+          </div>
+          <LeftPanel
+            v-if="!isPanelCollapsed"
+            :session-id="chat.sessionId.value"
+            :is-running="chat.isRunning.value"
+            :server-url="chat.serverUrl.value"
+            @upload-csv="showUploadCsv = true"
+            @upload-doc="showUploadDoc = true"
+            @resume-session="showResume = true"
+            @generate-doc="chat.generateDocument()"
+            @new-session="chat.reset()"
+          />
+        </aside>
       <main class="chat-area">
         <ChatArea :chat="chat" />
       </main>
-      <aside class="right-panel" :class="{ collapsed: isRightPanelCollapsed }">
-        <RightPanel :files="chat.generatedFiles.value" />
-      </aside>
-      <div class="panel-toggle right" @click="isRightPanelCollapsed = !isRightPanelCollapsed">
-        {{ isRightPanelCollapsed ? '◀' : '▶' }}
-      </div>
+<aside class="right-panel" :class="{ collapsed: isRightPanelCollapsed }">
+          <div class="panel-toggle right" @click="isRightPanelCollapsed = !isRightPanelCollapsed">
+            {{ isRightPanelCollapsed ? '◀' : '▶' }}
+          </div>
+          <RightPanel v-if="!isRightPanelCollapsed" :files="chat.generatedFiles.value" />
+        </aside>
     </div>
     <IcpArea />
 
