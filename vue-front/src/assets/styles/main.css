@@ -1017,7 +1017,7 @@ html, body {
 }
 
 @media (max-width: 768px) {
-  .app-container {
+  .content-row {
     flex-direction: column;
   }
 
@@ -1032,11 +1032,37 @@ html, body {
   .left-panel.collapsed {
     max-height: 0;
     min-width: 100%;
-    overflow: hidden;
   }
 
   .panel-toggle {
-    display: none;
+    top: auto;
+    bottom: -20px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 20px;
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    border: 1px solid var(--border-color);
+    border-top: none;
+  }
+
+  .panel-toggle.right {
+    display: flex;
+    top: -20px;
+    bottom: auto;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 20px;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+  }
+
+  .chat-area {
+    flex: 1;
   }
 
   .send-btn {
@@ -1045,7 +1071,17 @@ html, body {
   }
 
   .right-panel {
-    display: none;
+    width: 100%;
+    min-width: 100%;
+    max-height: 30vh;
+    border-left: none;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .right-panel.collapsed {
+    max-height: 0;
+    min-width: 100%;
+    border-top: none;
   }
 }
 
