@@ -209,6 +209,39 @@ def get_db_summary_for_agent(engine, tables=None) -> str:
     return "\n".join(lines)
 
 
+def get_db_structure_markdown(engine, tables=None) -> str:
+    table_names = _get_all_table_names(engine, tables)
+    if not table_names:
+        return "*(No database tables found)*"
+
+    lines = ["## Database Structure", ""]
+    for tname in table_names:
+        info = _get_table_columns(engine, tname)
+        columns = info['columns']
+        pk_cols = info['pk_cols']
+        fk_map = info['fk_map']
+
+        lines.append(f"### {tname}")
+        lines.append("")
+        lines.append("| Column | Type | Key |")
+        lines.append("|--------|------|-----|")
+
+        for col in columns:
+            col_name = col['name']
+            col_type = str(col['type'])
+            key = ''
+            if col_name in pk_cols:
+                key = 'PK'
+            if col_name in fk_map:
+                fk_label = f'FK → {fk_map[col_name]}'
+                key = f'{key}, {fk_label}' if key else fk_label
+            lines.append(f"| `{col_name}` | {col_type} | {key} |")
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def search_db_selected_fields(engine, keyword: Optional[str] = None, tables=None) -> Dict:
     if not keyword or not keyword.strip():
         return {}
