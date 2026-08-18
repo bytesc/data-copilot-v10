@@ -80,74 +80,286 @@ export function useChat() {
     return { action: null, error: 'No action result' }
   }
 
-  function parseActResult(events) {
-    const parsed = {
-      selected_fields: null,
-      selected_functions: null,
-      function_solved: false,
-      full_code: '',
-      full_ans: '',
-      exec_error: null,
-      solved_ans: '',
-      needs_user_input: false,
-      choices: [],
-      paused: false,
-      completed: false,
-      db_context: null,
-      func_context: null,
-      search_result: null,
-      explore_plan: '',
-    }
-    for (const event of events) {
-      const sub = event.sub_phase || ''
-      const etype = event.type || ''
-      const content = event.content || ''
-      const result = event.result
+function parseActResult(events) {
+  const parsed = {
+    selected_fields: null,
+    selected_functions: null,
+    function_solved: false,
+    full_code: '',
+    full_ans: '',
+    exec_error: null,
+    solved_ans: '',
+    needs_user_input: false,
+    choices: [],
+    paused: false,
+    completed: false,
+    db_context: null,
+    func_context: null,
+    search_result: null,
+    explore_plan: '',
+    // 新增字段
+    has_retry: false,
+    attempt_count: 0,
+    retry_errors: [],      // 记录所有尝试的错误
+  }
 
-      if (etype === 'done' && result && typeof result === 'object') {
-        if (sub === 'explore_schema' || sub === 'explore_functions') {
-          parsed.search_result = content
-          parsed.db_context = result.db_context || parsed.db_context
-          parsed.func_context = result.func_context || parsed.func_context
-          parsed.explore_plan = result.explore_plan || parsed.explore_plan
-          if (result.selected_fields != null) parsed.selected_fields = result.selected_fields
-          if (result.selected_functions != null) parsed.selected_functions = result.selected_functions
-        } else if (sub === 'output_text' || sub === 'summary' || sub === 'completion') {
-          parsed.full_ans = result.text || content
-          if (result.paused) parsed.paused = true
-          if (result.completed) parsed.completed = true
-        } else if (sub === 'exec') {
-          parsed.full_code = result.code || ''
-          parsed.full_ans = result.exec_result || ''
-          parsed.exec_error = result.error || null
-          if (result.solved_ans) parsed.solved_ans = result.solved_ans
-        } else if (sub === 'ask_question') {
-          parsed.full_ans = result.text || content
-          if (result.needs_user_input) parsed.needs_user_input = true
-        } else if (sub === 'ask_choice') {
-          parsed.full_ans = result.text || content
-          parsed.choices = result.choices || []
-          if (result.needs_user_input) parsed.needs_user_input = true
-        }
-      } else if (etype === 'chunk' || etype === 'code_chunk') {
-        if (sub === 'output_text' || sub === 'summary' || sub === 'completion') {
-          parsed.full_ans += content
-        }
-        if (sub === 'exec') {
-          parsed.full_ans += content
-          parsed.exec_error = null
-        }
-      } else if (sub === 'code' && event.sub_type === 'code_complete') {
-        parsed.full_code = content
-      } else if (sub === 'code' && etype === 'solved') {
-        parsed.solved_ans = content
-        parsed.function_solved = true
-      } else if (sub === 'exec' && event.sub_type === 'code_exe_error') {
-        parsed.exec_error = content
+  // 按 attempt 分组存储数据
+  const attempts = {}
+  let currentAttempt = 0
+  let lastAttempt = 0
+  let hasDetectedRetry = false
+
+  for (const event of events) {
+    const sub = event.sub_phase || ''
+    const etype = event.type || ''
+    const content = event.content || ''
+    const result = event.result
+    const subType = event.sub_type || ''
+    const attempt = event.attempt || 0
+
+    // 检测是否有重试（通过 attempt 变化）
+    if (attempt > 0 && attempt !== currentAttempt) {
+      hasDetectedRetry = true
+    }
+    if (attempt > lastAttempt) {
+      lastAttempt = attempt
+    }
+    if (attempt > 0) {
+      currentAttempt = attempt
+    }
+
+    // 确保当前 attempt 的数据结构存在
+    const attemptKey = attempt || 0
+    if (!attempts[attemptKey]) {
+      attempts[attemptKey] = {
+        full_code: '',
+        full_ans: '',
+        exec_error: null,
+        search_result: null,
+        selected_fields: null,
+        selected_functions: null,
+        explore_plan: '',
+        solved_ans: '',
+        function_solved: false,
+        needs_user_input: false,
+        choices: [],
+        paused: false,
+        completed: false,
+        has_error: false,
+        error_type: null, // 'code_gen_error' | 'code_exe_error' | 'error'
       }
     }
+
+    const attemptData = attempts[attemptKey]
+
+    // ============================================================
+    // 1. 处理 explore_schema / explore_functions 的 done 事件
+    // ============================================================
+    if (etype === 'done' && result && typeof result === 'object') {
+      if (sub === 'explore_schema' || sub === 'explore_functions') {
+        attemptData.search_result = content
+        parsed.db_context = result.db_context || parsed.db_context
+        parsed.func_context = result.func_context || parsed.func_context
+        parsed.explore_plan = result.explore_plan || parsed.explore_plan
+        if (result.selected_fields != null) {
+          attemptData.selected_fields = result.selected_fields
+          parsed.selected_fields = result.selected_fields
+        }
+        if (result.selected_functions != null) {
+          attemptData.selected_functions = result.selected_functions
+          parsed.selected_functions = result.selected_functions
+        }
+        continue
+      }
+
+      if (sub === 'output_text' || sub === 'summary' || sub === 'completion') {
+        attemptData.full_ans = result.text || content
+        if (result.paused) attemptData.paused = true
+        if (result.completed) attemptData.completed = true
+        continue
+      }
+
+      if (sub === 'exec') {
+        attemptData.full_code = result.code || attemptData.full_code || ''
+        attemptData.full_ans = result.exec_result || attemptData.full_ans || ''
+        attemptData.exec_error = result.error || null
+        if (result.solved_ans) attemptData.solved_ans = result.solved_ans
+        // 如果 done 事件带有完整的 code，且当前 attempt 没有保存过代码，则使用它
+        if (result.code && !attemptData.full_code) {
+          attemptData.full_code = result.code
+        }
+        continue
+      }
+
+      if (sub === 'ask_question') {
+        attemptData.full_ans = result.text || content
+        if (result.needs_user_input) attemptData.needs_user_input = true
+        continue
+      }
+
+      if (sub === 'ask_choice') {
+        attemptData.full_ans = result.text || content
+        attemptData.choices = result.choices || []
+        if (result.needs_user_input) attemptData.needs_user_input = true
+        continue
+      }
+    }
+
+    // ============================================================
+    // 2. 处理 type: 'error'（所有重试失败）
+    // ============================================================
+    if (etype === 'error') {
+      attemptData.has_error = true
+      attemptData.error_type = 'error'
+      attemptData.exec_error = content
+      parsed.exec_error = content
+      parsed.has_retry = true
+      continue
+    }
+
+    // ============================================================
+    // 3. 处理 code_gen_error（代码生成错误）
+    // ============================================================
+    if (subType === 'code_gen_error') {
+      attemptData.has_error = true
+      attemptData.error_type = 'code_gen_error'
+      attemptData.exec_error = content
+      // 不设置 parsed.exec_error，因为可能重试成功
+      continue
+    }
+
+    // ============================================================
+    // 4. 处理 code_exe_error（代码执行错误）
+    // ============================================================
+    if (sub === 'exec' && subType === 'code_exe_error') {
+      attemptData.has_error = true
+      attemptData.error_type = 'code_exe_error'
+      attemptData.exec_error = content
+      // 不立即设置 parsed.exec_error，等待最终结果
+      continue
+    }
+
+    // ============================================================
+    // 5. 处理 code_complete（代码生成完成）
+    // ============================================================
+    if (sub === 'code' && subType === 'code_complete') {
+      attemptData.full_code = content
+      // 重置当前 attempt 的执行结果（因为代码重新生成了）
+      attemptData.full_ans = ''
+      attemptData.exec_error = null
+      attemptData.has_error = false
+      continue
+    }
+
+    // ============================================================
+    // 6. 处理 solved（函数已解决）
+    // ============================================================
+    if (sub === 'code' && etype === 'solved') {
+      attemptData.solved_ans = content
+      attemptData.function_solved = true
+      parsed.solved_ans = content
+      parsed.function_solved = true
+      continue
+    }
+
+    // ============================================================
+    // 7. 处理 code_chunk（代码片段流式输出）
+    // ============================================================
+    if (subType === 'code_chunk') {
+      // 只在有代码时累积，但如果有 code_complete 会覆盖
+      if (!attemptData.full_code || attemptData.full_code.length < 100) {
+        // 流式累积（仅在 code_complete 未覆盖前使用）
+        attemptData.full_code += content
+      }
+      continue
+    }
+
+    // ============================================================
+    // 8. 处理 exec_chunk（执行结果流式输出）
+    // ============================================================
+    if (sub === 'exec' && subType === 'exec_chunk') {
+      attemptData.full_ans += content
+      // 收到执行结果说明该 attempt 至少执行了代码，清除错误状态
+      attemptData.exec_error = null
+      attemptData.has_error = false
+      continue
+    }
+
+    // ============================================================
+    // 9. 处理 exec 阶段的 chunk（通用）
+    // ============================================================
+    if ((etype === 'chunk' || etype === 'code_chunk') && sub === 'exec') {
+      attemptData.full_ans += content
+      attemptData.exec_error = null
+      attemptData.has_error = false
+      continue
+    }
+
+    // ============================================================
+    // 10. 处理 output_text / summary / completion 的 chunk
+    // ============================================================
+    if ((etype === 'chunk' || etype === 'code_chunk') &&
+        (sub === 'output_text' || sub === 'summary' || sub === 'completion')) {
+      attemptData.full_ans += content
+      continue
+    }
+  }
+
+  // ============================================================
+  // 11. 选择最终结果：优先使用最后一次尝试的数据
+  // ============================================================
+  const attemptKeys = Object.keys(attempts).sort((a, b) => Number(a) - Number(b))
+
+  if (attemptKeys.length === 0) {
+    // 没有解析到任何数据，返回初始状态
     return parsed
   }
+
+  // 获取最后一次尝试的数据
+  const lastKey = attemptKeys[attemptKeys.length - 1]
+  const lastData = attempts[lastKey]
+
+  // 合并结果到 parsed
+  parsed.full_code = lastData.full_code || parsed.full_code
+  parsed.full_ans = lastData.full_ans || parsed.full_ans
+  parsed.exec_error = lastData.exec_error || parsed.exec_error
+  parsed.solved_ans = lastData.solved_ans || parsed.solved_ans
+  parsed.function_solved = lastData.function_solved || parsed.function_solved
+  parsed.needs_user_input = lastData.needs_user_input || parsed.needs_user_input
+  parsed.choices = lastData.choices.length > 0 ? lastData.choices : parsed.choices
+  parsed.paused = lastData.paused || parsed.paused
+  parsed.completed = lastData.completed || parsed.completed
+  parsed.search_result = lastData.search_result || parsed.search_result
+  parsed.explore_plan = lastData.explore_plan || parsed.explore_plan
+
+  // 如果有搜索结果的字段，合并
+  if (lastData.selected_fields) parsed.selected_fields = lastData.selected_fields
+  if (lastData.selected_functions) parsed.selected_functions = lastData.selected_functions
+
+  // 检测是否有重试
+  parsed.has_retry = hasDetectedRetry || attemptKeys.length > 1
+
+  // 收集所有错误
+  parsed.retry_errors = []
+  for (const key of attemptKeys) {
+    const data = attempts[key]
+    if (data.exec_error) {
+      parsed.retry_errors.push({
+        attempt: Number(key),
+        error: data.exec_error,
+        type: data.error_type,
+      })
+    }
+  }
+
+  // 如果最后一次尝试有错误，但之前有成功的数据，且最后一次是 error 类型
+  // 保持错误状态
+  if (lastData.exec_error) {
+    parsed.exec_error = lastData.exec_error
+  }
+
+  return parsed
+}
 
   function parseObserveResult(events) {
     for (const event of events) {
