@@ -81,7 +81,7 @@ If todo is empty, the plan is complete. Keep descriptions concise."""
                       prompt=observe_prompt[:5000], response=raw[:5000],
                       token_estimate=prompt_length // 3)
     record_session_operation(session_id, "/api/observe/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
-    save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "observe", "action": "", "content": raw}])
+    save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "observe", "content": raw}])
 
 
 def _parse_plan_json(raw: str) -> dict:

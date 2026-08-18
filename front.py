@@ -939,7 +939,7 @@ def run_observe_phase(cycle_index, original_question, conversation_history, sess
 
         result = parse_observe_result(observe_events)
         with use_scope(observe_scope, clear=True):
-            render_history_entry({"role": "assistant", "type": "observe", "action": "", "content": raw_review})
+            render_history_entry({"role": "assistant", "type": "observe", "content": raw_review})
         return result, raw_review
     except Exception as e:
         print(f"[ERROR] run_observe_phase: cycle={cycle_index}")
@@ -1257,21 +1257,19 @@ def main():
             print(f"[DEBUG] act_result: needs_user_input={act_result.get('needs_user_input')}, paused={act_result.get('paused')}, completed={act_result.get('completed')}, function_solved={act_result.get('function_solved')}")
 
             if act_result["selected_fields"] is not None:
-                conversation_history.append({"role": "assistant", "type": "act", "action": "explore_schema", "selected_fields": act_result["selected_fields"]})
-            if act_result.get("explore_plan"):
-                existing = conversation_history[-1] if conversation_history and conversation_history[-1].get("action") == "explore_schema" else None
-                if existing:
-                    existing["explore_plan"] = act_result["explore_plan"]
-                else:
-                    conversation_history.append({"role": "assistant", "type": "act", "action": "explore_schema", "explore_plan": act_result["explore_plan"]})
-            if act_result["selected_functions"] is not None:
-                conversation_history.append({"role": "assistant", "type": "act", "action": "explore_functions", "selected_functions": act_result["selected_functions"]})
-            if act_result.get("search_result"):
-                existing = conversation_history[-1] if conversation_history else None
-                if existing and existing.get("role") == "assistant" and existing.get("type") == "act" and existing.get("action") == action:
-                    existing["search_result"] = act_result["search_result"]
-                else:
-                    conversation_history.append({"role": "assistant", "type": "act", "action": action, "search_result": act_result["search_result"]})
+                entry = {"role": "assistant", "type": "act", "action": "explore_schema", "selected_fields": act_result["selected_fields"]}
+                if act_result.get("explore_plan"):
+                    entry["explore_plan"] = act_result["explore_plan"]
+                if act_result.get("search_result"):
+                    entry["search_result"] = act_result["search_result"]
+                conversation_history.append(entry)
+            elif act_result["selected_functions"] is not None:
+                entry = {"role": "assistant", "type": "act", "action": "explore_functions", "selected_functions": act_result["selected_functions"]}
+                if act_result.get("search_result"):
+                    entry["search_result"] = act_result["search_result"]
+                conversation_history.append(entry)
+            elif act_result.get("search_result"):
+                conversation_history.append({"role": "assistant", "type": "act", "action": action, "search_result": act_result["search_result"]})
             function_solved = act_result["function_solved"]
             full_code = act_result["full_code"]
             full_ans = act_result["full_ans"]
@@ -1290,6 +1288,8 @@ def main():
                 entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "error": exec_error}
                 if full_code:
                     entry["code"] = full_code
+                if full_ans:
+                    entry["result"] = full_ans
             else:
                 entry = None
             if entry is not None:

@@ -64,6 +64,8 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "error": exec_error}
             if full_code:
                 entry["code"] = full_code
+            if full_ans:
+                entry["result"] = full_ans
             entries.append(entry)
     return entries
 
@@ -223,6 +225,10 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
         selected_functions=selected_functions,
     ):
         if event.get("sub_type") == "code_chunk":
+            if exec_error:
+                full_code = ""
+                full_ans = ""
+                exec_error = None
             full_code += event.get("content", "")
         if event.get("sub_type") == "code_complete":
             full_code = event.get("content", "")

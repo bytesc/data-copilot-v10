@@ -387,7 +387,7 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
                         history.append(act_entry)
             elif phase == "observe" and sub_phase == "review":
                 if response:
-                    history.append({"role": "assistant", "type": "observe", "action": "", "content": response})
+                    history.append({"role": "assistant", "type": "observe", "content": response})
             elif phase == "act" and sub_phase == "explore_schema":
                 if exec_result:
                     history.append({"role": "assistant", "type": "act", "action": "explore_schema", "search_result": exec_result})

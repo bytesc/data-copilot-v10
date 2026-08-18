@@ -599,17 +599,29 @@ function parseActResult(events) {
     const parsed = parseActResult(events)
     finalizeActMessage(msgId, action, parsed)
 
+    let hasSearchResult = false
     if (parsed.selected_fields != null) {
-      conversationHistory.value.push({
+      const entry = {
         role: 'assistant', type: 'act', action: 'explore_schema', selected_fields: parsed.selected_fields,
-      })
+      }
+      if (parsed.explore_plan) entry.explore_plan = parsed.explore_plan
+      if (parsed.search_result) {
+        entry.search_result = parsed.search_result
+        hasSearchResult = true
+      }
+      conversationHistory.value.push(entry)
     }
     if (parsed.selected_functions != null) {
-      conversationHistory.value.push({
+      const entry = {
         role: 'assistant', type: 'act', action: 'explore_functions', selected_functions: parsed.selected_functions,
-      })
+      }
+      if (parsed.search_result) {
+        entry.search_result = parsed.search_result
+        hasSearchResult = true
+      }
+      conversationHistory.value.push(entry)
     }
-    if (parsed.search_result) {
+    if (parsed.search_result && !hasSearchResult) {
       conversationHistory.value.push({
         role: 'assistant', type: 'act', action, search_result: parsed.search_result,
       })
@@ -620,10 +632,12 @@ function parseActResult(events) {
         code: parsed.full_code, result: parsed.full_ans,
       })
     } else if (parsed.exec_error) {
-      conversationHistory.value.push({
+      const entry = {
         role: 'assistant', type: 'act', action: 'generate_and_execute',
         error: parsed.exec_error, code: parsed.full_code || undefined,
-      })
+      }
+      if (parsed.full_ans) entry.result = parsed.full_ans
+      conversationHistory.value.push(entry)
     } else if (parsed.full_ans && FRONTEND_ACTIONS.has(action)) {
       conversationHistory.value.push({
         role: 'assistant', type: 'act', action, text: parsed.full_ans,
