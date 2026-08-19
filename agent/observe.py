@@ -11,7 +11,7 @@ from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
-from utils.context_trim import prepare_trimmed_context, save_session_step
+from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw
 
 router = APIRouter()
 
@@ -81,7 +81,7 @@ If todo is empty, the plan is complete. Keep descriptions concise."""
                       prompt=observe_prompt[:5000], response=raw[:5000],
                       token_estimate=prompt_length // 3)
     record_session_operation(session_id, "/api/observe/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
-    save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "observe", "content": raw}])
+    save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "observe", "content": parse_json_raw(raw)}])
 
 
 def _parse_plan_json(raw: str) -> dict:

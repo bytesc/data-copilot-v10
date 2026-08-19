@@ -1,9 +1,25 @@
+import json
 from typing import List, Optional
 
 from data_access.observe_log import save_session_context
 
 
 FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
+
+
+def parse_json_raw(raw: str) -> dict:
+    raw = raw.strip()
+    for prefix in ('```json', '```'):
+        if raw.startswith(prefix):
+            raw = raw[len(prefix):]
+    for suffix in ('```',):
+        if raw.endswith(suffix):
+            raw = raw[:-len(suffix)]
+    raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
 
 HISTORY_RETENTION = {
     "think": 3,

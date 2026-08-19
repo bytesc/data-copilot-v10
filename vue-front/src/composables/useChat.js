@@ -71,6 +71,22 @@ export function useChat() {
     return { description: raw, todo: [] }
   }
 
+  function parseJsonRaw(raw) {
+    raw = raw.trim()
+    for (const prefix of ['```json', '```']) {
+      if (raw.startsWith(prefix)) raw = raw.slice(prefix.length)
+    }
+    for (const suffix of ['```']) {
+      if (raw.endsWith(suffix)) raw = raw.slice(0, -suffix.length)
+    }
+    raw = raw.trim()
+    try {
+      return JSON.parse(raw)
+    } catch {
+      return {}
+    }
+  }
+
   function parseActionResult(events) {
     for (const event of events) {
       if (event.type === 'done' && event.action_result) {
@@ -502,7 +518,7 @@ function parseActResult(events) {
 
     const result = parseThinkResult(events)
     finalizeThinkMessage(msgId, rawPlan, result)
-    conversationHistory.value.push({ role: 'assistant', type: 'think', content: rawPlan })
+    conversationHistory.value.push({ role: 'assistant', type: 'think', content: parseJsonRaw(rawPlan) })
     return { result, rawPlan }
   }
 
@@ -532,7 +548,7 @@ function parseActResult(events) {
     }
 
     finalizeDecisionMessage(msgId, rawDecision)
-    conversationHistory.value.push({ role: 'assistant', type: 'action_decision', content: rawDecision })
+    conversationHistory.value.push({ role: 'assistant', type: 'action_decision', content: parseJsonRaw(rawDecision) })
     return parseActionResult(events)
   }
 
@@ -705,7 +721,7 @@ function parseActResult(events) {
 
     const result = parseObserveResult(events)
     finalizeObserveMessage(msgId, rawReview, result)
-    conversationHistory.value.push({ role: 'assistant', type: 'observe', content: rawReview })
+    conversationHistory.value.push({ role: 'assistant', type: 'observe', content: parseJsonRaw(rawReview) })
     return { result, rawReview }
   }
 

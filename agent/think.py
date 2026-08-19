@@ -14,7 +14,7 @@ from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, log_observe_session
 from utils.front_utils import history_to_text
-from utils.context_trim import prepare_trimmed_context, save_session_step
+from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw
 
 router = APIRouter()
 
@@ -96,7 +96,7 @@ The todo list contains the actionable steps. Keep task descriptions concise."""
                       token_estimate=prompt_length // 3)
     record_session_operation(session_id, "/api/think/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
     log_observe_session(session_id, status="think_done", total_tokens=prompt_length // 3)
-    save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "think", "content": raw}])
+    save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "think", "content": parse_json_raw(raw)}])
 
 
 def _parse_plan_json(raw: str) -> dict:

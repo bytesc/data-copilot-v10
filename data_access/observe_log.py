@@ -8,6 +8,21 @@ import json
 from data_access.sys_db_conn import sys_engine
 from data_access.session_log import session_operation_log
 
+
+def _parse_json_raw(raw: str) -> dict:
+    raw = raw.strip()
+    for prefix in ('```json', '```'):
+        if raw.startswith(prefix):
+            raw = raw[len(prefix):]
+    for suffix in ('```',):
+        if raw.endswith(suffix):
+            raw = raw[:-len(suffix)]
+    raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+
 metadata = MetaData()
 
 observe_cycle_log = Table(
@@ -368,10 +383,10 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
             user_decision = entry.get("user_decision", "") or ""
             if phase == "think" and sub_phase == "plan":
                 if response:
-                    history.append({"role": "assistant", "type": "think", "content": response})
+                    history.append({"role": "assistant", "type": "think", "content": _parse_json_raw(response)})
             elif phase == "action" and sub_phase == "decide":
                 if response:
-                    history.append({"role": "assistant", "type": "action_decision", "content": response})
+                    history.append({"role": "assistant", "type": "action_decision", "content": _parse_json_raw(response)})
                     action_type, action_text = _parse_action_decision(response)
                     if action_type and action_text:
                         act_entry = {"role": "assistant", "type": "act", "action": action_type, "text": action_text}
@@ -387,7 +402,7 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
                         history.append(act_entry)
             elif phase == "observe" and sub_phase == "review":
                 if response:
-                    history.append({"role": "assistant", "type": "observe", "content": response})
+                    history.append({"role": "assistant", "type": "observe", "content": _parse_json_raw(response)})
             elif phase == "act" and sub_phase == "explore_schema":
                 if exec_result:
                     history.append({"role": "assistant", "type": "act", "action": "explore_schema", "search_result": exec_result})

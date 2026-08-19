@@ -137,15 +137,6 @@ python ./main.py
 
 启动后可以通过api访问服务
 
-#### 前端
-
-项目自带一个简单的pywebio图形界面
-
-```bash
-# 启动前端服务
-python ./front.py
-```
-
 # 开源许可证
 
 此翻译版本仅供参考，以 LICENSE 文件中的英文版本为准
