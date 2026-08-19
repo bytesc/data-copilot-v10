@@ -68,22 +68,35 @@ Output ONLY a valid JSON object on a single line:
 If todo is empty, the plan is complete. Keep descriptions concise."""
 
     prompt_length = len(observe_prompt)
-    raw = ""
+    error_msg = ""
 
-    for chunk in call_llm_stream(observe_prompt, llm):
-        raw += chunk
-        yield f"data: {json.dumps({'phase': 'observe',  'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+    for i in range(2):
+        if i > 0:
+            yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'msg', 'content': '解析失败，正在重新审查...'}, ensure_ascii=False)}\n\n"
+        else:
+            yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'msg', 'content': '正在审查执行结果...'}, ensure_ascii=False)}\n\n"
 
-    plan_result = _parse_plan_json(raw)
-    yield f"data: {json.dumps({'phase': 'observe', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
+        raw = ""
+        for chunk in call_llm_stream(observe_prompt + error_msg, llm):
+            raw += chunk
+            yield f"data: {json.dumps({'phase': 'observe', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
-    log_observe_cycle(session_id, cycle_index, "observe", "review",
-                      prompt=observe_prompt[:5000], response=raw[:5000],
-                      token_estimate=prompt_length // 3)
-    record_session_operation(session_id, "/api/observe/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
-    history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "observe", "content": parse_json_raw(raw)}])
-    if history:
-        yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
+        plan_result = _parse_plan_json(raw)
+        if isinstance(plan_result.get("description"), str) and plan_result.get("todo") is not None:
+            yield f"data: {json.dumps({'phase': 'observe', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
+
+            log_observe_cycle(session_id, cycle_index, "observe", "review",
+                              prompt=observe_prompt[:5000], response=raw[:5000],
+                              token_estimate=prompt_length // 3)
+            record_session_operation(session_id, "/api/observe/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
+            history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "observe", "content": parse_json_raw(raw)}])
+            if history:
+                yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
+            return
+
+        error_msg = "\n\nPrevious attempt failed to produce valid JSON. Output ONLY a valid JSON object with 'description' and 'todo' fields.\n"
+
+    yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'error', 'content': 'Failed to review after retries'}, ensure_ascii=False)}\n\n"
 
 
 def _parse_plan_json(raw: str) -> dict:

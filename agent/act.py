@@ -142,28 +142,40 @@ Example:
 """
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': '正在分析所需字段...'}, ensure_ascii=False)}\n\n"
 
-    raw = ""
-    for chunk in call_llm_stream(prompt, llm):
-        raw += chunk
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
-    selected_fields = parse_selected_fields_json(raw) or {}
-    explore_plan = selected_fields.pop("plan", "") if isinstance(selected_fields, dict) else ""
+    error_msg = ""
+    for i in range(2):
+        if i > 0:
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': '解析失败，正在重新分析...'}, ensure_ascii=False)}\n\n"
 
-    if selected_fields and not selected_fields.get("__no_db__"):
-        display_content = get_db_overview_markdown(engine, tables, include_samples=True, selected_fields=selected_fields)
-    elif selected_fields and selected_fields.get("__no_db__"):
-        display_content = "*(No database tables needed)*"
-    else:
-        display_content = full_schema
+        raw = ""
+        for chunk in call_llm_stream(prompt + error_msg, llm):
+            raw += chunk
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
-    log_observe_cycle(session_id, 0, "act", "explore_schema",
-                      prompt=prompt[:5000], response=raw[:5000],
-                      exec_result=display_content[:10000],
-                      token_estimate=len(prompt) // 3)
+        selected_fields = parse_selected_fields_json(raw) or {}
+        if selected_fields is not None and isinstance(selected_fields, dict):
+            explore_plan = selected_fields.pop("plan", "") if isinstance(selected_fields, dict) else ""
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema, 'explore_plan': explore_plan}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+            if selected_fields and not selected_fields.get("__no_db__"):
+                display_content = get_db_overview_markdown(engine, tables, include_samples=True, selected_fields=selected_fields)
+            elif selected_fields and selected_fields.get("__no_db__"):
+                display_content = "*(No database tables needed)*"
+            else:
+                display_content = full_schema
 
-    return {"selected_fields": selected_fields, "explore_plan": explore_plan, "search_result": display_content}
+            log_observe_cycle(session_id, 0, "act", "explore_schema",
+                              prompt=prompt[:5000], response=raw[:5000],
+                              exec_result=display_content[:10000],
+                              token_estimate=len(prompt) // 3)
+
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema, 'explore_plan': explore_plan}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+
+            return {"selected_fields": selected_fields, "explore_plan": explore_plan, "search_result": display_content}
+
+        error_msg = "\n\nPrevious attempt failed to produce valid JSON. Output ONLY a valid JSON object with table names as keys and column lists as values.\n"
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'error', 'content': 'Failed to parse fields after retries'}, ensure_ascii=False)}\n\n"
+    return {"selected_fields": {}, "explore_plan": "", "search_result": full_schema}
 
 
 def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None):

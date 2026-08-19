@@ -9,3 +9,8 @@ export function renderMarkdown(text) {
   if (!text) return ''
   return marked.parse(text)
 }
+
+export function renderMarkdownInline(text) {
+  if (!text) return ''
+  return marked.parseInline(text)
+}

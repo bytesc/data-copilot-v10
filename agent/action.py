@@ -98,43 +98,51 @@ def _event_stream_action(
         cycle_index: int,
         request_json: str = "",
 ):
-    yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': '正在决策下一步动作...'}, ensure_ascii=False)}\n\n"
-
     prompt = _build_action_prompt(
         question, conversation_history, session_id,
     )
 
-    raw = ""
-    for chunk in call_llm_stream(prompt, llm):
-        raw += chunk
-        yield f"data: {json.dumps({'phase': 'action', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+    error_msg = ""
+    for i in range(2):
+        if i > 0:
+            yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': '解析失败，正在重新决策...'}, ensure_ascii=False)}\n\n"
+        else:
+            yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': '正在决策下一步动作...'}, ensure_ascii=False)}\n\n"
 
-    action_result = _parse_action_json(raw)
-    yield f"data: {json.dumps({'phase': 'action', 'type': 'done', 'content': raw, 'action_result': action_result}, ensure_ascii=False)}\n\n"
+        raw = ""
+        for chunk in call_llm_stream(prompt + error_msg, llm):
+            raw += chunk
+            yield f"data: {json.dumps({'phase': 'action', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
-    log_observe_cycle(session_id, cycle_index, "action", "decide",
-                      prompt=prompt[:5000], response=raw[:5000],
-                      token_estimate=len(prompt) // 3)
+        action_result = _parse_action_json(raw)
+        action = action_result.get("action")
+        if action:
+            yield f"data: {json.dumps({'phase': 'action', 'type': 'done', 'content': raw, 'action_result': action_result}, ensure_ascii=False)}\n\n"
 
-    action = action_result.get("action")
-    if action:
-        record_session_operation(
-            session_id, "/api/action/stream/",
-            request_json, str(action_result), "",
-            "success", f"决定动作: {action}",
-            prompt_length=len(prompt)
-        )
-    else:
-        record_session_operation(
-            session_id, "/api/action/stream/",
-            request_json, str(action_result), "",
-            "error", action_result.get("error", "未知错误"),
-            prompt_length=len(prompt)
-        )
+            log_observe_cycle(session_id, cycle_index, "action", "decide",
+                              prompt=prompt[:5000], response=raw[:5000],
+                              token_estimate=len(prompt) // 3)
+            record_session_operation(
+                session_id, "/api/action/stream/",
+                request_json, str(action_result), "",
+                "success", f"决定动作: {action}",
+                prompt_length=len(prompt)
+            )
+            history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "action_decision", "content": parse_json_raw(raw)}])
+            if history:
+                yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
+            return
 
-    history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "action_decision", "content": parse_json_raw(raw)}])
-    if history:
-        yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
+        error_msg = f"\n\nPrevious attempt failed: {action_result.get('error', 'invalid JSON')}. Output ONLY a valid JSON object with a valid action field.\n"
+
+    record_session_operation(
+        session_id, "/api/action/stream/",
+        request_json, str(action_result), "",
+        "error", action_result.get("error", "未知错误"),
+        prompt_length=len(prompt)
+    )
+    error_content = action_result.get("error", "unknown")
+    yield f"data: {json.dumps({'phase': 'action', 'type': 'error', 'content': f'Action failed: {error_content}'}, ensure_ascii=False)}\n\n"
 
 
 def _parse_action_json(raw: str) -> dict:

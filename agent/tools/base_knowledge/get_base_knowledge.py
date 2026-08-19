@@ -32,6 +32,8 @@ DB_QUERY_GUIDE = _read_doc("db_quiery_guide.md")
 
 BASE = _read_doc("base_knowledge.md")
 
+DOC = _read_doc("doc_knowledge.md")
+
 
 def get_base_knowledge(key=""):
     knowledge = BASE

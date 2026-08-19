@@ -84,7 +84,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { renderMarkdown } from '@/utils/markdown.js'
+import { renderMarkdown, renderMarkdownInline } from '@/utils/markdown.js'
 import ActMessage from '@/components/ActMessage.vue'
 import DocumentMessage from '@/components/DocumentMessage.vue'
 
@@ -142,7 +142,7 @@ const formattedPlan = computed(() => {
   if (plan.todo?.length) {
     html += '<p><strong>Pending Tasks:</strong></p><ul>'
     for (const t of plan.todo) {
-      html += `<li><input type="checkbox" disabled /> ${renderMarkdown(t)}</li>`
+      html += `<li><input type="checkbox" disabled /> ${renderMarkdownInline(t)}</li>`
     }
     html += '</ul>'
   }
