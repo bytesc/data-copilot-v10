@@ -96,7 +96,9 @@ The todo list contains the actionable steps. Keep task descriptions concise."""
                       token_estimate=prompt_length // 3)
     record_session_operation(session_id, "/api/think/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
     log_observe_session(session_id, status="think_done", total_tokens=prompt_length // 3)
-    save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "think", "content": parse_json_raw(raw)}])
+    history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "think", "content": parse_json_raw(raw)}])
+    if history:
+        yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
 
 
 def _parse_plan_json(raw: str) -> dict:

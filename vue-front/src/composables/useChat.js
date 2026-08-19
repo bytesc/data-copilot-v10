@@ -48,16 +48,6 @@ export function useChat() {
     })
   }
 
-  function parseThinkResult(events) {
-    for (const event of events) {
-      if (event.type === 'done') {
-        if (event.plan_result) return event.plan_result
-        return parsePlanJson(event.content || '')
-      }
-    }
-    return { description: '', todo: [] }
-  }
-
   function parsePlanJson(raw) {
     try {
       const result = JSON.parse(raw)
@@ -87,307 +77,7 @@ export function useChat() {
     }
   }
 
-  function parseActionResult(events) {
-    for (const event of events) {
-      if (event.type === 'done' && event.action_result) {
-        return event.action_result
-      }
-    }
-    return { action: null, error: 'No action result' }
-  }
-
-function parseActResult(events) {
-  const parsed = {
-    selected_fields: null,
-    selected_functions: null,
-    function_solved: false,
-    full_code: '',
-    full_ans: '',
-    exec_error: null,
-    solved_ans: '',
-    needs_user_input: false,
-    choices: [],
-    paused: false,
-    completed: false,
-    db_context: null,
-    func_context: null,
-    search_result: null,
-    explore_plan: '',
-    // 新增字段
-    has_retry: false,
-    attempt_count: 0,
-    retry_errors: [],      // 记录所有尝试的错误
-  }
-
-  // 按 attempt 分组存储数据
-  const attempts = {}
-  let currentAttempt = 0
-  let lastAttempt = 0
-  let hasDetectedRetry = false
-
-  for (const event of events) {
-    const sub = event.sub_phase || ''
-    const etype = event.type || ''
-    const content = event.content || ''
-    const result = event.result
-    const subType = event.sub_type || ''
-    const attempt = event.attempt || 0
-
-    // 检测是否有重试（通过 attempt 变化）
-    if (attempt > 0 && attempt !== currentAttempt) {
-      hasDetectedRetry = true
-    }
-    if (attempt > lastAttempt) {
-      lastAttempt = attempt
-    }
-    if (attempt > 0) {
-      currentAttempt = attempt
-    }
-
-    // 确保当前 attempt 的数据结构存在
-    const attemptKey = attempt || 0
-    if (!attempts[attemptKey]) {
-      attempts[attemptKey] = {
-        full_code: '',
-        full_ans: '',
-        exec_error: null,
-        search_result: null,
-        selected_fields: null,
-        selected_functions: null,
-        explore_plan: '',
-        solved_ans: '',
-        function_solved: false,
-        needs_user_input: false,
-        choices: [],
-        paused: false,
-        completed: false,
-        has_error: false,
-        error_type: null, // 'code_gen_error' | 'code_exe_error' | 'error'
-      }
-    }
-
-    const attemptData = attempts[attemptKey]
-
-    // ============================================================
-    // 1. 处理 explore_schema / explore_functions 的 done 事件
-    // ============================================================
-    if (etype === 'done' && result && typeof result === 'object') {
-      if (sub === 'explore_schema' || sub === 'explore_functions') {
-        attemptData.search_result = content
-        parsed.db_context = result.db_context || parsed.db_context
-        parsed.func_context = result.func_context || parsed.func_context
-        parsed.explore_plan = result.explore_plan || parsed.explore_plan
-        if (result.selected_fields != null) {
-          attemptData.selected_fields = result.selected_fields
-          parsed.selected_fields = result.selected_fields
-        }
-        if (result.selected_functions != null) {
-          attemptData.selected_functions = result.selected_functions
-          parsed.selected_functions = result.selected_functions
-        }
-        continue
-      }
-
-      if (sub === 'output_text' || sub === 'summary' || sub === 'completion') {
-        attemptData.full_ans = result.text || content
-        if (result.paused) attemptData.paused = true
-        if (result.completed) attemptData.completed = true
-        continue
-      }
-
-      if (sub === 'exec') {
-        attemptData.full_code = result.code || attemptData.full_code || ''
-        attemptData.full_ans = result.exec_result || attemptData.full_ans || ''
-        attemptData.exec_error = result.error || null
-        if (result.solved_ans) attemptData.solved_ans = result.solved_ans
-        // 如果 done 事件带有完整的 code，且当前 attempt 没有保存过代码，则使用它
-        if (result.code && !attemptData.full_code) {
-          attemptData.full_code = result.code
-        }
-        continue
-      }
-
-      if (sub === 'ask_question') {
-        attemptData.full_ans = result.text || content
-        if (result.needs_user_input) attemptData.needs_user_input = true
-        continue
-      }
-
-      if (sub === 'ask_choice') {
-        attemptData.full_ans = result.text || content
-        attemptData.choices = result.choices || []
-        if (result.needs_user_input) attemptData.needs_user_input = true
-        continue
-      }
-    }
-
-    // ============================================================
-    // 2. 处理 type: 'error'（所有重试失败）
-    // ============================================================
-    if (etype === 'error') {
-      attemptData.has_error = true
-      attemptData.error_type = 'error'
-      attemptData.exec_error = content
-      parsed.exec_error = content
-      parsed.has_retry = true
-      continue
-    }
-
-    // ============================================================
-    // 3. 处理 code_gen_error（代码生成错误）
-    // ============================================================
-    if (subType === 'code_gen_error') {
-      attemptData.has_error = true
-      attemptData.error_type = 'code_gen_error'
-      attemptData.exec_error = content
-      // 不设置 parsed.exec_error，因为可能重试成功
-      continue
-    }
-
-    // ============================================================
-    // 4. 处理 code_exe_error（代码执行错误）
-    // ============================================================
-    if (sub === 'exec' && subType === 'code_exe_error') {
-      attemptData.has_error = true
-      attemptData.error_type = 'code_exe_error'
-      attemptData.exec_error = content
-      // 不立即设置 parsed.exec_error，等待最终结果
-      continue
-    }
-
-    // ============================================================
-    // 5. 处理 code_complete（代码生成完成）
-    // ============================================================
-    if (sub === 'code' && subType === 'code_complete') {
-      attemptData.full_code = content
-      // 重置当前 attempt 的执行结果（因为代码重新生成了）
-      attemptData.full_ans = ''
-      attemptData.exec_error = null
-      attemptData.has_error = false
-      continue
-    }
-
-    // ============================================================
-    // 6. 处理 solved（函数已解决）
-    // ============================================================
-    if (sub === 'code' && etype === 'solved') {
-      attemptData.solved_ans = content
-      attemptData.function_solved = true
-      parsed.solved_ans = content
-      parsed.function_solved = true
-      continue
-    }
-
-    // ============================================================
-    // 7. 处理 code_chunk（代码片段流式输出）
-    // ============================================================
-    if (subType === 'code_chunk') {
-      // 只在有代码时累积，但如果有 code_complete 会覆盖
-      if (!attemptData.full_code || attemptData.full_code.length < 100) {
-        // 流式累积（仅在 code_complete 未覆盖前使用）
-        attemptData.full_code += content
-      }
-      continue
-    }
-
-    // ============================================================
-    // 8. 处理 exec_chunk（执行结果流式输出）
-    // ============================================================
-    if (sub === 'exec' && subType === 'exec_chunk') {
-      attemptData.full_ans += content
-      // 收到执行结果说明该 attempt 至少执行了代码，清除错误状态
-      attemptData.exec_error = null
-      attemptData.has_error = false
-      continue
-    }
-
-    // ============================================================
-    // 9. 处理 exec 阶段的 chunk（通用）
-    // ============================================================
-    if ((etype === 'chunk' || etype === 'code_chunk') && sub === 'exec') {
-      attemptData.full_ans += content
-      attemptData.exec_error = null
-      attemptData.has_error = false
-      continue
-    }
-
-    // ============================================================
-    // 10. 处理 output_text / summary / completion 的 chunk
-    // ============================================================
-    if ((etype === 'chunk' || etype === 'code_chunk') &&
-        (sub === 'output_text' || sub === 'summary' || sub === 'completion')) {
-      attemptData.full_ans += content
-      continue
-    }
-  }
-
-  // ============================================================
-  // 11. 选择最终结果：优先使用最后一次尝试的数据
-  // ============================================================
-  const attemptKeys = Object.keys(attempts).sort((a, b) => Number(a) - Number(b))
-
-  if (attemptKeys.length === 0) {
-    // 没有解析到任何数据，返回初始状态
-    return parsed
-  }
-
-  // 获取最后一次尝试的数据
-  const lastKey = attemptKeys[attemptKeys.length - 1]
-  const lastData = attempts[lastKey]
-
-  // 合并结果到 parsed
-  parsed.full_code = lastData.full_code || parsed.full_code
-  parsed.full_ans = lastData.full_ans || parsed.full_ans
-  parsed.exec_error = lastData.exec_error || parsed.exec_error
-  parsed.solved_ans = lastData.solved_ans || parsed.solved_ans
-  parsed.function_solved = lastData.function_solved || parsed.function_solved
-  parsed.needs_user_input = lastData.needs_user_input || parsed.needs_user_input
-  parsed.choices = lastData.choices.length > 0 ? lastData.choices : parsed.choices
-  parsed.paused = lastData.paused || parsed.paused
-  parsed.completed = lastData.completed || parsed.completed
-  parsed.search_result = lastData.search_result || parsed.search_result
-  parsed.explore_plan = lastData.explore_plan || parsed.explore_plan
-
-  // 如果有搜索结果的字段，合并
-  if (lastData.selected_fields) parsed.selected_fields = lastData.selected_fields
-  if (lastData.selected_functions) parsed.selected_functions = lastData.selected_functions
-
-  // 检测是否有重试
-  parsed.has_retry = hasDetectedRetry || attemptKeys.length > 1
-
-  // 收集所有错误
-  parsed.retry_errors = []
-  for (const key of attemptKeys) {
-    const data = attempts[key]
-    if (data.exec_error) {
-      parsed.retry_errors.push({
-        attempt: Number(key),
-        error: data.exec_error,
-        type: data.error_type,
-      })
-    }
-  }
-
-  // 如果最后一次尝试有错误，但之前有成功的数据，且最后一次是 error 类型
-  // 保持错误状态
-  if (lastData.exec_error) {
-    parsed.exec_error = lastData.exec_error
-  }
-
-  return parsed
-}
-
-  function parseObserveResult(events) {
-    for (const event of events) {
-      if (event.type === 'done') {
-        if (event.plan_result) return event.plan_result
-        return parsePlanJson(event.content || '')
-      }
-    }
-    return { description: '', todo: [] }
-  }
-
-  function historyToText(history) {
+function historyToText(history) {
     return history.map(entry => {
       const role = entry.role || ''
       const type = entry.type || ''
@@ -449,11 +139,6 @@ function parseActResult(events) {
       // Act phase
       const actResult = await runActPhase(action, fullQuestion, actionResult)
       if (actResult.function_solved) {
-        if (actResult.solved_ans) {
-          conversationHistory.value.push({
-            role: 'assistant', type: 'act', action: 'solved', solved_ans: actResult.solved_ans,
-          })
-        }
         continue
       }
 
@@ -482,20 +167,10 @@ function parseActResult(events) {
     }
   }
 
-  async function collectSSEEvents(gen) {
-    const events = []
-    for await (const event of gen) {
-      events.push(event)
-    }
-    return events
-  }
-
   async function runThinkPhase() {
-    const label = cycleIndex.value === 1 ? 'THINK - Planning' : `THINK - Planning (Cycle ${cycleIndex.value})`
     const msgId = Date.now()
-    addMessage('stream', 'think', { label, content: '', streaming: true, msgId })
+    addMessage('stream', 'think', { label: 'THINK - Planning', content: '', streaming: true, msgId })
 
-    const events = []
     let rawPlan = ''
     const gen = thinkStream({
       question: question.value,
@@ -503,7 +178,6 @@ function parseActResult(events) {
       session_id: sessionId.value,
     })
     for await (const event of gen) {
-      events.push(event)
       if (event.type === 'chunk') {
         rawPlan += event.content
         updateStreamingMessage(msgId, rawPlan)
@@ -513,21 +187,17 @@ function parseActResult(events) {
         updateStreamingMessage(msgId, rawPlan, false)
       } else if (event.type === 'error') {
         updateStreamingMessage(msgId, event.content, false, true)
+      } else if (event.type === 'history') {
+        handleHistoryEvent(event.history)
       }
     }
-
-    const result = parseThinkResult(events)
-    finalizeThinkMessage(msgId, rawPlan, result)
-    conversationHistory.value.push({ role: 'assistant', type: 'think', content: parseJsonRaw(rawPlan) })
-    return { result, rawPlan }
+    return {}
   }
 
   async function runActionPhase() {
     const msgId = Date.now()
-    const label = `ACTION - Decide (Cycle ${cycleIndex.value})`
-    addMessage('stream', 'action_decision', { label, content: '', streaming: true, msgId })
+    addMessage('stream', 'action_decision', { label: 'ACTION - Decide', content: '', streaming: true, msgId })
 
-    const events = []
     let rawDecision = ''
     const gen = actionStream({
       question: question.value,
@@ -536,7 +206,6 @@ function parseActResult(events) {
       session_id: sessionId.value,
     })
     for await (const event of gen) {
-      events.push(event)
       if (event.type === 'chunk') {
         rawDecision += event.content
         updateStreamingMessage(msgId, rawDecision)
@@ -544,12 +213,12 @@ function parseActResult(events) {
         updateStreamingMessage(msgId, rawDecision, false)
       } else if (event.type === 'error') {
         updateStreamingMessage(msgId, event.content, false, true)
+      } else if (event.type === 'history') {
+        handleHistoryEvent(event.history)
       }
     }
-
-    finalizeDecisionMessage(msgId, rawDecision)
-    conversationHistory.value.push({ role: 'assistant', type: 'action_decision', content: parseJsonRaw(rawDecision) })
-    return parseActionResult(events)
+    const lastAction = [...conversationHistory.value].reverse().find(e => e.type === 'action_decision')
+    return lastAction?.content || {}
   }
 
   async function runActPhase(action, fullQuestion, actionResult) {
@@ -557,18 +226,12 @@ function parseActResult(events) {
       return handleFrontendAction(action, actionResult)
     }
 
-    const label = `ACT - ${action} (Cycle ${cycleIndex.value})`
     const msgId = Date.now()
     addMessage('stream', 'act', {
-      label,
-      action,
-      content: '',
-      streaming: true,
-      msgId,
-      subPhases: [],
+      label: `ACT - ${action}`, action,
+      content: '', streaming: true, msgId, subPhases: [],
     })
 
-    const events = []
     let currentSubPhase = null
     let currentSubContent = ''
     const gen = actStream({
@@ -585,10 +248,14 @@ function parseActResult(events) {
     })
 
     for await (const event of gen) {
-      events.push(event)
       const sub = event.sub_phase || ''
       const etype = event.type || ''
       const content = event.content || ''
+
+      if (event.type === 'history') {
+        handleHistoryEvent(event.history)
+        continue
+      }
 
       if (sub && sub !== currentSubPhase) {
         if (currentSubContent) {
@@ -612,55 +279,7 @@ function parseActResult(events) {
       addSubPhaseToMessage(msgId, currentSubPhase, currentSubContent)
     }
 
-    const parsed = parseActResult(events)
-    finalizeActMessage(msgId, action, parsed)
-
-    let hasSearchResult = false
-    if (parsed.selected_fields != null) {
-      const entry = {
-        role: 'assistant', type: 'act', action: 'explore_schema', selected_fields: parsed.selected_fields,
-      }
-      if (parsed.explore_plan) entry.explore_plan = parsed.explore_plan
-      if (parsed.search_result) {
-        entry.search_result = parsed.search_result
-        hasSearchResult = true
-      }
-      conversationHistory.value.push(entry)
-    }
-    if (parsed.selected_functions != null) {
-      const entry = {
-        role: 'assistant', type: 'act', action: 'explore_functions', selected_functions: parsed.selected_functions,
-      }
-      if (parsed.search_result) {
-        entry.search_result = parsed.search_result
-        hasSearchResult = true
-      }
-      conversationHistory.value.push(entry)
-    }
-    if (parsed.search_result && !hasSearchResult) {
-      conversationHistory.value.push({
-        role: 'assistant', type: 'act', action, search_result: parsed.search_result,
-      })
-    }
-    if (parsed.full_ans && !parsed.exec_error && parsed.full_code) {
-      conversationHistory.value.push({
-        role: 'assistant', type: 'act', action: 'generate_and_execute',
-        code: parsed.full_code, result: parsed.full_ans,
-      })
-    } else if (parsed.exec_error) {
-      const entry = {
-        role: 'assistant', type: 'act', action: 'generate_and_execute',
-        error: parsed.exec_error, code: parsed.full_code || undefined,
-      }
-      if (parsed.full_ans) entry.result = parsed.full_ans
-      conversationHistory.value.push(entry)
-    } else if (parsed.full_ans && FRONTEND_ACTIONS.has(action)) {
-      conversationHistory.value.push({
-        role: 'assistant', type: 'act', action, text: parsed.full_ans,
-      })
-    }
-
-    return parsed
+    return {}
   }
 
   function handleFrontendAction(action, actionResult) {
@@ -674,6 +293,8 @@ function parseActResult(events) {
       needs_user_input: false, choices,
       paused: false, completed: false,
     }
+
+    conversationHistory.value.push({ role: 'assistant', type: 'act', action, text })
 
     if (action === 'output_text') {
       addMessage('assistant', 'act', { action, text, collapsed: true })
@@ -695,11 +316,9 @@ function parseActResult(events) {
   }
 
   async function runObservePhase() {
-    const label = `OBSERVE - Review (Cycle ${cycleIndex.value})`
     const msgId = Date.now()
-    addMessage('stream', 'observe', { label, content: '', streaming: true, msgId })
+    addMessage('stream', 'observe', { label: 'OBSERVE - Review', content: '', streaming: true, msgId })
 
-    const events = []
     let rawReview = ''
     const gen = observeStream({
       question: question.value,
@@ -708,7 +327,6 @@ function parseActResult(events) {
       session_id: sessionId.value,
     })
     for await (const event of gen) {
-      events.push(event)
       if (event.type === 'chunk') {
         rawReview += event.content
         updateStreamingMessage(msgId, rawReview)
@@ -716,13 +334,10 @@ function parseActResult(events) {
         updateStreamingMessage(msgId, rawReview, false)
       } else if (event.type === 'error') {
         updateStreamingMessage(msgId, event.content, false, true)
+      } else if (event.type === 'history') {
+        handleHistoryEvent(event.history)
       }
     }
-
-    const result = parseObserveResult(events)
-    finalizeObserveMessage(msgId, rawReview, result)
-    conversationHistory.value.push({ role: 'assistant', type: 'observe', content: parseJsonRaw(rawReview) })
-    return { result, rawReview }
   }
 
   function updateStreamingMessage(msgId, content, streaming = true, isError = false) {
@@ -763,46 +378,6 @@ function parseActResult(events) {
       } else {
         msg.subPhases.push({ name: subPhase, content, streaming: false, isError: false })
       }
-    }
-  }
-
-  function finalizeThinkMessage(msgId, content, result) {
-    const idx = messages.value.findIndex(m => m.msgId === msgId)
-    if (idx !== -1) {
-      messages.value[idx].content = content
-      messages.value[idx].streaming = false
-      messages.value[idx].planResult = result
-      messages.value[idx].phase = 'think'
-    }
-  }
-
-  function finalizeDecisionMessage(msgId, content) {
-    const idx = messages.value.findIndex(m => m.msgId === msgId)
-    if (idx !== -1) {
-      messages.value[idx].content = content
-      messages.value[idx].streaming = false
-      messages.value[idx].phase = 'action_decision'
-    }
-  }
-
-  function finalizeActMessage(msgId, action, parsed) {
-    const idx = messages.value.findIndex(m => m.msgId === msgId)
-    if (idx !== -1) {
-      messages.value[idx].streaming = false
-      messages.value[idx].parsed = parsed
-      if (parsed.attempts?.length) {
-        messages.value[idx].attempts = parsed.attempts
-      }
-    }
-  }
-
-  function finalizeObserveMessage(msgId, content, result) {
-    const idx = messages.value.findIndex(m => m.msgId === msgId)
-    if (idx !== -1) {
-      messages.value[idx].content = content
-      messages.value[idx].streaming = false
-      messages.value[idx].planResult = result
-      messages.value[idx].phase = 'observe'
     }
   }
 
@@ -870,16 +445,13 @@ function parseActResult(events) {
   async function resumeSession(sessionData) {
     sessionId.value = sessionData.session_id
     question.value = sessionData.question || ''
-    conversationHistory.value = sessionData.conversation_history || []
     cycleIndex.value = sessionData.cycle_count || 0
 
     addMessage('system', 'resume', {
       content: `Session restored: \`${sessionId.value}\`\nOriginal question: ${question.value}\nCycles completed: ${cycleIndex.value}`,
     })
 
-    for (const entry of conversationHistory.value) {
-      renderHistoryEntry(entry)
-    }
+    handleHistoryEvent(sessionData.conversation_history || [])
 
     try {
       const files = await fetchGeneratedFiles(sessionId.value)
@@ -887,6 +459,18 @@ function parseActResult(events) {
     } catch {
       generatedFiles.value = []
     }
+  }
+
+  function rebuildMessagesFromHistory(history) {
+    messages.value = []
+    for (const entry of history) {
+      renderHistoryEntry(entry)
+    }
+  }
+
+  function handleHistoryEvent(history) {
+    conversationHistory.value = history
+    rebuildMessagesFromHistory(history)
   }
 
   function renderHistoryEntry(entry) {
@@ -907,13 +491,16 @@ function parseActResult(events) {
     }
 
     if (entryType === 'think') {
-      const plan = parsePlanJson(entry.content || '')
-      addMessage('assistant', 'think', { content: entry.content, planResult: plan, collapsed: true })
+      const content = entry.content || ''
+      const plan = typeof content === 'object' ? content : parsePlanJson(content)
+      addMessage('assistant', 'think', { content: typeof content === 'object' ? JSON.stringify(content) : content, planResult: plan, collapsed: true })
     } else if (entryType === 'action_decision') {
-      addMessage('assistant', 'action_decision', { content: entry.content, collapsed: true })
+      const content = entry.content || ''
+      addMessage('assistant', 'action_decision', { content: typeof content === 'object' ? JSON.stringify(content) : content, collapsed: true })
     } else if (entryType === 'observe') {
-      const plan = parsePlanJson(entry.content || '')
-      addMessage('assistant', 'observe', { content: entry.content, planResult: plan, collapsed: true })
+      const content = entry.content || ''
+      const plan = typeof content === 'object' ? content : parsePlanJson(content)
+      addMessage('assistant', 'observe', { content: typeof content === 'object' ? JSON.stringify(content) : content, planResult: plan, collapsed: true })
     } else if (entryType === 'act') {
       addMessage('assistant', 'act', {
         action: entry.action,

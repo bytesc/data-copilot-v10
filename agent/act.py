@@ -100,8 +100,11 @@ def _event_stream_act(
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
 
     new_entries = _build_act_entries(action, act_data)
+    history = None
     if new_entries:
-        save_session_step(session_id, conversation_history, new_entries)
+        history = save_session_step(session_id, conversation_history, new_entries)
+    if history:
+        yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
 
 
 def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None):

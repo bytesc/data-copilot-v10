@@ -132,7 +132,9 @@ def _event_stream_action(
             prompt_length=len(prompt)
         )
 
-    save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "action_decision", "content": parse_json_raw(raw)}])
+    history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "action_decision", "content": parse_json_raw(raw)}])
+    if history:
+        yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
 
 
 def _parse_action_json(raw: str) -> dict:
