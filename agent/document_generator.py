@@ -63,10 +63,11 @@ Rules:
 5. Do NOT describe the agent's execution process, tool calls, or workflow steps
 6. If the conversation history contains successfully generated charts or images (URLs like tmp_imgs/*.png), only include the images that are directly relevant to this specific section's topic — do NOT repeat the same image across multiple sections. If the prompt lists "already used" images, strictly avoid including them.
 7. LANGUAGE IS CRITICAL: The entire document MUST be written in the EXACT SAME language as the user's original question. If the user asked in English, write in English. If the user asked in Chinese, write in Chinese. The conversation history and knowledge base below are provided for factual content ONLY — they may contain mixed or different languages. You MUST ignore their language entirely and write exclusively in the user's language. This is not a suggestion — it is a hard requirement. The language of agent outputs, SQL results, knowledge base, or any other context must NEVER leak into the output.
-8. Keep the content focused on the section topic
-9. Be thorough but concise
-10. Use proper markdown headings, lists, and tables as needed. Do NOT use any fenced code blocks (``` ... ```) of any kind, including chart blocks (```chart), YAML blocks, diagram blocks, or any other non-standard markdown fenced blocks. Data visualizations must be referenced via existing image URLs from the conversation history, not described in code blocks.
-11. If this section is the final summary or conclusion, do NOT repeat the headings, structure, or content of the earlier sections. Synthesize the key findings into concise, actionable recommendations. Answer "so what" and "what to do next."
+8. LANGUAGE CONSISTENCY: The "Document Title" and "Section Heading" provided in the prompt below define the document's language. Your section content MUST be written in the same language as the Document Title. If the Document Title is in English, write this section in English — even if the conversation history or knowledge base contains Chinese text. If the Document Title is in Chinese, write in Chinese. Cross-check the Document Title's language before writing and use it as the sole language reference.
+9. Keep the content focused on the section topic
+10. Be thorough but concise
+11. Use proper markdown headings, lists, and tables as needed. Do NOT use any fenced code blocks (``` ... ```) of any kind, including chart blocks (```chart), YAML blocks, diagram blocks, or any other non-standard markdown fenced blocks. Data visualizations must be referenced via existing image URLs from the conversation history, not described in code blocks.
+12. If this section is the final summary or conclusion, do NOT repeat the headings, structure, or content of the earlier sections. Synthesize the key findings into concise, actionable recommendations. Answer "so what" and "what to do next."
 """
 
 

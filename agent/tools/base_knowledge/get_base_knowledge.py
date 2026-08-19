@@ -24,15 +24,14 @@ def _read_doc(filename):
         return ""
 
 
-DB_BRIEF = _read_doc("db_brief.md")
+DB_BRIEF = "\nDataBase Brief:\n"+_read_doc("db_brief.md")
 
-DB_QUERY_GUIDE = _read_doc("db_quiery_guide.md")
+DB_QUERY_GUIDE = "\nSQL Query guide:\n"+_read_doc("db_quiery_guide.md")
 
 
+BASE = "\nbase knowledge for reference:\n"+_read_doc("base_knowledge.md")
 
-BASE = _read_doc("base_knowledge.md")
-
-DOC = _read_doc("doc_knowledge.md")
+DOC = "\ndoc reference(just for reference):\n"+_read_doc("doc_knowledge.md")
 
 
 def get_base_knowledge(key=""):
