@@ -13,6 +13,7 @@ from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
+from agent.tools.base_knowledge.get_base_knowledge import DOC
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.utils.pd_to_walker import generate_random_string
@@ -39,7 +40,9 @@ The outline should:
 
 IMPORTANT:
 - This is a business summary document. The outline should focus on business analysis, data insights, and conclusions. Do NOT include sections about code, SQL queries, technical implementation details, or agent execution process.
-- The entire document MUST be written in the same language as the user's original question in the conversation history.
+- CRITICAL: The output must contain NO code whatsoever. No code blocks, no inline code snippets, no SQL, no Python, no YAML, no chart syntax, no programming language constructs of any kind.
+- The entire document MUST be written in the same language as the user's original question in the conversation history. The knowledge base document provided below may be in a different language — ignore its language and write exclusively in the user's language.
+- The final part (if structured as a summary or conclusion) must synthesize the key findings into concise, actionable insights. It must NOT repeat the headings or structure of the earlier parts. It should answer "so what" and "what to do next," not re-list the document sections.
 
 Output ONLY a valid JSON object (no markdown, no code blocks):
 {
@@ -56,13 +59,14 @@ Rules:
 1. Write in markdown format
 2. Focus on business insights, data analysis results, trends, patterns, and conclusions
 3. You may mention data sources and filtering criteria when relevant to the business context
-4. Do NOT include code snippets, SQL queries, Python code, or any technical implementation details
+4. CRITICAL: The output must contain NO code whatsoever. No code blocks, no inline code snippets, no SQL, no Python, no YAML, no chart syntax, no programming language constructs of any kind.
 5. Do NOT describe the agent's execution process, tool calls, or workflow steps
 6. If the conversation history contains successfully generated charts or images (URLs like tmp_imgs/*.png), only include the images that are directly relevant to this specific section's topic — do NOT repeat the same image across multiple sections. If the prompt lists "already used" images, strictly avoid including them.
-7. The entire document MUST be written in the same language as the user's original question in the conversation history
+7. The entire document MUST be written in the same language as the user's original question in the conversation history. The knowledge base document provided below may be in a different language — ignore its language and write exclusively in the user's language.
 8. Keep the content focused on the section topic
 9. Be thorough but concise
-10. Use proper markdown headings, lists, and tables as needed (but no code blocks)"""
+10. Use proper markdown headings, lists, and tables as needed. Do NOT use any fenced code blocks (``` ... ```) of any kind, including chart blocks (```chart), YAML blocks, diagram blocks, or any other non-standard markdown fenced blocks. Data visualizations must be referenced via existing image URLs from the conversation history, not described in code blocks.
+11. If this section is the final summary or conclusion, do NOT repeat the headings, structure, or content of the earlier sections. Synthesize the key findings into concise, actionable recommendations. Answer "so what" and "what to do next.""
 
 
 def _extract_image_urls(text: str) -> Set[str]:
@@ -236,6 +240,8 @@ def _event_stream_generate_document(conversation_history: List[dict], session_id
 
     outline_prompt = f"""{OUTLINE_SYSTEM}
 
+{DOC}
+
 Conversation History:
 {context}"""
 
@@ -277,6 +283,8 @@ Document Title: {title}
 Section Heading: {heading}
 Section Description: {description}{used_hint}
 
+{DOC}
+
 Conversation History:
 {context}
 
@@ -300,6 +308,8 @@ Write the content for the section "{heading}" in markdown format. Do NOT include
     full_document = f"# {title}\n\n"
     for heading, content in document_parts:
         full_document += f"## {heading}\n\n{content}\n\n"
+
+    full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_document, flags=re.DOTALL)
 
     file_name = f"doc_{generate_random_string(8)}"
     os.makedirs("tmp_imgs", exist_ok=True)

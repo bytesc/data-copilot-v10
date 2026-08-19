@@ -38,7 +38,7 @@ ACTIONS = """
 - explore_functions: {{"action": "explore_functions"}}
   Explore the available function catalog and select needed functions based on previous context.
 - generate_and_execute: {{"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"]}}
-  Write some python code to call functions. funcs: list of function names to use. 
+  Decide to execute code that calls functions. funcs: list of function names to use. The actual code will be generated in the next phase. Do NOT include any code or "code" field in the JSON output. 
 - output_text: {{"action": "output_text", "text": "Your response content here..."}}
   Output some text to the user without stopping the pipline.
 - ask_question: {{"action": "ask_question", "text": "Your question for the user here..."}}
