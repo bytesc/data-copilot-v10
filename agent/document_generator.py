@@ -66,7 +66,8 @@ Rules:
 8. Keep the content focused on the section topic
 9. Be thorough but concise
 10. Use proper markdown headings, lists, and tables as needed. Do NOT use any fenced code blocks (``` ... ```) of any kind, including chart blocks (```chart), YAML blocks, diagram blocks, or any other non-standard markdown fenced blocks. Data visualizations must be referenced via existing image URLs from the conversation history, not described in code blocks.
-11. If this section is the final summary or conclusion, do NOT repeat the headings, structure, or content of the earlier sections. Synthesize the key findings into concise, actionable recommendations. Answer "so what" and "what to do next.""
+11. If this section is the final summary or conclusion, do NOT repeat the headings, structure, or content of the earlier sections. Synthesize the key findings into concise, actionable recommendations. Answer "so what" and "what to do next."
+"""
 
 
 def _extract_image_urls(text: str) -> Set[str]:
