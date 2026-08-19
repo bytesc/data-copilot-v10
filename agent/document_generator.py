@@ -42,7 +42,7 @@ IMPORTANT:
 - This is a business summary document. The outline should focus on business analysis, data insights, and conclusions. Do NOT include sections about code, SQL queries, technical implementation details, or agent execution process.
 - CRITICAL: The output must contain NO code whatsoever. No code blocks, no inline code snippets, no SQL, no Python, no YAML, no chart syntax, no programming language constructs of any kind.
 - LANGUAGE IS CRITICAL: The entire document MUST be written in the EXACT SAME language as the user's original question. If the user asked in English, write in English. If the user asked in Chinese, write in Chinese. The conversation history and knowledge base below are provided for factual content ONLY — they may contain mixed or different languages. You MUST ignore their language entirely and write exclusively in the user's language. This is not a suggestion — it is a hard requirement. The language of agent outputs, SQL results, knowledge base, or any other context must NEVER leak into the output.
-- The final part (if structured as a summary or conclusion) must synthesize the key findings into concise, actionable insights. It must NOT repeat the headings or structure of the earlier parts. It should answer "so what" and "what to do next," not re-list the document sections.
+- The final part (if structured as a summary or conclusion) must synthesize the key findings into concise, actionable insights. It must NOT repeat the headings or structure of the earlier parts. It should answer "so what" and "what to do next," not re-list the document sections. The description of the final part must NOT use phrases like "summarize each section" or "recap the key points from each section" — it should describe a synthesis of cross-cutting conclusions.
 
 Output ONLY a valid JSON object (no markdown, no code blocks):
 {
@@ -62,12 +62,11 @@ Rules:
 4. CRITICAL: The output must contain NO code whatsoever. No code blocks, no inline code snippets, no SQL, no Python, no YAML, no chart syntax, no programming language constructs of any kind.
 5. Do NOT describe the agent's execution process, tool calls, or workflow steps
 6. If the conversation history contains successfully generated charts or images (URLs like tmp_imgs/*.png), only include the images that are directly relevant to this specific section's topic — do NOT repeat the same image across multiple sections. If the prompt lists "already used" images, strictly avoid including them.
-7. LANGUAGE IS CRITICAL: The entire document MUST be written in the EXACT SAME language as the user's original question. If the user asked in English, write in English. If the user asked in Chinese, write in Chinese. The conversation history and knowledge base below are provided for factual content ONLY — they may contain mixed or different languages. You MUST ignore their language entirely and write exclusively in the user's language. This is not a suggestion — it is a hard requirement. The language of agent outputs, SQL results, knowledge base, or any other context must NEVER leak into the output.
-8. LANGUAGE CONSISTENCY: The "Document Title" and "Section Heading" provided in the prompt below define the document's language. Your section content MUST be written in the same language as the Document Title. If the Document Title is in English, write this section in English — even if the conversation history or knowledge base contains Chinese text. If the Document Title is in Chinese, write in Chinese. Cross-check the Document Title's language before writing and use it as the sole language reference.
-9. Keep the content focused on the section topic
-10. Be thorough but concise
-11. Use proper markdown headings, lists, and tables as needed. Do NOT use any fenced code blocks (``` ... ```) of any kind, including chart blocks (```chart), YAML blocks, diagram blocks, or any other non-standard markdown fenced blocks. Data visualizations must be referenced via existing image URLs from the conversation history, not described in code blocks.
-12. If this section is the final summary or conclusion, do NOT repeat the headings, structure, or content of the earlier sections. Synthesize the key findings into concise, actionable recommendations. Answer "so what" and "what to do next."
+7. LANGUAGE IS CRITICAL — READ THIS FIRST: Before writing anything, check the "Document Title" below. If it is in English, write this entire section in English. If it is in Chinese, write in Chinese. The conversation history and knowledge base below are provided for factual content ONLY — they may contain mixed or different languages. You MUST ignore their language entirely and write exclusively in the language of the Document Title. This is not a suggestion — it is a hard requirement. The knowledge base (which is a Chinese document about Singapore regulations) must NEVER influence the output language. Every sentence you write must be in the Document Title's language.
+8. Keep the content focused on the section topic
+9. Be thorough but concise
+10. Use proper markdown headings, lists, and tables as needed. Do NOT use any fenced code blocks (``` ... ```) of any kind, including chart blocks (```chart), YAML blocks, diagram blocks, or any other non-standard markdown fenced blocks. Data visualizations must be referenced via existing image URLs from the conversation history, not described in code blocks.
+11. If this section is the final summary or conclusion: do NOT create sub-sections that mirror the earlier section headings. Do NOT structure the summary as a list of per-topic recaps. Instead, synthesize cross-cutting themes into a few concise, actionable recommendations. Answer "so what" and "what to do next." The summary should be shorter than the other sections, not longer.
 """
 
 
@@ -284,6 +283,9 @@ Conversation History:
 Document Title: {title}
 Section Heading: {heading}
 Section Description: {description}{used_hint}
+
+Full Document Outline (all sections):
+{chr(10).join(f'  {j+1}. {p["heading"]} — {p["description"]}' for j, p in enumerate(parts))}
 
 {DOC}
 
