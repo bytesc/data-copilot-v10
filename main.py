@@ -34,12 +34,15 @@ from data_access.observe_log import (
 )
 from data_access.report_log import create_report_log_table, get_generated_files
 from data_access.base_knowledge_db import create_base_knowledge_table
+from data_access.db_query_guide_db import create_db_query_guide_table
+from data_access.doc_knowledge_db import create_doc_knowledge_table
 
-# 启动时确保会话操作记录表已创建
 create_session_log_table()
 create_observe_log_tables()
 create_report_log_table()
 create_base_knowledge_table()
+create_db_query_guide_table()
+create_doc_knowledge_table()
 
 # DATABASE_URL = config_data['mysql']
 # engine = sqlalchemy.create_engine(DATABASE_URL)
