@@ -1,0 +1,9 @@
+node_modules
+vue-front/node_modules
+.git
+__pycache__
+*.pyc
+tmp_imgs
+front_img
+.kilo
+docker-cmd.txt
