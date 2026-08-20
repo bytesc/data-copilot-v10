@@ -65,3 +65,13 @@ CREATE TABLE IF NOT EXISTS `base_knowledge` (
   `key` TEXT NOT NULL COMMENT '基础知识键',
   `value` LONGTEXT COMMENT '基础知识值'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='基础知识表';
+
+CREATE TABLE IF NOT EXISTS `db_query_guide` (
+  `key` TEXT NOT NULL COMMENT '查询指南键',
+  `value` LONGTEXT COMMENT '查询指南值'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='查询指南表';
+
+CREATE TABLE IF NOT EXISTS `doc_knowledge` (
+  `key` TEXT NOT NULL COMMENT '文档知识键',
+  `value` LONGTEXT COMMENT '文档知识值'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文档知识表';
