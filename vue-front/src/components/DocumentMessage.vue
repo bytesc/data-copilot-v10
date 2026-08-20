@@ -7,7 +7,7 @@
         <p><strong>Parts:</strong> {{ message.docOutline.parts?.length || 0 }}</p>
         <ol>
           <li v-for="(part, i) in message.docOutline.parts" :key="i">
-            {{ part.heading || `Part ${i + 1}` }}
+            <strong>{{ part.heading || `Part ${i + 1}` }}</strong><span v-if="part.description"> — {{ part.description }}</span>
           </li>
         </ol>
       </div>

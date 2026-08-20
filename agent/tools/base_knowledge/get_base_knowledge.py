@@ -34,12 +34,7 @@ BASE = "\nbase knowledge for reference:\n"+_read_doc("base_knowledge.md")
 DOC = "\ndoc reference(just for reference):\n"+_read_doc("doc_knowledge.md")
 
 
-def get_base_knowledge(key=""):
-    knowledge = BASE
-    return knowledge
-
-
-def get_base_knowledge_db(key=""):
+def get_base_knowledge_db(key=None):
     try:
         with sys_engine.connect() as conn:
             result = conn.execute(select(base_knowledge))
@@ -50,7 +45,7 @@ def get_base_knowledge_db(key=""):
         return {}
 
 
-def get_base_knowledge_db_llm(context=""):
+def get_base_knowledge_db_llm(context="", key=None):
     knowledge = get_base_knowledge_db()
     if not knowledge:
         yield ""

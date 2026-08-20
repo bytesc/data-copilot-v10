@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.agent import generate_and_execute_stream
-from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, get_base_knowledge
+from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, BASE
 from agent.tools.tools_def import engine, llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.tools.copilot.sql_code import parse_selected_fields_json
@@ -110,7 +110,7 @@ def _event_stream_act(
 def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': '正在搜索数据库信息...'}, ensure_ascii=False)}\n\n"
 
-    base_knowledge = get_base_knowledge()
+    base_knowledge = BASE
 
     if search_keyword and search_keyword.strip():
         full_schema = search_db_markdown(engine, search_keyword.strip(), tables)
