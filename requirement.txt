@@ -1,9 +1,11 @@
 fastapi==0.103.2
+uvicorn==0.23.2
 pyjwt==2.10.1
 pydantic==2.10.5
 SQLAlchemy==2.0.36
 
 PyMySQL==1.1.0
+cryptography==41.0.7
 
 
 openai==1.63.0

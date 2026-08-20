@@ -18,9 +18,6 @@ while True:
     sleep 2
 done
 
-echo "Installing Playwright browsers..."
-playwright install chromium || true
-
 echo "Starting backend..."
 cd /app
 python main.py

@@ -1,5 +1,9 @@
-docker compose -f docker/docker-compose.yml build --no-cache
-docker compose -f docker/docker-compose.yml up -d
-docker compose -f docker/docker-compose.yml ps
-docker compose -f docker/docker-compose.yml logs mysql
-docker compose -f docker/docker-compose.yml down
+docker compose -f docker/docker-compose.yml -p docker up -d --build
+docker compose -f docker/docker-compose.yml -p docker up -d --build frontend
+docker compose -f docker/docker-compose.yml -p docker up -d --build backend
+docker compose -f docker/docker-compose.yml -p docker down
+docker compose -f docker/docker-compose.yml -p docker down -v
+
+docker compose -f docker/docker-compose.yml -p docker logs mysql
+docker compose -f docker/docker-compose.yml -p docker logs backend
+docker compose -f docker/docker-compose.yml -p docker logs frontend
