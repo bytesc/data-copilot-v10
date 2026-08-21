@@ -311,8 +311,8 @@ Write the content for the section "{heading}" in markdown format. Do NOT include
                           token_estimate=len(part_prompt) // 3)
 
     full_document = f"# {title}\n\n"
-    for heading, content in document_parts:
-        full_document += f"## {heading}\n\n{content}\n\n"
+    for idx, (heading, content) in enumerate(document_parts, 1):
+        full_document += f"## {idx}. {heading}\n\n{content}\n\n"
 
     full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_document, flags=re.DOTALL)
 
