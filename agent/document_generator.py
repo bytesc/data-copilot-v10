@@ -71,6 +71,12 @@ Rules:
 """
 
 
+def _strip_heading(text: str, heading: str) -> str:
+    escaped = re.escape(heading)
+    pattern = rf'^\s*(?:#{1,6}\s+)?\*{{0,2}}{escaped}\*{{0,2}}\s*\n+'
+    return re.sub(pattern, '', text, count=1)
+
+
 def _extract_image_urls(text: str) -> Set[str]:
     return set(re.findall(r'!\[[^\]]*\]\(([^)]+)\)', text))
 
@@ -293,12 +299,14 @@ Full Document Outline (all sections):
 Conversation History:
 {context}
 
-Write the content for the section "{heading}" in markdown format. Do NOT include the section heading itself (it will be added automatically)."""
+Write the content for the section "{heading}" in markdown format. ⚠️ CRITICAL: Do NOT repeat the section heading "{heading}" in your output. The heading will be added automatically. Start directly with the body content — no heading, no title line."""
 
         part_raw = ""
         for chunk in call_llm_stream(part_prompt, llm):
             part_raw += chunk
             yield f"data: {json.dumps({'phase': 'part', 'type': 'chunk', 'content': chunk, 'part_index': i}, ensure_ascii=False)}\n\n"
+
+        part_raw = _strip_heading(part_raw, heading)
 
         new_images = _extract_image_urls(part_raw)
         used_images.update(new_images)
