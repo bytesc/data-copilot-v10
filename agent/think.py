@@ -64,8 +64,9 @@ ACTIONS AVAILABLE:
 Context (includes conversation history and user questions):
 {context}
 
+⚠️ LANGUAGE — READ THIS FIRST: Before generating any output, check the user's question language. Your ENTIRE output (description and todo items) MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, you MUST write in Chinese. If the user asked in English, you MUST write in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context, database information, and knowledge base may contain mixed languages — they are for factual content ONLY. Their language must NEVER leak into your output. Every word you output must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
+
 Rules:
-0. LANGUAGE IS CRITICAL: Your entire output (description and todo items) MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, write in Chinese. If the user asked in English, write in English. The context, database information, and knowledge base may contain mixed languages — they are for factual content only. You MUST use the user's language exclusively.
 1. Each step should be a specific, actionable task.
 2. The todo list should contain between 1 and 10 items. If the question is a simple greeting, chat, summary or requires no data analysis, set todo to an empty list. If all tasks are done, set todo to an empty list.
 3. Mention specific table names and field names in data retrieval tasks.
@@ -79,7 +80,9 @@ Output ONLY a valid JSON object on a single line(no md block):
 
 If the question requires no data analysis (greeting, clarification, etc.), output an empty todo list.
 The description should be a short paragraph describing the overall approach.
-The todo list contains the actionable steps. Keep task descriptions concise."""
+The todo list contains the actionable steps. Keep task descriptions concise.
+
+⚠️ FINAL LANGUAGE CHECK: The knowledge base above is in Chinese — IGNORE THAT. Your output MUST be in the user's language. Check the user's question now: what language is it in? Write your ENTIRE response in that language. Do NOT copy the knowledge base's language."""
 
     prompt_length = len(think_prompt)
     error_msg = ""

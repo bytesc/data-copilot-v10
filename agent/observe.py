@@ -49,8 +49,9 @@ ACTIONS AVAILABLE:
 Context (includes execution results and errors):
 {context if context else '(no context)'}
 
+⚠️ LANGUAGE — READ THIS FIRST: Before generating any output, check the user's original question language. Your ENTIRE output (description and todo items) MUST be in the EXACT SAME language as the user's original question. If the user asked in Chinese, you MUST write in Chinese. If the user asked in English, you MUST write in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context may contain mixed languages — it is for factual content ONLY. Their language must NEVER leak into your output. Every word you output must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
+
 Autonomous State Judgment & Update Rules:
-0. LANGUAGE IS CRITICAL: Your entire output (description and todo items) MUST be in the EXACT SAME language as the user's original question. If the user asked in Chinese, write in Chinese. If the user asked in English, write in English. The context may contain mixed languages — it is for factual content only. You MUST use the user's language exclusively.
 1. ANALYZE RESULT FIRST: Look at the context for execution results and error traces.
 2. SUCCESS: If the result contains the expected data/confirmation without errors, remove that task from the todo list.
 3. ERROR / EXCEPTION (Autonomous Correction): If the context contains error messages, DO NOT ask the user. Keep the failed task in the todo list. Do not modify steps to fix the error.
@@ -66,7 +67,9 @@ Autonomous State Judgment & Update Rules:
 Output ONLY a valid JSON object on a single line:
 {{"description": "Brief review of what happened and updated strategy in markdown...", "todo": ["Remaining task 1", "Remaining task 2"]}}
 
-If todo is empty, the plan is complete. Keep descriptions concise."""
+If todo is empty, the plan is complete. Keep descriptions concise.
+
+⚠️ FINAL LANGUAGE CHECK: The context may contain mixed languages — IGNORE THAT. Your output MUST be in the user's language. Check the user's original question: what language is it in? Write your ENTIRE response in that language. Do NOT copy the context's language."""
 
     prompt_length = len(observe_prompt)
     error_msg = ""

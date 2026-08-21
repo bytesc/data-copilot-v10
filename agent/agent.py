@@ -141,7 +141,7 @@ Here is the functions you can import and use:
     remind_prompt = """
     Remind: 
 
-    ⚠️ LANGUAGE IS CRITICAL: All your output text (yield messages, chart titles, axis labels, legends, annotations, explanations, and any user-facing text) MUST be in the EXACT SAME language as the user's original question. If the user asked in Chinese, write all text in Chinese. If the user asked in English, write all text in English. The context, database content, and knowledge base may contain mixed languages — they are for factual content only. You MUST use the user's language exclusively for all generated text.
+    ⚠️ LANGUAGE — READ THIS FIRST: Before writing any code, check the user's original question language. ALL your output text (yield messages, chart titles, axis labels, legends, annotations, explanations, error messages, and any user-facing text) MUST be in the EXACT SAME language as the user's original question. If the user asked in Chinese, you MUST write ALL text in Chinese. If the user asked in English, you MUST write ALL text in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context, database content, and knowledge base may contain mixed languages — they are for factual content ONLY. Their language must NEVER leak into your yield text, chart labels, or any output. Every word of user-facing text you generate must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
 
     ⚠️ CRITICAL OUTPUT FORMAT — VIOLATION WILL CAUSE EXECUTION FAILURE:
     - Your ENTIRE response MUST be wrapped in a SINGLE ```python ... ``` markdown code block. Nothing outside the code block is allowed.
@@ -215,9 +215,14 @@ Here is the functions you can import and use:
     - If the current todo item requires user confirmation or additional information, yield the request and stop. Do NOT proceed to other items.
     """
 
+    final_language_check = """
+⚠️ FINAL LANGUAGE CHECK: The knowledge base above is in Chinese — IGNORE THAT. All your output text MUST be in the user's language. Check the user's question now: what language is it in? Write ALL text (yield messages, chart titles, labels) in that language. Do NOT copy the knowledge base's language.
+"""
+
     cot_prompt = pre_prompt + function_prompt + str(function_info) + \
                  module_prompt + example_code + remind_prompt + \
-                 database + knowledge + " \nContext:\n" + question
+                 database + knowledge + " \nContext:\n" + question + \
+                 final_language_check
     return cot_prompt, rag_ans, function_import
 
 
