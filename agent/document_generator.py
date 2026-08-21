@@ -66,8 +66,10 @@ Rules:
 7. LANGUAGE IS CRITICAL — READ THIS FIRST: Before writing anything, check the "Document Title" below. If it is in English, write this entire section in English. If it is in Chinese, write in Chinese. The conversation history and knowledge base below are provided for factual content ONLY — they may contain mixed or different languages. You MUST ignore their language entirely and write exclusively in the language of the Document Title. This is not a suggestion — it is a hard requirement. The knowledge base (which is a Chinese document about Singapore regulations) must NEVER influence the output language. Every sentence you write must be in the Document Title's language.
 8. Keep the content focused on the section topic
 9. Be thorough but concise
-10. Use proper markdown headings, lists, and tables as needed. Do NOT use any fenced code blocks (``` ... ```) of any kind, including chart blocks (```chart), YAML blocks, diagram blocks, or any other non-standard markdown fenced blocks. Data visualizations must be referenced via existing image URLs from the conversation history, not described in code blocks.
-11. If this section is the final summary or conclusion: do NOT create sub-sections that mirror the earlier section headings. Do NOT structure the summary as a list of per-topic recaps. Instead, synthesize cross-cutting themes into a few concise, actionable recommendations. Answer "so what" and "what to do next." The summary should be shorter than the other sections, not longer.
+10. Use proper markdown headings, lists, and tables as needed. Do NOT use any fenced code blocks. Heading depth is limited to `###` (H3) — do NOT use `####`, `#####`, or `######`. Use `###` for sub-headings and plain bold text or bullet points for deeper structure.
+11. Do NOT use `1. xxx` numbered lists (e.g., `1. First item`). Use `-` bullet lists instead. If numbering is essential, use `1) xxx` format to avoid Word auto-numbering conflicts across sections.
+11. Sub-headings within this section MAY use numbering (e.g., `### 1. xxx`), but the numbering MUST restart from 1 for THIS section only — do NOT continue numbering from previous sections. Each section is independent; its sub-heading numbers are scoped to this section alone.
+12. If this section is the final summary or conclusion: do NOT create sub-sections that mirror the earlier section headings. Do NOT structure the summary as a list of per-topic recaps. Instead, synthesize cross-cutting themes into a few concise, actionable recommendations. Answer "so what" and "what to do next." The summary should be shorter than the other sections, not longer.
 """
 
 
@@ -129,10 +131,10 @@ def _markdown_to_docx(markdown_text: str, output_path: str):
             i += 1
             continue
 
-        ol_match = re.match(r'^\d+\.\s+(.+)$', stripped)
+        ol_match = re.match(r'^(\d+)\.\s+(.+)$', stripped)
         if ol_match:
-            p = doc.add_paragraph(style='List Number')
-            _add_inline_runs(p, ol_match.group(1))
+            p = doc.add_paragraph()
+            _add_inline_runs(p, f"{ol_match.group(1)}) {ol_match.group(2)}")
             i += 1
             continue
 
