@@ -65,6 +65,7 @@ Context (includes conversation history and user questions):
 {context}
 
 Rules:
+0. LANGUAGE IS CRITICAL: Your entire output (description and todo items) MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, write in Chinese. If the user asked in English, write in English. The context, database information, and knowledge base may contain mixed languages — they are for factual content only. You MUST use the user's language exclusively.
 1. Each step should be a specific, actionable task.
 2. The todo list should contain between 1 and 10 items. If the question is a simple greeting, chat, summary or requires no data analysis, set todo to an empty list. If all tasks are done, set todo to an empty list.
 3. Mention specific table names and field names in data retrieval tasks.

@@ -141,6 +141,8 @@ Here is the functions you can import and use:
     remind_prompt = """
     Remind: 
 
+    ⚠️ LANGUAGE IS CRITICAL: All your output text (yield messages, chart titles, axis labels, legends, annotations, explanations, and any user-facing text) MUST be in the EXACT SAME language as the user's original question. If the user asked in Chinese, write all text in Chinese. If the user asked in English, write all text in English. The context, database content, and knowledge base may contain mixed languages — they are for factual content only. You MUST use the user's language exclusively for all generated text.
+
     ⚠️ CRITICAL OUTPUT FORMAT — VIOLATION WILL CAUSE EXECUTION FAILURE:
     - Your ENTIRE response MUST be wrapped in a SINGLE ```python ... ``` markdown code block. Nothing outside the code block is allowed.
     - The first line of your code MUST be `def func():`. Do NOT write any code, text, or explanation outside the function.

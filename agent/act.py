@@ -130,6 +130,8 @@ def _act_explore_schema(full_question: str, session_id: str, tables, search_keyw
 Context:
 {full_question}
 
+LANGUAGE IS CRITICAL: The "plan" field text MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, write the plan in Chinese. If the user asked in English, write the plan in English.
+
 Output ONLY a JSON object mapping table names to their needed columns. Use an empty list [] for a table to select all its columns. 
 Use an empty object {{}} to select all tables and all columns. 
 Use {{"__no_db__": true}} if no database query is needed or no relivent data in the database.
