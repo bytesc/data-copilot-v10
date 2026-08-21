@@ -1,7 +1,7 @@
 <template>
   <div class="icp-area">
     <div class="context-info-row">
-      <div class="context-info-label">ICP 赔案号 · 附加说明</div>
+      <div class="context-info-label">ICP · AI content for reference only</div>
     </div>
   </div>
 </template>

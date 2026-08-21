@@ -3,7 +3,7 @@
     <div class="messages-area" ref="messagesContainer">
       <div v-if="messages.length === 0 && !isRunning" class="empty-state">
         <div class="empty-icon">💬</div>
-        <h2>Data-Copilot v4</h2>
+        <h2>Data-Copilot v10</h2>
         <p>Ask a question to start analyzing your data</p>
       </div>
 

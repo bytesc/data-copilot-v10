@@ -2,7 +2,7 @@
   <div class="left-panel-inner">
     <div class="logo-area">
       <div class="logo-icon">DC</div>
-      <h1 class="app-title">Data-Copilot v4</h1>
+      <h1 class="app-title">Data-Copilot v10</h1>
       <p class="app-subtitle">Think → Action → Act → Observe</p>
     </div>
 
