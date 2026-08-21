@@ -67,16 +67,10 @@ Rules:
 8. Keep the content focused on the section topic
 9. Be thorough but concise
 10. Use proper markdown headings, lists, and tables as needed. Do NOT use any fenced code blocks. Heading depth is limited to `###` (H3) — do NOT use `####`, `#####`, or `######`. Use `###` for sub-headings and plain bold text or bullet points for deeper structure.
-11. Do NOT use `1. xxx` numbered lists (e.g., `1. First item`). Use `-` bullet lists instead. If numbering is essential, use `1) xxx` format to avoid Word auto-numbering conflicts across sections.
+11. ⚠️ Do NOT add numbers to sub-headings (e.g., avoid `### 1. xxx`, `### 2. xxx`). Use descriptive headings only, like `### Key Findings` or `### 核心发现`. Numbered lists in body text are allowed but use `-` bullet lists instead of `1.` numbered lists to avoid Word auto-numbering conflicts.
 11. Sub-headings within this section MAY use numbering (e.g., `### 1. xxx`), but the numbering MUST restart from 1 for THIS section only — do NOT continue numbering from previous sections. Each section is independent; its sub-heading numbers are scoped to this section alone.
 12. If this section is the final summary or conclusion: do NOT create sub-sections that mirror the earlier section headings. Do NOT structure the summary as a list of per-topic recaps. Instead, synthesize cross-cutting themes into a few concise, actionable recommendations. Answer "so what" and "what to do next." The summary should be shorter than the other sections, not longer.
 """
-
-
-def _strip_heading(text: str, heading: str) -> str:
-    escaped = re.escape(heading)
-    pattern = rf'^\s*(?:#{1,6}\s+)?\*{{0,2}}{escaped}\*{{0,2}}\s*\n+'
-    return re.sub(pattern, '', text, count=1)
 
 
 def _extract_image_urls(text: str) -> Set[str]:
@@ -131,10 +125,10 @@ def _markdown_to_docx(markdown_text: str, output_path: str):
             i += 1
             continue
 
-        ol_match = re.match(r'^(\d+)\.\s+(.+)$', stripped)
+        ol_match = re.match(r'^\d+\.\s+(.+)$', stripped)
         if ol_match:
             p = doc.add_paragraph()
-            _add_inline_runs(p, f"{ol_match.group(1)}) {ol_match.group(2)}")
+            _add_inline_runs(p, stripped)
             i += 1
             continue
 
@@ -307,8 +301,6 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
         for chunk in call_llm_stream(part_prompt, llm):
             part_raw += chunk
             yield f"data: {json.dumps({'phase': 'part', 'type': 'chunk', 'content': chunk, 'part_index': i}, ensure_ascii=False)}\n\n"
-
-        part_raw = _strip_heading(part_raw, heading)
 
         new_images = _extract_image_urls(part_raw)
         used_images.update(new_images)
