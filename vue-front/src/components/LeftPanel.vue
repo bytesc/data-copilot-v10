@@ -24,6 +24,9 @@
       <button class="ctrl-btn" @click="$emit('generate-doc')" :disabled="isRunning">
         <span class="btn-icon">📋</span> Generate Summary
       </button>
+      <button class="ctrl-btn" @click="$emit('generate-doc-unified')" :disabled="isRunning">
+        <span class="btn-icon">📄</span> Generate Full Doc
+      </button>
       <button class="ctrl-btn new-session" @click="$emit('new-session')">
         <span class="btn-icon">✨</span> New Session
       </button>
@@ -42,5 +45,5 @@ defineProps({
   serverUrl: { type: String, default: 'http://127.0.0.1:8009' },
 })
 
-defineEmits(['upload-csv', 'upload-doc', 'resume-session', 'generate-doc', 'new-session'])
+defineEmits(['upload-csv', 'upload-doc', 'resume-session', 'generate-doc', 'generate-doc-unified', 'new-session'])
 </script>

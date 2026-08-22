@@ -73,6 +73,30 @@ Rules:
 """
 
 
+UNIFIED_SYSTEM = """You are a professional business document writer. Based on the conversation history between a user and a data analysis AI assistant, write the complete business summary document in one pass.
+
+You must follow the structural directive below exactly:
+
+**Structural Requirements:**
+- Present the overall conclusion first (Executive Summary), followed by the detailed breakdown and supporting analysis.
+- The "conclusion-first" structure applies to every subsection. Each subsection must open with its own key conclusion or finding, followed by the supporting analysis, evidence, or data. No subsection may begin with background information or context before stating its primary conclusion.
+- Use a clear hierarchical heading structure. The document should have a top-level title (`# Title`), major sections (`## Section`), and subsections as needed (`### Subsection`, `#### Subsection`). There is no restriction on heading depth.
+- Numbered headings (e.g. `## 1. Introduction`, `### 3.1 Clinical sites`) are allowed and encouraged for clarity.
+
+**Content Rules:**
+1. Write entirely in markdown format.
+2. CRITICAL: The output must contain NO code blocks. No fenced code, no inline code snippets, no SQL, no Python, no YAML, no chart syntax. Use plain markdown (headings, lists, tables, bold, italic) only.
+3. Focus on business insights, data analysis results, trends, patterns, and conclusions.
+4. Do NOT describe the agent's execution process, tool calls, search steps, data collection methods, or analytical workflows. Present only the final findings.
+5. CHARTS AND IMAGES: The conversation history contains successfully generated charts and images (URLs like tmp_imgs/*.png). You MUST include every valid chart and image that is relevant. Use markdown image syntax: `![description](image_url)`. Reference actual image URLs from the conversation — do NOT make up URLs. Place each chart near the text that discusses its findings.
+6. LANGUAGE IS CRITICAL: Determine the user's language from the conversation history. Write the entire document in that language. The knowledge base and other context may contain mixed languages — ignore them. Every sentence must be in the user's language.
+7. You may mention data sources and filtering criteria when relevant to the business context.
+8. Be thorough but concise.
+9. All tables must be well-formatted markdown tables.
+10. If the conversation history does not contain enough data for a meaningful section, state what is not available rather than inventing data.
+"""
+
+
 def _extract_image_urls(text: str) -> Set[str]:
     return set(re.findall(r'!\[[^\]]*\]\(([^)]+)\)', text))
 
@@ -358,6 +382,84 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
 async def generate_document_stream_api(request: Request, user_input: DocumentInput):
     return StreamingResponse(
         _event_stream_generate_document(
+            user_input.conversation_history,
+            user_input.session_id or "",
+            user_input.model_dump_json(),
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+def _event_stream_generate_document_unified(conversation_history: List[dict], session_id: str, request_json: str = ""):
+    context = history_to_text(conversation_history)
+
+    yield f"data: {json.dumps({'phase': 'generate', 'type': 'msg', 'content': 'Generating document...'}, ensure_ascii=False)}\n\n"
+
+    prompt = f"""{UNIFIED_SYSTEM}
+
+{DOC}
+
+{TARGET}
+
+Conversation History:
+{context}
+
+Write the complete business summary document in markdown format. Start with `# Title` as the top-level heading. Do NOT wrap the output in any code blocks or fences — output raw markdown only. Do NOT include any introductory or explanatory text outside the markdown document."""
+
+    full_raw = ""
+    for chunk in call_llm_stream(prompt, llm):
+        full_raw += chunk
+        yield f"data: {json.dumps({'phase': 'generate', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+
+    yield f"data: {json.dumps({'phase': 'generate', 'type': 'done', 'content': full_raw}, ensure_ascii=False)}\n\n"
+
+    log_observe_cycle(session_id, 0, "generate_document_unified", "full",
+                      prompt=prompt[:10000], response=full_raw[:10000],
+                      token_estimate=len(prompt) // 3)
+
+    full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_raw, flags=re.DOTALL)
+
+    file_name = f"doc_{generate_random_string(8)}"
+    os.makedirs("tmp_imgs", exist_ok=True)
+
+    md_path = os.path.join("tmp_imgs", file_name + ".md")
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(full_document)
+
+    docx_path = os.path.join("tmp_imgs", file_name + ".docx")
+    _markdown_to_docx(full_document, docx_path)
+
+    static_url = config_data.get("static_path", "http://127.0.0.1:8009/")
+    download_url_md = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".md"
+    download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx"
+
+    yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx}, ensure_ascii=False)}\n\n"
+
+    record_session_operation(
+        session_id, "/api/generate-document/stream/unified/",
+        request_json, full_document[:5000], "",
+        "success", f"文档生成完成: {file_name}",
+        prompt_length=len(context)
+    )
+
+    record_report_generation(
+        session_id=session_id,
+        file_name=file_name,
+        chat_history=json.dumps(conversation_history, ensure_ascii=False),
+        outline=full_raw,
+        full_text=full_document,
+    )
+
+
+@router.post("/api/generate-document/stream/unified/")
+async def generate_document_unified_stream_api(request: Request, user_input: DocumentInput):
+    return StreamingResponse(
+        _event_stream_generate_document_unified(
             user_input.conversation_history,
             user_input.session_id or "",
             user_input.model_dump_json(),

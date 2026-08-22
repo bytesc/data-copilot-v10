@@ -48,6 +48,10 @@ export function generateDocumentStream(payload) {
   return createSSEStream(`${BASE_URL}/generate-document/stream/`, payload)
 }
 
+export function generateDocumentUnifiedStream(payload) {
+  return createSSEStream(`${BASE_URL}/generate-document/stream/unified/`, payload)
+}
+
 async function* createSSEStream(url, payload) {
   const response = await fetch(url, {
     method: 'POST',

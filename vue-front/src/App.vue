@@ -14,6 +14,7 @@
             @upload-doc="showUploadDoc = true"
             @resume-session="showResume = true"
             @generate-doc="chat.generateDocument()"
+            @generate-doc-unified="chat.generateDocumentUnified()"
             @new-session="chat.reset()"
           />
         </aside>

@@ -1,7 +1,8 @@
 import { ref, reactive, computed } from 'vue'
 import {
   thinkStream, actionStream, actStream, observeStream,
-  logUserInput, generateDocumentStream, fetchGeneratedFiles,
+  logUserInput, generateDocumentStream, generateDocumentUnifiedStream,
+  fetchGeneratedFiles,
 } from '@/utils/api.js'
 
 export function useChat() {
@@ -607,6 +608,58 @@ function historyToText(history) {
     }
   }
 
+  async function generateDocumentUnified() {
+    const docMsgId = Date.now()
+    addMessage('stream', 'document', {
+      label: 'Generating Document (Unified)...',
+      content: '',
+      streaming: true,
+      msgId: docMsgId,
+      docParts: [],
+      docOutline: null,
+    })
+
+    let fullContent = ''
+
+    const gen = generateDocumentUnifiedStream({
+      conversation_history: conversationHistory.value,
+      session_id: sessionId.value,
+    })
+
+    for await (const event of gen) {
+      const phase = event.phase || ''
+      const etype = event.type || ''
+      const content = event.content || ''
+
+      if (phase === 'generate') {
+        if (etype === 'chunk') {
+          fullContent += content
+          updateDocMessage(docMsgId, {
+            outlineGenerating: fullContent,
+          })
+        } else if (etype === 'done') {
+          updateDocMessage(docMsgId, {
+            outlineGenerating: null,
+          })
+        }
+      } else if (phase === 'document' && etype === 'done') {
+        updateDocMessage(docMsgId, {
+          streaming: false,
+          docContent: content,
+          downloadUrlMd: event.download_url_md || event.download_url || '',
+          downloadUrlDocx: event.download_url_docx || '',
+        })
+        generatedFiles.value.push({
+          id: docMsgId,
+          title: 'Document',
+          downloadUrlMd: event.download_url_md || event.download_url || '',
+          downloadUrlDocx: event.download_url_docx || '',
+          createdAt: Date.now(),
+        })
+      }
+    }
+  }
+
   function updateDocMessage(msgId, updates) {
     const idx = messages.value.findIndex(m => m.msgId === msgId)
     if (idx !== -1) {
@@ -647,6 +700,7 @@ function historyToText(history) {
     submitNewQuestion,
     resumeSession,
     generateDocument,
+    generateDocumentUnified,
     reset,
     serverUrl,
   }
