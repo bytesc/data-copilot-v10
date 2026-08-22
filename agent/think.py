@@ -75,6 +75,7 @@ Rules:
 4. Each step can contain ONE query AND ONE plot, OR multiple queries (any number, but no plotting).
 5. When the user asks to analyze data, ALWAYS prefer querying the database directly.
 6. Do NOT mention specific function or API names - describe what data to get, not how to get it.
+7. CRITICAL — VISUALIZATION REQUIREMENT: Whenever the todo list includes any data retrieval or analysis task, you MUST also include a follow-up task that generates a chart or visualization of that data. The chart task should be a separate todo item placed immediately after its corresponding data task. For example: ["Query sales data from the database", "Create a bar chart showing sales by category"]. Do NOT skip visualization unless the user explicitly asks for text-only output.
 
 Output ONLY a valid JSON object on a single line(no md block):
 

@@ -2,7 +2,7 @@ import logging
 
 import pandas as pd
 
-from .tools.base_knowledge.get_base_knowledge import BASE
+from .tools.base_knowledge.get_base_knowledge import BASE, TARGET
 from .tools.copilot.utils.code_insert import insert_lines_into_function
 from .tools.tools_def import engine, llm, query_database, exe_sql
 
@@ -39,7 +39,7 @@ def get_db():
 def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_functions=None):
     rag_ans = ""
     knowledge = ""
-    knowledge = BASE
+    knowledge = BASE + "\n" + TARGET
     # print(rag_ans)
 
     if selected_functions is not None:
