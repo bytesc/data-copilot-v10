@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.action import ACTIONS
+from agent.tools.base_knowledge.get_base_knowledge import TARGET
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
@@ -39,9 +40,15 @@ def _event_stream_observe(
     else:
         context = ""
 
+    target_section = ""
+    if "```" in TARGET:
+        target_section = "The target document template below defines the content that must be included. Review the execution results against this template to determine what still needs to be done:\n\n" + TARGET
+
     observe_prompt = f"""You are an objective Observer. Your job is to review the execution results of the last step, update the plan accordingly.
 
 The system is working in Think → Action → Act → Observe cycles. You takes the `Observe` part.
+
+{target_section}
 
 ACTIONS AVAILABLE:
 {ACTIONS}
@@ -57,7 +64,7 @@ Autonomous State Judgment & Update Rules:
 3. ERROR / EXCEPTION (Autonomous Correction): If the context contains error messages, DO NOT ask the user. Keep the failed task in the todo list. Do not modify steps to fix the error.
 4. PARTIAL SUCCESS: If only part of the task was completed, remove completed parts and append new tasks for remaining work.
 5. Keep completed tasks out of the todo list — only include PENDING tasks.
-6. If all tasks are done, set todo to an empty list.
+6. CRITICAL — COMPLETENESS CHECK: Before setting todo to empty, compare what has been accomplished against the target document template above. If any section, data point, image/chart, or table from the template has not been addressed, add tasks to cover them. Do NOT mark the plan as complete if the target document template has requirements that have not been fulfilled.
 7. If there are pending tasks, the todo list should contain between 1 and 10 items.
 8. Your job is an objective Observer, do not be creative to new solutions.
 

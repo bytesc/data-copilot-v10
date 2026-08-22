@@ -44,11 +44,15 @@ def _event_stream_think(
     func_catalog = get_func_summary_for_agent()
     base_knowledge = BASE
 
+    target_section = ""
+    if "```" in TARGET:
+        target_section = "The target document template below defines the final report structure and content that must be produced. Ensure your plan covers all sections, data points, images, and tables required by this template:\n\n" + TARGET
+
     think_prompt = f"""You are an autonomous data analysis Thinker. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
 
 {base_knowledge}
 
-{TARGET}
+{target_section}
 
 Database Information:
 {DB_BRIEF}
