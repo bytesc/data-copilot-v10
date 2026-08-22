@@ -204,8 +204,11 @@ Do NOT write any SQL code. Use plain natural language only."""
 DB_BRIEF = "\nDataBase Brief:\n"+_read_doc("db_brief.md")
 
 
-DB_QUERY_GUIDE = "\nSQL Query guide:\n"+_read_doc("db_quiery_guide.md")\
-+"\n" + base_knowledge_to_str(get_db_query_guide_db())
+DB_QUERY_GUIDE = ""
+
+# DB_QUERY_GUIDE = "\nSQL Query guide:\n"+_read_doc("db_quiery_guide.md")\
+# +"\n" + base_knowledge_to_str(get_db_query_guide_db())
+
 
 BASE = "\nbase knowledge for reference:\n"+_read_doc("base_knowledge.md")\
        +"\n" + base_knowledge_to_str(get_base_knowledge_db())
