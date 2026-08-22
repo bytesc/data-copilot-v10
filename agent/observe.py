@@ -41,7 +41,7 @@ def _event_stream_observe(
         context = ""
 
     target_section = ""
-    if "```" in TARGET:
+    if TARGET.strip() != "":
         target_section = "The target document template below defines the content that must be included. Review the execution results against this template to determine what still needs to be done:\n\n" + TARGET
 
     observe_prompt = f"""You are an objective Observer. Your job is to review the execution results of the last step, update the plan accordingly.
