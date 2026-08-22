@@ -121,8 +121,6 @@ def _act_explore_schema(full_question: str, session_id: str, tables, search_keyw
 
 {base_knowledge}
 
-{TARGET}
-
 {DB_BRIEF}
 
 {DB_QUERY_GUIDE}
