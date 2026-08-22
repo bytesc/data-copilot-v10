@@ -213,3 +213,5 @@ BASE = "\nbase knowledge for reference:\n"+_read_doc("base_knowledge.md")\
 DOC = "\ndoc reference(just for reference):\n"+_read_doc("doc_knowledge.md")\
 +"\n" + base_knowledge_to_str(get_doc_knowledge_db())
 
+
+TARGET = "\nTarget:\n"+_read_doc("target_knowledge.md")

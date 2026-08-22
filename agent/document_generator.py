@@ -13,7 +13,7 @@ from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-from agent.tools.base_knowledge.get_base_knowledge import DOC
+from agent.tools.base_knowledge.get_base_knowledge import DOC, TARGET
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.utils.pd_to_walker import generate_random_string
@@ -246,6 +246,8 @@ def _event_stream_generate_document(conversation_history: List[dict], session_id
 
 {DOC}
 
+{TARGET}
+
 Conversation History:
 {context}"""
 
@@ -291,6 +293,8 @@ Full Document Outline (all sections):
 {chr(10).join(f'  {j+1}. {p["heading"]} — {p["description"]}' for j, p in enumerate(parts))}
 
 {DOC}
+
+{TARGET}
 
 Conversation History:
 {context}
