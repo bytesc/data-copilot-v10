@@ -37,8 +37,9 @@ ACTIONS = """
   Explore the database schema and structure based on previous context. Not used to query data, you should use `generate_and_execute` to exe_sql.
 - explore_functions: {{"action": "explore_functions"}}
   Explore the available function catalog and select needed functions based on previous context.
-- generate_and_execute: {{"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"]}}
-  Decide to execute code that calls functions. funcs: list of function names to use. The actual code will be generated in the next phase. Do NOT include any code or "code" field in the JSON output. 
+- generate_and_execute: {{"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"], "research_guide": "..."}}
+  Decide to execute code that calls functions. funcs: list of function names to use. The actual code will be generated in the next phase. Do NOT include any code or "code" field in the JSON output.
+  research_guide: Optional detailed natural language description of what data to search for and what images/charts to generate. For each image, describe: chart type (bar, pie, line, venn, etc.), title, X-axis labels, Y-axis labels, legend entries, data series with exact values, colors, annotations, and any special formatting. The code generation phase will use this to produce the exact visualizations. This is NOT just a category name — it must be a complete, detailed specification that a programmer could implement without further clarification. Use this when the task requires specific charts or images. Example: "Image 1: Horizontal bar chart titled 'Provider depth by stage'. X-axis: number of providers (0-7). Y-axis: stage names (Research & Design, Cell Therapy QC, Clinical Manufacturing Process, Cell & Gene Therapy Logistics, Viral Vector Manufacturing, Cell Processing/Apheresis, Clinical Trial Execution). Values: 1,1,2,2,3,3,6. Color bars with <=2 providers orange, others blue." 
 - output_text: {{"action": "output_text", "text": "Your response content here..."}}
   Output some text to the user without stopping the pipline.
 - ask_question: {{"action": "ask_question", "text": "Your question for the user here..."}}
@@ -171,6 +172,7 @@ def _parse_action_json(raw: str) -> dict:
         "funcs": result.get("funcs"),
         "text": result.get("text"),
         "choices": result.get("choices"),
+        "research_guide": result.get("research_guide"),
     }
 
 

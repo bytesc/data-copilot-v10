@@ -85,6 +85,7 @@ def _event_stream_act(
     tables = params.get("tables")
     selected_fields = params.get("selected_fields")
     selected_functions = params.get("selected_functions")
+    research_guide = params.get("research_guide")
 
     act_data = {}
     if action == "explore_schema":
@@ -94,7 +95,7 @@ def _event_stream_act(
         act_data = yield from _act_explore_functions(full_question, session_id, search_keyword)
 
     elif action == "generate_and_execute":
-        act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions, request_json)
+        act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions, request_json, research_guide)
 
     else:
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
@@ -231,7 +232,7 @@ exe_sql, get_save_image_path
     return {"selected_functions": selected_functions, "search_result": display_content}
 
 
-def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions, request_json: str = ""):
+def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions, request_json: str = "", research_guide: str = ""):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': '正在生成并执行代码...'}, ensure_ascii=False)}\n\n"
     full_code = ""
     full_ans = ""
@@ -240,6 +241,7 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
         full_question, tables, retries=2,
         selected_fields=selected_fields,
         selected_functions=selected_functions,
+        research_guide=research_guide,
     ):
         if event.get("sub_type") == "code_chunk":
             if exec_error:

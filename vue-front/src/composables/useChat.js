@@ -245,6 +245,7 @@ function historyToText(history) {
         search_keyword: actionResult.keyword || undefined,
         selected_fields: action === 'generate_and_execute' ? { __no_db__: true } : undefined,
         selected_functions: actionResult.funcs || undefined,
+        research_guide: actionResult.research_guide || undefined,
       },
     })
 

@@ -36,10 +36,10 @@ def get_db():
     return get_db_info_prompt(engine, example=True, simple=True)
 
 
-def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_functions=None):
+def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_functions=None, research_guide=None):
     rag_ans = ""
     knowledge = ""
-    knowledge = BASE + "\n" + TARGET
+    knowledge = BASE + "\n"
     # print(rag_ans)
 
     if selected_functions is not None:
@@ -219,9 +219,13 @@ Here is the functions you can import and use:
 ⚠️ FINAL LANGUAGE CHECK: The knowledge base above is in Chinese — IGNORE THAT. All your output text MUST be in the user's language. Check the user's question now: what language is it in? Write ALL text (yield messages, chart titles, labels) in that language. Do NOT copy the knowledge base's language.
 """
 
+    research_section = ""
+    if research_guide:
+        research_section = "\n\nImage and Data Requirements:\n" + research_guide + "\n\nYou MUST query the data and generate the images described above. Include the generated image paths in your output using `yield path`."
+
     cot_prompt = pre_prompt + function_prompt + str(function_info) + \
                  module_prompt + example_code + remind_prompt + \
-                 database + knowledge + " \nContext:\n" + question + \
+                 database + knowledge + research_section + " \nContext:\n" + question + \
                  final_language_check
     return cot_prompt, rag_ans, function_import
 
@@ -251,10 +255,11 @@ def format_yield_item(item, print_rows=5):
 
 def generate_and_execute_stream(question, tables=None, retries=2,
                                  selected_fields=None, selected_functions=None, print_rows=5,
+                                 research_guide=None,
                                  ):
     yield {"type": "msg", "content": "正在分析问题...", "phase": "act", "sub_phase": "code"}
 
-    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, selected_fields, selected_functions)
+    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, selected_fields, selected_functions, research_guide)
     prompt_length = len(cot_prompt)
 
     error_msg = ""
