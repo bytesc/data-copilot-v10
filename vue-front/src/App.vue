@@ -1,33 +1,23 @@
 <template>
   <div class="app-container">
-    <div class="content-row">
-<aside class="left-panel" :class="{ collapsed: isPanelCollapsed }">
-          <div class="panel-toggle" @click="isPanelCollapsed = !isPanelCollapsed">
-            {{ isPanelCollapsed ? '▶' : '◀' }}
-          </div>
-          <LeftPanel
-            v-if="!isPanelCollapsed"
-            :session-id="chat.sessionId.value"
-            :is-running="chat.isRunning.value"
-            :server-url="chat.serverUrl.value"
-            @upload-csv="showUploadCsv = true"
-            @upload-doc="showUploadDoc = true"
-            @resume-session="showResume = true"
-            @generate-doc="chat.generateDocument()"
-            @generate-doc-unified="chat.generateDocumentUnified()"
-            @new-session="chat.reset()"
-          />
-        </aside>
-      <main class="chat-area">
-        <ChatArea :chat="chat" />
-      </main>
-<aside class="right-panel" :class="{ collapsed: isRightPanelCollapsed }">
-          <div class="panel-toggle right" @click="isRightPanelCollapsed = !isRightPanelCollapsed">
-            {{ isRightPanelCollapsed ? '◀' : '▶' }}
-          </div>
-          <RightPanel v-if="!isRightPanelCollapsed" :files="chat.generatedFiles.value" />
-        </aside>
+    <nav class="top-nav">
+      <div class="nav-brand">
+        <router-link to="/" class="nav-logo">Data-Copilot v10</router-link>
+      </div>
+      <div class="nav-links">
+        <router-link to="/" class="nav-link" active-class="nav-link-active">
+          <span class="nav-icon">💬</span> Chat
+        </router-link>
+        <router-link to="/data" class="nav-link" active-class="nav-link-active">
+          <span class="nav-icon">📊</span> Data
+        </router-link>
+      </div>
+    </nav>
+
+    <div class="page-content">
+      <router-view />
     </div>
+
     <IcpArea />
 
     <button class="theme-toggle" :title="isDark ? '切换到亮色主题' : '切换到暗色主题'" @click="toggleTheme">
@@ -39,44 +29,12 @@
         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
       </svg>
     </button>
-
-    <UploadModal
-      v-if="showUploadCsv"
-      type="csv"
-      :server-url="chat.serverUrl.value"
-      @close="showUploadCsv = false"
-    />
-    <UploadModal
-      v-if="showUploadDoc"
-      type="doc"
-      :server-url="chat.serverUrl.value"
-      @close="showUploadDoc = false"
-    />
-    <ResumeModal
-      v-if="showResume"
-      :server-url="chat.serverUrl.value"
-      @close="showResume = false"
-      @resume="onResume"
-    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useChat } from '@/composables/useChat.js'
-import LeftPanel from '@/components/LeftPanel.vue'
-import RightPanel from '@/components/RightPanel.vue'
-import ChatArea from '@/components/ChatArea.vue'
 import IcpArea from '@/components/IcpArea.vue'
-import UploadModal from '@/components/UploadModal.vue'
-import ResumeModal from '@/components/ResumeModal.vue'
-
-const chat = useChat()
-const isPanelCollapsed = ref(false)
-const isRightPanelCollapsed = ref(false)
-const showUploadCsv = ref(false)
-const showUploadDoc = ref(false)
-const showResume = ref(false)
 
 const isDark = ref(true)
 
@@ -96,9 +54,85 @@ onMounted(() => {
   isDark.value = saved !== 'light'
   applyTheme()
 })
-
-function onResume(sessionData) {
-  showResume.value = false
-  chat.resumeSession(sessionData)
-}
 </script>
+
+<style scoped>
+.top-nav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  height: 48px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+}
+
+.nav-logo {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.nav-link:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.nav-link-active {
+  color: var(--accent-blue);
+  background: var(--bg-tertiary);
+}
+
+.nav-icon {
+  font-size: 14px;
+}
+
+.page-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .top-nav {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .nav-logo {
+    font-size: 14px;
+  }
+
+  .nav-link {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+</style>
