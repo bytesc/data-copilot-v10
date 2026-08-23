@@ -39,7 +39,7 @@
       </template>
 
       <template v-else-if="message.type === 'stream' && message.phase === 'act'">
-        <ActMessage :message="message" />
+        <ActMessage :message="message" :server-url="serverUrl" />
       </template>
 
       <template v-else-if="message.type === 'stream' && message.phase === 'document'">
@@ -48,7 +48,7 @@
 
       <template v-else-if="message.type === 'assistant'">
         <template v-if="message.phase === 'act'">
-          <ActMessage :message="message" />
+          <ActMessage :message="message" :server-url="serverUrl" />
         </template>
         <template v-else>
           <details v-if="message.collapsed" class="msg-collapse" :open="!message.collapsed">
@@ -90,6 +90,7 @@ import DocumentMessage from '@/components/DocumentMessage.vue'
 
 const props = defineProps({
   message: { type: Object, required: true },
+  serverUrl: { type: String, default: '' },
 })
 
 const renderedContent = computed(() => {

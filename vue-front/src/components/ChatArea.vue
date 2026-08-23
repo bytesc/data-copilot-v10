@@ -11,6 +11,7 @@
         v-for="msg in messages"
         :key="msg.id"
         :message="msg"
+        :server-url="serverUrl"
       />
 
       <div v-if="isRunning" class="thinking-indicator">
@@ -92,7 +93,7 @@ const props = defineProps({
 
 const {
   messages, isRunning, isCompleted, isPaused,
-  awaitingInput, inputPrompt, inputChoices,
+  awaitingInput, inputPrompt, inputChoices, serverUrl,
   startChat, submitUserResponse, submitPausedInput, submitNewQuestion,
 } = props.chat
 

@@ -692,6 +692,13 @@ html, body {
   margin-top: 12px;
 }
 
+.doc-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
 .download-btn {
   display: inline-block;
   padding: 8px 16px;

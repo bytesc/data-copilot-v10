@@ -76,11 +76,12 @@
 
     <template v-else-if="message.action === 'generate_document'">
       <details class="msg-collapse" open>
-        <summary class="collapse-summary">{{ message.title || 'Generated Document' }}</summary>
+        <summary class="collapse-summary">Document generated</summary>
         <div class="collapse-body">
-          <div v-if="message.download_url_md || message.download_url_docx" class="file-actions">
-            <a v-if="message.download_url_md" :href="message.download_url_md + '?download=1'" target="_blank" class="download-btn md">.md</a>
-            <a v-if="message.download_url_docx" :href="message.download_url_docx + '?download=1'" target="_blank" class="download-btn docx">.docx</a>
+          <div v-if="message.title" class="doc-title">{{ message.title }}</div>
+          <div v-if="message.file_name" class="file-actions">
+            <a :href="`${serverUrl}/tmp_imgs/${message.file_name}.md?download=1`" target="_blank" class="download-btn md">.md</a>
+            <a :href="`${serverUrl}/tmp_imgs/${message.file_name}.docx?download=1`" target="_blank" class="download-btn docx">.docx</a>
           </div>
           <div v-if="message.result" v-html="renderMd(message.result)"></div>
         </div>
@@ -131,6 +132,7 @@ import { renderMarkdown } from '@/utils/markdown.js'
 
 const props = defineProps({
   message: { type: Object, required: true },
+  serverUrl: { type: String, default: '' },
 })
 
 const FRONTEND_ACTIONS = ['output_text', 'ask_question', 'ask_choice', 'summary_and_pause', 'attempt_completion']

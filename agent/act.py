@@ -71,9 +71,7 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
     elif action == "generate_document":
         title = act_data.get("title", "")
         file_name = act_data.get("file_name", "")
-        download_url_md = act_data.get("download_url_md", "")
-        download_url_docx = act_data.get("download_url_docx", "")
-        entries.append({"role": "assistant", "type": "act", "action": "generate_document", "title": title, "file_name": file_name, "download_url_md": download_url_md, "download_url_docx": download_url_docx, "result": "报告文档已生成"})
+        entries.append({"role": "assistant", "type": "act", "action": "generate_document", "title": title, "file_name": file_name, "result": "报告文档已生成"})
     return entries
 
 
@@ -308,8 +306,6 @@ def _act_generate_document(conversation_history, session_id, title: str = "", re
         "title": title,
         "file_name": last_event.get("file_name", ""),
         "status": "completed",
-        "download_url_md": last_event.get("download_url_md", ""),
-        "download_url_docx": last_event.get("download_url_docx", ""),
     }
 
 

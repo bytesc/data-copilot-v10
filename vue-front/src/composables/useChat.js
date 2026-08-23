@@ -281,8 +281,8 @@ function historyToText(history) {
           generatedFiles.value.push({
             id: msgId,
             title: event.title || 'Document',
-            downloadUrlMd: event.download_url_md || '',
-            downloadUrlDocx: event.download_url_docx || '',
+            downloadUrlMd: `${serverUrl.value}/tmp_imgs/${event.file_name}.md`,
+            downloadUrlDocx: `${serverUrl.value}/tmp_imgs/${event.file_name}.docx`,
             createdAt: Date.now(),
           })
         }
@@ -532,8 +532,6 @@ function historyToText(history) {
         attempts: entry.attempts,
         title: entry.title,
         file_name: entry.file_name,
-        download_url_md: entry.download_url_md,
-        download_url_docx: entry.download_url_docx,
         collapsed: true,
       })
     } else if (entryType === 'document') {

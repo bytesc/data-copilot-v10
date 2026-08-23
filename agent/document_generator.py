@@ -376,13 +376,6 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
 
 
 
-def _title_to_file_name(title: str) -> str:
-    safe = re.sub(r'[^\w\u4e00-\u9fff]+', '_', title).strip('_')
-    if not safe:
-        safe = f"doc_{generate_random_string(8)}"
-    return safe
-
-
 def generate_document_from_context(conversation_history: List[dict], session_id: str, title: str = "", request_json: str = ""):
     yield from _event_stream_generate_document_unified(conversation_history, session_id, title, request_json)
 
@@ -419,7 +412,7 @@ Write the complete business summary document in markdown format. Start with `# T
     title_match = re.search(r'^#\s+(.+)$', full_document, re.MULTILINE)
     title = title_match.group(1).strip() if title_match else "Summary Document"
 
-    file_name = _title_to_file_name(title) if title else f"doc_{generate_random_string(8)}"
+    file_name = f"doc_{generate_random_string(8)}"
     os.makedirs("tmp_imgs", exist_ok=True)
 
     md_path = os.path.join("tmp_imgs", file_name + ".md")
