@@ -2,7 +2,7 @@
   <div class="app-container">
     <nav class="top-nav">
       <div class="nav-brand">
-        <router-link to="/" class="nav-logo">Data-Copilot v10</router-link>
+        <router-link to="/" class="nav-logo">Data-Copilot</router-link>
       </div>
       <div class="nav-links">
         <router-link to="/" class="nav-link" active-class="nav-link-active">
