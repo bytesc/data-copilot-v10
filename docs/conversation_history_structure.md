@@ -50,7 +50,7 @@ LLM 输出的 JSON 对象，格式为 `{"action": "...", ...}`。
 
 ```json
 {"role":"assistant","type":"act","action":"generate_document",
- "title":"...","file_name":"...","result":"报告文档已生成"}
+ "title":"...","file_name":"...","full_text":"..."}
 ```
 
 ### 纯前端执行

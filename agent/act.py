@@ -72,7 +72,7 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
         title = act_data.get("title", "")
         file_name = act_data.get("file_name", "")
         full_text = act_data.get("full_text", "")
-        entries.append({"role": "assistant", "type": "act", "action": "generate_document", "title": title, "file_name": file_name, "full_text": full_text, "result": "报告文档已生成"})
+        entries.append({"role": "assistant", "type": "act", "action": "generate_document", "title": title, "file_name": file_name, "full_text": full_text})
     return entries
 
 

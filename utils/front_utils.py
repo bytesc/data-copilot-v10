@@ -53,8 +53,6 @@ def history_to_text(history: List[dict]) -> str:
                     lines.append(f"[ACT generate_document] 文档已生成: {entry['file_name']}.md / {entry['file_name']}.docx")
                 if entry.get("full_text"):
                     lines.append(f"[ACT generate_document] 全文:\n{entry['full_text']}")
-                if entry.get("result"):
-                    lines.append(f"[ACT generate_document] Result:\n{entry['result']}")
             elif action == "solved":
                 if entry.get("solved_ans"):
                     lines.append(f"[ACT] Solved Answer:\n{entry['solved_ans']}")
