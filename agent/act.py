@@ -71,7 +71,8 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
     elif action == "generate_document":
         title = act_data.get("title", "")
         file_name = act_data.get("file_name", "")
-        entries.append({"role": "assistant", "type": "act", "action": "generate_document", "title": title, "file_name": file_name, "result": "报告文档已生成"})
+        full_text = act_data.get("full_text", "")
+        entries.append({"role": "assistant", "type": "act", "action": "generate_document", "title": title, "file_name": file_name, "full_text": full_text, "result": "报告文档已生成"})
     return entries
 
 
@@ -303,8 +304,9 @@ def _act_generate_document(conversation_history, session_id, title: str = "", re
             except json.JSONDecodeError:
                 pass
     return {
-        "title": title,
+        "title": last_event.get("title", title),
         "file_name": last_event.get("file_name", ""),
+        "full_text": last_event.get("content", ""),
         "status": "completed",
     }
 

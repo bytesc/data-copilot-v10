@@ -83,7 +83,7 @@
             <a :href="`${serverUrl}/tmp_imgs/${message.file_name}.md?download=1`" target="_blank" class="download-btn md">.md</a>
             <a :href="`${serverUrl}/tmp_imgs/${message.file_name}.docx?download=1`" target="_blank" class="download-btn docx">.docx</a>
           </div>
-          <div v-if="message.result" v-html="renderMd(message.result)"></div>
+          <div v-if="message.full_text" class="doc-full-text" v-html="renderMd(message.full_text)"></div>
         </div>
       </details>
     </template>

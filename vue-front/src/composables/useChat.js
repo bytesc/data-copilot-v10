@@ -532,6 +532,7 @@ function historyToText(history) {
         attempts: entry.attempts,
         title: entry.title,
         file_name: entry.file_name,
+        full_text: entry.full_text,
         collapsed: true,
       })
     } else if (entryType === 'document') {
