@@ -5,7 +5,11 @@ import io
 from typing import List, Optional, Set
 
 import httpx
+from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+router = APIRouter()
 
 from docx import Document
 from docx.shared import Inches, Pt
@@ -364,12 +368,31 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
         prompt_length=len(context)
     )
 
+    outline_json = json.dumps({"title": title}, ensure_ascii=False)
+
     record_report_generation(
         session_id=session_id,
         file_name=file_name,
         chat_history=json.dumps(conversation_history, ensure_ascii=False),
-        outline=outline_raw,
+        outline=outline_json,
         full_text=full_document,
+    )
+
+
+@router.post("/api/generate-document/stream/")
+async def generate_document_stream_api(request: Request, user_input: DocumentInput):
+    return StreamingResponse(
+        _event_stream_generate_document(
+            user_input.conversation_history,
+            user_input.session_id or "",
+            user_input.model_dump_json(),
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
     )
 
 
@@ -443,4 +466,21 @@ Write the complete business summary document in markdown format. Start with `# T
         chat_history=json.dumps(conversation_history, ensure_ascii=False),
         outline=outline_json,
         full_text=full_document,
+    )
+
+
+@router.post("/api/generate-document/stream/unified/")
+async def generate_document_unified_stream_api(request: Request, user_input: DocumentInput):
+    return StreamingResponse(
+        generate_document_from_context(
+            user_input.conversation_history,
+            user_input.session_id or "",
+            user_input.model_dump_json(),
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
     )
