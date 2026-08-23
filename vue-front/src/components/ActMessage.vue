@@ -74,6 +74,19 @@
       </template>
     </template>
 
+    <template v-else-if="message.action === 'generate_document'">
+      <details class="msg-collapse" open>
+        <summary class="collapse-summary">{{ message.title || 'Generated Document' }}</summary>
+        <div class="collapse-body">
+          <div v-if="message.download_url_md || message.download_url_docx" class="file-actions">
+            <a v-if="message.download_url_md" :href="message.download_url_md + '?download=1'" target="_blank" class="download-btn md">.md</a>
+            <a v-if="message.download_url_docx" :href="message.download_url_docx + '?download=1'" target="_blank" class="download-btn docx">.docx</a>
+          </div>
+          <div v-if="message.result" v-html="renderMd(message.result)"></div>
+        </div>
+      </details>
+    </template>
+
     <template v-else-if="message.action === 'solved'">
       <div class="solved-content" v-html="renderMd(message.solved_ans || '')"></div>
     </template>

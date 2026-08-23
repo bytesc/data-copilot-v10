@@ -69,8 +69,11 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
                 entry["result"] = full_ans
             entries.append(entry)
     elif action == "generate_document":
+        title = act_data.get("title", "")
         file_name = act_data.get("file_name", "")
-        entries.append({"role": "assistant", "type": "act", "action": "generate_document", "file_name": file_name, "result": "报告文档已生成"})
+        download_url_md = act_data.get("download_url_md", "")
+        download_url_docx = act_data.get("download_url_docx", "")
+        entries.append({"role": "assistant", "type": "act", "action": "generate_document", "title": title, "file_name": file_name, "download_url_md": download_url_md, "download_url_docx": download_url_docx, "result": "报告文档已生成"})
     return entries
 
 
@@ -102,8 +105,8 @@ def _event_stream_act(
         act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions, request_json, research_guide)
 
     elif action == "generate_document":
-        file_name = params.get("file_name")
-        act_data = yield from _act_generate_document(conversation_history, session_id, file_name, request_json)
+        title = params.get("title")
+        act_data = yield from _act_generate_document(conversation_history, session_id, title, request_json)
 
     else:
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
@@ -291,11 +294,23 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
     return {"full_code": full_code, "full_ans": full_ans, "exec_error": exec_error}
 
 
-def _act_generate_document(conversation_history, session_id, file_name: str = "", request_json: str = ""):
+def _act_generate_document(conversation_history, session_id, title: str = "", request_json: str = ""):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': '正在生成报告文档...'}, ensure_ascii=False)}\n\n"
-    for event in generate_document_from_context(conversation_history, session_id, file_name, request_json):
-        yield f"data: {json.dumps({**event}, ensure_ascii=False)}\n\n"
-    return {"file_name": file_name, "status": "completed"}
+    last_event = {}
+    for event in generate_document_from_context(conversation_history, session_id, title, request_json):
+        yield event
+        if event.startswith("data: "):
+            try:
+                last_event = json.loads(event[6:].strip())
+            except json.JSONDecodeError:
+                pass
+    return {
+        "title": title,
+        "file_name": last_event.get("file_name", ""),
+        "status": "completed",
+        "download_url_md": last_event.get("download_url_md", ""),
+        "download_url_docx": last_event.get("download_url_docx", ""),
+    }
 
 
 @router.post("/api/act/stream/")

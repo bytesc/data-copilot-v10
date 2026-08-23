@@ -52,8 +52,8 @@ ACTIONS = """
   Output some text and stop the pipline.
 - attempt_completion: {{"action": "attempt_completion", "text": "Your final results here..."}}
   Output some text and stop the pipline in case of completion.
-- generate_document: {{"action": "generate_document", "file_name": "report_name"}}
-  Generate a complete business summary document based on the full conversation history. The file_name specifies the output file name (without extension). The document will be saved as both .md and .docx files. Use this when the user asks to generate a report or document.
+- generate_document: {{"action": "generate_document", "title": "report_title"}}
+  Generate a complete business summary document based on the full conversation history. The title specifies the document title. The document will be saved as both .md and .docx files. Use this when the user asks to generate a report or document.
 """
 
 
@@ -182,7 +182,7 @@ def _parse_action_json(raw: str) -> dict:
         "text": result.get("text"),
         "choices": result.get("choices"),
         "research_guide": result.get("research_guide"),
-        "file_name": result.get("file_name"),
+        "title": result.get("title"),
     }
 
 

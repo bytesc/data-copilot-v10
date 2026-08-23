@@ -245,7 +245,7 @@ function historyToText(history) {
         selected_fields: action === 'generate_and_execute' ? { __no_db__: true } : undefined,
         selected_functions: actionResult.funcs || undefined,
         research_guide: actionResult.research_guide || undefined,
-        file_name: actionResult.file_name || undefined,
+        title: actionResult.title || undefined,
       },
     })
 
@@ -280,7 +280,7 @@ function historyToText(history) {
           })
           generatedFiles.value.push({
             id: msgId,
-            title: 'Document',
+            title: event.title || 'Document',
             downloadUrlMd: event.download_url_md || '',
             downloadUrlDocx: event.download_url_docx || '',
             createdAt: Date.now(),
@@ -530,6 +530,10 @@ function historyToText(history) {
         search_result: entry.search_result,
         explore_plan: entry.explore_plan,
         attempts: entry.attempts,
+        title: entry.title,
+        file_name: entry.file_name,
+        download_url_md: entry.download_url_md,
+        download_url_docx: entry.download_url_docx,
         collapsed: true,
       })
     } else if (entryType === 'document') {

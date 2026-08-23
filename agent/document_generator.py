@@ -376,11 +376,18 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
 
 
 
-def generate_document_from_context(conversation_history: List[dict], session_id: str, file_name: str = "", request_json: str = ""):
-    yield from _event_stream_generate_document_unified(conversation_history, session_id, file_name, request_json)
+def _title_to_file_name(title: str) -> str:
+    safe = re.sub(r'[^\w\u4e00-\u9fff]+', '_', title).strip('_')
+    if not safe:
+        safe = f"doc_{generate_random_string(8)}"
+    return safe
 
 
-def _event_stream_generate_document_unified(conversation_history: List[dict], session_id: str, file_name: str = "", request_json: str = ""):
+def generate_document_from_context(conversation_history: List[dict], session_id: str, title: str = "", request_json: str = ""):
+    yield from _event_stream_generate_document_unified(conversation_history, session_id, title, request_json)
+
+
+def _event_stream_generate_document_unified(conversation_history: List[dict], session_id: str, title: str = "", request_json: str = ""):
     context = history_to_text(conversation_history)
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': 'Generating document...'}, ensure_ascii=False)}\n\n"
@@ -409,8 +416,10 @@ Write the complete business summary document in markdown format. Start with `# T
 
     full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_raw, flags=re.DOTALL)
 
-    if not file_name:
-        file_name = f"doc_{generate_random_string(8)}"
+    title_match = re.search(r'^#\s+(.+)$', full_document, re.MULTILINE)
+    title = title_match.group(1).strip() if title_match else "Summary Document"
+
+    file_name = _title_to_file_name(title) if title else f"doc_{generate_random_string(8)}"
     os.makedirs("tmp_imgs", exist_ok=True)
 
     md_path = os.path.join("tmp_imgs", file_name + ".md")
@@ -424,12 +433,14 @@ Write the complete business summary document in markdown format. Start with `# T
     download_url_md = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".md"
     download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx"
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'done', 'content': full_document, 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx}, ensure_ascii=False)}\n\n"
+    outline_json = json.dumps({"title": title}, ensure_ascii=False)
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'done', 'content': full_document, 'title': title, 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx}, ensure_ascii=False)}\n\n"
 
     record_session_operation(
         session_id, "act/generate_document",
         request_json, full_document[:5000], "",
-        "success", f"文档生成完成: {file_name}",
+        "success", f"文档生成完成: {title}",
         prompt_length=len(context)
     )
 
@@ -437,6 +448,6 @@ Write the complete business summary document in markdown format. Start with `# T
         session_id=session_id,
         file_name=file_name,
         chat_history=json.dumps(conversation_history, ensure_ascii=False),
-        outline=full_raw,
+        outline=outline_json,
         full_text=full_document,
     )

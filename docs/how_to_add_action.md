@@ -188,4 +188,4 @@ function subPhaseLabel(name) {
 - 在 `act.py` 中通过 `_act_generate_document` 执行
 - 调用 `document_generator.py` 中的 `generate_document_from_context`
 - SSE 事件使用 `phase: 'act'` + `sub_phase: 'generate_document'`
-- 历史记录通过 `_build_act_entries` 保存为 `{"role":"assistant","type":"act","action":"generate_document","file_name":"...","result":"..."}`
+- 历史记录通过 `_build_act_entries` 保存为 `{"role":"assistant","type":"act","action":"generate_document","title":"...","file_name":"...","result":"..."}`
