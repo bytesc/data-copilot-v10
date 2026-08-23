@@ -5,8 +5,6 @@ import io
 from typing import List, Optional, Set
 
 import httpx
-from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from docx import Document
@@ -22,9 +20,6 @@ from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from data_access.report_log import record_report_generation
 from utils.front_utils import history_to_text
-
-router = APIRouter()
-
 
 class DocumentInput(BaseModel):
     conversation_history: List[dict]
@@ -378,27 +373,17 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
     )
 
 
-@router.post("/api/generate-document/stream/")
-async def generate_document_stream_api(request: Request, user_input: DocumentInput):
-    return StreamingResponse(
-        _event_stream_generate_document(
-            user_input.conversation_history,
-            user_input.session_id or "",
-            user_input.model_dump_json(),
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
-    )
 
 
-def _event_stream_generate_document_unified(conversation_history: List[dict], session_id: str, request_json: str = ""):
+
+def generate_document_from_context(conversation_history: List[dict], session_id: str, file_name: str = "", request_json: str = ""):
+    yield from _event_stream_generate_document_unified(conversation_history, session_id, file_name, request_json)
+
+
+def _event_stream_generate_document_unified(conversation_history: List[dict], session_id: str, file_name: str = "", request_json: str = ""):
     context = history_to_text(conversation_history)
 
-    yield f"data: {json.dumps({'phase': 'generate', 'type': 'msg', 'content': 'Generating document...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': 'Generating document...'}, ensure_ascii=False)}\n\n"
 
     prompt = f"""{UNIFIED_SYSTEM}
 
@@ -414,9 +399,9 @@ Write the complete business summary document in markdown format. Start with `# T
     full_raw = ""
     for chunk in call_llm_stream(prompt, llm):
         full_raw += chunk
-        yield f"data: {json.dumps({'phase': 'generate', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
-    yield f"data: {json.dumps({'phase': 'generate', 'type': 'done', 'content': full_raw}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'done', 'content': full_raw}, ensure_ascii=False)}\n\n"
 
     log_observe_cycle(session_id, 0, "generate_document_unified", "full",
                       prompt=prompt[:10000], response=full_raw[:10000],
@@ -424,7 +409,8 @@ Write the complete business summary document in markdown format. Start with `# T
 
     full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_raw, flags=re.DOTALL)
 
-    file_name = f"doc_{generate_random_string(8)}"
+    if not file_name:
+        file_name = f"doc_{generate_random_string(8)}"
     os.makedirs("tmp_imgs", exist_ok=True)
 
     md_path = os.path.join("tmp_imgs", file_name + ".md")
@@ -438,10 +424,10 @@ Write the complete business summary document in markdown format. Start with `# T
     download_url_md = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".md"
     download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx"
 
-    yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'done', 'content': full_document, 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx}, ensure_ascii=False)}\n\n"
 
     record_session_operation(
-        session_id, "/api/generate-document/stream/unified/",
+        session_id, "act/generate_document",
         request_json, full_document[:5000], "",
         "success", f"文档生成完成: {file_name}",
         prompt_length=len(context)
@@ -453,21 +439,4 @@ Write the complete business summary document in markdown format. Start with `# T
         chat_history=json.dumps(conversation_history, ensure_ascii=False),
         outline=full_raw,
         full_text=full_document,
-    )
-
-
-@router.post("/api/generate-document/stream/unified/")
-async def generate_document_unified_stream_api(request: Request, user_input: DocumentInput):
-    return StreamingResponse(
-        _event_stream_generate_document_unified(
-            user_input.conversation_history,
-            user_input.session_id or "",
-            user_input.model_dump_json(),
-        ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
     )

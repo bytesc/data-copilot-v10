@@ -22,6 +22,7 @@ VALID_ACTIONS = [
     "explore_schema", "explore_functions", "generate_and_execute",
     "output_text", "ask_question", "ask_choice",
     "summary_and_pause", "attempt_completion",
+    "generate_document",
 ]
 
 
@@ -51,6 +52,8 @@ ACTIONS = """
   Output some text and stop the pipline.
 - attempt_completion: {{"action": "attempt_completion", "text": "Your final results here..."}}
   Output some text and stop the pipline in case of completion.
+- generate_document: {{"action": "generate_document", "file_name": "report_name"}}
+  Generate a complete business summary document based on the full conversation history. The file_name specifies the output file name (without extension). The document will be saved as both .md and .docx files. Use this when the user asks to generate a report or document.
 """
 
 
@@ -179,6 +182,7 @@ def _parse_action_json(raw: str) -> dict:
         "text": result.get("text"),
         "choices": result.get("choices"),
         "research_guide": result.get("research_guide"),
+        "file_name": result.get("file_name"),
     }
 
 

@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.agent import generate_and_execute_stream
+from agent.document_generator import generate_document_from_context
 from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, BASE, TARGET
 from agent.tools.tools_def import engine, llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
@@ -67,6 +68,9 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             if full_ans:
                 entry["result"] = full_ans
             entries.append(entry)
+    elif action == "generate_document":
+        file_name = act_data.get("file_name", "")
+        entries.append({"role": "assistant", "type": "act", "action": "generate_document", "file_name": file_name, "result": "报告文档已生成"})
     return entries
 
 
@@ -96,6 +100,10 @@ def _event_stream_act(
 
     elif action == "generate_and_execute":
         act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions, request_json, research_guide)
+
+    elif action == "generate_document":
+        file_name = params.get("file_name")
+        act_data = yield from _act_generate_document(conversation_history, session_id, file_name, request_json)
 
     else:
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
@@ -281,6 +289,13 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
                           exec_code=full_code[:10000], exec_result=full_ans[:10000])
 
     return {"full_code": full_code, "full_ans": full_ans, "exec_error": exec_error}
+
+
+def _act_generate_document(conversation_history, session_id, file_name: str = "", request_json: str = ""):
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': '正在生成报告文档...'}, ensure_ascii=False)}\n\n"
+    for event in generate_document_from_context(conversation_history, session_id, file_name, request_json):
+        yield f"data: {json.dumps({**event}, ensure_ascii=False)}\n\n"
+    return {"file_name": file_name, "status": "completed"}
 
 
 @router.post("/api/act/stream/")

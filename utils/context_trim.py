@@ -36,6 +36,7 @@ HISTORY_RETENTION = {
     "act_ask_choice": 999,
     "act_summary_and_pause": 999,
     "act_attempt_completion": 999,
+    "act_generate_document": 1,
     "observe": 3,
     "observe_explore_schema": 3,
     "observe_explore_functions": 3,
@@ -71,6 +72,8 @@ def _get_entry_category(entry: dict) -> Optional[str]:
             return "act_result"
         if action == "solved":
             return "act_solved"
+        if action == "generate_document":
+            return "act_generate_document"
         if action in FRONTEND_ACTIONS:
             return f"act_{action}"
         return "act_search_result"
