@@ -81,6 +81,17 @@
   {type:"history", history:[...]}
 ```
 
+### generate_document
+
+```
+成功：
+  {type:"msg",     sub_phase:"generate_document", content:"Generating document..."}
+  {type:"chunk",   sub_phase:"generate_document", content:"..."}  ×N
+  {type:"done",    sub_phase:"generate_document", content:"...",
+   file_name:"...", download_url_md:"...", download_url_docx:"..."}
+  {type:"history", history:[...]}
+```
+
 ### generate_and_execute
 
 ```

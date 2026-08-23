@@ -134,9 +134,14 @@ watch(awaitingInput, async (val) => {
 })
 
 watch(messages, async () => {
+  if (_isAnyStreaming()) return
   await nextTick()
   if (messagesContainer.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
   }
 }, { deep: true })
+
+function _isAnyStreaming() {
+  return messages.value.some(m => m.streaming)
+}
 </script>

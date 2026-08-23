@@ -180,6 +180,7 @@ function subPhaseLabel(name) {
     completion: 'Completion',
     ask_question: 'Question',
     ask_choice: 'Choice',
+    generate_document: 'Generated Document',
   }
   return labels[name] || name
 }

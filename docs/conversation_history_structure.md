@@ -46,6 +46,13 @@ LLM 输出的 JSON 对象，格式为 `{"action": "...", ...}`。
  "error":"...","code":"...","result":"..."}
 ```
 
+### generate_document
+
+```json
+{"role":"assistant","type":"act","action":"generate_document",
+ "file_name":"...","result":"报告文档已生成"}
+```
+
 ### 纯前端执行
 
 output_text / ask_question / ask_choice / summary_and_pause / attempt_completion

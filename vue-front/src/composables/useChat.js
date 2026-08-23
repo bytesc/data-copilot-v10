@@ -1,8 +1,7 @@
 import { ref, reactive, computed } from 'vue'
 import {
   thinkStream, actionStream, actStream, observeStream,
-  logUserInput, generateDocumentStream, generateDocumentUnifiedStream,
-  fetchGeneratedFiles,
+  logUserInput, fetchGeneratedFiles,
 } from '@/utils/api.js'
 
 export function useChat() {
@@ -246,6 +245,7 @@ function historyToText(history) {
         selected_fields: action === 'generate_and_execute' ? { __no_db__: true } : undefined,
         selected_functions: actionResult.funcs || undefined,
         research_guide: actionResult.research_guide || undefined,
+        file_name: actionResult.file_name || undefined,
       },
     })
 
@@ -272,6 +272,20 @@ function historyToText(history) {
         updateStreamingSubPhase(msgId, currentSubPhase, currentSubContent)
       } else if (etype === 'done') {
         updateStreamingSubPhase(msgId, currentSubPhase, currentSubContent, false)
+        if (sub === 'generate_document' && event.download_url_md) {
+          addSubPhaseToMessage(msgId, currentSubPhase, currentSubContent)
+          setTimeout(() => {
+            const idx = messages.value.findIndex(m => m.msgId === msgId)
+            if (idx !== -1) messages.value[idx].streaming = false
+          })
+          generatedFiles.value.push({
+            id: msgId,
+            title: 'Document',
+            downloadUrlMd: event.download_url_md || '',
+            downloadUrlDocx: event.download_url_docx || '',
+            createdAt: Date.now(),
+          })
+        }
       } else if (etype === 'error') {
         updateStreamingSubPhase(msgId, currentSubPhase, content, false, true)
       }
@@ -523,144 +537,6 @@ function historyToText(history) {
     }
   }
 
-  async function generateDocument() {
-    const docMsgId = Date.now()
-    addMessage('stream', 'document', {
-      label: 'Generating Document...',
-      content: '',
-      streaming: true,
-      msgId: docMsgId,
-      docParts: [],
-      docOutline: null,
-    })
-
-    const events = []
-    let outlineRaw = ''
-    let outlineData = null
-    let partAccumulator = ''
-    let currentPartIdx = -1
-    const completedParts = []
-
-    const gen = generateDocumentStream({
-      conversation_history: conversationHistory.value,
-      session_id: sessionId.value,
-    })
-
-    for await (const event of gen) {
-      events.push(event)
-      const phase = event.phase || ''
-      const etype = event.type || ''
-      const content = event.content || ''
-
-      if (phase === 'outline') {
-        if (etype === 'chunk') {
-          outlineRaw += content
-          updateDocMessage(docMsgId, { outlineGenerating: outlineRaw })
-        } else if (etype === 'done') {
-          outlineData = event.outline || {}
-          updateDocMessage(docMsgId, { docOutline: outlineData, outlineGenerating: null })
-        } else if (etype === 'error') {
-          updateDocMessage(docMsgId, { outlineError: content })
-        }
-      } else if (phase === 'part') {
-        const partIdx = event.part_index ?? -1
-        if (etype === 'msg') {
-          currentPartIdx = partIdx
-          partAccumulator = ''
-          updateDocMessage(docMsgId, {
-            currentPartIdx,
-            currentPartHeading: event.heading || `Part ${partIdx + 1}`,
-            completedParts: [...completedParts],
-          })
-        } else if (etype === 'chunk') {
-          partAccumulator += content
-          updateDocMessage(docMsgId, {
-            currentPartIdx,
-            currentPartContent: partAccumulator,
-            completedParts: [...completedParts],
-          })
-        } else if (etype === 'done') {
-          completedParts.push({
-            heading: event.heading || `Part ${partIdx + 1}`,
-            content: partAccumulator,
-          })
-          updateDocMessage(docMsgId, {
-            completedParts: [...completedParts],
-            currentPartIdx: null,
-            currentPartContent: null,
-          })
-        }
-      } else if (phase === 'document' && etype === 'done') {
-        updateDocMessage(docMsgId, {
-          streaming: false,
-          docContent: content,
-          downloadUrlMd: event.download_url_md || event.download_url || '',
-          downloadUrlDocx: event.download_url_docx || '',
-          completedParts: [...completedParts],
-        })
-        generatedFiles.value.push({
-          id: docMsgId,
-          title: outlineData?.title || 'Document',
-          downloadUrlMd: event.download_url_md || event.download_url || '',
-          downloadUrlDocx: event.download_url_docx || '',
-          createdAt: Date.now(),
-        })
-      }
-    }
-  }
-
-  async function generateDocumentUnified() {
-    const docMsgId = Date.now()
-    addMessage('stream', 'document', {
-      label: 'Generating Document (Unified)...',
-      content: '',
-      streaming: true,
-      msgId: docMsgId,
-      docParts: [],
-      docOutline: null,
-    })
-
-    let fullContent = ''
-
-    const gen = generateDocumentUnifiedStream({
-      conversation_history: conversationHistory.value,
-      session_id: sessionId.value,
-    })
-
-    for await (const event of gen) {
-      const phase = event.phase || ''
-      const etype = event.type || ''
-      const content = event.content || ''
-
-      if (phase === 'generate') {
-        if (etype === 'chunk') {
-          fullContent += content
-          updateDocMessage(docMsgId, {
-            outlineGenerating: fullContent,
-          })
-        } else if (etype === 'done') {
-          updateDocMessage(docMsgId, {
-            outlineGenerating: null,
-          })
-        }
-      } else if (phase === 'document' && etype === 'done') {
-        updateDocMessage(docMsgId, {
-          streaming: false,
-          docContent: content,
-          downloadUrlMd: event.download_url_md || event.download_url || '',
-          downloadUrlDocx: event.download_url_docx || '',
-        })
-        generatedFiles.value.push({
-          id: docMsgId,
-          title: 'Document',
-          downloadUrlMd: event.download_url_md || event.download_url || '',
-          downloadUrlDocx: event.download_url_docx || '',
-          createdAt: Date.now(),
-        })
-      }
-    }
-  }
-
   function updateDocMessage(msgId, updates) {
     const idx = messages.value.findIndex(m => m.msgId === msgId)
     if (idx !== -1) {
@@ -700,8 +576,6 @@ function historyToText(history) {
     submitPausedInput,
     submitNewQuestion,
     resumeSession,
-    generateDocument,
-    generateDocumentUnified,
     reset,
     serverUrl,
   }
