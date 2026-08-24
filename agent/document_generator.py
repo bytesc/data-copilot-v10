@@ -214,8 +214,6 @@ def _markdown_to_docx(markdown_text: str, output_path: str):
 
 
 def _markdown_to_pdf(markdown_text: str, output_path: str):
-    _image_index = [0]
-
     def _embed_image(match):
         alt_text = match.group(1)
         img_url = match.group(2)
@@ -226,17 +224,13 @@ def _markdown_to_pdf(markdown_text: str, output_path: str):
             if ext.lower() in ("jpg", "jpeg"):
                 ext = "jpeg"
             b64 = base64.b64encode(img_bytes).decode("ascii")
-            _image_index[0] += 1
-            result = f'![{alt_text}](data:image/{ext};base64,{b64})'
-            if _image_index[0] > 1:
-                result = f'<div style="page-break-before: always;"></div>\n\n{result}'
-            return result
+            return f'![{alt_text}](data:image/{ext};base64,{b64})'
         return f'*[Image: {alt_text}]*'
 
     markdown_text = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', _embed_image, markdown_text)
 
     pdf = MarkdownPdf()
-    pdf.add_section(Section(markdown_text, toc=False), user_css="img { max-width: 100%; }")
+    pdf.add_section(Section(markdown_text, toc=False))
     pdf.save(output_path)
 
 
