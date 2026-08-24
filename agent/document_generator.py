@@ -376,7 +376,10 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
         f.write(full_document)
 
     docx_path = os.path.join("tmp_imgs", file_name + ".docx")
-    _markdown_to_docx(full_document, docx_path)
+    try:
+        _markdown_to_docx(full_document, docx_path)
+    except Exception:
+        docx_path = None
 
     pdf_path = os.path.join("tmp_imgs", file_name + ".pdf")
     try:
@@ -386,7 +389,7 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
 
     static_url = config_data.get("static_path", "http://127.0.0.1:8009/")
     download_url_md = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".md"
-    download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx"
+    download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx" if docx_path else ""
     download_url_pdf = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".pdf" if pdf_path else ""
 
     yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'title': title, 'parts_count': len(parts), 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx, 'download_url_pdf': download_url_pdf}, ensure_ascii=False)}\n\n"
@@ -473,7 +476,10 @@ Write the complete business summary document in markdown format. Start with `# T
         f.write(full_document)
 
     docx_path = os.path.join("tmp_imgs", file_name + ".docx")
-    _markdown_to_docx(full_document, docx_path)
+    try:
+        _markdown_to_docx(full_document, docx_path)
+    except Exception:
+        docx_path = None
 
     pdf_path = os.path.join("tmp_imgs", file_name + ".pdf")
     try:
@@ -483,7 +489,7 @@ Write the complete business summary document in markdown format. Start with `# T
 
     static_url = config_data.get("static_path", "http://127.0.0.1:8009/")
     download_url_md = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".md"
-    download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx"
+    download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx" if docx_path else ""
     download_url_pdf = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".pdf" if pdf_path else ""
     
 
