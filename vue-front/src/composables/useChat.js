@@ -296,6 +296,10 @@ function historyToText(history) {
       addSubPhaseToMessage(msgId, currentSubPhase, currentSubContent)
     }
 
+    if (action === 'generate_document') {
+      return { completed: true }
+    }
+
     return {}
   }
 
