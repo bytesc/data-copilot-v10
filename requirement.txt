@@ -24,6 +24,7 @@ seaborn==0.13.2
 
 PyPDF2==3.0.1
 python-docx==1.2.0
+xhtml2pdf==0.2.16
 Markdown==3.3
 beautifulsoup4==4.12.3
 

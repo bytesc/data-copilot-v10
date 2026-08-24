@@ -11,6 +11,9 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
+import markdown
+from xhtml2pdf import pisa
+
 from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -211,6 +214,32 @@ def _markdown_to_docx(markdown_text: str, output_path: str):
     doc.save(output_path)
 
 
+def _markdown_to_pdf(markdown_text: str, output_path: str):
+    md_extensions = ["tables", "fenced_code", "codehilite", "nl2br"]
+    html_body = markdown.markdown(markdown_text, extensions=md_extensions)
+
+    css = """
+    @page { size: A4; margin: 2cm; }
+    body { font-family: 'DejaVu Sans', 'SimSun', sans-serif; font-size: 11pt; line-height: 1.6; color: #333; }
+    h1 { font-size: 18pt; margin-top: 0; }
+    h2 { font-size: 14pt; }
+    h3 { font-size: 12pt; }
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+    th { background-color: #f5f5f5; }
+    img { max-width: 100%; height: auto; }
+    pre { background-color: #f5f5f5; padding: 8px; font-size: 9pt; }
+    code { background-color: #f0f0f0; padding: 1px 3px; font-size: 9pt; }
+    """
+
+    html_doc = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>{css}</style></head>
+<body>{html_body}</body></html>"""
+
+    with open(output_path, "wb") as f:
+        pisa.CreatePDF(html_doc, dest=f)
+
+
 def _add_inline_runs(paragraph, text: str):
     pattern = re.compile(r'(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\))')
     last_end = 0
@@ -355,11 +384,18 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
     docx_path = os.path.join("tmp_imgs", file_name + ".docx")
     _markdown_to_docx(full_document, docx_path)
 
+    pdf_path = os.path.join("tmp_imgs", file_name + ".pdf")
+    try:
+        _markdown_to_pdf(full_document, pdf_path)
+    except Exception:
+        pdf_path = None
+
     static_url = config_data.get("static_path", "http://127.0.0.1:8009/")
     download_url_md = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".md"
     download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx"
+    download_url_pdf = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".pdf" if pdf_path else ""
 
-    yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'title': title, 'parts_count': len(parts), 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'title': title, 'parts_count': len(parts), 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx, 'download_url_pdf': download_url_pdf}, ensure_ascii=False)}\n\n"
 
     record_session_operation(
         session_id, "/api/generate-document/stream/",
@@ -445,13 +481,20 @@ Write the complete business summary document in markdown format. Start with `# T
     docx_path = os.path.join("tmp_imgs", file_name + ".docx")
     _markdown_to_docx(full_document, docx_path)
 
+    pdf_path = os.path.join("tmp_imgs", file_name + ".pdf")
+    try:
+        _markdown_to_pdf(full_document, pdf_path)
+    except Exception:
+        pdf_path = None
+
     static_url = config_data.get("static_path", "http://127.0.0.1:8009/")
     download_url_md = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".md"
     download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx"
+    download_url_pdf = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".pdf" if pdf_path else ""
 
     outline_json = json.dumps({"title": title}, ensure_ascii=False)
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'done', 'content': full_document, 'title': title, 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'done', 'content': full_document, 'title': title, 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx, 'download_url_pdf': download_url_pdf}, ensure_ascii=False)}\n\n"
 
     record_session_operation(
         session_id, "act/generate_document",

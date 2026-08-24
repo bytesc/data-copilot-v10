@@ -72,6 +72,7 @@ def get_generated_files(session_id):
                 "title": title,
                 "downloadUrlMd": f"{static_url}/tmp_imgs/{file_name}.md" if file_name else "",
                 "downloadUrlDocx": f"{static_url}/tmp_imgs/{file_name}.docx" if file_name else "",
+                "downloadUrlPdf": f"{static_url}/tmp_imgs/{file_name}.pdf" if file_name else "",
                 "createdAt": rd.get("created_at").isoformat() if rd.get("created_at") else "",
             })
 

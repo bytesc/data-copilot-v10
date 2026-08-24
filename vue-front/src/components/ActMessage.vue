@@ -82,6 +82,7 @@
           <div v-if="message.file_name" class="file-actions">
             <a :href="`${serverUrl}/tmp_imgs/${message.file_name}.md?download=1`" target="_blank" class="download-btn md">.md</a>
             <a :href="`${serverUrl}/tmp_imgs/${message.file_name}.docx?download=1`" target="_blank" class="download-btn docx">.docx</a>
+            <a :href="`${serverUrl}/tmp_imgs/${message.file_name}.pdf?download=1`" target="_blank" class="download-btn pdf">.pdf</a>
           </div>
           <div v-if="message.full_text" class="doc-full-text" v-html="renderMd(message.full_text)"></div>
         </div>

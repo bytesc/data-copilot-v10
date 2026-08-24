@@ -20,6 +20,7 @@
         <div class="file-actions">
           <a v-if="file.downloadUrlMd" :href="file.downloadUrlMd + '?download=1'" class="download-btn md" target="_blank">.md</a>
           <a v-if="file.downloadUrlDocx" :href="file.downloadUrlDocx + '?download=1'" class="download-btn docx" target="_blank">.docx</a>
+          <a v-if="file.downloadUrlPdf" :href="file.downloadUrlPdf + '?download=1'" class="download-btn pdf" target="_blank">.pdf</a>
         </div>
       </div>
     </div>

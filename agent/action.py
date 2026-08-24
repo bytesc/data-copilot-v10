@@ -41,7 +41,7 @@ ACTIONS = """
   Explore the available function catalog and select needed functions based on previous context.
 - generate_and_execute: {{"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"], "research_guide": "..."}}
   Decide to execute code that calls functions. funcs: list of function names to use. The actual code will be generated in the next phase. Do NOT include any code or "code" field in the JSON output.
-  research_guide: Optional natural language description of what data to search for and what images/charts to generate. Include details like chart types, data sources, labels, and colors. This guides the code generation phase to produce the correct visualizations. Use this when the task requires specific charts or images. 
+  research_guide: Optional natural language description of what data to search for and what images/charts to generate. Include details like chart types, data sources, labels, colors, and axis sorting. This guides the code generation phase to produce the correct visualizations. Use this when the task requires specific charts or images. 
 - output_text: {{"action": "output_text", "text": "Your response content here..."}}
   Output some text to the user without stopping the pipline.
 - ask_question: {{"action": "ask_question", "text": "Your question for the user here..."}}

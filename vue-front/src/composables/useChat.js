@@ -283,6 +283,7 @@ function historyToText(history) {
             title: event.title || 'Document',
             downloadUrlMd: `${serverUrl.value}/tmp_imgs/${event.file_name}.md`,
             downloadUrlDocx: `${serverUrl.value}/tmp_imgs/${event.file_name}.docx`,
+            downloadUrlPdf: `${serverUrl.value}/tmp_imgs/${event.file_name}.pdf`,
             createdAt: Date.now(),
           })
         }
@@ -613,6 +614,7 @@ function historyToText(history) {
           docContent: content,
           downloadUrlMd: `${serverUrl.value}/tmp_imgs/${event.file_name}.md`,
           downloadUrlDocx: `${serverUrl.value}/tmp_imgs/${event.file_name}.docx`,
+          downloadUrlPdf: `${serverUrl.value}/tmp_imgs/${event.file_name}.pdf`,
           completedParts: [...completedParts],
         })
         generatedFiles.value.push({
@@ -620,6 +622,7 @@ function historyToText(history) {
           title: outlineData?.title || 'Document',
           downloadUrlMd: `${serverUrl.value}/tmp_imgs/${event.file_name}.md`,
           downloadUrlDocx: `${serverUrl.value}/tmp_imgs/${event.file_name}.docx`,
+          downloadUrlPdf: `${serverUrl.value}/tmp_imgs/${event.file_name}.pdf`,
           createdAt: Date.now(),
         })
       }
@@ -658,12 +661,14 @@ function historyToText(history) {
           docContent: content,
           downloadUrlMd: `${serverUrl.value}/tmp_imgs/${event.file_name}.md`,
           downloadUrlDocx: `${serverUrl.value}/tmp_imgs/${event.file_name}.docx`,
+          downloadUrlPdf: `${serverUrl.value}/tmp_imgs/${event.file_name}.pdf`,
         })
         generatedFiles.value.push({
           id: docMsgId,
           title: event.title || 'Document',
           downloadUrlMd: `${serverUrl.value}/tmp_imgs/${event.file_name}.md`,
           downloadUrlDocx: `${serverUrl.value}/tmp_imgs/${event.file_name}.docx`,
+          downloadUrlPdf: `${serverUrl.value}/tmp_imgs/${event.file_name}.pdf`,
           createdAt: Date.now(),
         })
       }
