@@ -1,7 +1,7 @@
 <template>
   <div class="act-message">
     <template v-if="message.action === 'explore_schema'">
-      <details v-if="message.explore_plan || message.parsed?.explore_plan" class="msg-collapse" open>
+      <details v-if="message.explore_plan || message.parsed?.explore_plan" class="msg-collapse">
         <summary class="collapse-summary">Query Plan</summary>
         <div class="collapse-body" v-html="renderMd(message.explore_plan || message.parsed?.explore_plan)"></div>
       </details>
@@ -46,7 +46,7 @@
                   <pre><code class="language-python">{{ att.code }}</code></pre>
                 </div>
               </details>
-              <details v-if="att.result" class="msg-collapse" open>
+              <details v-if="att.result" class="msg-collapse">
                 <summary class="collapse-summary">Result (Attempt {{ i + 1 }})</summary>
                 <div class="collapse-body" v-html="renderMd(att.result)"></div>
               </details>
@@ -64,7 +64,7 @@
             <pre><code class="language-python">{{ message.code }}</code></pre>
           </div>
         </details>
-        <details v-if="message.result" class="msg-collapse" open>
+        <details v-if="message.result" class="msg-collapse">
           <summary class="collapse-summary">Result</summary>
           <div class="collapse-body" v-html="renderMd(message.result)"></div>
         </details>

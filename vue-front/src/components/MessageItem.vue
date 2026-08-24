@@ -11,7 +11,7 @@
       </template>
 
       <template v-else-if="message.type === 'stream' && message.phase === 'think'">
-        <details class="msg-collapse" :open="message.streaming">
+        <details class="msg-collapse">
           <summary class="collapse-summary">Plan</summary>
           <div class="collapse-body">
             <div v-if="message.planResult" class="plan-display" v-html="formattedPlan"></div>
