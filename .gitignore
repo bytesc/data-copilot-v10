@@ -11,7 +11,7 @@ tmp_imgs/*.html
 tmp_imgs/*.csv
 tmp_imgs/*.docx
 tmp_imgs/*.md
-
+tmp_imgs/*.pdf
 
 temp.png
 temp.html
