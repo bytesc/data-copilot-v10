@@ -214,22 +214,106 @@ def _markdown_to_docx(markdown_text: str, output_path: str):
     doc.save(output_path)
 
 
+def _register_chinese_font():
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import platform
+
+    font_path = os.environ.get("FONT_PATH")
+    if font_path and os.path.isfile(font_path):
+        alias = os.path.splitext(os.path.basename(font_path))[0]
+        try:
+            pdfmetrics.registerFont(TTFont(alias, font_path))
+            return alias
+        except Exception:
+            pass
+
+    if platform.system() == "Windows":
+        font_dir = os.environ.get("WINDIR", "C:\\Windows") + "\\Fonts"
+        candidates = [
+            ("NotoSansSC-VF.ttf", "NotoSansSC"),
+            ("simsun.ttc", "SimSun"),
+            ("msyh.ttc", "MicrosoftYaHei"),
+        ]
+    else:
+        font_dir = "/usr/share/fonts"
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["fc-list", ":lang=zh", "-f", "%{file}\n"],
+                capture_output=True, text=True, timeout=5
+            )
+            for line in result.stdout.strip().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                alias = os.path.splitext(os.path.basename(line))[0]
+                try:
+                    pdfmetrics.registerFont(TTFont(alias, line))
+                    return alias
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        candidates = [
+            ("NotoSansSC-VF.ttf", "NotoSansSC"),
+            ("NotoSansSC-Regular.ttf", "NotoSansSC"),
+            ("NotoSansCJKsc-Regular.otf", "NotoSansCJKsc"),
+            ("SourceHanSansSC-Regular.otf", "SourceHanSansSC"),
+            ("wqy-zenhei.ttc", "WenQuanYiZenHei"),
+            ("wqy-microhei.ttc", "WenQuanYiMicroHei"),
+        ]
+
+    for filename, alias in candidates:
+        p = os.path.join(font_dir, filename)
+        if os.path.isfile(p):
+            try:
+                pdfmetrics.registerFont(TTFont(alias, p))
+                return alias
+            except Exception:
+                continue
+    return None
+
+_chinese_font_name = None
+
 def _markdown_to_pdf(markdown_text: str, output_path: str):
+    global _chinese_font_name
+    if _chinese_font_name is None:
+        _chinese_font_name = _register_chinese_font() or "Helvetica"
+
+    import base64
+
+    def _embed_image(match):
+        alt_text = match.group(1)
+        img_url = match.group(2)
+        img_bytes = _download_image_bytes(img_url)
+        if img_bytes:
+            ext = os.path.splitext(img_url.split("?")[0])[1].lstrip(".") or "png"
+            if ext.lower() in ("jpg", "jpeg"):
+                ext = "jpeg"
+            b64 = base64.b64encode(img_bytes).decode("ascii")
+            return f'![{alt_text}](data:image/{ext};base64,{b64})'
+        return f'*[Image: {alt_text}]*'
+
+    markdown_text = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', _embed_image, markdown_text)
+
     md_extensions = ["tables", "fenced_code", "codehilite", "nl2br"]
     html_body = markdown.markdown(markdown_text, extensions=md_extensions)
 
-    css = """
-    @page { size: A4; margin: 2cm; }
-    body { font-family: 'DejaVu Sans', 'SimSun', sans-serif; font-size: 11pt; line-height: 1.6; color: #333; }
-    h1 { font-size: 18pt; margin-top: 0; }
-    h2 { font-size: 14pt; }
-    h3 { font-size: 12pt; }
-    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
-    th { background-color: #f5f5f5; }
-    img { max-width: 100%; height: auto; }
-    pre { background-color: #f5f5f5; padding: 8px; font-size: 9pt; }
-    code { background-color: #f0f0f0; padding: 1px 3px; font-size: 9pt; }
+    html_body = re.sub(r'<img[^>]*src\s*=\s*["\']#["\'][^>]*>', '', html_body)
+
+    css = f"""
+    @page {{ size: A4; margin: 2cm; }}
+    body {{ font-family: '{_chinese_font_name}', 'DejaVu Sans', sans-serif; font-size: 11pt; line-height: 1.6; color: #333; }}
+    h1 {{ font-size: 18pt; margin-top: 0; }}
+    h2 {{ font-size: 14pt; }}
+    h3 {{ font-size: 12pt; }}
+    table {{ border-collapse: collapse; width: 100%; margin: 1em 0; }}
+    th, td {{ border: 1px solid #ccc; padding: 6px 8px; text-align: left; }}
+    th {{ background-color: #f5f5f5; }}
+    img {{ max-width: 100%; height: auto; }}
+    pre {{ background-color: #f5f5f5; padding: 8px; font-size: 9pt; }}
+    code {{ background-color: #f0f0f0; padding: 1px 3px; font-size: 9pt; }}
     """
 
     html_doc = f"""<!DOCTYPE html>
@@ -491,6 +575,7 @@ Write the complete business summary document in markdown format. Start with `# T
     download_url_md = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".md"
     download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx"
     download_url_pdf = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".pdf" if pdf_path else ""
+    
 
     outline_json = json.dumps({"title": title}, ensure_ascii=False)
 

@@ -284,7 +284,7 @@ def get_session_cycles(session_id, limit=200):
         return []
 
 
-FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
+FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion", "generate_document"}
 
 
 def _parse_action_decision(raw: str):
@@ -398,6 +398,8 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
                         elif action_type == "summary_and_pause":
                             act_entry["paused"] = True
                         elif action_type == "attempt_completion":
+                            act_entry["completed"] = True
+                        elif action_type == "generate_document":
                             act_entry["completed"] = True
                         history.append(act_entry)
             elif phase == "observe" and sub_phase == "review":

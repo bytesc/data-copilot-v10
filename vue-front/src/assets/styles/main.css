@@ -723,6 +723,10 @@ html, body {
   background: var(--accent-green);
 }
 
+.download-btn.pdf {
+  background: var(--accent-red, #d32f2f);
+}
+
 .download-btn:hover {
   opacity: 0.9;
 }
