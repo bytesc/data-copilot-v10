@@ -220,17 +220,26 @@ def _markdown_to_pdf(markdown_text: str, output_path: str):
         img_bytes = _download_image_bytes(img_url)
         if img_bytes:
             import base64
+            from io import BytesIO
+            from PIL import Image
             ext = os.path.splitext(img_url.split("?")[0])[1].lstrip(".") or "png"
             if ext.lower() in ("jpg", "jpeg"):
                 ext = "jpeg"
             b64 = base64.b64encode(img_bytes).decode("ascii")
+            try:
+                img = Image.open(BytesIO(img_bytes))
+                _, h = img.size
+                if h > 400:
+                    return f'<div style="page-break-before: always;"></div>\n\n![{alt_text}](data:image/{ext};base64,{b64})'
+            except Exception:
+                pass
             return f'![{alt_text}](data:image/{ext};base64,{b64})'
         return f'*[Image: {alt_text}]*'
 
     markdown_text = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', _embed_image, markdown_text)
 
     pdf = MarkdownPdf()
-    pdf.add_section(Section(markdown_text, toc=False), user_css="img { max-width: 100%; max-height: 650px; page-break-inside: avoid; }")
+    pdf.add_section(Section(markdown_text, toc=False), user_css="img { max-width: 100%; }")
     pdf.save(output_path)
 
 

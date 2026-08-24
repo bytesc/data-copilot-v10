@@ -112,7 +112,7 @@
 
     <template v-if="message.subPhases?.length">
       <div v-for="sub in message.subPhases" :key="sub.name" class="sub-phase">
-        <details class="msg-collapse" :open="sub.name === 'output_text' || sub.name === 'summary' || sub.name === 'completion'">
+        <details class="msg-collapse" :open="sub.name === 'generate_document' || sub.name === 'completion'">
           <summary class="collapse-summary">{{ subPhaseLabel(sub.name) }}</summary>
           <div class="collapse-body">
             <div v-if="sub.name === 'explore_schema' || sub.name === 'explore_functions'">
