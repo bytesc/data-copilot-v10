@@ -230,7 +230,7 @@ def _markdown_to_pdf(markdown_text: str, output_path: str):
     markdown_text = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', _embed_image, markdown_text)
 
     pdf = MarkdownPdf()
-    pdf.add_section(Section(markdown_text, toc=False))
+    pdf.add_section(Section(markdown_text, toc=False), user_css="img { max-width: 100%; max-height: 650px; page-break-inside: avoid; }")
     pdf.save(output_path)
 
 
