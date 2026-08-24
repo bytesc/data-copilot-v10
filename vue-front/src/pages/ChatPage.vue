@@ -10,8 +10,6 @@
         :is-running="chat.isRunning.value"
         :server-url="chat.serverUrl.value"
         @resume-session="showResume = true"
-        @generate-doc="chat.generateDocument()"
-        @generate-doc-unified="chat.generateDocumentUnified()"
         @new-session="chat.reset()"
       />
     </aside>
@@ -24,7 +22,13 @@
       <div class="panel-toggle right" @click="isRightPanelCollapsed = !isRightPanelCollapsed">
         {{ isRightPanelCollapsed ? '◀' : '▶' }}
       </div>
-      <RightPanel v-if="!isRightPanelCollapsed" :files="chat.generatedFiles.value" />
+      <RightPanel
+        v-if="!isRightPanelCollapsed"
+        :files="chat.generatedFiles.value"
+        :is-running="chat.isRunning.value"
+        @generate-doc="chat.generateDocument()"
+        @generate-doc-unified="chat.generateDocumentUnified()"
+      />
     </aside>
 
     <ResumeModal

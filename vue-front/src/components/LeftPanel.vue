@@ -15,15 +15,39 @@
       <button class="ctrl-btn" @click="$emit('resume-session')" :disabled="isRunning">
         <span class="btn-icon">🔄</span> Resume Session
       </button>
-      <button class="ctrl-btn" @click="$emit('generate-doc')" :disabled="isRunning">
-        <span class="btn-icon">📋</span> Generate Summary
-      </button>
-      <button class="ctrl-btn" @click="$emit('generate-doc-unified')" :disabled="isRunning">
-        <span class="btn-icon">📄</span> Generate Full Doc
-      </button>
       <button class="ctrl-btn new-session" @click="$emit('new-session')">
-        <span class="btn-icon">✨</span> New Session
+        <span class="btn-icon">✨</span> New Chat
       </button>
+      <button class="ctrl-btn">
+        <span class="btn-icon">🌐</span> Sites
+      </button>
+      <button class="ctrl-btn">
+        <span class="btn-icon">⏰</span> Scheduled
+      </button>
+      <button class="ctrl-btn">
+        <span class="btn-icon">🔌</span> Plugins
+      </button>
+      <div class="collapsible-section">
+        <div class="collapsible-header" @click="pinnedOpen = !pinnedOpen">
+          <span class="collapsible-arrow">{{ pinnedOpen ? '▾' : '▸' }}</span>
+          Pinned
+        </div>
+        <div v-show="pinnedOpen" class="collapsible-body"></div>
+      </div>
+      <div class="collapsible-section">
+        <div class="collapsible-header" @click="projectsOpen = !projectsOpen">
+          <span class="collapsible-arrow">{{ projectsOpen ? '▾' : '▸' }}</span>
+          Projects
+        </div>
+        <div v-show="projectsOpen" class="collapsible-body"></div>
+      </div>
+      <div class="collapsible-section">
+        <div class="collapsible-header" @click="recentsOpen = !recentsOpen">
+          <span class="collapsible-arrow">{{ recentsOpen ? '▾' : '▸' }}</span>
+          Recents
+        </div>
+        <div v-show="recentsOpen" class="collapsible-body"></div>
+      </div>
     </div>
 
     <div class="spacer"></div>
@@ -59,13 +83,19 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
+
 defineProps({
   sessionId: { type: String, required: true },
   isRunning: { type: Boolean, default: false },
   serverUrl: { type: String, default: 'http://127.0.0.1:8009' },
 })
 
-defineEmits(['resume-session', 'generate-doc', 'generate-doc-unified', 'new-session'])
+defineEmits(['resume-session', 'new-session'])
+
+const pinnedOpen = ref(false)
+const projectsOpen = ref(false)
+const recentsOpen = ref(false)
 </script>
 
 <style scoped>
@@ -111,5 +141,37 @@ defineEmits(['resume-session', 'generate-doc', 'generate-doc-unified', 'new-sess
 .option-select:hover,
 .option-select:focus {
   border-color: var(--accent-blue);
+}
+
+.collapsible-section {
+  flex-shrink: 0;
+}
+
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapsible-header:hover {
+  color: var(--text-primary);
+}
+
+.collapsible-arrow {
+  font-size: 10px;
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.collapsible-body {
+  padding: 0;
 }
 </style>
