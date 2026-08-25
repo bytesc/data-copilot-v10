@@ -1,3 +1,10 @@
+# ============================================================
+# 修改数据库配置时需要同步修改以下 3 个地方：
+#   1. config/config.yaml         — mysql / mysql_sys 连接串
+#   2. docker/docker-compose.yml  — MYSQL_ROOT_PASSWORD
+#   3. docker/docker-init.sql     — CREATE DATABASE 语句
+# ============================================================
+
 docker compose -f docker/docker-compose.yml -p docker up -d --build
 docker compose -f docker/docker-compose.yml -p docker up -d --build frontend
 docker compose -f docker/docker-compose.yml -p docker up -d --build backend
