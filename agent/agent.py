@@ -40,6 +40,10 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
     rag_ans = ""
     knowledge = ""
     knowledge = BASE + "\n"
+
+    target_section = ""
+    if TARGET.strip() != "":
+        target_section = "The target document template below defines the data and charts that the final report must contain. Your generated code MUST query the necessary data and produce the required charts/images to fulfill this template:\n\n" + TARGET + "\n"
     # print(rag_ans)
 
     if selected_functions is not None:
@@ -225,7 +229,7 @@ Here is the functions you can import and use:
 
     cot_prompt = pre_prompt + function_prompt + str(function_info) + \
                  module_prompt + example_code + remind_prompt + \
-                 database + knowledge + research_section + " \nContext:\n" + question + \
+                 database + knowledge + target_section + research_section + " \nContext:\n" + question + \
                  final_language_check
     return cot_prompt, rag_ans, function_import
 

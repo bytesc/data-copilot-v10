@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from agent.tools.base_knowledge.get_base_knowledge import TARGET
+
 from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.tools_def import llm
@@ -70,10 +70,6 @@ def _build_action_prompt(
     db_summary = get_db_summary_for_agent(engine)
     func_catalog = get_func_summary_for_agent()
 
-    target_section = ""
-    if TARGET.strip() != "":
-        target_section = "The target document template below defines the final report structure and content that must be produced. Ensure your action decisions help cover all sections, data points, images, and tables required by this template:\n\n" + TARGET + "\n"
-
     return f"""You are an action decision maker. Given the current context, decide the SINGLE next action to execute.
 
 Some Available Functions:
@@ -81,7 +77,6 @@ Some Available Functions:
 Use `explore_functions` action for more available functions. Then use `generate_and_execute` action to call.
 
 The system is working in Think → Action → Act → Observe cycles. You takes the `Action` part.
-{target_section}
 Context:
 {context if context else '(no context)'}
 
