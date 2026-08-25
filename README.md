@@ -98,23 +98,38 @@ pip install -r requirement.txt
 server_port: 8009 # 部署端口
 server_host: "0.0.0.0"  # allow host
 # 数据库
-mysql: "mysql+pymysql://root:123456@localhost:3306/singapore_land"
+mysql: "mysql+pymysql://root:123456@localhost:3306/2026start_v3"
+
+mysql_sys: "mysql+pymysql://root:123456@localhost:3306/med_data_sys"
 
 # 静态文件服务地址，本机域名/ip:端口
 static_path: "http://127.0.0.1:8009/"
+# 静态文件存储目录（相对于项目根目录）
+static_folder: "tmp_imgs"
 
-model_name: "qwen-max"
+model_name: "deepseek-v4-pro"
+# qwen3.7-flash qwen3.8-max
 # glm-4
-# deepseek-chat
+# deepseek-chat deepseek-v4-flash
 # qwen-max
 # gpt-4o-mini
 
-model_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+model_url: "https://tokenhub.tencentmaas.com/v1"
 # https://open.bigmodel.cn/api/paas/v4/
 # https://api.deepseek.com/v1/
 # https://dashscope.aliyuncs.com/compatible-mode/v1
 # https://api.openai.com/v1
 
+```
+
+### 前端配置
+
+`vue-front/.env`（首次部署需创建）
+```env
+# 后端服务地址（开发模式 vite 代理目标）
+VITE_SERVER_URL=http://127.0.0.1:8009
+# API 基础路径
+VITE_API_BASE=/api
 ```
 
 ### 大语言模型配置

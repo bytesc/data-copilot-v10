@@ -28,5 +28,15 @@ while True:
 done
 
 echo "Starting backend..."
+
+# 确保静态文件目录存在
+STATIC_FOLDER=$(python -c "
+import yaml
+with open('/app/config/config.yaml') as f:
+    cfg = yaml.safe_load(f)
+print(cfg.get('static_folder', 'tmp_imgs'))
+")
+mkdir -p "/app/$STATIC_FOLDER"
+
 cd /app
 python main.py

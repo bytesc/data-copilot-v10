@@ -4,6 +4,12 @@
 #   2. docker/docker-compose.yml  — MYSQL_ROOT_PASSWORD
 #   3. docker/docker-init.sql     — CREATE DATABASE 语句
 # ============================================================
+# ============================================================
+# 修改 static_folder 时需要同步修改以下 2 个地方：
+#   1. config/config.yaml         — static_folder 字段
+#   2. docker/docker-compose.yml  — volumes 挂载路径
+#   3. docker/nginx.conf          — location 路径
+# ============================================================
 
 docker compose -f docker/docker-compose.yml -p docker up -d 
 docker compose -f docker/docker-compose.yml -p docker up -d --build

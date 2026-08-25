@@ -22,6 +22,7 @@ services:
     depends_on:
       - mysql
     volumes:
+      # 修改 static_folder 时需同步修改此路径
       - ../tmp_imgs:/app/tmp_imgs
       - ../front_img:/app/front_img
     environment:
