@@ -206,7 +206,7 @@ DB_BRIEF = "\nDataBase Brief:\n"+_read_doc("db_brief.md")
 
 DB_QUERY_GUIDE = ""
 
-# DB_QUERY_GUIDE = "\nSQL Query guide:\n"+_read_doc("db_quiery_guide.md")\
+# DB_QUERY_GUIDE = "\nSQL Query guide:\n"+_read_doc("db_query_guide.md")\
 # +"\n" + base_knowledge_to_str(get_db_query_guide_db())
 
 
