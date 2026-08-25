@@ -43,7 +43,7 @@ import { ref } from 'vue'
 
 const props = defineProps({
   type: { type: String, required: true },
-  serverUrl: { type: String, default: 'http://127.0.0.1:8009' },
+  serverUrl: { type: String, default: import.meta.env.VITE_SERVER_URL || 'http://127.0.0.1:8009' },
 })
 
 const emit = defineEmits(['close'])

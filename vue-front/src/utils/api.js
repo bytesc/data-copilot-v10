@@ -1,4 +1,4 @@
-const BASE_URL = '/api'
+const BASE_URL = import.meta.env.VITE_API_BASE || '/api'
 
 export async function fetchSessions(limit = 50) {
   const res = await fetch(`${BASE_URL}/sessions/?limit=${limit}`)

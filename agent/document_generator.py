@@ -103,9 +103,10 @@ def _extract_image_urls(text: str) -> Set[str]:
 
 
 def _download_image_bytes(url: str) -> bytes:
-    local_match = re.search(r'tmp_imgs/([^\s/]+\.(?:png|jpg|jpeg|gif|bmp|webp))', url, re.IGNORECASE)
+    static_folder = config_data.get("static_folder", "tmp_imgs")
+    local_match = re.search(rf'{re.escape(static_folder)}/([^\s/]+\.(?:png|jpg|jpeg|gif|bmp|webp))', url, re.IGNORECASE)
     if local_match:
-        local_path = os.path.join("tmp_imgs", local_match.group(1))
+        local_path = os.path.join(static_folder, local_match.group(1))
         if os.path.isfile(local_path):
             with open(local_path, "rb") as f:
                 return f.read()
@@ -373,30 +374,32 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
     full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_document, flags=re.DOTALL)
 
     file_name = f"doc_{generate_random_string(8)}"
-    os.makedirs("tmp_imgs", exist_ok=True)
+    static_folder = config_data.get("static_folder", "tmp_imgs")
+    os.makedirs(static_folder, exist_ok=True)
 
-    md_path = os.path.join("tmp_imgs", file_name + ".md")
+    md_path = os.path.join(static_folder, file_name + ".md")
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(full_document)
 
-    docx_path = os.path.join("tmp_imgs", file_name + ".docx")
+    docx_path = os.path.join(static_folder, file_name + ".docx")
     try:
         _markdown_to_docx(full_document, docx_path)
     except Exception:
         docx_path = None
 
-    pdf_path = os.path.join("tmp_imgs", file_name + ".pdf")
+    pdf_path = os.path.join(static_folder, file_name + ".pdf")
     try:
         _markdown_to_pdf(full_document, pdf_path)
     except Exception:
         pdf_path = None
 
-    static_url = config_data.get("static_path", "http://127.0.0.1:8009/")
-    download_url_md = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".md"
-    download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx" if docx_path else ""
-    download_url_pdf = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".pdf" if pdf_path else ""
+    static_url = config_data["static_path"].rstrip("/")
+    static_folder = config_data.get("static_folder", "tmp_imgs")
+    download_url_md = f"{static_url}/{static_folder}/{file_name}.md"
+    download_url_docx = f"{static_url}/{static_folder}/{file_name}.docx" if docx_path else ""
+    download_url_pdf = f"{static_url}/{static_folder}/{file_name}.pdf" if pdf_path else ""
 
-    yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'title': title, 'parts_count': len(parts), 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx, 'download_url_pdf': download_url_pdf}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'document', 'type': 'done', 'content': full_document, 'title': title, 'parts_count': len(parts), 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx, 'download_url_pdf': download_url_pdf, 'conversation_history': conversation_history}, ensure_ascii=False)}\n\n"
 
     record_session_operation(
         session_id, "/api/generate-document/stream/",
@@ -475,33 +478,34 @@ Write the complete business summary document in markdown format. Start with `# T
     title = title_match.group(1).strip() if title_match else "Summary Document"
 
     file_name = f"doc_{generate_random_string(8)}"
-    os.makedirs("tmp_imgs", exist_ok=True)
+    static_folder = config_data.get("static_folder", "tmp_imgs")
+    os.makedirs(static_folder, exist_ok=True)
 
-    md_path = os.path.join("tmp_imgs", file_name + ".md")
+    md_path = os.path.join(static_folder, file_name + ".md")
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(full_document)
 
-    docx_path = os.path.join("tmp_imgs", file_name + ".docx")
+    docx_path = os.path.join(static_folder, file_name + ".docx")
     try:
         _markdown_to_docx(full_document, docx_path)
     except Exception:
         docx_path = None
 
-    pdf_path = os.path.join("tmp_imgs", file_name + ".pdf")
+    pdf_path = os.path.join(static_folder, file_name + ".pdf")
     try:
         _markdown_to_pdf(full_document, pdf_path)
     except Exception:
         pdf_path = None
 
-    static_url = config_data.get("static_path", "http://127.0.0.1:8009/")
-    download_url_md = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".md"
-    download_url_docx = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".docx" if docx_path else ""
-    download_url_pdf = static_url.rstrip("/") + "/tmp_imgs/" + file_name + ".pdf" if pdf_path else ""
-    
+    static_url = config_data["static_path"].rstrip("/")
+    static_folder = config_data.get("static_folder", "tmp_imgs")
+    download_url_md = f"{static_url}/{static_folder}/{file_name}.md"
+    download_url_docx = f"{static_url}/{static_folder}/{file_name}.docx" if docx_path else ""
+    download_url_pdf = f"{static_url}/{static_folder}/{file_name}.pdf" if pdf_path else ""
 
     outline_json = json.dumps({"title": title}, ensure_ascii=False)
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'done', 'content': full_document, 'title': title, 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx, 'download_url_pdf': download_url_pdf}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'done', 'content': full_document, 'title': title, 'file_name': file_name, 'download_url_md': download_url_md, 'download_url_docx': download_url_docx, 'download_url_pdf': download_url_pdf, 'conversation_history': conversation_history}, ensure_ascii=False)}\n\n"
 
     record_session_operation(
         session_id, "act/generate_document",

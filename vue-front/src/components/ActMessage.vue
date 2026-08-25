@@ -133,7 +133,7 @@ import { renderMarkdown } from '@/utils/markdown.js'
 
 const props = defineProps({
   message: { type: Object, required: true },
-  serverUrl: { type: String, default: '' },
+  serverUrl: { type: String, default: import.meta.env.VITE_SERVER_URL || 'http://127.0.0.1:8009' },
 })
 
 const FRONTEND_ACTIONS = ['output_text', 'ask_question', 'ask_choice', 'summary_and_pause', 'attempt_completion']

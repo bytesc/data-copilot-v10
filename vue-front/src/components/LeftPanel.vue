@@ -88,7 +88,7 @@ import { ref } from 'vue'
 defineProps({
   sessionId: { type: String, required: true },
   isRunning: { type: Boolean, default: false },
-  serverUrl: { type: String, default: 'http://127.0.0.1:8009' },
+  serverUrl: { type: String, default: import.meta.env.VITE_SERVER_URL || 'http://127.0.0.1:8009' },
 })
 
 defineEmits(['resume-session', 'new-session'])

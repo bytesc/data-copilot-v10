@@ -5,6 +5,7 @@ import pandas as pd
 import pygwalker as pyg
 from agent.utils.get_config import config_data
 STATIC_URL = config_data['static_path']
+STATIC_FOLDER = config_data.get('static_folder', 'tmp_imgs')
 
 def generate_random_string(length=8):
     letters = string.ascii_lowercase
@@ -22,7 +23,7 @@ def get_html(df: pd.DataFrame):
 
 
 def pd_to_walker(df: pd.DataFrame):
-    file_path = "./tmp_imgs/" + generate_random_string(12)+".html"
+    file_path = f"./{STATIC_FOLDER}/" + generate_random_string(12)+".html"
     html = get_html(df)
     with open(file_path, 'w') as file:
         file.write(html)

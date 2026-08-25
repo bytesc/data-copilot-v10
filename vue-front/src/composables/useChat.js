@@ -20,7 +20,7 @@ export function useChat() {
   const messages = ref([])
   const generatedFiles = ref([])
 
-  const serverUrl = ref('http://127.0.0.1:8009')
+  const serverUrl = ref(import.meta.env.VITE_SERVER_URL || 'http://127.0.0.1:8009')
 
   function generateSessionId() {
     const now = new Date()
@@ -449,7 +449,7 @@ function historyToText(history) {
     isCompleted.value = false
     question.value = newQuestion
     addMessage('user', 'question', { content: newQuestion })
-    conversationHistory.value = [{ role: 'user', type: 'question', content: newQuestion }]
+    conversationHistory.value.push({ role: 'user', type: 'question', content: newQuestion })
     cycleIndex.value = 0
 
     isRunning.value = true

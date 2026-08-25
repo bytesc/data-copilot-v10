@@ -63,7 +63,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # 创建线程池，处理同步任务
 executor = ThreadPoolExecutor(max_workers=10)
 
-STATIC_FOLDER = "tmp_imgs"
+STATIC_FOLDER = config_data.get("static_folder", "tmp_imgs")
 STATIC_PATH = f"/{STATIC_FOLDER}"
 
 

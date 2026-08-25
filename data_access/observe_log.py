@@ -321,8 +321,10 @@ def reconstruct_conversation_history(session_id):
             history_json = session_info.get("conversation_history", "")
 
             if history_json:
-                history = json.loads(history_json)
+                history = json.loads(history_json) or []
             else:
+                history = []
+            if not history:
                 history = _rebuild_from_cycle_logs(conn, session_id, question)
 
         return {

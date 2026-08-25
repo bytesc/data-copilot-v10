@@ -48,7 +48,8 @@ def record_report_generation(session_id, file_name, chat_history="", outline="",
 
 def get_generated_files(session_id):
     try:
-        static_url = config_data.get("static_path", "http://127.0.0.1:8009/").rstrip("/")
+        static_url = config_data["static_path"].rstrip("/")
+        static_folder = config_data.get("static_folder", "tmp_imgs")
         with sys_engine.connect() as conn:
             result = conn.execute(
                 select(report_generation_log)
@@ -70,9 +71,9 @@ def get_generated_files(session_id):
             files.append({
                 "id": rd.get("id"),
                 "title": title,
-                "downloadUrlMd": f"{static_url}/tmp_imgs/{file_name}.md" if file_name else "",
-                "downloadUrlDocx": f"{static_url}/tmp_imgs/{file_name}.docx" if file_name else "",
-                "downloadUrlPdf": f"{static_url}/tmp_imgs/{file_name}.pdf" if file_name else "",
+                "downloadUrlMd": f"{static_url}/{static_folder}/{file_name}.md" if file_name else "",
+                "downloadUrlDocx": f"{static_url}/{static_folder}/{file_name}.docx" if file_name else "",
+                "downloadUrlPdf": f"{static_url}/{static_folder}/{file_name}.pdf" if file_name else "",
                 "createdAt": rd.get("created_at").isoformat() if rd.get("created_at") else "",
             })
 

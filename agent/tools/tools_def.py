@@ -16,6 +16,7 @@ DATABASE_URL = config_data['mysql']
 engine = sqlalchemy.create_engine(DATABASE_URL)
 
 STATIC_URL = config_data['static_path']
+STATIC_FOLDER = config_data.get('static_folder', 'tmp_imgs')
 
 llm = get_llm()
 
@@ -237,7 +238,7 @@ def load_data(url: str) -> pd.DataFrame:
     ```
     """
     file_name = extract_csv_filename_from_url(url)
-    df = read_csv_from_local("./tmp_imgs/"+file_name)
+    df = read_csv_from_local(f"./{STATIC_FOLDER}/"+file_name)
     return df
 
 
