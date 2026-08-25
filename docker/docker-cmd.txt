@@ -5,6 +5,7 @@
 #   3. docker/docker-init.sql     — CREATE DATABASE 语句
 # ============================================================
 
+docker compose -f docker/docker-compose.yml -p docker up -d 
 docker compose -f docker/docker-compose.yml -p docker up -d --build
 docker compose -f docker/docker-compose.yml -p docker up -d --build frontend
 docker compose -f docker/docker-compose.yml -p docker up -d --build backend
