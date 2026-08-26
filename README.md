@@ -100,7 +100,7 @@ server_host: "0.0.0.0"  # allow host
 # 数据库
 mysql: "mysql+pymysql://root:123456@localhost:3306/2026start_v3"
 
-mysql_sys: "mysql+pymysql://root:123456@localhost:3306/med_data_sys"
+mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_sys"
 
 # 静态文件服务地址，本机域名/ip:端口
 static_path: "http://127.0.0.1:8009/"
