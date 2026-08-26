@@ -6,7 +6,8 @@ from data_access.sys_db_conn import sys_engine
 from data_access.base_knowledge_db import base_knowledge
 from data_access.db_query_guide_db import db_query_guide
 from data_access.doc_knowledge_db import doc_knowledge
-from data_access.graph_code_guide_db import graph_code_guide
+from data_access.code_guide_db import code_guide
+from data_access.think_knowledge_db import think_knowledge
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from agent.tools.tools_def import llm, engine
 from agent.tools.search_db import get_db_structure_markdown
@@ -226,10 +227,10 @@ def get_doc_knowledge_db_llm(context="", key=None):
     yield from _llm_search_with_ids(prompt, doc)
 
 
-def get_graph_code_guide_db(key=None, threshold=0.3):
+def get_code_guide_db(key=None, threshold=0.3):
     try:
         with sys_engine.connect() as conn:
-            rows = conn.execute(select(graph_code_guide)).fetchall()
+            rows = conn.execute(select(code_guide)).fetchall()
             all_guide = {row.key: {"id": row.id, "value": row.value} for row in rows}
 
         if not key:
@@ -244,12 +245,12 @@ def get_graph_code_guide_db(key=None, threshold=0.3):
                     break
         return result
     except Exception as e:
-        print(f"[WARNING] Failed to read graph_code_guide from db: {e}")
+        print(f"[WARNING] Failed to read code_guide from db: {e}")
         return {}
 
 
-def get_graph_code_guide_db_llm(context="", key=None):
-    guide = get_graph_code_guide_db(key)
+def get_code_guide_db_llm(context="", key=None):
+    guide = get_code_guide_db(key)
     if not guide:
         yield {"type": "done", "description": "", "useful_ids": []}
         return
@@ -270,6 +271,52 @@ def get_graph_code_guide_db_llm(context="", key=None):
     )
 
     yield from _llm_search_with_ids(prompt, guide)
+
+
+def get_think_knowledge_db(key=None, threshold=0.3):
+    try:
+        with sys_engine.connect() as conn:
+            rows = conn.execute(select(think_knowledge)).fetchall()
+            all_knowledge = {row.key: {"id": row.id, "value": row.value} for row in rows}
+
+        if not key:
+            return all_knowledge
+
+        from difflib import SequenceMatcher
+        result = {}
+        for db_key, db_value in all_knowledge.items():
+            for search_key in key:
+                if SequenceMatcher(None, search_key, db_key).ratio() >= threshold:
+                    result[db_key] = db_value
+                    break
+        return result
+    except Exception as e:
+        print(f"[WARNING] Failed to read think_knowledge from db: {e}")
+        return {}
+
+
+def get_think_knowledge_db_llm(context="", key=None):
+    knowledge = get_think_knowledge_db(key)
+    if not knowledge:
+        yield {"type": "done", "description": "", "useful_ids": []}
+        return
+
+    knowledge_text = base_knowledge_to_str(knowledge)
+
+    prompt = _build_knowledge_context(
+        knowledge_text, "",
+        "thinking strategy expert",
+        context,
+        "Analyze the user's question against the think knowledge. Output a natural language analysis plan describing:\n"
+        "1. The overall approach to solve the problem\n"
+        "2. Key data points to focus on\n"
+        "3. Analysis methods or techniques to apply\n"
+        "4. Potential pitfalls or edge cases to consider\n"
+        "5. The reasoning behind the plan\n"
+        "Do NOT write any code."
+    )
+
+    yield from _llm_search_with_ids(prompt, knowledge)
 
 
 class _DynamicStr:
@@ -313,3 +360,5 @@ DOC = _DynamicStr(lambda: "\ndoc reference(just for reference):\n" + _DOC_MD\
 
 
 TARGET = _DynamicStr(lambda: "\nTarget:\n" + _TARGET_MD)
+
+THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + base_knowledge_to_str(get_think_knowledge_db()))

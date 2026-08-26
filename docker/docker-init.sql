@@ -87,12 +87,19 @@ CREATE TABLE IF NOT EXISTS `doc_knowledge` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文档知识表';
 
-CREATE TABLE IF NOT EXISTS `graph_code_guide` (
+CREATE TABLE IF NOT EXISTS `code_guide` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
   `key` TEXT NOT NULL COMMENT '图表代码指南键',
   `value` LONGTEXT COMMENT '图表代码指南值',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图表代码指南表';
+
+CREATE TABLE IF NOT EXISTS `think_knowledge` (
+  `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `key` TEXT NOT NULL COMMENT '思考知识键',
+  `value` LONGTEXT COMMENT '思考知识值',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思考知识表';
 
 CREATE DATABASE IF NOT EXISTS data_copilot_v10_sys DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -182,9 +189,16 @@ CREATE TABLE IF NOT EXISTS `doc_knowledge` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文档知识表';
 
-CREATE TABLE IF NOT EXISTS `graph_code_guide` (
+CREATE TABLE IF NOT EXISTS `code_guide` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
   `key` TEXT NOT NULL COMMENT '图表代码指南键',
   `value` LONGTEXT COMMENT '图表代码指南值',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图表代码指南表';
+
+CREATE TABLE IF NOT EXISTS `think_knowledge` (
+  `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `key` TEXT NOT NULL COMMENT '思考知识键',
+  `value` LONGTEXT COMMENT '思考知识值',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思考知识表';

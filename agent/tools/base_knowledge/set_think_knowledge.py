@@ -1,35 +1,35 @@
 import json
 from sqlalchemy import select, insert
 from data_access.sys_db_conn import sys_engine
-from data_access.graph_code_guide_db import graph_code_guide
+from data_access.think_knowledge_db import think_knowledge
 from agent.tools.copilot.utils.call_llm_test import call_llm
 from agent.tools.tools_def import llm
 
 
-def set_graph_code_guide(text=""):
+def set_think_knowledge(text=""):
     if not text or not text.strip():
         return {"success": False, "error": "Empty input text"}
 
-    existing_guide = _get_existing_guide()
-    existing_text = "\n\n".join(f"### {k}\n{v}" for k, v in existing_guide.items()) if existing_guide else "*(None)*"
+    existing_knowledge = _get_existing_knowledge()
+    existing_text = "\n\n".join(f"### {k}\n{v}" for k, v in existing_knowledge.items()) if existing_knowledge else "*(None)*"
 
-    prompt = f"""You are a chart code knowledge extraction expert. Extract structured knowledge from the user's input text.
+    prompt = f"""You are a knowledge extraction expert. Extract structured knowledge from the user's input text.
 
-## Existing Graph Code Guide
+## Existing Think Knowledge
 {existing_text}
 
 ## Input Text
 {text.strip()}
 
 ## Instructions
-1. Analyze the input text and extract key knowledge points about graph/chart code generation.
-2. Each key should be a short descriptive label (e.g. "color_palette", "chart_type_preference", "axis_format"), each value the knowledge content.
+1. Analyze the input text and extract key knowledge points.
+2. Each key should be a short descriptive label, each value the knowledge content.
 3. Output ONLY a valid JSON object (no markdown code block).
 4. If the text provides no new useful knowledge, output an empty JSON object: {{}}.
 
 Example:
 ```json
-{{"color_palette": "Use blue and orange as primary colors", "chart_type_preference": "Prefer bar charts for categorical data and line charts for time series"}}
+{{"analysis_approach": "Use time series decomposition to analyze trends", "key_metrics": ["revenue", "growth_rate"]}}
 ```
 """
 
@@ -37,7 +37,7 @@ Example:
         response = call_llm(prompt, llm)
         raw = response.content.strip()
     except Exception as e:
-        print(f"[WARNING] Failed to call LLM for set_graph_code_guide: {e}")
+        print(f"[WARNING] Failed to call LLM for set_think_knowledge: {e}")
         return {"success": False, "error": f"LLM call failed: {e}"}
 
     knowledge = _parse_knowledge_json(raw)
@@ -45,21 +45,21 @@ Example:
         return {"success": False, "error": "Failed to parse knowledge JSON", "raw": raw[:500]}
 
     try:
-        saved = _save_guide(knowledge)
+        saved = _save_knowledge(knowledge)
         return {"success": True, "saved": saved, "count": len(knowledge)}
     except Exception as e:
-        print(f"[WARNING] Failed to save graph_code_guide: {e}")
+        print(f"[WARNING] Failed to save think_knowledge: {e}")
         return {"success": False, "error": f"DB save failed: {e}"}
 
 
-def _get_existing_guide():
+def _get_existing_knowledge():
     try:
         with sys_engine.connect() as conn:
-            result = conn.execute(select(graph_code_guide))
+            result = conn.execute(select(think_knowledge))
             rows = result.fetchall()
             return {row.key: row.value for row in rows}
     except Exception as e:
-        print(f"[WARNING] Failed to read existing graph_code_guide: {e}")
+        print(f"[WARNING] Failed to read existing think_knowledge: {e}")
         return {}
 
 
@@ -81,21 +81,21 @@ def _parse_knowledge_json(raw):
     return {}
 
 
-def _save_guide(knowledge):
+def _save_knowledge(knowledge):
     with sys_engine.connect() as conn:
         trans = conn.begin()
         try:
             for key, value in knowledge.items():
                 existing = conn.execute(
-                    select(graph_code_guide).where(graph_code_guide.c.key == key)
+                    select(think_knowledge).where(think_knowledge.c.key == key)
                 ).fetchone()
                 if existing:
                     conn.execute(
-                        graph_code_guide.update().where(graph_code_guide.c.key == key).values(value=str(value))
+                        think_knowledge.update().where(think_knowledge.c.key == key).values(value=str(value))
                     )
                 else:
                     conn.execute(
-                        insert(graph_code_guide).values(key=key, value=str(value))
+                        insert(think_knowledge).values(key=key, value=str(value))
                     )
             trans.commit()
             return list(knowledge.keys())
