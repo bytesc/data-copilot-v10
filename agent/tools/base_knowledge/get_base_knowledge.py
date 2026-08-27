@@ -8,6 +8,7 @@ from data_access.db_query_guide_db import db_query_guide
 from data_access.doc_knowledge_db import doc_knowledge
 from data_access.code_guide_db import code_guide
 from data_access.think_knowledge_db import think_knowledge
+from data_access.brief_info_db import brief_info
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from agent.tools.tools_def import llm, engine
 from agent.tools.search_db import get_db_structure_markdown
@@ -362,3 +363,30 @@ DOC = _DynamicStr(lambda: "\ndoc reference(just for reference):\n" + _DOC_MD\
 TARGET = _DynamicStr(lambda: "\nTarget:\n" + _TARGET_MD)
 
 THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + base_knowledge_to_str(get_think_knowledge_db()))
+
+
+def get_brief_info():
+    try:
+        with sys_engine.connect() as conn:
+            rows = conn.execute(select(brief_info)).fetchall()
+            result = {row.attr: row.value for row in rows}
+    except Exception as e:
+        print(f"[WARNING] Failed to read brief_info: {e}")
+        result = {}
+
+    _entries = [
+        ("db_brief", "db_brief.md"),
+        ("base_knowledge_brief", "base_knowledge_brief.md"),
+    ]
+    for attr_name, md_filename in _entries:
+        md_content = _read_doc(md_filename)
+        db_value = result.get(attr_name, "")
+        combined = md_content + ("\n\n" + db_value if db_value else "")
+        result[attr_name] = combined
+
+    return result
+
+
+BRIEF_INFO = _DynamicStr(lambda: "\n" + "\n\n".join(
+    f"### {k}\n{v}" for k, v in get_brief_info().items() if v
+))

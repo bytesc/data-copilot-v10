@@ -38,6 +38,7 @@ from data_access.db_query_guide_db import create_db_query_guide_table
 from data_access.doc_knowledge_db import create_doc_knowledge_table
 from data_access.code_guide_db import create_code_guide_table
 from data_access.think_knowledge_db import create_think_knowledge_table
+from data_access.brief_info_db import create_brief_info_table, init_brief_info
 
 create_session_log_table()
 create_observe_log_tables()
@@ -47,6 +48,8 @@ create_db_query_guide_table()
 create_doc_knowledge_table()
 create_code_guide_table()
 create_think_knowledge_table()
+create_brief_info_table()
+init_brief_info()
 
 # DATABASE_URL = config_data['mysql']
 # engine = sqlalchemy.create_engine(DATABASE_URL)

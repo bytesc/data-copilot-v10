@@ -202,3 +202,11 @@ CREATE TABLE IF NOT EXISTS `think_knowledge` (
   `value` LONGTEXT COMMENT '思考知识值',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思考知识表';
+
+CREATE TABLE IF NOT EXISTS `brief_info` (
+  `attr` TEXT NOT NULL COMMENT '属性名称',
+  `value` LONGTEXT COMMENT '属性值'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='简要信息表';
+
+INSERT INTO `brief_info` (`attr`, `value`) VALUES ('db_brief', '');
+INSERT INTO `brief_info` (`attr`, `value`) VALUES ('base_knowledge_brief', '');

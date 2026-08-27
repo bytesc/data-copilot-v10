@@ -8,10 +8,10 @@ mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_sys"
 static_path: "http://127.0.0.1:8009/"
 static_folder: "tmp_imgs"
 
-model_name: "deepseek-v4-pro"
+model_name: "deepseek-v4-flash"
 # qwen3.7-flash qwen3.8-max
 # glm-4
-# deepseek-chat deepseek-v4-flash
+# deepseek-chat deepseek-v4-flash deepseek-v4-pro
 # qwen-max
 # gpt-4o-mini
 

@@ -10,8 +10,8 @@ FUNCTION_DICT = {
     "exe_sql": exe_sql,
     "load_data": load_data,
     "get_save_image_path": get_save_image_path,
-    "search_web": search_web,
-    "fetch_webpage": fetch_webpage,
+    # "search_web": search_web,
+    # "fetch_webpage": fetch_webpage,
 }
 
 FUNCTION_IMPORT = {
