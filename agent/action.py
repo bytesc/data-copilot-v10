@@ -22,7 +22,7 @@ VALID_ACTIONS = [
     "explore_schema", "explore_functions", "generate_and_execute",
     "output_text", "ask_question", "ask_choice",
     "summary_and_pause", "attempt_completion",
-    "generate_document",
+    "generate_document", "web_search", "fetch_webpage",
 ]
 
 
@@ -54,6 +54,10 @@ ACTIONS = """
   Output some text and stop the pipline in case of completion.
 - generate_document: {{"action": "generate_document", "title": "report_title"}}
   Generate a complete business summary document based on the full conversation history. The title specifies the document title. The document will be saved as both .md and .docx files. Use this when the user asks to generate a report or document.
+- web_search: {{"action": "web_search", "query": "search query", "max_results": 10}}
+  Search the web using DuckDuckGo. Use this when the user asks for real-time information, news, facts, or data not available in the local database. Returns a list of results with title, URL, and snippet. Optionally set max_results (default 10, max 50) to control how many results to return.
+- fetch_webpage: {{"action": "fetch_webpage", "url": "https://example.com/page", "max_length": 10000}}
+  Fetch and extract the text content of a specific webpage. Use this after `web_search` to read the full content of a promising result. The url should be extracted from a previous search result. max_length controls max characters to return (default 10000).
 """
 
 
@@ -92,6 +96,8 @@ Decision Rules:
 5. `generate_and_execute` is the major action to solve complex problems.
 6. `explore_schema` returns all relevant data structure and schema in the database at a time based on previous context. DO NOT try to perform two explore_schema with the same consecutively.
 7. `explore_functions` returns all relevant available python function catalog at a time based on previous context. DO NOT try to perform two explore_functions with the same consecutively.
+8. `web_search` searches the web for real-time information. Use it when the user asks about current events, news, facts, or data that is unlikely to be in the local database.
+9. `fetch_webpage` fetches and reads the full text content of a specific URL. Use it after `web_search` to get detailed information from a specific page. The URL should come from a previous search result.
 
 """
 
@@ -178,6 +184,10 @@ def _parse_action_json(raw: str) -> dict:
         "choices": result.get("choices"),
         "research_guide": result.get("research_guide"),
         "title": result.get("title"),
+        "query": result.get("query"),
+        "max_results": result.get("max_results"),
+        "url": result.get("url"),
+        "max_length": result.get("max_length"),
     }
 
 

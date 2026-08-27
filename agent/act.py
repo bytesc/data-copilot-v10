@@ -14,6 +14,7 @@ from agent.tools.copilot.sql_code import parse_selected_fields_json
 from agent.tools.search_db import get_db_overview_markdown, search_db_markdown, get_db_summary_for_agent
 from agent.tools.search_func import get_func_catalog_markdown, search_func_by_keyword, get_func_summary_for_agent, get_func_docs_for
 from agent.tools.get_function_info import FUNCTION_DICT
+from agent.tools.web_search.web_search import search_web, fetch_webpage
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
@@ -73,6 +74,24 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
         file_name = act_data.get("file_name", "")
         full_text = act_data.get("full_text", "")
         entries.append({"role": "assistant", "type": "act", "action": "generate_document", "title": title, "file_name": file_name, "full_text": full_text})
+    elif action == "web_search":
+        entry = {"role": "assistant", "type": "act", "action": "web_search"}
+        if act_data.get("display_content"):
+            entry["search_result"] = act_data["display_content"]
+        elif act_data.get("search_results"):
+            entry["search_result"] = act_data["search_results"]
+        if act_data.get("query"):
+            entry["query"] = act_data["query"]
+        entries.append(entry)
+    elif action == "fetch_webpage":
+        entry = {"role": "assistant", "type": "act", "action": "fetch_webpage"}
+        if act_data.get("display_content"):
+            entry["search_result"] = act_data["display_content"]
+        elif act_data.get("content"):
+            entry["search_result"] = act_data["content"]
+        if act_data.get("url"):
+            entry["url"] = act_data["url"]
+        entries.append(entry)
     return entries
 
 
@@ -106,6 +125,12 @@ def _event_stream_act(
     elif action == "generate_document":
         title = params.get("title")
         act_data = yield from _act_generate_document(conversation_history, session_id, title, request_json)
+
+    elif action == "web_search":
+        act_data = yield from _act_web_search(full_question, session_id, params, request_json)
+
+    elif action == "fetch_webpage":
+        act_data = yield from _act_fetch_webpage(full_question, session_id, params, request_json)
 
     else:
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
@@ -309,6 +334,97 @@ def _act_generate_document(conversation_history, session_id, title: str = "", re
         "full_text": last_event.get("content", ""),
         "status": "completed",
     }
+
+
+def _act_web_search(full_question: str, session_id: str, params: dict, request_json: str = ""):
+    query = (params.get("query") or "").strip()
+    max_results = params.get("max_results", 10)
+    if not query:
+        query = full_question.strip()
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'msg', 'content': f'正在搜索: {query}...'}, ensure_ascii=False)}\n\n"
+
+    try:
+        max_results = min(int(max_results), 50)
+    except (ValueError, TypeError):
+        max_results = 10
+
+    raw_result = search_web(query, max_results=max_results)
+    try:
+        result_data = json.loads(raw_result)
+    except json.JSONDecodeError:
+        result_data = {"error": "Failed to parse search results", "raw": raw_result}
+
+    if "error" in result_data:
+        error_msg = result_data.get("error", "unknown error")
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'error', 'content': f'搜索失败: {error_msg}'}, ensure_ascii=False)}\n\n"
+        return {"search_results": result_data, "query": query}
+
+    formatted = []
+    for r in result_data.get("results", []):
+        formatted.append(f"- **{r.get('title', '')}**\n  URL: {r.get('url', '')}\n  {r.get('snippet', '')}")
+
+    display_content = f"## 搜索结果: {query}\n\n共找到 {result_data.get('count', 0)} 条结果:\n\n" + "\n\n".join(formatted)
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'chunk', 'content': display_content}, ensure_ascii=False)}\n\n"
+
+    log_observe_cycle(session_id, 0, "act", "web_search",
+                      prompt=full_question[:5000], response=raw_result[:5000],
+                      exec_result=display_content[:10000],
+                      token_estimate=len(full_question) // 3)
+
+    record_session_operation(
+        session_id, "/api/act/stream/", request_json,
+        json.dumps({"query": query, "count": result_data.get("count", 0)}, ensure_ascii=False),
+        "success", f"Web search: {query}",
+    )
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'done', 'content': display_content, 'result': {'search_results': result_data, 'query': query}}, ensure_ascii=False)}\n\n"
+
+    return {"search_results": result_data, "query": query, "display_content": display_content}
+
+
+def _act_fetch_webpage(full_question: str, session_id: str, params: dict, request_json: str = ""):
+    url = (params.get("url") or "").strip()
+    max_length = params.get("max_length", 10000)
+    if not url:
+        url = full_question.strip()
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'msg', 'content': f'正在获取页面: {url[:100]}...'}, ensure_ascii=False)}\n\n"
+
+    try:
+        max_length = min(int(max_length), 50000)
+    except (ValueError, TypeError):
+        max_length = 10000
+
+    content = fetch_webpage(url, max_length=max_length)
+    try:
+        parsed = json.loads(content)
+        if "error" in parsed:
+            error_msg = parsed.get("error", "unknown error")
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'error', 'content': f'获取页面失败: {error_msg}'}, ensure_ascii=False)}\n\n"
+            return {"url": url, "content": content}
+    except json.JSONDecodeError:
+        pass
+
+    display_content = f"## 页面内容: {url}\n\n{content}\n\n---\n*内容长度: {len(content)} 字符*"
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'chunk', 'content': display_content}, ensure_ascii=False)}\n\n"
+
+    log_observe_cycle(session_id, 0, "act", "fetch_webpage",
+                      prompt=full_question[:5000], response=content[:5000],
+                      exec_result=content[:10000],
+                      token_estimate=len(full_question) // 3)
+
+    record_session_operation(
+        session_id, "/api/act/stream/", request_json,
+        json.dumps({"url": url, "length": len(content)}, ensure_ascii=False),
+        "success", f"Fetch webpage: {url[:100]}",
+    )
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'done', 'content': display_content, 'result': {'url': url, 'content': content[:10000]}}, ensure_ascii=False)}\n\n"
+
+    return {"url": url, "content": content, "display_content": display_content}
 
 
 @router.post("/api/act/stream/")

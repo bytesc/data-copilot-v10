@@ -81,16 +81,35 @@
   {type:"history", history:[...]}
 ```
 
-### generate_document
+### web_search
 
 ```
 成功：
-  {type:"msg",     sub_phase:"generate_document", content:"Generating document..."}
-  {type:"chunk",   sub_phase:"generate_document", content:"..."}  ×N
-  {type:"done",    sub_phase:"generate_document", content:"...",
-   title:"...", file_name:"...", download_url_md:"...", download_url_docx:"..."}
+  {type:"msg",     sub_phase:"web_search", content:"正在搜索: {query}..."}
+  {type:"chunk",   sub_phase:"web_search", content:"搜索结果 markdown..."}
+  {type:"done",    sub_phase:"web_search", content:"...",
+   result:{search_results:{query,count,results:[{title,url,snippet}]}, query:"..."}}
   {type:"history", history:[...]}
+
+失败：
+  {type:"error",   sub_phase:"web_search", content:"搜索失败: ..."}
 ```
+
+### fetch_webpage
+
+```
+成功：
+  {type:"msg",     sub_phase:"fetch_webpage", content:"正在获取页面: {url}..."}
+  {type:"chunk",   sub_phase:"fetch_webpage", content:"页面内容 markdown..."}
+  {type:"done",    sub_phase:"fetch_webpage", content:"...",
+   result:{url:"...", content:"..."}}
+  {type:"history", history:[...]}
+
+失败：
+  {type:"error",   sub_phase:"fetch_webpage", content:"获取页面失败: ..."}
+```
+
+### generate_document
 
 ### generate_and_execute
 

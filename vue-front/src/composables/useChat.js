@@ -247,6 +247,10 @@ function historyToText(history) {
         selected_functions: actionResult.funcs || undefined,
         research_guide: actionResult.research_guide || undefined,
         title: actionResult.title || undefined,
+        query: actionResult.query || undefined,
+        max_results: actionResult.max_results || undefined,
+        url: actionResult.url || undefined,
+        max_length: actionResult.max_length || undefined,
       },
     })
 

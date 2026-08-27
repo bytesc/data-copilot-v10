@@ -181,6 +181,52 @@ function subPhaseLabel(name) {
 ```
 ```
 
+## 完整示例：`web_search` 动作
+
+### 作用
+搜索网络信息，使用 DuckDuckGo 引擎，返回标题、URL、摘要。
+
+### 实现要点
+- **`action.py`**: `VALID_ACTIONS` 添加 `"web_search"`，`ACTIONS` prompt 添加 `query`/`max_results` 参数描述，`_parse_action_json` 提取 `query`/`max_results`
+- **`act.py`**: 导入 `search_web`，`_event_stream_act` 分发到 `_act_web_search`，`_build_act_entries` 保存 `search_result` 和 `query`
+- **执行函数**: 直接调用 `search_web(query, max_results)`，结果格式化为 markdown 后 yield `done` 事件
+- **前端**: `useChat.js` params 传递 `query`/`max_results`，`ActMessage.vue` 添加 `web_search` 模板和 `subPhaseLabel`
+
+### SSE 事件流
+```
+成功：
+  {type:"msg",     sub_phase:"web_search", content:"正在搜索: {query}..."}
+  {type:"chunk",   sub_phase:"web_search", content:"搜索结果 markdown..."}
+  {type:"done",    sub_phase:"web_search", content:"...", result:{search_results:{...}, query:"..."}}
+  {type:"history", history:[...]}
+
+失败：
+  {type:"error",   sub_phase:"web_search", content:"搜索失败: ..."}
+```
+
+## 完整示例：`fetch_webpage` 动作
+
+### 作用
+获取指定 URL 的网页文本内容，通常用于 `web_search` 之后阅读详细页面。
+
+### 实现要点
+- **`action.py`**: `VALID_ACTIONS` 添加 `"fetch_webpage"`，`ACTIONS` prompt 添加 `url`/`max_length` 参数描述，`_parse_action_json` 提取 `url`/`max_length`
+- **`act.py`**: 导入 `fetch_webpage`，`_event_stream_act` 分发到 `_act_fetch_webpage`，`_build_act_entries` 保存 `url` 和 `content`（存入 `search_result` 字段）
+- **执行函数**: 直接调用 `fetch_webpage(url, max_length)`，返回内容 yield `chunk` 和 `done` 事件
+- **前端**: `useChat.js` params 传递 `url`/`max_length`，`ActMessage.vue` 添加 `fetch_webpage` 模板和 `subPhaseLabel`
+
+### SSE 事件流
+```
+成功：
+  {type:"msg",     sub_phase:"fetch_webpage", content:"正在获取页面: {url}..."}
+  {type:"chunk",   sub_phase:"fetch_webpage", content:"页面内容 markdown..."}
+  {type:"done",    sub_phase:"fetch_webpage", content:"...", result:{url:"...", content:"..."}}
+  {type:"history", history:[...]}
+
+失败：
+  {type:"error",   sub_phase:"fetch_webpage", content:"获取页面失败: ..."}
+```
+
 ## 完整示例：`generate_document` 动作
 
 参考已实现的 `generate_document` 动作，该动作：

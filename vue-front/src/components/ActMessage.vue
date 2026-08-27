@@ -74,6 +74,26 @@
       </template>
     </template>
 
+    <template v-else-if="message.action === 'web_search'">
+      <details class="msg-collapse" open>
+        <summary class="collapse-summary">Web Search Results</summary>
+        <div class="collapse-body">
+          <div v-if="message.query" class="search-query"><strong>Query:</strong> {{ message.query }}</div>
+          <div v-if="hasSearchResult" v-html="renderMd(searchResult)"></div>
+        </div>
+      </details>
+    </template>
+
+    <template v-else-if="message.action === 'fetch_webpage'">
+      <details class="msg-collapse" open>
+        <summary class="collapse-summary">Fetched Webpage</summary>
+        <div class="collapse-body">
+          <div v-if="message.url" class="search-query"><strong>URL:</strong> {{ message.url }}</div>
+          <div v-if="hasSearchResult" v-html="renderMd(searchResult)"></div>
+        </div>
+      </details>
+    </template>
+
     <template v-else-if="message.action === 'generate_document'">
       <details class="msg-collapse" open>
         <summary class="collapse-summary">Document generated</summary>
@@ -197,6 +217,8 @@ function subPhaseLabel(name) {
     ask_question: 'Question',
     ask_choice: 'Choice',
     generate_document: 'Generated Document',
+    web_search: 'Web Search Results',
+    fetch_webpage: 'Fetched Webpage',
   }
   return labels[name] || name
 }

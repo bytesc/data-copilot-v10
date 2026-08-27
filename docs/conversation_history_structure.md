@@ -46,12 +46,22 @@ LLM 输出的 JSON 对象，格式为 `{"action": "...", ...}`。
  "error":"...","code":"...","result":"..."}
 ```
 
-### generate_document
+### web_search
 
 ```json
-{"role":"assistant","type":"act","action":"generate_document",
- "title":"...","file_name":"...","full_text":"..."}
+{"role":"assistant","type":"act","action":"web_search",
+ "search_result":"格式化后的 markdown 搜索结果字符串",
+ "query":"..."}
 ```
+
+### fetch_webpage
+
+```json
+{"role":"assistant","type":"act","action":"fetch_webpage",
+ "url":"...","search_result":"格式化后的 markdown 页面内容字符串"}
+```
+
+### generate_document
 
 ### 纯前端执行
 
