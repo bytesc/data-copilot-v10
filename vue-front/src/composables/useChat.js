@@ -109,6 +109,7 @@ function historyToText(history) {
     } catch (e) {
       console.error('Chat error:', e)
       addMessage('error', 'system', { content: `Error: ${e.message}` })
+      isCompleted.value = true
     } finally {
       isRunning.value = false
     }
@@ -422,6 +423,7 @@ function historyToText(history) {
     } catch (e) {
       console.error('Chat error:', e)
       addMessage('error', 'system', { content: `Error: ${e.message}` })
+      isCompleted.value = true
     } finally {
       isRunning.value = false
     }
@@ -440,6 +442,7 @@ function historyToText(history) {
     } catch (e) {
       console.error('Chat error:', e)
       addMessage('error', 'system', { content: `Error: ${e.message}` })
+      isCompleted.value = true
     } finally {
       isRunning.value = false
     }
@@ -458,6 +461,7 @@ function historyToText(history) {
     } catch (e) {
       console.error('Chat error:', e)
       addMessage('error', 'system', { content: `Error: ${e.message}` })
+      isCompleted.value = true
     } finally {
       isRunning.value = false
     }
