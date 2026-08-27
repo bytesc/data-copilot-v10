@@ -32,11 +32,6 @@ def init_brief_info():
                         brief_info.insert().values(attr=attr_name, value=md_content)
                     )
                     print(f"[INFO] Inserted brief_info: {attr_name}")
-                else:
-                    conn.execute(
-                        brief_info.update().where(brief_info.c.attr == attr_name).values(value=md_content)
-                    )
-                    print(f"[INFO] Updated brief_info: {attr_name}")
             conn.commit()
     except Exception as e:
         print(f"[WARNING] Failed to init brief_info: {e}")
