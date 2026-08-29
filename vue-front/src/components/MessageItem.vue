@@ -72,7 +72,10 @@
       </template>
 
       <template v-else-if="message.type === 'error'">
-        <div class="error-message" v-html="renderedContent"></div>
+        <details class="msg-collapse">
+          <summary class="collapse-summary">Error</summary>
+          <div class="error-message" v-html="renderedContent"></div>
+        </details>
       </template>
 
       <template v-else-if="message.type === 'system'">

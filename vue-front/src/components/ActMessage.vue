@@ -72,9 +72,12 @@
           <summary class="collapse-summary">Result</summary>
           <div class="collapse-body" v-html="renderMd(message.result)"></div>
         </details>
-        <div v-if="message.error" class="error-block">
-          <strong>Error:</strong> {{ message.error }}
-        </div>
+        <details v-if="message.error" class="msg-collapse">
+          <summary class="collapse-summary">Error</summary>
+          <div class="error-block">
+            <strong>Error:</strong> {{ message.error }}
+          </div>
+        </details>
       </template>
     </template>
 
