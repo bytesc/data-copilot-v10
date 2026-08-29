@@ -118,18 +118,16 @@ def _build_compact_schema(engine, tables=None):
 
 
 def parse_selected_fields_json(txt):
+    from utils.json_parse import parse_json
+    result = parse_json(txt)
+    if result is not None:
+        return result
     try:
-        match = re.search(r'```json\s*(.*?)\s*```', txt, re.DOTALL)
+        match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', txt, re.DOTALL)
         if match:
-            return json.loads(match.group(1))
-        return json.loads(txt)
+            return json.loads(match.group())
     except Exception:
-        try:
-            match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', txt, re.DOTALL)
-            if match:
-                return json.loads(match.group())
-        except Exception:
-            pass
+        pass
     return None
 
 

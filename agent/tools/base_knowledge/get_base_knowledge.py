@@ -105,17 +105,11 @@ def get_doc_knowledge_db(key=None, threshold=0.3):
 
 
 def _parse_llm_response_with_ids(raw):
-    try:
-        match = re.search(r'```json\s*(.*?)\s*```', raw, re.DOTALL)
-        if match:
-            data = json.loads(match.group(1))
-        else:
-            data = json.loads(raw)
-        description = data.get("description", "")
-        useful_ids = data.get("useful_ids", [])
-        return description, useful_ids
-    except Exception:
-        return raw, []
+    from utils.json_parse import parse_json
+    data = parse_json(raw)
+    if isinstance(data, dict):
+        return data.get("description", ""), data.get("useful_ids", [])
+    return raw, []
 
 
 def _llm_search_with_ids(prompt, knowledge):

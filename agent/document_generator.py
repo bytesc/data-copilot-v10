@@ -264,24 +264,14 @@ def _add_inline_runs(paragraph, text: str):
 
 
 def _parse_outline_json(raw: str) -> dict:
-    raw = raw.strip()
-    for prefix in ('```json', '```'):
-        if raw.startswith(prefix):
-            raw = raw[len(prefix):]
-    for suffix in ('```',):
-        if raw.endswith(suffix):
-            raw = raw[:-len(suffix)]
-    raw = raw.strip()
-    try:
-        result = json.loads(raw)
-    except json.JSONDecodeError:
-        return {"title": "Summary Document", "parts": []}
-    if not isinstance(result, dict):
-        return {"title": "Summary Document", "parts": []}
-    return {
-        "title": result.get("title", "Summary Document"),
-        "parts": result.get("parts", [])
-    }
+    from utils.context_trim import parse_json
+    result = parse_json(raw)
+    if isinstance(result, dict):
+        return {
+            "title": result.get("title", "Summary Document"),
+            "parts": result.get("parts", [])
+        }
+    return {"title": "Summary Document", "parts": []}
 
 
 def _event_stream_generate_document(conversation_history: List[dict], session_id: str, request_json: str = ""):

@@ -64,21 +64,9 @@ def _get_existing_knowledge():
 
 
 def _parse_knowledge_json(raw):
-    raw = raw.strip()
-    for prefix in ("```json", "```"):
-        if raw.startswith(prefix):
-            raw = raw[len(prefix):]
-    for suffix in ("```",):
-        if raw.endswith(suffix):
-            raw = raw[:-len(suffix)]
-    raw = raw.strip()
-    try:
-        result = json.loads(raw)
-        if isinstance(result, dict):
-            return result
-    except json.JSONDecodeError:
-        pass
-    return {}
+    from utils.json_parse import parse_json
+    result = parse_json(raw)
+    return result if isinstance(result, dict) else {}
 
 
 def _save_knowledge(knowledge):

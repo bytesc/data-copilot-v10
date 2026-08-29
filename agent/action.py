@@ -14,7 +14,7 @@ from data_access.observe_log import log_observe_cycle
 from data_access.session_log import record_session_operation
 from agent.tools.tools_def import engine
 from utils.front_utils import history_to_text
-from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw
+from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
 
 router = APIRouter()
 
@@ -84,7 +84,7 @@ The system is working in Think → Action → Act → Observe cycles. You takes 
 Context:
 {context if context else '(no context)'}
 
-Output ONLY a valid JSON object on a single line(no md code block). Choose from:
+Output ONLY a valid JSON object on a single line (no md block). Choose from:
 
 {ACTIONS}
 
@@ -144,7 +144,7 @@ def _event_stream_action(
                 yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
             return
 
-        error_msg = f"\n\nPrevious attempt failed: {action_result.get('error', 'invalid JSON')}. Output ONLY a valid JSON object with a valid action field.\n"
+        error_msg = f"\n\nPrevious attempt failed: {action_result.get('error', 'invalid JSON')}. Output ONLY a single-line JSON object with a valid action field. No markdown code blocks, no extra text, no line breaks.\n"
 
     record_session_operation(
         session_id, "/api/action/stream/",
@@ -157,20 +157,9 @@ def _event_stream_action(
 
 
 def _parse_action_json(raw: str) -> dict:
-    raw = raw.strip()
-    for start in ('```json', '```'):
-        if raw.startswith(start):
-            raw = raw[len(start):]
-            break
-    for end in ('```',):
-        if raw.endswith(end):
-            raw = raw[:-len(end)]
-    raw = raw.strip()
-
-    try:
-        result = json.loads(raw)
-    except json.JSONDecodeError:
-        return {"action": None, "error": f"Failed to parse JSON: {raw[:200]}"}
+    result = parse_json(raw)
+    if result is None:
+        return {"action": None, "error": f"Failed to parse JSON: {raw.strip()[:200]}"}
 
     action = result.get("action", "")
     if action not in VALID_ACTIONS:

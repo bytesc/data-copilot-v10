@@ -12,7 +12,7 @@ from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
-from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw
+from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
 
 router = APIRouter()
 
@@ -71,7 +71,7 @@ Autonomous State Judgment & Update Rules:
 - `explore_schema` returns all relevant data structure and schema in the database at a time based on previous context. ALL tables are explored and only return relevant ones! explored means completed! NO need to perform explore_schema with the same input again!
 - `explore_functions` returns all relevant available python function catalog at a time based on previous context. ALL functions are explored and only return relevant ones! explored means completed! NO need to perform explore_functions with the same input again!
 
-Output ONLY a valid JSON object on a single line:
+Output ONLY a valid JSON object on a single line (no md block):
 {{"description": "Brief review of what happened and updated strategy in markdown...", "todo": ["Remaining task 1", "Remaining task 2"]}}
 
 If todo is empty, the plan is complete. Keep descriptions concise.
@@ -93,7 +93,7 @@ If todo is empty, the plan is complete. Keep descriptions concise.
             yield f"data: {json.dumps({'phase': 'observe', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
         plan_result = _parse_plan_json(raw)
-        if isinstance(plan_result.get("description"), str) and plan_result.get("todo") is not None:
+        if plan_result is not None:
             yield f"data: {json.dumps({'phase': 'observe', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
 
             log_observe_cycle(session_id, cycle_index, "observe", "review",
@@ -105,30 +105,19 @@ If todo is empty, the plan is complete. Keep descriptions concise.
                 yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
             return
 
-        error_msg = "\n\nPrevious attempt failed to produce valid JSON. Output ONLY a valid JSON object with 'description' and 'todo' fields.\n"
+        error_msg = "\n\nPrevious attempt failed. Output ONLY a single-line JSON object with 'description' and 'todo' fields. No markdown code blocks, no extra text, no line breaks.\n"
 
     yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'error', 'content': 'Failed to review after retries'}, ensure_ascii=False)}\n\n"
 
 
-def _parse_plan_json(raw: str) -> dict:
-    raw = raw.strip()
-    for prefix in ('```json', '```'):
-        if raw.startswith(prefix):
-            raw = raw[len(prefix):]
-    for suffix in ('```',):
-        if raw.endswith(suffix):
-            raw = raw[:-len(suffix)]
-    raw = raw.strip()
-    try:
-        result = json.loads(raw)
-    except json.JSONDecodeError:
-        return {"description": raw, "todo": []}
-    if not isinstance(result, dict):
-        return {"description": raw, "todo": []}
-    return {
-        "description": result.get("description", raw),
-        "todo": result.get("todo") or [],
-    }
+def _parse_plan_json(raw: str) -> dict | None:
+    result = parse_json(raw)
+    if isinstance(result, dict):
+        return {
+            "description": result.get("description", raw),
+            "todo": result.get("todo") or [],
+        }
+    return None
 
 
 @router.post("/api/observe/stream/")

@@ -34,15 +34,17 @@ def parse_output_html(txt):
 
 
 def parse_generated_python_code(txt):
-    matches = []
     try:
         matches = re.findall(r'```python(.*?)```', txt, re.DOTALL)
+        if matches:
+            return matches[0]
     except Exception as e:
         print("parsing err", e)
 
-    if len(matches) == 0:
-        return None
-    return matches[0]
+    stripped = txt.strip()
+    if 'def func(' in stripped:
+        return stripped
+    return None
 
 
 def parse_generated_sql_code(txt):

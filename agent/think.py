@@ -14,7 +14,7 @@ from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, log_observe_session
 from utils.front_utils import history_to_text
-from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw
+from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
 
 router = APIRouter()
 
@@ -81,7 +81,7 @@ Rules:
 6. Do NOT mention specific function or API names - describe what data to get, not how to get it.
 7. CRITICAL — VISUALIZATION REQUIREMENT: Whenever the todo list includes any data retrieval or analysis task, you MUST also include a follow-up task that generates a chart or visualization of that data. The chart task should be a separate todo item placed immediately after its corresponding data task. For example: ["Query sales data from the database", "Create a bar chart showing sales by category"]. Do NOT skip visualization unless the user explicitly asks for text-only output.
 
-Output ONLY a valid JSON object on a single line(no md block):
+Output ONLY a valid JSON object on a single line (no md block):
 
 {{"description": "Brief analysis strategy in markdown...", "todo": ["Task 1", "Task 2", "Task 3"]}}
 
@@ -106,7 +106,7 @@ The todo list contains the actionable steps. Keep task descriptions concise.
             yield f"data: {json.dumps({'phase': 'think', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
         plan_result = _parse_plan_json(raw)
-        if isinstance(plan_result.get("description"), str) and plan_result.get("todo") is not None:
+        if plan_result is not None:
             yield f"data: {json.dumps({'phase': 'think', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
 
             log_observe_cycle(session_id, 0, "think", "plan",
@@ -119,30 +119,19 @@ The todo list contains the actionable steps. Keep task descriptions concise.
                 yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
             return
 
-        error_msg = "\n\nPrevious attempt failed to produce valid JSON. Output ONLY a valid JSON object with 'description' and 'todo' fields.\n"
+        error_msg = "\n\nPrevious attempt failed. Output ONLY a single-line JSON object with 'description' and 'todo' fields. No markdown code blocks, no extra text, no line breaks.\n"
 
     yield f"data: {json.dumps({'phase': 'think', 'type': 'error', 'content': 'Failed to generate plan after retries'}, ensure_ascii=False)}\n\n"
 
 
-def _parse_plan_json(raw: str) -> dict:
-    raw = raw.strip()
-    for prefix in ('```json', '```'):
-        if raw.startswith(prefix):
-            raw = raw[len(prefix):]
-    for suffix in ('```',):
-        if raw.endswith(suffix):
-            raw = raw[:-len(suffix)]
-    raw = raw.strip()
-    try:
-        result = json.loads(raw)
-    except json.JSONDecodeError:
-        return {"description": raw, "todo": []}
-    if not isinstance(result, dict):
-        return {"description": raw, "todo": []}
-    return {
-        "description": result.get("description", raw),
-        "todo": result.get("todo") or [],
-    }
+def _parse_plan_json(raw: str) -> dict | None:
+    result = parse_json(raw)
+    if isinstance(result, dict):
+        return {
+            "description": result.get("description", raw),
+            "todo": result.get("todo") or [],
+        }
+    return None
 
 
 @router.post("/api/think/stream/")

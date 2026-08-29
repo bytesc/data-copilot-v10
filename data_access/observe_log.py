@@ -10,18 +10,9 @@ from data_access.session_log import session_operation_log
 
 
 def _parse_json_raw(raw: str) -> dict:
-    raw = raw.strip()
-    for prefix in ('```json', '```'):
-        if raw.startswith(prefix):
-            raw = raw[len(prefix):]
-    for suffix in ('```',):
-        if raw.endswith(suffix):
-            raw = raw[:-len(suffix)]
-    raw = raw.strip()
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
+    from utils.json_parse import parse_json
+    result = parse_json(raw)
+    return result if result is not None else {}
 
 metadata = MetaData()
 
@@ -288,20 +279,12 @@ FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pa
 
 
 def _parse_action_decision(raw: str):
-    try:
-        raw = raw.strip()
-        for prefix in ("```json", "```"):
-            if raw.startswith(prefix):
-                raw = raw[len(prefix):]
-        for suffix in ("```",):
-            if raw.endswith(suffix):
-                raw = raw[:-len(suffix)]
-        data = json.loads(raw.strip())
+    from utils.json_parse import parse_json
+    data = parse_json(raw)
+    if isinstance(data, dict):
         action = data.get("action", "")
         if action in FRONTEND_ACTIONS:
             return action, data.get("text", "")
-    except (json.JSONDecodeError, TypeError):
-        pass
     return None, None
 
 
