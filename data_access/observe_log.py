@@ -392,10 +392,10 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
                     history.append({"role": "assistant", "type": "observe", "content": _parse_json_raw(response)})
             elif phase == "act" and sub_phase == "explore_schema":
                 if exec_result:
-                    history.append({"role": "assistant", "type": "act", "action": "explore_schema", "search_result": exec_result})
+                    history.append({"role": "assistant", "type": "act", "action": "explore_schema", "schema_detail": exec_result})
             elif phase == "act" and sub_phase == "explore_functions":
                 if exec_result:
-                    history.append({"role": "assistant", "type": "act", "action": "explore_functions", "search_result": exec_result})
+                    history.append({"role": "assistant", "type": "act", "action": "explore_functions", "func_docs": exec_result})
             elif phase == "act" and sub_phase == "generate_and_execute":
                 act_entry = {"role": "assistant", "type": "act", "action": "generate_and_execute"}
                 if exec_code:

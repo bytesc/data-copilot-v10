@@ -284,9 +284,9 @@ function historyToText(history) {
               selected_fields: event.result.selected_fields,
               explore_plan: event.result.explore_plan,
               selected_guides: event.result.selected_guides,
-              guide_result: event.result.guide_result,
+              query_guide_content: event.result.query_guide_content,
               selected_functions: event.result.selected_functions,
-              search_result: event.content,
+              schema_detail: event.content,
             })
           }
         }
@@ -554,8 +554,8 @@ function historyToText(history) {
         selected_fields: entry.selected_fields,
         selected_functions: entry.selected_functions,
         selected_guides: entry.selected_guides,
-        guide_result: entry.guide_result,
-        search_result: entry.search_result,
+        query_guide_content: entry.query_guide_content,
+        schema_detail: entry.schema_detail,
         explore_plan: entry.explore_plan,
         attempts: entry.attempts,
         title: entry.title,

@@ -23,15 +23,15 @@ LLM 输出的 JSON 对象，格式为 `{"action": "...", ...}`。
 ```json
 {"role":"assistant","type":"act","action":"explore_schema",
  "selected_fields":{"table1":["col1","col2"],"table2":[]},
- "explore_plan":"...","search_result":"...",
- "selected_guides":[1,3,7],"guide_result":"### Rule: Find companies by topic\n..."}
+ "explore_plan":"...","schema_detail":"...",
+ "selected_guides":[1,3,7],"query_guide_content":"### Rule: Find companies by topic\n..."}
 ```
 
 ### explore_functions
 
 ```json
 {"role":"assistant","type":"act","action":"explore_functions",
- "selected_functions":[...],"search_result":"..."}
+ "selected_functions":[...],"func_docs":"..."}
 ```
 
 ### generate_and_execute — 成功
@@ -60,7 +60,7 @@ LLM 输出的 JSON 对象，格式为 `{"action": "...", ...}`。
 
 ```json
 {"role":"assistant","type":"act","action":"fetch_webpage",
- "url":"...","search_result":"格式化后的 markdown 页面内容字符串"}
+ "url":"...","page_content":"格式化后的 markdown 页面内容字符串"}
 ```
 
 ### generate_document

@@ -211,7 +211,7 @@ function subPhaseLabel(name) {
 
 ### 实现要点
 - **`action.py`**: `VALID_ACTIONS` 添加 `"fetch_webpage"`，`ACTIONS` prompt 添加 `url`/`max_length` 参数描述，`_parse_action_json` 提取 `url`/`max_length`
-- **`act.py`**: 导入 `fetch_webpage`，`_event_stream_act` 分发到 `_act_fetch_webpage`，`_build_act_entries` 保存 `url` 和 `content`（存入 `search_result` 字段）
+- **`act.py`**: 导入 `fetch_webpage`，`_event_stream_act` 分发到 `_act_fetch_webpage`，`_build_act_entries` 保存 `url` 和 `content`（存入 `page_content` 字段）
 - **执行函数**: 直接调用 `fetch_webpage(url, max_length)`，返回内容 yield `chunk` 和 `done` 事件
 - **前端**: `useChat.js` params 传递 `url`/`max_length`，`ActMessage.vue` 添加 `fetch_webpage` 模板和 `subPhaseLabel`
 

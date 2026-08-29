@@ -23,47 +23,54 @@ def history_to_text(history: List[dict]) -> str:
                 lines.append(f"User: {content}")
         elif entry_type == "think":
             content = entry.get("content", "")
-            lines.append(f"[THINK] Plan:\n{json.dumps(content, ensure_ascii=False) if isinstance(content, dict) else content}")
+            lines.append(f"[THINK] content:\n{json.dumps(content, ensure_ascii=False) if isinstance(content, dict) else content}")
         elif entry_type == "action_decision":
             content = entry.get("content", "")
-            lines.append(f"[ACTION] Decision:\n{json.dumps(content, ensure_ascii=False) if isinstance(content, dict) else content}")
+            lines.append(f"[ACTION] content:\n{json.dumps(content, ensure_ascii=False) if isinstance(content, dict) else content}")
         elif entry_type == "act":
             action = entry.get("action", "")
             if action == "explore_schema":
                 if entry.get("selected_fields") is not None:
-                    lines.append(f"[ACT explore_schema] Selected Fields: {json.dumps(entry['selected_fields'], ensure_ascii=False)}")
+                    lines.append(f"[ACT explore_schema] selected_fields: {json.dumps(entry['selected_fields'], ensure_ascii=False)}")
                 if entry.get("explore_plan"):
-                    lines.append(f"[ACT explore_schema] Query Plan:\n{entry['explore_plan']}")
-                if entry.get("search_result"):
-                    lines.append(f"[ACT explore_schema] Results:\n{entry['search_result']}")
+                    lines.append(f"[ACT explore_schema] explore_plan:\n{entry['explore_plan']}")
+                if entry.get("selected_guides"):
+                    lines.append(f"[ACT explore_schema] selected_guides: {json.dumps(entry['selected_guides'])}")
+                if entry.get("query_guide_content"):
+                    lines.append(f"[ACT explore_schema] query_guide_content:\n{entry['query_guide_content']}")
+                if entry.get("schema_detail"):
+                    lines.append(f"[ACT explore_schema] schema_detail:\n{entry['schema_detail']}")
             elif action == "explore_functions":
                 if entry.get("selected_functions") is not None:
-                    lines.append(f"[ACT explore_functions] Selected Functions: {json.dumps(entry['selected_functions'], ensure_ascii=False)}")
-                if entry.get("search_result"):
-                    lines.append(f"[ACT explore_functions] Results:\n{entry['search_result']}")
+                    lines.append(f"[ACT explore_functions] selected_functions: {json.dumps(entry['selected_functions'], ensure_ascii=False)}")
+                if entry.get("func_docs"):
+                    lines.append(f"[ACT explore_functions] func_docs:\n{entry['func_docs']}")
             elif action == "generate_and_execute":
                 if entry.get("code"):
-                    lines.append(f"[ACT generate_and_execute] Code:\n{entry['code']}")
+                    lines.append(f"[ACT generate_and_execute] code:\n{entry['code']}")
                 if entry.get("error"):
-                    lines.append(f"[ACT generate_and_execute] Error:\n{entry['error']}")
+                    lines.append(f"[ACT generate_and_execute] error:\n{entry['error']}")
                 elif entry.get("result"):
-                    lines.append(f"[ACT generate_and_execute] Result:\n{entry['result']}")
+                    lines.append(f"[ACT generate_and_execute] result:\n{entry['result']}")
             elif action == "generate_document":
                 if entry.get("file_name"):
-                    lines.append(f"[ACT generate_document] 文档已生成: {entry['file_name']}.md / {entry['file_name']}.docx")
+                    lines.append(f"[ACT generate_document] file_name: {entry['file_name']}.md / {entry['file_name']}.docx")
                 if entry.get("full_text"):
-                    lines.append(f"[ACT generate_document] 全文:\n{entry['full_text']}")
+                    lines.append(f"[ACT generate_document] full_text:\n{entry['full_text']}")
             elif action == "solved":
                 if entry.get("solved_ans"):
-                    lines.append(f"[ACT] Solved Answer:\n{entry['solved_ans']}")
+                    lines.append(f"[ACT] solved_ans:\n{entry['solved_ans']}")
             elif action in FRONTEND_ACTIONS:
                 if entry.get("text"):
-                    lines.append(f"[ACT {action}] Output:\n{entry['text']}")
+                    lines.append(f"[ACT {action}] text:\n{entry['text']}")
+            elif action == "fetch_webpage":
+                if entry.get("page_content"):
+                    lines.append(f"[ACT {action}] page_content:\n{entry['page_content']}")
             else:
                 if entry.get("search_result"):
-                    lines.append(f"[ACT {action}] Results:\n{entry['search_result']}")
+                    lines.append(f"[ACT {action}] search_result:\n{entry['search_result']}")
         elif entry_type == "observe":
             action = entry.get("action", "")
             content = entry.get("content", "")
-            lines.append(f"[OBSERVE {action}] Review:\n{json.dumps(content, ensure_ascii=False) if isinstance(content, dict) else content}")
+            lines.append(f"[OBSERVE] content:\n{json.dumps(content, ensure_ascii=False) if isinstance(content, dict) else content}")
     return "\n".join(lines)

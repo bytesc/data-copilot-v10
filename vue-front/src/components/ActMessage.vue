@@ -11,9 +11,9 @@
           <pre><code>{{ formatJson(selectedFields) }}</code></pre>
         </div>
       </details>
-      <details v-if="hasSearchResult" class="msg-collapse">
+      <details v-if="hasSchemaDetail" class="msg-collapse">
         <summary class="collapse-summary">Search Results: explore_schema</summary>
-        <div class="collapse-body" v-html="renderMd(searchResult)"></div>
+        <div class="collapse-body" v-html="renderMd(schemaDetail)"></div>
       </details>
       <details v-if="hasSelectedGuides" class="msg-collapse">
         <summary class="collapse-summary">Selected Guides</summary>
@@ -21,9 +21,9 @@
           <pre><code>{{ formatJson(selectedGuides) }}</code></pre>
         </div>
       </details>
-      <details v-if="hasGuideResult" class="msg-collapse">
+      <details v-if="hasQueryGuideContent" class="msg-collapse">
         <summary class="collapse-summary">Query Guide</summary>
-        <div class="collapse-body" v-html="renderMd(guideResult)"></div>
+        <div class="collapse-body" v-html="renderMd(queryGuideContent)"></div>
       </details>
     </template>
 
@@ -34,9 +34,9 @@
           <pre><code>{{ formatJson(selectedFunctions) }}</code></pre>
         </div>
       </details>
-      <details v-if="hasSearchResult" class="msg-collapse">
+      <details v-if="hasFuncDocs" class="msg-collapse">
         <summary class="collapse-summary">Search Results: explore_functions</summary>
-        <div class="collapse-body" v-html="renderMd(searchResult)"></div>
+        <div class="collapse-body" v-html="renderMd(funcDocs)"></div>
       </details>
     </template>
 
@@ -102,7 +102,7 @@
         <summary class="collapse-summary">Fetched Webpage</summary>
         <div class="collapse-body">
           <div v-if="message.url" class="search-query"><strong>URL:</strong> {{ message.url }}</div>
-          <div v-if="hasSearchResult" v-html="renderMd(searchResult)"></div>
+          <div v-if="hasPageContent" v-html="renderMd(pageContent)"></div>
         </div>
       </details>
     </template>
@@ -199,11 +199,17 @@ const selectedFunctions = computed(() => {
 
 const hasSelectedFunctions = computed(() => selectedFunctions.value != null)
 
-const searchResult = computed(() => {
-  return props.message.search_result || props.message.parsed?.search_result
+const funcDocs = computed(() => {
+  return props.message.func_docs || props.message.parsed?.func_docs
 })
 
-const hasSearchResult = computed(() => !!searchResult.value)
+const hasFuncDocs = computed(() => !!funcDocs.value)
+
+const schemaDetail = computed(() => {
+  return props.message.schema_detail || props.message.parsed?.schema_detail
+})
+
+const hasSchemaDetail = computed(() => !!schemaDetail.value)
 
 const selectedGuides = computed(() => {
   return props.message.selected_guides || props.message.parsed?.selected_guides || []
@@ -211,11 +217,17 @@ const selectedGuides = computed(() => {
 
 const hasSelectedGuides = computed(() => selectedGuides.value.length > 0)
 
-const guideResult = computed(() => {
-  return props.message.guide_result || props.message.parsed?.guide_result || ''
+const queryGuideContent = computed(() => {
+  return props.message.query_guide_content || props.message.parsed?.query_guide_content || ''
 })
 
-const hasGuideResult = computed(() => !!guideResult.value)
+const hasQueryGuideContent = computed(() => !!queryGuideContent.value)
+
+const pageContent = computed(() => {
+  return props.message.page_content || props.message.parsed?.page_content
+})
+
+const hasPageContent = computed(() => !!pageContent.value)
 
 function renderMd(text) {
   return renderMarkdown(text || '')

@@ -46,19 +46,19 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             entry["selected_fields"] = act_data["selected_fields"]
         if act_data.get("explore_plan"):
             entry["explore_plan"] = act_data["explore_plan"]
-        if act_data.get("search_result"):
-            entry["search_result"] = act_data["search_result"]
+        if act_data.get("schema_detail"):
+            entry["schema_detail"] = act_data["schema_detail"]
         if act_data.get("selected_guides"):
             entry["selected_guides"] = act_data["selected_guides"]
-        if act_data.get("guide_result"):
-            entry["guide_result"] = act_data["guide_result"]
+        if act_data.get("query_guide_content"):
+            entry["query_guide_content"] = act_data["query_guide_content"]
         entries.append(entry)
     elif action == "explore_functions":
         entry = {"role": "assistant", "type": "act", "action": "explore_functions"}
         if act_data.get("selected_functions") is not None:
             entry["selected_functions"] = act_data["selected_functions"]
-        if act_data.get("search_result"):
-            entry["search_result"] = act_data["search_result"]
+        if act_data.get("func_docs"):
+            entry["func_docs"] = act_data["func_docs"]
         entries.append(entry)
     elif action == "generate_and_execute":
         full_code = act_data.get("full_code", "")
@@ -90,9 +90,9 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
     elif action == "fetch_webpage":
         entry = {"role": "assistant", "type": "act", "action": "fetch_webpage"}
         if act_data.get("display_content"):
-            entry["search_result"] = act_data["display_content"]
+            entry["page_content"] = act_data["display_content"]
         elif act_data.get("content"):
-            entry["search_result"] = act_data["content"]
+            entry["page_content"] = act_data["content"]
         if act_data.get("url"):
             entry["url"] = act_data["url"]
         entries.append(entry)
@@ -222,14 +222,14 @@ Example:
                               exec_result=display_content[:10000],
                               token_estimate=len(prompt) // 3)
 
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema, 'explore_plan': explore_plan, 'selected_guides': selected_guide_keys, 'guide_result': guide_result}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema, 'explore_plan': explore_plan, 'selected_guides': selected_guide_keys, 'query_guide_content': guide_result}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
-            return {"selected_fields": selected_fields, "explore_plan": explore_plan, "search_result": display_content, "selected_guides": selected_guide_keys, "guide_result": guide_result}
+            return {"selected_fields": selected_fields, "explore_plan": explore_plan, "schema_detail": display_content, "selected_guides": selected_guide_keys, "query_guide_content": guide_result}
 
         error_msg = "\n\nPrevious attempt failed to produce valid JSON. Output ONLY a valid JSON object with table names as keys and column lists as values.\n"
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'error', 'content': 'Failed to parse fields after retries'}, ensure_ascii=False)}\n\n"
-    return {"selected_fields": {}, "explore_plan": "", "search_result": full_schema}
+    return {"selected_fields": {}, "explore_plan": "", "schema_detail": full_schema}
 
 
 def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None):
@@ -280,7 +280,7 @@ exe_sql, get_save_image_path
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'done', 'content': display_content, 'result': {'selected_functions': selected_functions, 'func_context': full_catalog}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
-    return {"selected_functions": selected_functions, "search_result": display_content}
+    return {"selected_functions": selected_functions, "func_docs": display_content}
 
 
 def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions, request_json: str = "", research_guide: str = ""):

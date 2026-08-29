@@ -18,7 +18,8 @@
 | `base_knowledge.md` | `_BASE_MD` |
 | `doc_knowledge.md` | `_DOC_MD` |
 | `target_knowledge.md` | `_TARGET_MD` |
-| `db_query_guide.md` | `_DB_QUERY_GUIDE_MD`（当前未启用） |
+| `db_query_guide.md` | `_DB_QUERY_GUIDE_MD` |
+| `base_knowledge_brief.md` | 通过 `get_brief_info()` 读取 |
 
 ### 2. 数据库表（实时查询，无需重启）
 
@@ -34,13 +35,15 @@ value LONGTEXT
 |----|----------|
 | `base_knowledge` | `get_base_knowledge_db()` |
 | `doc_knowledge` | `get_doc_knowledge_db()` |
-| `db_query_guide` | `get_db_query_guide_db()`（当前未启用） |
+| `db_query_guide` | `get_db_query_guide_db()` |
 | `code_guide` | `get_code_guide_db()` |
 | `think_knowledge` | `get_think_knowledge_db()` |
 
+另外，`brief_info` 表（结构为 `attr` / `value`）用于存储 `db_brief` 和 `base_knowledge_brief` 等附加信息。
+
 ### 3. 动态注入机制：`_DynamicStr`
 
-`get_base_knowledge.py:275-289` 定义了一个代理类，使模块级变量在每次使用时重新计算，而非在导入时固定：
+`get_base_knowledge.py:317-331` 定义了一个代理类，使模块级变量在每次使用时重新计算，而非在导入时固定：
 
 ```python
 class _DynamicStr:
@@ -50,17 +53,31 @@ class _DynamicStr:
     def __radd__(self, other):      return other + str(self)
     def strip(self):                return str(self).strip()
     def __format__(self, spec):     return format(str(self), spec)
+    def __repr__(self):             return repr(str(self))
 ```
 
 模块级变量将 MD 内容（启动时缓存）和 DB 内容（实时查询）拼接：
 
 ```python
+DB_BRIEF = _DynamicStr(_get_db_brief)
+# _get_db_brief() 内部: _DB_BRIEF_MD + brief_info 表的 db_brief 字段
+
 BASE = _DynamicStr(lambda: "\nbase knowledge for reference:\n" + _BASE_MD
        + "\n" + base_knowledge_to_str(get_base_knowledge_db()))
 DOC = _DynamicStr(lambda: "\ndoc reference(just for reference):\n" + _DOC_MD
        + "\n" + base_knowledge_to_str(get_doc_knowledge_db()))
 
+TARGET = _DynamicStr(lambda: "\nTarget:\n" + _TARGET_MD)
+
+DB_QUERY_GUIDE = _DynamicStr(_format_db_query_guide)
+# _format_db_query_guide() 内部: _DB_QUERY_GUIDE_MD + get_db_query_guide_db()
+
 THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + base_knowledge_to_str(get_think_knowledge_db()))
+
+BRIEF_INFO = _DynamicStr(lambda: "\n" + "\n\n".join(
+    f"### {k}\n{v}" for k, v in get_brief_info().items() if v
+))
+# get_brief_info() 内部: brief_info 表 + knowledge_docs/*_brief.md
 ```
 
 ---
@@ -78,7 +95,7 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + bas
 ```
 {BASE}                    → MD base_knowledge.md + DB base_knowledge 表
 {TARGET}                  → MD target_knowledge.md（有内容时注入）
-{DB_BRIEF}                → MD db_brief.md
+{DB_BRIEF}                → MD db_brief.md + DB brief_info 表
 ```
 
 **功能：** Think 阶段生成 todo list 分析计划，`BASE` 提供背景知识，`TARGET` 提供目标模板（如有），`DB_BRIEF` 提供数据库概要。
@@ -107,8 +124,8 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + bas
 
 ```
 {BASE}                    → MD base_knowledge.md + DB base_knowledge 表
-{DB_BRIEF}                → MD db_brief.md
-{DB_QUERY_GUIDE}          → 当前为空（注释状态）
+{DB_BRIEF}                → MD db_brief.md + DB brief_info 表
+{DB_QUERY_GUIDE}          → MD db_query_guide.md + DB db_query_guide 表
 + full_schema             → 动态查询的数据库结构
 ```
 
@@ -160,7 +177,12 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 **文件：** `agent/document_generator.py`
 
-**注入的变量：** `BASE`, `DOC`, `TARGET`
+**两个生成路径：**
+
+- **分步生成** (`_event_stream_generate_document`): 先由 LLM 生成大纲，再逐部分生成
+- **统一生成** (`_event_stream_generate_document_unified`): 一次完整生成
+
+**两个路径均注入变量：** `BASE`, `DOC`, `TARGET`
 
 **注入方式：** f-string 直接嵌入
 
@@ -170,7 +192,7 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 {TARGET}                  → MD target_knowledge.md（有内容时注入）
 ```
 
-**功能：** 生成业务摘要文档（MD + DOCX）。`DOC` 提供文档格式参考，`BASE` 提供数据背景，`TARGET` 提供目标模板。
+**功能：** 生成业务摘要文档（MD + DOCX + PDF）。`DOC` 提供文档格式参考，`BASE` 提供数据背景，`TARGET` 提供目标模板。
 
 ---
 
@@ -201,7 +223,7 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 | **Act - generate_and_execute** | `agent.py` | `BASE`, `TARGET`, `database`, `function_info` | MD + DB + 动态查询 |
 | **Act - generate_document** | `document_generator.py` | `BASE`, `DOC`, `TARGET` | MD + DB |
 | **Observe** | `observe.py` | `TARGET` | MD |
-| **（未注入）** | — | `THINK_KNOWLEDGE` | DB |
+| **（未注入）** | — | `THINK_KNOWLEDGE`, `BRIEF_INFO` | DB |
 
 ---
 
@@ -244,24 +266,27 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 ## 数据流图
 
 ```
-┌──────────────────────────────────────────────────┐
-│             启动时加载（缓存）                       │
-│  knowledge_docs/*.md  ── _read_doc() ── 缓存变量   │
-│                                                  │
-│  data_copilot_v10_sys 表 ── get_*_db() ── dict    │
-│                                                  │
-│           _DynamicStr ── 拼接 MD + DB             │
-│                                                  │
-│  BASE / DOC / TARGET / DB_BRIEF / DB_QUERY_GUIDE / THINK_KNOWLEDGE  │
-└──────────────────────┬───────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                    启动时加载（缓存）                               │
+│  knowledge_docs/*.md  ── _read_doc() ── 缓存变量                  │
+│                                                                  │
+│  data_copilot_v10_sys 表 ── get_*_db() ── dict                   │
+│  brief_info 表 ── get_brief_info() ── dict                        │
+│                                                                  │
+│           _DynamicStr ── 拼接 MD + DB                            │
+│                                                                  │
+│  BASE / DOC / TARGET / DB_BRIEF / DB_QUERY_GUIDE /               │
+│  THINK_KNOWLEDGE / BRIEF_INFO                                     │
+└──────────────────────┬───────────────────────────────────────────┘
                        │
-    ┌──────────┬───────┼───────────┬──────────┐
-    ▼          ▼       ▼           ▼          ▼
-  Think    explore_  generate_   generate_  Observe
+    ┌──────────┬───────┼───────────┬──────────────┬──────────┐
+    ▼          ▼       ▼           ▼              ▼          ▼
+  Think    explore_  generate_   generate_      Observe   (未注入)
            schema    &execute    document
-  {BASE}   {BASE}    knowledge   {BASE}     {TARGET}
-  {TARGET} {DB_BRIEF}=BASE       {DOC}
-  {DB_BRIEF}         {TARGET}    {TARGET}
+  {BASE}   {BASE}    knowledge   {BASE}         {TARGET}   THINK_
+  {TARGET} {DB_BRIEF}=BASE       {DOC}                     KNOWLEDGE
+  {DB_BRIEF}{DB_QUERY_ {TARGET}  {TARGET}                  BRIEF_INFO
+            GUIDE}
 ```
 
 ---
@@ -270,7 +295,7 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 
 | 文件 | 用途 |
 |------|------|
-| `agent/tools/base_knowledge/get_base_knowledge.py` | 核心：`_DynamicStr`、`get_*_db()`、`get_*_db_llm()`、模块级变量 |
+| `agent/tools/base_knowledge/get_base_knowledge.py` | 核心：`_DynamicStr`、`get_*_db()`、`get_*_db_llm()`、`get_brief_info()`、模块级变量 |
 | `agent/tools/base_knowledge/set_base_knowledge.py` | 写入 `base_knowledge` 表 |
 | `agent/tools/base_knowledge/set_code_guide.py` | 写入 `code_guide` 表 |
 | `agent/tools/base_knowledge/set_think_knowledge.py` | 写入 `think_knowledge` 表 |
@@ -279,8 +304,9 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 | `agent/action.py` | Action 阶段 prompt 构建 |
 | `agent/act.py` | Act 阶段 prompt 构建（explore_schema / explore_functions） |
 | `agent/agent.py` | 代码生成阶段 prompt 构建（generate_and_execute） |
-| `agent/document_generator.py` | 文档生成阶段 prompt 构建 |
+| `agent/document_generator.py` | 文档生成阶段 prompt 构建（分步 + 统一两种模式） |
 | `agent/observe.py` | Observe 阶段 prompt 构建 |
+| `data_access/brief_info_db.py` | `brief_info` 表定义 |
 | `data_access/code_guide_db.py` | `code_guide` 表定义 |
 | `data_access/base_knowledge_db.py` | `base_knowledge` 表定义 |
 | `data_access/db_query_guide_db.py` | `db_query_guide` 表定义 |
