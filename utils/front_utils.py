@@ -63,9 +63,16 @@ def history_to_text(history: List[dict]) -> str:
             elif action in FRONTEND_ACTIONS:
                 if entry.get("text"):
                     lines.append(f"[ACT {action}] text:\n{entry['text']}")
+            elif action == "web_search":
+                if entry.get("search_result"):
+                    lines.append(f"[ACT web_search] search_result:\n{entry['search_result']}")
+                if entry.get("query"):
+                    lines.append(f"[ACT web_search] query: {entry['query']}")
             elif action == "fetch_webpage":
                 if entry.get("page_content"):
-                    lines.append(f"[ACT {action}] page_content:\n{entry['page_content']}")
+                    lines.append(f"[ACT fetch_webpage] page_content:\n{entry['page_content']}")
+                if entry.get("url"):
+                    lines.append(f"[ACT fetch_webpage] url: {entry['url']}")
             else:
                 if entry.get("search_result"):
                     lines.append(f"[ACT {action}] search_result:\n{entry['search_result']}")

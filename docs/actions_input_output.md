@@ -105,6 +105,8 @@
 
 **输出（失败）**
 ```json
+{"role":"assistant","type":"act","action":"generate_and_execute","error":"..."}
+// code 和 result 在非空时可选出现
 {"role":"assistant","type":"act","action":"generate_and_execute","error":"...","code":"...","result":"..."}
 ```
 
@@ -263,6 +265,7 @@
 ```
 [ACT web_search] search_result:
 {search_result}
+[ACT web_search] query: {query}
 ```
 
 ---
@@ -283,6 +286,7 @@
 ```
 [ACT fetch_webpage] page_content:
 {page_content}
+[ACT fetch_webpage] url: {url}
 ```
 
 ---

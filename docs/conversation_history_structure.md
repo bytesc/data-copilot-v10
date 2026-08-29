@@ -56,11 +56,25 @@ LLM 输出的 JSON 对象，格式为 `{"action": "...", ...}`。
  "query":"..."}
 ```
 
+上下文格式:
+```
+[ACT web_search] search_result:
+{search_result}
+[ACT web_search] query: {query}
+```
+
 ### fetch_webpage
 
 ```json
 {"role":"assistant","type":"act","action":"fetch_webpage",
  "url":"...","page_content":"格式化后的 markdown 页面内容字符串"}
+```
+
+上下文格式:
+```
+[ACT fetch_webpage] page_content:
+{page_content}
+[ACT fetch_webpage] url: {url}
 ```
 
 ### generate_document
