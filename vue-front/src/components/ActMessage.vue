@@ -223,8 +223,16 @@ const queryGuideContent = computed(() => {
 
 const hasQueryGuideContent = computed(() => !!queryGuideContent.value)
 
+const searchResult = computed(() => {
+  const sub = props.message.subPhases?.find(s => s.name === 'web_search')
+  return props.message.search_result || props.message.parsed?.search_result || sub?.content || ''
+})
+
+const hasSearchResult = computed(() => !!searchResult.value)
+
 const pageContent = computed(() => {
-  return props.message.page_content || props.message.parsed?.page_content
+  const sub = props.message.subPhases?.find(s => s.name === 'fetch_webpage')
+  return props.message.page_content || props.message.parsed?.page_content || sub?.content || ''
 })
 
 const hasPageContent = computed(() => !!pageContent.value)

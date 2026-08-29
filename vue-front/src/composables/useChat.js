@@ -228,6 +228,7 @@ function historyToText(history) {
     }
 
     const msgId = Date.now()
+    // 第一阶段：SSE 事件流实时渲染，subPhases 逐步填充
     addMessage('stream', 'act', {
       label: `ACT - ${action}`, action,
       content: '', streaming: true, msgId, subPhases: [],
@@ -287,6 +288,10 @@ function historyToText(history) {
               query_guide_content: event.result.query_guide_content,
               selected_functions: event.result.selected_functions,
               schema_detail: event.content,
+              query: event.result.query,
+              url: event.result.url,
+              search_result: currentSubContent,
+              page_content: currentSubContent,
             })
           }
         }
@@ -510,6 +515,8 @@ function historyToText(history) {
     }
   }
 
+  // 两阶段渲染：1) SSE 事件流先渲染实时消息（含 subPhases），2) history 事件到达后完全替换为持久化消息
+  // 因此 renderHistoryEntry 必须携带所有前端展示字段，否则 history 覆盖后内容会丢失
   function handleHistoryEvent(history) {
     conversationHistory.value = history
     rebuildMessagesFromHistory(history)
@@ -561,6 +568,10 @@ function historyToText(history) {
         title: entry.title,
         file_name: entry.file_name,
         full_text: entry.full_text,
+        search_result: entry.search_result,
+        page_content: entry.page_content,
+        query: entry.query,
+        url: entry.url,
         collapsed: true,
       })
     } else if (entryType === 'document') {
