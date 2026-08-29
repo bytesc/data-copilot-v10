@@ -477,6 +477,23 @@ html, body {
   font-style: italic;
 }
 
+.interrupt-btn {
+  margin-left: auto;
+  padding: 4px 14px;
+  background: var(--accent-red);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.interrupt-btn:hover {
+  background: #c94f4b;
+}
+
 .streaming-content {
   white-space: pre-wrap;
   word-break: break-word;

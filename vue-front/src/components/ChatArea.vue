@@ -17,6 +17,7 @@
       <div v-if="isRunning" class="thinking-indicator">
         <span class="blink-cursor">|</span>
         <span class="thinking-text">Thinking...</span>
+        <button class="interrupt-btn" :disabled="interruptRequested" @click="onInterrupt">{{ interruptRequested ? 'Interrupting...' : 'Interrupt' }}</button>
       </div>
     </div>
 
@@ -95,6 +96,8 @@ const {
   messages, isRunning, isCompleted, isPaused,
   awaitingInput, inputPrompt, inputChoices, serverUrl,
   startChat, submitUserResponse, submitPausedInput, submitNewQuestion,
+  requestInterrupt,
+  interruptRequested,
 } = props.chat
 
 const currentQuestion = ref('')
@@ -119,6 +122,10 @@ function onUserResponse(text) {
   if (!t) return
   submitUserResponse(t)
   userInput.value = ''
+}
+
+function onInterrupt() {
+  requestInterrupt()
 }
 
 function onPausedSubmit() {

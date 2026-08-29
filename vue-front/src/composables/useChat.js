@@ -16,6 +16,7 @@ export function useChat() {
   const inputChoices = ref([])
   const isPaused = ref(false)
   const isCompleted = ref(false)
+  const interruptRequested = ref(false)
 
   const messages = ref([])
   const generatedFiles = ref([])
@@ -99,6 +100,7 @@ function historyToText(history) {
     isCompleted.value = false
     isPaused.value = false
     awaitingInput.value = false
+    interruptRequested.value = false
     cycleIndex.value = 0
 
     addMessage('user', 'question', { content: questionText })
@@ -115,6 +117,10 @@ function historyToText(history) {
     }
   }
 
+  function requestInterrupt() {
+    interruptRequested.value = true
+  }
+
   async function runMainLoop() {
     while (true) {
       if (isCompleted.value || isPaused.value) break
@@ -127,10 +133,13 @@ function historyToText(history) {
 
       // Think phase
       await runThinkPhase()
+      if (interruptRequested.value) { await pauseAfterInterrupt(); return }
+
       const fullQuestion = historyToText(conversationHistory.value)
 
       // Action phase - decide what to do
       const actionResult = await runActionPhase()
+      if (interruptRequested.value) { await pauseAfterInterrupt(); return }
       const action = actionResult.action
       if (!action) {
         addMessage('system', 'error', { content: `Action failed: ${actionResult.error || 'unknown'}` })
@@ -139,6 +148,7 @@ function historyToText(history) {
 
       // Act phase
       const actResult = await runActPhase(action, fullQuestion, actionResult)
+      if (interruptRequested.value) { await pauseAfterInterrupt(); return }
       if (actResult.function_solved) {
         continue
       }
@@ -165,7 +175,15 @@ function historyToText(history) {
 
       // Observe phase
       await runObservePhase()
+      if (interruptRequested.value) { await pauseAfterInterrupt(); return }
     }
+  }
+
+  async function pauseAfterInterrupt() {
+    interruptRequested.value = false
+    isPaused.value = true
+    isRunning.value = false
+    addMessage('system', 'interrupt', { content: 'Interrupted. Enter a new instruction or click Continue.' })
   }
 
   async function runThinkPhase() {
@@ -756,5 +774,7 @@ function historyToText(history) {
     generateDocumentUnified,
     reset,
     serverUrl,
+    requestInterrupt,
+    interruptRequested,
   }
 }
