@@ -15,8 +15,14 @@
         <summary class="collapse-summary">Search Results: explore_schema</summary>
         <div class="collapse-body" v-html="renderMd(searchResult)"></div>
       </details>
+      <details v-if="hasSelectedGuides" class="msg-collapse">
+        <summary class="collapse-summary">Selected Guides</summary>
+        <div class="collapse-body">
+          <pre><code>{{ formatJson(selectedGuides) }}</code></pre>
+        </div>
+      </details>
       <details v-if="hasGuideResult" class="msg-collapse">
-        <summary class="collapse-summary">Query Guide ({{ selectedGuides.length }} items)</summary>
+        <summary class="collapse-summary">Query Guide</summary>
         <div class="collapse-body" v-html="renderMd(guideResult)"></div>
       </details>
     </template>
@@ -202,6 +208,8 @@ const hasSearchResult = computed(() => !!searchResult.value)
 const selectedGuides = computed(() => {
   return props.message.selected_guides || props.message.parsed?.selected_guides || []
 })
+
+const hasSelectedGuides = computed(() => selectedGuides.value.length > 0)
 
 const guideResult = computed(() => {
   return props.message.guide_result || props.message.parsed?.guide_result || ''

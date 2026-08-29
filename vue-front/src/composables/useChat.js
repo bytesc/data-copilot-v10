@@ -277,6 +277,19 @@ function historyToText(history) {
         updateStreamingSubPhase(msgId, currentSubPhase, currentSubContent)
       } else if (etype === 'done') {
         updateStreamingSubPhase(msgId, currentSubPhase, currentSubContent, false)
+        if (event.result) {
+          const idx = messages.value.findIndex(m => m.msgId === msgId)
+          if (idx !== -1) {
+            Object.assign(messages.value[idx], {
+              selected_fields: event.result.selected_fields,
+              explore_plan: event.result.explore_plan,
+              selected_guides: event.result.selected_guides,
+              guide_result: event.result.guide_result,
+              selected_functions: event.result.selected_functions,
+              search_result: event.content,
+            })
+          }
+        }
         if (sub === 'generate_document' && event.download_url_md) {
           addSubPhaseToMessage(msgId, currentSubPhase, currentSubContent)
           setTimeout(() => {
