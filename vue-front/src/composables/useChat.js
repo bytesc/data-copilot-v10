@@ -540,6 +540,8 @@ function historyToText(history) {
         solved_ans: entry.solved_ans,
         selected_fields: entry.selected_fields,
         selected_functions: entry.selected_functions,
+        selected_guides: entry.selected_guides,
+        guide_result: entry.guide_result,
         search_result: entry.search_result,
         explore_plan: entry.explore_plan,
         attempts: entry.attempts,

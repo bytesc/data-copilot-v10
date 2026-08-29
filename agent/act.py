@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from agent.agent import generate_and_execute_stream
 from agent.document_generator import generate_document_from_context
-from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, BASE, TARGET
+from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, BASE, TARGET, get_db_query_guide_db
 from agent.tools.tools_def import engine, llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.tools.copilot.sql_code import parse_selected_fields_json
@@ -168,14 +168,16 @@ Context:
 
 LANGUAGE IS CRITICAL: The "plan" field text MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, write the plan in Chinese. If the user asked in English, write the plan in English.
 
-Output ONLY a JSON object mapping table names to their needed columns. Use an empty list [] for a table to select all its columns. 
-Use an empty object {{}} to select all tables and all columns. 
-Use {{"__no_db__": true}} if no database query is needed or no relivent data in the database.
-Include a "plan" field describing the query plan in text.
+Output ONLY a JSON object with the following structure:
+- "tables": an object mapping table names to their needed columns. Use an empty list [] for a table to select all its columns.
+- Use {{"tables": {{}}}} to select all tables and all columns.
+- Use {{"__no_db__": true}} if no database query is needed or no relevant data in the database.
+- "selected_guides": an array of guide IDs (integers) from the SQL Query guide above that are relevant to the query. Empty list if none.
+- Include a "plan" field describing the query plan in text.
 
 Example:
 ```json
-{{"users": ["id", "name", "email"], "orders": [], "plan": "Query the users table to get customer IDs and emails, then join with orders table to find purchase records"}}
+{{"tables": {{"users": ["id", "name", "email"], "orders": []}}, "selected_guides": [1, 3, 7], "plan": "Query the users table to get customer IDs and emails, then join with orders table to find purchase records"}}
 ```
 """
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': '正在分析所需字段...'}, ensure_ascii=False)}\n\n"
@@ -192,23 +194,33 @@ Example:
 
         selected_fields = parse_selected_fields_json(raw) or {}
         if selected_fields is not None and isinstance(selected_fields, dict):
-            explore_plan = selected_fields.pop("plan", "") if isinstance(selected_fields, dict) else ""
+            explore_plan = selected_fields.pop("plan", "")
+            selected_guide_keys = selected_fields.pop("selected_guides", []) or []
+            tables_dict = selected_fields.pop("tables", selected_fields) if "tables" in selected_fields else selected_fields
 
-            if selected_fields and not selected_fields.get("__no_db__"):
-                display_content = get_db_overview_markdown(engine, tables, include_samples=True, selected_fields=selected_fields)
-            elif selected_fields and selected_fields.get("__no_db__"):
+            if tables_dict and not tables_dict.get("__no_db__") and not selected_fields.get("__no_db__"):
+                display_content = get_db_overview_markdown(engine, tables, include_samples=True, selected_fields=tables_dict)
+            elif tables_dict and tables_dict.get("__no_db__") or selected_fields.get("__no_db__"):
                 display_content = "*(No database tables needed)*"
             else:
                 display_content = full_schema
+            selected_fields = tables_dict
+
+            all_guides = get_db_query_guide_db()
+            guide_id_set = set(selected_guide_keys)
+            guide_result = "\n\n".join(
+                f"### {k}\n{v['value']}" for k, v in all_guides.items()
+                if v['value'] and v['id'] in guide_id_set
+            ) if selected_guide_keys else ""
 
             log_observe_cycle(session_id, 0, "act", "explore_schema",
                               prompt=prompt[:5000], response=raw[:5000],
                               exec_result=display_content[:10000],
                               token_estimate=len(prompt) // 3)
 
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema, 'explore_plan': explore_plan}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema, 'explore_plan': explore_plan, 'selected_guides': selected_guide_keys, 'guide_result': guide_result}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
-            return {"selected_fields": selected_fields, "explore_plan": explore_plan, "search_result": display_content}
+            return {"selected_fields": selected_fields, "explore_plan": explore_plan, "search_result": display_content, "selected_guides": selected_guide_keys, "guide_result": guide_result}
 
         error_msg = "\n\nPrevious attempt failed to produce valid JSON. Output ONLY a valid JSON object with table names as keys and column lists as values.\n"
 

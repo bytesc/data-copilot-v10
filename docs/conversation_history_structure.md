@@ -22,7 +22,9 @@ LLM 输出的 JSON 对象，格式为 `{"action": "...", ...}`。
 
 ```json
 {"role":"assistant","type":"act","action":"explore_schema",
- "selected_fields":{"table1":["col1","col2"],"table2":[]},"explore_plan":"...","search_result":"..."}
+ "selected_fields":{"table1":["col1","col2"],"table2":[]},
+ "explore_plan":"...","search_result":"...",
+ "selected_guides":[1,3,7],"guide_result":"### Rule: Find companies by topic\n..."}
 ```
 
 ### explore_functions

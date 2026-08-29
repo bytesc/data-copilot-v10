@@ -344,13 +344,32 @@ _TARGET_MD = _read_doc("target_knowledge.md")
 _DB_QUERY_GUIDE_MD = _read_doc("db_query_guide.md")
 
 
-DB_BRIEF = _DynamicStr(lambda: "\nDataBase Brief:\n" + _DB_BRIEF_MD)
+def _get_db_brief():
+    md = _DB_BRIEF_MD
+    try:
+        with sys_engine.connect() as conn:
+            rows = conn.execute(select(brief_info)).fetchall()
+            row_map = {row.attr: row.value for row in rows}
+        db_value = row_map.get("db_brief", "")
+        if db_value:
+            md += "\n\n" + db_value
+    except Exception as e:
+        print(f"[WARNING] Failed to read brief_info for db_brief: {e}")
+    return "\nDataBase Brief:\n" + md
+
+DB_BRIEF = _DynamicStr(_get_db_brief)
 
 
-DB_QUERY_GUIDE = _DynamicStr(lambda: "")
+def _format_db_query_guide():
+    md = _DB_QUERY_GUIDE_MD
+    guide_db = get_db_query_guide_db()
+    if guide_db:
+        md += "\n\n" + "\n\n".join(
+            f"### [id={v['id']}] {k}\n{v['value']}" for k, v in guide_db.items()
+        )
+    return "\nSQL Query guide:\n" + md
 
-# DB_QUERY_GUIDE = _DynamicStr(lambda: "\nSQL Query guide:\n" + _DB_QUERY_GUIDE_MD\
-# + "\n" + base_knowledge_to_str(get_db_query_guide_db()))
+DB_QUERY_GUIDE = _DynamicStr(_format_db_query_guide)
 
 
 BASE = _DynamicStr(lambda: "\nbase knowledge for reference:\n" + _BASE_MD\

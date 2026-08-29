@@ -15,6 +15,10 @@
         <summary class="collapse-summary">Search Results: explore_schema</summary>
         <div class="collapse-body" v-html="renderMd(searchResult)"></div>
       </details>
+      <details v-if="hasGuideResult" class="msg-collapse">
+        <summary class="collapse-summary">Query Guide ({{ selectedGuides.length }} items)</summary>
+        <div class="collapse-body" v-html="renderMd(guideResult)"></div>
+      </details>
     </template>
 
     <template v-else-if="message.action === 'explore_functions'">
@@ -191,6 +195,16 @@ const searchResult = computed(() => {
 })
 
 const hasSearchResult = computed(() => !!searchResult.value)
+
+const selectedGuides = computed(() => {
+  return props.message.selected_guides || props.message.parsed?.selected_guides || []
+})
+
+const guideResult = computed(() => {
+  return props.message.guide_result || props.message.parsed?.guide_result || ''
+})
+
+const hasGuideResult = computed(() => !!guideResult.value)
 
 function renderMd(text) {
   return renderMarkdown(text || '')
