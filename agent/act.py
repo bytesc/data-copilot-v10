@@ -48,6 +48,10 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             entry["explore_plan"] = act_data["explore_plan"]
         if act_data.get("search_result"):
             entry["search_result"] = act_data["search_result"]
+        if act_data.get("selected_guides"):
+            entry["selected_guides"] = act_data["selected_guides"]
+        if act_data.get("guide_result"):
+            entry["guide_result"] = act_data["guide_result"]
         entries.append(entry)
     elif action == "explore_functions":
         entry = {"role": "assistant", "type": "act", "action": "explore_functions"}
