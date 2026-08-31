@@ -2,7 +2,7 @@
 __pycache__/
 
 *.log
-api_key_openai.txt
+agent/utils/llm_access/*.txt
 output_img/
 cache/
 exports/
