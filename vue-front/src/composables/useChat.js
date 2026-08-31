@@ -310,6 +310,9 @@ function historyToText(history) {
               url: event.result.url,
               search_result: currentSubContent,
               page_content: currentSubContent,
+              selected_knowledge_ids: event.result.selected_knowledge_ids,
+              knowledge_content: event.result.knowledge_content,
+              summary: event.result.summary,
             })
           }
         }
@@ -590,6 +593,9 @@ function historyToText(history) {
         page_content: entry.page_content,
         query: entry.query,
         url: entry.url,
+        selected_knowledge_ids: entry.selected_knowledge_ids,
+        knowledge_content: entry.knowledge_content,
+        summary: entry.summary,
         collapsed: true,
       })
     } else if (entryType === 'document') {
