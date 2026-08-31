@@ -19,6 +19,7 @@ HISTORY_RETENTION = {
     "act_error": 1,                    # generate_and_execute 的执行错误（仅保留最近1条）
     "act_explore_db": 999,             # explore_schema 的数据库结构搜索结果（永久保留）
     "act_explore_func": 999,           # explore_functions 的函数目录搜索结果（永久保留）
+    "act_explore_base_knowledge": 999, # explore_base_knowledge 的基础知识搜索结果（永久保留）
     "act_web_search": 3,               # web_search 的搜索结果
     "act_fetch_webpage": 3,            # fetch_webpage 的页面内容
     "act_output_text": 999,            # output_text 动作的输出文本（永久保留）
@@ -30,6 +31,7 @@ HISTORY_RETENTION = {
     "act_default": 999,  # 未匹配的 action 默认保留轮数
     "observe_explore_schema": 3,       # explore_schema 后的 observe 结果
     "observe_explore_functions": 3,    # explore_functions 后的 observe 结果
+    "observe_explore_base_knowledge": 3, # explore_base_knowledge 后的 observe 结果
     "observe_generate_and_execute": 3, # generate_and_execute 后的 observe 结果
     "observe_output_text": 3,          # output_text 后的 observe 结果
     "observe_ask_question": 3,         # ask_question 后的 observe 结果
@@ -55,6 +57,8 @@ def _get_entry_category(entry: dict) -> Optional[str]:
             return "act_explore_db"
         if action == "explore_functions":
             return "act_explore_func"
+        if action == "explore_base_knowledge":
+            return "act_explore_base_knowledge"
         if action == "generate_and_execute":
             if entry.get("code"):
                 return "act_code"

@@ -75,6 +75,26 @@
   ... → {phase:"act", type:"error", sub_phase:"explore_schema", content:"Failed to parse fields after retries"}
 ```
 
+### explore_base_knowledge
+
+```
+成功：
+  {phase:"act", type:"msg",    sub_phase:"explore_base_knowledge", content:"正在搜索基础知识..."}
+  {phase:"act", type:"msg",    sub_phase:"explore_base_knowledge", content:"正在分析相关知识..."}
+  {phase:"act", type:"chunk",  sub_phase:"explore_base_knowledge", content:"..."}  ×N
+  {phase:"act", type:"done",   sub_phase:"explore_base_knowledge", content:"...",
+   result:{selected_knowledge_ids:[1,3,7], knowledge_content:"...", summary:"..."},
+   search_keyword:"..."}
+  {type:"history", history:[...]}
+
+重试后成功：
+  ... → {phase:"act", type:"msg", sub_phase:"explore_base_knowledge", content:"解析失败，正在重新分析..."}
+  → 重新生成 → {type:"done", ...} → {type:"history", ...}
+
+重试耗尽失败：
+  ... → {phase:"act", type:"error", sub_phase:"explore_base_knowledge", content:"Failed to parse knowledge selection after retries"}
+```
+
 ### explore_functions
 
 ```

@@ -19,7 +19,8 @@ from utils.context_trim import prepare_trimmed_context, save_session_step, parse
 router = APIRouter()
 
 VALID_ACTIONS = [
-    "explore_schema", "explore_functions", "generate_and_execute",
+    "explore_schema", "explore_functions", "explore_base_knowledge",
+    "generate_and_execute",
     "output_text", "ask_question", "ask_choice",
     "summary_and_pause", "attempt_completion",
     "generate_document", "web_search", "fetch_webpage",
@@ -37,6 +38,8 @@ ACTIONS = """
 
 - explore_schema: {{"action": "explore_schema"}}
   Explore the database schema and structure based on previous context. Not used to query data, you should use `generate_and_execute` to exe_sql.
+- explore_base_knowledge: {{"action": "explore_base_knowledge", "keyword": "..."}}
+  Explore the base knowledge (business domain knowledge, documentation, thinking strategies) based on keyword. Use this to retrieve relevant business context, domain rules, or documentation from the knowledge base.
 - explore_functions: {{"action": "explore_functions"}}
   Explore the available function catalog and select needed functions based on previous context.
 - generate_and_execute: {{"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"], "research_guide": "..."}}
@@ -96,8 +99,9 @@ Decision Rules:
 5. `generate_and_execute` is the major action to solve complex problems.
 6. `explore_schema` returns all relevant data structure and schema in the database at a time based on previous context. DO NOT try to perform two explore_schema with the same consecutively.
 7. `explore_functions` returns all relevant available python function catalog at a time based on previous context. DO NOT try to perform two explore_functions with the same consecutively.
-8. `web_search` searches the web for real-time information. Use it when the user asks about current events, news, facts, or data that is unlikely to be in the local database.
-9. `fetch_webpage` fetches and reads the full text content of a specific URL. Use it after `web_search` to get detailed information from a specific page. The URL should come from a previous search result.
+8. `explore_base_knowledge` searches the business domain knowledge base with an optional keyword. Use it to retrieve relevant business rules, domain context, documentation, or thinking strategies. DO NOT perform two explore_base_knowledge consecutively.
+9. `web_search` searches the web for real-time information. Use it when the user asks about current events, news, facts, or data that is unlikely to be in the local database.
+10. `fetch_webpage` fetches and reads the full text content of a specific URL. Use it after `web_search` to get detailed information from a specific page. The URL should come from a previous search result.
 
 """
 

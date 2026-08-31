@@ -70,6 +70,29 @@
 
 ---
 
+## 3.5. explore_base_knowledge
+
+**输入**
+```json
+{"action": "explore_base_knowledge", "keyword": "..."}
+```
+
+**输出**
+```json
+{"role":"assistant","type":"act","action":"explore_base_knowledge","selected_knowledge_ids":[...],"knowledge_content":"...","summary":"..."}
+```
+
+**上下文**
+```
+[ACT explore_base_knowledge] selected_knowledge_ids: [1, 3, 7]
+[ACT explore_base_knowledge] knowledge_content:
+{knowledge_content}
+[ACT explore_base_knowledge] summary:
+{summary}
+```
+
+---
+
 ## 4. explore_functions
 
 **输入**

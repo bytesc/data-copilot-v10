@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.action import ACTIONS
-from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, BASE, TARGET
+from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, BASE, TARGET, BRIEF_INFO
 from agent.tools.tools_def import engine, llm
 from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
@@ -56,7 +56,10 @@ def _event_stream_think(
 
 Database Information:
 {DB_BRIEF}
-Use `explore_schema` action to explore table schemas and sample data in detail. Then use `generate_and_execute` action to exe_sql
+
+{BRIEF_INFO}
+
+Use `explore_schema` action to explore table schemas and sample data in detail. Use `explore_base_knowledge` action to explore business domain knowledge. Then use `generate_and_execute` action to exe_sql
 
 Some Available Functions:
 {func_catalog}

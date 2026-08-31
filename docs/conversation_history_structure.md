@@ -27,6 +27,14 @@ LLM 输出的 JSON 对象，格式为 `{"action": "...", ...}`。
  "selected_guides":[1,3,7],"query_guide_content":"### Rule: Find companies by topic\n..."}
 ```
 
+### explore_base_knowledge
+
+```json
+{"role":"assistant","type":"act","action":"explore_base_knowledge",
+ "selected_knowledge_ids":[1,3,7],"knowledge_content":"### Rule: ...\n...",
+ "summary":"The user's question relates to..."}
+```
+
 ### explore_functions
 
 ```json

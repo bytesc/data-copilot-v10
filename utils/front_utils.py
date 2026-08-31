@@ -40,6 +40,13 @@ def history_to_text(history: List[dict]) -> str:
                     lines.append(f"[ACT explore_schema] query_guide_content:\n{entry['query_guide_content']}")
                 if entry.get("schema_detail"):
                     lines.append(f"[ACT explore_schema] schema_detail:\n{entry['schema_detail']}")
+            elif action == "explore_base_knowledge":
+                if entry.get("selected_knowledge_ids") is not None:
+                    lines.append(f"[ACT explore_base_knowledge] selected_knowledge_ids: {json.dumps(entry['selected_knowledge_ids'], ensure_ascii=False)}")
+                if entry.get("knowledge_content"):
+                    lines.append(f"[ACT explore_base_knowledge] knowledge_content:\n{entry['knowledge_content']}")
+                if entry.get("summary"):
+                    lines.append(f"[ACT explore_base_knowledge] summary:\n{entry['summary']}")
             elif action == "explore_functions":
                 if entry.get("selected_functions") is not None:
                     lines.append(f"[ACT explore_functions] selected_functions: {json.dumps(entry['selected_functions'], ensure_ascii=False)}")

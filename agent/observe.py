@@ -70,6 +70,7 @@ Autonomous State Judgment & Update Rules:
 
 - `explore_schema` returns all relevant data structure and schema in the database at a time based on previous context. ALL tables are explored and only return relevant ones! explored means completed! NO need to perform explore_schema with the same input again!
 - `explore_functions` returns all relevant available python function catalog at a time based on previous context. ALL functions are explored and only return relevant ones! explored means completed! NO need to perform explore_functions with the same input again!
+- `explore_base_knowledge` returns all relevant business domain knowledge at a time based on previous context. ALL knowledge entries are explored and only return relevant ones! explored means completed! NO need to perform explore_base_knowledge with the same input again!
 
 Output ONLY a valid JSON object on a single line (no md block):
 {{"description": "Brief review of what happened and updated strategy in markdown...", "todo": ["Remaining task 1", "Remaining task 2"]}}

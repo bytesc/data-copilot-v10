@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from agent.agent import generate_and_execute_stream
 from agent.document_generator import generate_document_from_context
-from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, BASE, TARGET, get_db_query_guide_db
+from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, BASE, TARGET, BRIEF_INFO, get_db_query_guide_db, get_base_knowledge_db, base_knowledge_to_str, get_doc_knowledge_db, get_think_knowledge_db, get_code_guide_db
 from agent.tools.tools_def import engine, llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.tools.copilot.sql_code import parse_selected_fields_json
@@ -52,6 +52,15 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             entry["selected_guides"] = act_data["selected_guides"]
         if act_data.get("query_guide_content"):
             entry["query_guide_content"] = act_data["query_guide_content"]
+        entries.append(entry)
+    elif action == "explore_base_knowledge":
+        entry = {"role": "assistant", "type": "act", "action": "explore_base_knowledge"}
+        if act_data.get("selected_knowledge_ids") is not None:
+            entry["selected_knowledge_ids"] = act_data["selected_knowledge_ids"]
+        if act_data.get("knowledge_content"):
+            entry["knowledge_content"] = act_data["knowledge_content"]
+        if act_data.get("summary"):
+            entry["summary"] = act_data["summary"]
         entries.append(entry)
     elif action == "explore_functions":
         entry = {"role": "assistant", "type": "act", "action": "explore_functions"}
@@ -120,6 +129,9 @@ def _event_stream_act(
     if action == "explore_schema":
         act_data = yield from _act_explore_schema(full_question, session_id, tables, search_keyword)
 
+    elif action == "explore_base_knowledge":
+        act_data = yield from _act_explore_base_knowledge(full_question, session_id, search_keyword)
+
     elif action == "explore_functions":
         act_data = yield from _act_explore_functions(full_question, session_id, search_keyword)
 
@@ -162,6 +174,8 @@ def _act_explore_schema(full_question: str, session_id: str, tables, search_keyw
 {base_knowledge}
 
 {DB_BRIEF}
+
+{BRIEF_INFO}
 
 {DB_QUERY_GUIDE}
 
@@ -281,6 +295,94 @@ exe_sql, get_save_image_path
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'done', 'content': display_content, 'result': {'selected_functions': selected_functions, 'func_context': full_catalog}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
     return {"selected_functions": selected_functions, "func_docs": display_content}
+
+
+def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyword: Optional[str] = None):
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': '正在搜索基础知识...'}, ensure_ascii=False)}\n\n"
+
+    if search_keyword and search_keyword.strip():
+        base_knowledge = get_base_knowledge_db(key=[search_keyword.strip()])
+        doc_knowledge = get_doc_knowledge_db(key=[search_keyword.strip()])
+        think_knowledge = get_think_knowledge_db(key=[search_keyword.strip()])
+        code_guide = get_code_guide_db(key=[search_keyword.strip()])
+    else:
+        base_knowledge = get_base_knowledge_db()
+        doc_knowledge = get_doc_knowledge_db()
+        think_knowledge = get_think_knowledge_db()
+        code_guide = get_code_guide_db()
+
+    all_knowledge = {}
+    all_knowledge.update(base_knowledge)
+    all_knowledge.update(doc_knowledge)
+    all_knowledge.update(think_knowledge)
+    all_knowledge.update(code_guide)
+
+    if not all_knowledge:
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'done', 'content': '*(No relevant knowledge found)*', 'result': {'selected_knowledge_ids': [], 'knowledge_content': '', 'summary': ''}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+        return {"selected_knowledge_ids": [], "knowledge_content": "", "summary": ""}
+
+    knowledge_text = base_knowledge_to_str(all_knowledge)
+
+    prompt = f"""Analyze the following knowledge base and the user's question to select the relevant knowledge entries.
+
+{knowledge_text}
+
+Context:
+{full_question}
+
+Output ONLY a JSON object with the following structure:
+- "selected_ids": an array of knowledge entry IDs (integers) that are relevant. Empty list if none.
+- "summary": a brief summary of which knowledge entries are relevant and why.
+
+Example:
+{{"selected_ids": [1, 3, 7], "summary": "The user's question relates to company data analysis, entries 1, 3, 7 provide relevant domain knowledge."}}
+"""
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': '正在分析相关知识...'}, ensure_ascii=False)}\n\n"
+
+    error_msg = ""
+    for i in range(2):
+        if i > 0:
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': '解析失败，正在重新分析...'}, ensure_ascii=False)}\n\n"
+
+        raw = ""
+        for chunk in call_llm_stream(prompt + error_msg, llm):
+            raw += chunk
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+
+        parsed = _parse_base_knowledge_json(raw)
+        if parsed is not None:
+            selected_ids = parsed.get("selected_ids", [])
+            summary = parsed.get("summary", "")
+
+            id_set = set(selected_ids)
+            selected_entries = {k: v for k, v in all_knowledge.items() if v['id'] in id_set}
+            display_content = base_knowledge_to_str(selected_entries) if selected_entries else "*(No relevant knowledge selected)*"
+
+            log_observe_cycle(session_id, 0, "act", "explore_base_knowledge",
+                              prompt=prompt[:5000], response=raw[:5000],
+                              exec_result=display_content[:10000],
+                              token_estimate=len(prompt) // 3)
+
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'done', 'content': display_content, 'result': {'selected_knowledge_ids': selected_ids, 'knowledge_content': display_content, 'summary': summary}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+
+            return {"selected_knowledge_ids": selected_ids, "knowledge_content": display_content, "summary": summary}
+
+        error_msg = "\n\nPrevious attempt failed to produce valid JSON. Output ONLY a valid JSON object with 'selected_ids' and 'summary' fields.\n"
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'error', 'content': 'Failed to parse knowledge selection after retries'}, ensure_ascii=False)}\n\n"
+    return {"selected_knowledge_ids": [], "knowledge_content": knowledge_text, "summary": ""}
+
+
+def _parse_base_knowledge_json(raw: str) -> dict | None:
+    from utils.context_trim import parse_json
+    result = parse_json(raw)
+    if isinstance(result, dict) and "selected_ids" in result:
+        return {
+            "selected_ids": result.get("selected_ids", []),
+            "summary": result.get("summary", ""),
+        }
+    return None
 
 
 def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions, request_json: str = "", research_guide: str = ""):

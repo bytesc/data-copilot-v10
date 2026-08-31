@@ -134,6 +134,7 @@ const assistantSummary = computed(() => {
   if (a === 'attempt_completion') return 'Completion'
   if (a === 'explore_schema') return 'Explore Schema'
   if (a === 'explore_functions') return 'Explore Functions'
+  if (a === 'explore_base_knowledge') return 'Explore Base Knowledge'
   if (a === 'generate_and_execute') return 'Generate & Execute'
   if (a === 'solved') return 'Solved'
   return a || 'Entry'

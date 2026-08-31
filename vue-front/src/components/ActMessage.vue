@@ -27,6 +27,23 @@
       </details>
     </template>
 
+    <template v-else-if="message.action === 'explore_base_knowledge'">
+      <details v-if="hasSelectedKnowledgeIds" class="msg-collapse">
+        <summary class="collapse-summary">Selected Knowledge IDs</summary>
+        <div class="collapse-body">
+          <pre><code>{{ formatJson(selectedKnowledgeIds) }}</code></pre>
+        </div>
+      </details>
+      <details v-if="hasKnowledgeContent" class="msg-collapse">
+        <summary class="collapse-summary">Search Results: explore_base_knowledge</summary>
+        <div class="collapse-body" v-html="renderMd(knowledgeContent)"></div>
+      </details>
+      <details v-if="hasSummary" class="msg-collapse">
+        <summary class="collapse-summary">Summary</summary>
+        <div class="collapse-body" v-html="renderMd(summary)"></div>
+      </details>
+    </template>
+
     <template v-else-if="message.action === 'explore_functions'">
       <details v-if="hasSelectedFunctions" class="msg-collapse">
         <summary class="collapse-summary">Selected Functions</summary>
@@ -148,7 +165,7 @@
         <details class="msg-collapse" :open="sub.name === 'generate_document' || sub.name === 'completion'">
           <summary class="collapse-summary">{{ subPhaseLabel(sub.name) }}</summary>
           <div class="collapse-body">
-            <div v-if="sub.name === 'explore_schema' || sub.name === 'explore_functions'">
+            <div v-if="sub.name === 'explore_schema' || sub.name === 'explore_functions' || sub.name === 'explore_base_knowledge'">
               <div v-html="renderMd(sub.content)"></div>
             </div>
             <div v-else v-html="renderMd(sub.content)"></div>
@@ -192,6 +209,24 @@ const selectedFields = computed(() => {
 })
 
 const hasSelectedFields = computed(() => selectedFields.value != null)
+
+const selectedKnowledgeIds = computed(() => {
+  return props.message.selected_knowledge_ids || props.message.parsed?.selected_knowledge_ids
+})
+
+const hasSelectedKnowledgeIds = computed(() => selectedKnowledgeIds.value != null)
+
+const knowledgeContent = computed(() => {
+  return props.message.knowledge_content || props.message.parsed?.knowledge_content
+})
+
+const hasKnowledgeContent = computed(() => !!knowledgeContent.value)
+
+const summary = computed(() => {
+  return props.message.summary || props.message.parsed?.summary
+})
+
+const hasSummary = computed(() => !!summary.value)
 
 const selectedFunctions = computed(() => {
   return props.message.selected_functions || props.message.parsed?.selected_functions
@@ -252,6 +287,7 @@ function formatJson(obj) {
 function subPhaseLabel(name) {
   const labels = {
     explore_schema: 'Search Results: explore_schema',
+    explore_base_knowledge: 'Search Results: explore_base_knowledge',
     explore_functions: 'Search Results: explore_functions',
     generate: 'Generated Code',
     code: 'Generated Code',
