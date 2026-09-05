@@ -4,69 +4,89 @@
 
 `config/config.yaml` 中的 `mysql` 字段改为新数据库的连接地址，`mysql_sys` 通常无需修改。
 
-## 2. 需要准备的内容
-
-### 2.1 表注释与字段注释
+## 2. 表注释与字段注释
 
 直接在 MySQL 中为表、字段添加 `COMMENT`，系统自动读取，无需额外配置。
 
-### 2.2 数据库概览
+## 3. 知识配置项
 
-| 来源 | 说明 |
+以下每个配置项均支持通过 **静态 MD 文件** 和/或 **数据库表** 配置，两者内容合并后一起注入提示词（并非二选一）。
+
+### 3.1 DB_BRIEF — 数据库概览
+
+| 来源 | 路径/表 |
 |---|---|
-| 静态文件 `knowledge_docs/db_brief.md` | 数据库的整体业务描述 |
-| 数据库表 `brief_info` 中 `attr='db_brief'` 的行 | 同上 |
+| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/db_brief.md` |
+| 数据库表 | `brief_info` 中 `attr='db_brief'` 的行 |
 
-**关系：** 两者合并后一起注入提示词，并非二选一。
+两者合并后以 `DataBase Brief` 标签注入。
 
-### 2.3 基础知识摘要
+### 3.2 BASE — 基础业务知识
 
-| 来源 | 说明 |
+| 来源 | 路径/表 |
 |---|---|
-| 静态文件 `knowledge_docs/base_knowledge_brief.md` | 业务重点摘要 |
-| 数据库表 `brief_info` 中 `attr='base_knowledge_brief'` 的行 | 同上 |
+| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/base_knowledge.md` |
+| 数据库表 | `base_knowledge` 表（key-value 结构） |
 
-**关系：** 两者合并后一起注入，并非二选一。
+两者合并后以 `base knowledge for reference` 标签注入。
 
-### 2.4 SQL 查询指南
+### 3.3 DB_QUERY_GUIDE — SQL 查询指南
 
-| 来源 | 说明 |
+| 来源 | 路径/表 |
 |---|---|
-| 静态文件 `knowledge_docs/db_query_guide.md` | 静态参考文档 |
-| 数据库表 `db_query_guide` | 每条记录一条指南（key-value 结构） |
+| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/db_query_guide.md` |
+| 数据库表 | `db_query_guide` 表（key-value 结构，每条记录一条指南） |
 
-**关系：** 两者合并后一起注入，并非二选一。建议在 DB 中按 key-value 存储，方便动态增删。
+两者合并后以 `SQL Query guide` 标签注入。DB 中的每条记录会附加 `[id=N]` 标记。
 
-### 2.5 基础业务知识
+### 3.4 DOC — 文档知识
 
-| 来源 | 说明 |
+| 来源 | 路径/表 |
 |---|---|
-| 静态文件 `knowledge_docs/base_knowledge.md` | 通常为空，知识存储在 DB |
-| 数据库表 `base_knowledge` | 每条记录一条知识（key-value 结构） |
+| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/doc_knowledge.md` |
+| 数据库表 | `doc_knowledge` 表（key-value 结构） |
 
-**关系：** 两者合并后一起注入，并非二选一。建议在 DB 中存储。
+两者合并后以 `doc reference` 标签注入。
 
-## 3. 知识库表汇总（系统数据库 `data_copilot_v10_sys`）
+### 3.5 TARGET — 目标输出模板
 
-| 表名 | 用途 | 接入新数据库时 |
+| 来源 | 路径/表 |
+|---|---|
+| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/target_knowledge.md` |
+| 数据库表 | 无 |
+
+仅支持 MD 文件，以 `Target` 标签注入。
+
+### 3.6 THINK_KNOWLEDGE — 思考分析策略
+
+| 来源 | 路径/表 |
+|---|---|
+| MD 文件 | 无 |
+| 数据库表 | `think_knowledge` 表（key-value 结构） |
+
+仅支持数据库表，以 `think knowledge for reference` 标签注入。
+
+### 3.7 BRIEF_INFO — 摘要信息
+
+| 条目 | MD 文件 | 数据库表 |
 |---|---|---|
-| `brief_info` | 存储 `db_brief`（数据库概览）和 `base_knowledge_brief`（知识摘要） | **必须配置** |
-| `db_query_guide` | SQL 查询指南，每条记录一条 | 推荐配置 |
-| `base_knowledge` | 基础业务知识，每条记录一条 | 按需配置 |
-| `doc_knowledge` | 文档知识 | 按需配置 |
-| `code_guide` | 图表代码指南 | 按需配置 |
-| `think_knowledge` | 思考分析策略 | 按需配置 |
+| 数据库概览 | `knowledge_docs/db_brief.md` | `brief_info` 中 `attr='db_brief'` |
+| 知识摘要 | `knowledge_docs/base_knowledge_brief.md` | `brief_info` 中 `attr='base_knowledge_brief'` |
 
-## 4. 静态文件汇总（`agent/tools/base_knowledge/knowledge_docs/`）
+两者合并后注入。
 
-| 文件 | 用途 | 接入新数据库时 |
-|---|---|---|
-| `db_brief.md` | 数据库概览 | 推荐编写 |
-| `base_knowledge_brief.md` | 知识摘要 | 推荐编写 |
-| `db_query_guide.md` | SQL 查询指南 | 可选（建议用 DB 表） |
-| `base_knowledge.md` | 基础业务知识 | 可选（建议用 DB 表） |
-| `doc_knowledge.md` | 文档知识 | 按需 |
-| `target_knowledge.md` | 目标输出模板 | 按需 |
+## 4. 汇总
+
+| 配置项 | MD 文件 | DB 表 | 关系 |
+|---|---|---|---|
+| DB_BRIEF | `db_brief.md` | `brief_info.db_brief` | 合并 |
+| BASE | `base_knowledge.md` | `base_knowledge` | 合并 |
+| DB_QUERY_GUIDE | `db_query_guide.md` | `db_query_guide` | 合并 |
+| DOC | `doc_knowledge.md` | `doc_knowledge` | 合并 |
+| TARGET | `target_knowledge.md` | 无 | 仅 MD |
+| THINK_KNOWLEDGE | 无 | `think_knowledge` | 仅 DB |
+| BRIEF_INFO.db_brief | `db_brief.md` | `brief_info` 中 `attr='db_brief'` | 合并 |
+| BRIEF_INFO.base_knowledge_brief | `base_knowledge_brief.md` | `brief_info` 中 `attr='base_knowledge_brief'` | 合并 |
 
 ## 5. 验证
 
