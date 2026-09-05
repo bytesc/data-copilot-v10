@@ -1,90 +1,94 @@
-# data copilot v8
+# Data Copilot v10
 
-✨ **基于代码生成和函数调用(function call)的大语言模型(LLM)数据分析智能体**
-支持任意数据集和描述文档一键智能导入与智能图表绘制，通过多智能体协作和上下文长数据记忆，实现精准的自然语言查询与可视化分析。
+✨ **基于代码生成的多智能体数据分析平台**
 
-🚩[English Readme](./README.en.md)
+通过自然语言与数据库交互，自动理解用户意图，将复杂问题拆解为子任务，通过 T-A-A-O 自主循环（Think → Action → Act → Observe）逐步完成 SQL 查询、代码生成执行、图表绘制与报告生成。支持多源知识库蒸馏、联网搜索、CSV 一键导入与全链路可观测。
+
+🚩 [English Readme](./README.en.md)
 
 ### 相关项目
-- [基于大语言模型 (LLM) 的<u>**可解释型**</u>自然语言数据库查询系统 https://github.com/bytesc/data-copilot-steps](https://github.com/bytesc/data-copilot-steps)
-- [基于大语言模型 (LLM)和并发预测模型的自然语言数据库查询系统 (https://github.com/bytesc/data-copilot-v2](https://github.com/bytesc/data-copilot-v2)
+- [基于大语言模型的可解释型自然语言数据库查询系统](https://github.com/bytesc/data-copilot-steps)
+- [基于大语言模型和并发预测模型的自然语言数据库查询系统](https://github.com/bytesc/data-copilot-v2)
 
 [个人网站：www.bytesc.top](http://www.bytesc.top)
 
-
-
 ## 功能简介
 
-- 1, 基于代码生成的大语言模型智能体(AI Agent)，实现数据查询智能绘制多种统计图表。
-- 2, 实现智能体对用户的反问，解决用户提问模糊、不完整的情况。
-- 3, 智能体支持灵活的自定义函数调用(function call)和思维链(COT)
-- 4, 实现多智能体的合作调用
-- 5, 能够处理大语言模型表现不稳定等异常情况
-- 6, 上下文支持非文本长数据记忆，在多轮对话当中实现数据的存取
-- 7, 支持任意数据表格一键导入数据库，支持任意文档生成数据注释标注
-
+- **自然语言驱动分析**：直接提问，自动生成并执行 SQL 和 Python 代码完成查询与可视化
+- **T-A-A-O 自主闭环**：Think（规划）→ Action（决策）→ Act（执行）→ Observe（审查），循环直到任务完成
+- **多智能体角色分工**：规划、执行、审查等角色分离，协同完成复杂任务流水线
+- **代码生成与执行**：动态生成 Python 代码，安全沙箱执行，支持 SQL 查询、图表绘制、数据变换
+- **智能图表绘制**：自动选择图表类型（matplotlib/seaborn），支持对比图、数据标注
+- **知识蒸馏与检索**：多源知识库（业务规则、查询指南、思维策略、代码范例），动态注入上下文
+- **上下文智能裁剪**：按类别独立保留策略，避免长对话上下文溢出
+- **文档自动生成**：一键生成 Markdown / DOCX / PDF 格式分析报告，含图表的智能排版
+- **任意 CSV 导入**：上传 CSV 自动建表，上传文档自动生成数据注释
+- **联网搜索**：支持 DuckDuckGo 联网搜索，结合外部信息分析
+- **全链路可观测**：每一步 LLM 调用、代码执行、结果均记录到数据库，支持会话回溯
+- **SSE 实时流式**：生成代码、执行结果、规划更新实时推送到前端
 
 ## 技术架构
 
-### 核心组件与技术架构  
+### 核心循环：T-A-A-O
 
-#### **1. 可配置的LLM主干模型**  
-- 支持主流大模型（如GPT-4o、Claude等），灵活适配不同场景需求。  
+```
+┌─────────┐     ┌──────────┐     ┌──────┐     ┌──────────┐
+│  THINK  │────▶│  ACTION  │────▶│  ACT │────▶│  OBSERVE │
+│ (规划)   │     │ (决策)    │     │(执行) │     │ (审查)    │
+└─────────┘     └──────────┘     └──────┘     └──────────┘
+     ▲                                              │
+     └──────────────────────────────────────────────┘
+                    (循环直到任务完成)
+```
 
-#### **2. 动态工具调用的函数图谱（Function Graph）**  
-- 智能选择最佳工具链，根据任务类型动态组合数据查询、分析与可视化功能。  
+每个阶段对应独立的 LLM 调用和专用提示词：
 
-#### **4. 意图讨论和问题拆解** 
-- 将复杂问题拆解为子任务列表(To-do List)，智能体逐个解决
-- 支持反问用户澄清模糊或不完整的需求
+1. **THINK（思考）**：LLM 接收用户问题、数据库结构、函数目录、知识库，输出 JSON 规划 `{"description": "...", "todo": ["task1", ...]}`
+2. **ACTION（决策）**：LLM 根据当前规划选择一个动作（探索表结构、生成代码、搜索知识库、搜索网页、反问用户、生成文档等）
+3. **ACT（执行）**：执行所选动作——生成并执行代码、查询数据库、绘制图表、搜索网页等
+4. **OBSERVE（审查）**：LLM 审查执行结果，更新任务列表，处理错误，决定继续或终止
 
-#### **5. 成功历史蒸馏** 
-- 基于历史成功对话蒸馏知识库，新提问时检索相似案例
-- 将成功经验作为示例注入当前对话，借鉴以往解决思路
+### 组件架构
 
-#### **6. 多智能体协作层**  
-- 通过角色化Agent分工（如数据查询Agent、校验Agent、报告生成Agent）实现复杂任务流水线处理。  
- 
- 
+| 组件 | 说明 |
+|------|------|
+| **LLM 主干** | 支持 DeepSeek、Qwen、GLM、GPT-4o 等，通过 OpenAI 兼容接口接入 |
+| **函数图谱** | 预定义工具函数（SQL 查询、图表绘制、数据分析、网页搜索等），LLM 动态选择组合 |
+| **知识库** | 多源知识：业务规则（DB + 文件）、查询指南、思维策略、代码范例、数据库摘要 |
+| **代码引擎** | 生成 Python 代码 → 沙箱执行 → 结果流式返回 |
+| **数据库层** | 用户数据 DB（MySQL）+ 系统 DB（会话日志、知识库、操作审计） |
+| **文档生成器** | 大纲规划 → 逐节生成 → 多格式导出（MD/DOCX/PDF） |
+| **前端** | Vue 3 + Vite，SSE 流式渲染，T-A-A-O 状态机 |
 
 ### 工作流程
 
-![](./readme_img/flow2.png)
+```
+用户提问 → [THINK] 规划任务列表
+            → [ACTION] 决策动作
+              → [ACT] 执行动作（探索/查询/画图/搜索/生成文档等）
+                → [OBSERVE] 审查结果，更新任务列表
+                  → 循环直到任务全部完成
+```
 
-基本流程：
-User query → History Search → Solution breakdown → Function selection → Code generation → Execution → Validation
-1. **Question**: 用户自然语言问题提问
-2. **History Search**: 根据历史成功对话蒸馏知识库，在提问时搜索知识库，借鉴以往成功思路
-3. **Solution breakdown**: 和用户讨论意图，制定解决方案，把复杂问题拆解为子任务列表(To-do List)，智能体逐个解决小问题，最终实现复杂任务的解决。
-4. **Function Selection**: LLM 根据函数基本信息选择多个函数，通过函数依赖图(Function Graph)获得可用函数列表和详细注释（函数包括非智能体函数(Custum Function)和调用其它智能体的函数(Agent as Function)，实现多智能体协同）
-5. **Function Skill**: 根据 function 的选择动态提供不同的 prompt 信息(借鉴 skill 的概念)
-6. **Function Calls Chain**: LLM 根据函数列表和详细注释，生成调用多个函数的 python 代码并执行
-7. **Result Review**: LLM 回顾总结整个流程，评估问题是否解决，更新任务列表，没有解决则反问用户，使其澄清问题或者提供更多信息
+### 工具函数
 
+| 函数 | 功能 |
+|------|------|
+| `exe_sql(sql)` | 执行原始 SQL 查询 |
+| `query_database(question, columns)` | 自然语言转 SQL 查询 |
+| `explain_data(question, data)` | 自然语言数据分析说明 |
+| `load_data(url)` | 从 CSV 链接加载数据 |
+| `search_web(query)` | DuckDuckGo 网页搜索 |
+| `fetch_webpage(url)` | 抓取网页内容 |
 
-### 任意数据导入
+## 配置与使用
 
-任意 csv 文件，加上描述数据的文档即可被解析查询
+### 环境要求
 
-![](./readme_img/flow4.png)
-
-1. 上传 csv 文件自动导入数据库
-2. 上传数据描述文档调用数据标注 Agent 生成数据注释
-
-### 上下文数据传递
-
-数据的上下文传递和中期记忆
-
-![](./readme_img/flow3.png)
-
-1. Agent 生成代码调用 sql agent 查询数据，查询结果自动保存为 csv 文件，文件链接存入上下文
-2. 下一轮对话中 Agent 从上下文中获取 csv 数据文件链接，生成代码可以通过链接重新读取数据
-
-## 如何使用
+- Python 3.10
+- MySQL 数据库
 
 ### 安装依赖
-
-python 版本 3.10
 
 ```bash
 pip install -r requirement.txt
@@ -93,75 +97,54 @@ pip install -r requirement.txt
 ### 配置文件
 
 `./config/config.yaml`
-```yml
-# config
-server_port: 8009 # 部署端口
-server_host: "0.0.0.0"  # allow host
-# 数据库
-mysql: "mysql+pymysql://root:123456@localhost:3306/2026start_v3"
 
+```yaml
+server_port: 8009
+server_host: "0.0.0.0"
+
+# 用户数据数据库
+mysql: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10"
+
+# 系统数据库（会话日志、知识库等）
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_sys"
 
-# 静态文件服务地址，本机域名/ip:端口
+# 静态文件服务地址
 static_path: "http://127.0.0.1:8009/"
-# 静态文件存储目录（相对于项目根目录）
+# 静态文件存储目录
 static_folder: "tmp_imgs"
 
-model_name: "deepseek-v4-pro"
-# qwen3.7-flash qwen3.8-max
-# glm-4
-# deepseek-chat deepseek-v4-flash
-# qwen-max
-# gpt-4o-mini
-
+# 大模型配置
+model_name: "deepseek-v4-flash"
 model_url: "https://tokenhub.tencentmaas.com/v1"
-# https://open.bigmodel.cn/api/paas/v4/
-# https://api.deepseek.com/v1/
-# https://dashscope.aliyuncs.com/compatible-mode/v1
-# https://api.openai.com/v1
-
 ```
 
 ### 前端配置
 
-`vue-front/.env`（首次部署需创建）
+`vue-front/.env`
+
 ```env
-# 后端服务地址（开发模式 vite 代理目标）
 VITE_SERVER_URL=http://127.0.0.1:8009
-# API 基础路径
 VITE_API_BASE=/api
 ```
 
-### 大语言模型配置
+### API Key 配置
 
-新建文件：`agent\utils\llm_access\api_key_openai.txt` 在其中填写`api-key`
+新建文件 `agent/utils/llm_access/api_key_openai.txt`，填入 API Key。
 
-`api-key`获取链接：
-- 阿里云:[https://bailian.console.aliyun.com/](https://bailian.console.aliyun.com/)
-- deepseek:[https://api-docs.deepseek.com/](https://api-docs.deepseek.com/)
-- glm:[https://open.bigmodel.cn/](https://open.bigmodel.cn/)
+获取方式：
+- [阿里云百炼](https://bailian.console.aliyun.com/)
+- [DeepSeek](https://api-docs.deepseek.com/)
+- [智谱 GLM](https://open.bigmodel.cn/)
+- [OpenAI](https://platform.openai.com/)
 
-### 运行
-
-#### 服务端
+### 启动
 
 ```bash
-# 服务端
 python ./main.py
 ```
 
-启动后可以通过api访问服务
+## 开源许可
 
-# 开源许可证
+MIT License
 
-此翻译版本仅供参考，以 LICENSE 文件中的英文版本为准
-
-MIT 开源许可证：
-
-版权所有 (c) 2025 bytesc
-
-特此授权，免费向任何获得本软件及相关文档文件（以下简称“软件”）副本的人提供使用、复制、修改、合并、出版、发行、再许可和/或销售软件的权利，但须遵守以下条件：
-
-上述版权声明和本许可声明应包含在所有副本或实质性部分中。
-
-本软件按“原样”提供，不作任何明示或暗示的保证，包括但不限于适销性、特定用途适用性和非侵权性。在任何情况下，作者或版权持有人均不对因使用本软件而产生的任何索赔、损害或其他责任负责，无论是在合同、侵权或其他方面。
+Copyright (c) 2025 bytesc
