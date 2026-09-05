@@ -35,32 +35,42 @@ class ActionInput(BaseModel):
 
 
 ACTIONS = """
-
-- explore_schema: {{"action": "explore_schema"}}
-  Explore the database schema and structure based on previous context. Not used to query data, you should use `generate_and_execute` to exe_sql.
-- explore_base_knowledge: {{"action": "explore_base_knowledge", "keyword": "..."}}
-  Explore the base knowledge (business domain knowledge, documentation, thinking strategies) based on keyword. Use this to retrieve relevant business context, domain rules, or documentation from the knowledge base.
-- explore_functions: {{"action": "explore_functions"}}
-  Explore the available function catalog and select needed functions based on previous context.
-- generate_and_execute: {{"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"], "research_guide": "..."}}
+ 
+- explore_schema: {"action": "explore_schema", "keyword": "..."}
+  Explore the database schema and structure. Optional keyword hints the LLM to focus on specific tables/columns. Not used to query data, you should use `generate_and_execute` to exe_sql.
+- explore_base_knowledge: {"action": "explore_base_knowledge", "keyword": "..."}
+  Explore the base knowledge (business domain knowledge, documentation, thinking strategies). Optional keyword hints the LLM to focus on specific knowledge entries. Use this to retrieve relevant business context, domain rules, or documentation from the knowledge base.
+- explore_functions: {"action": "explore_functions", "keyword": "..."}
+  Explore the available function catalog. Optional keyword hints the LLM to focus on relevant functions. Use `explore_functions` for more available functions. Then use `generate_and_execute` action to call.
+- generate_and_execute: {"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"], "research_guide": "..."}
   Decide to execute code that calls functions. funcs: list of function names to use. The actual code will be generated in the next phase. Do NOT include any code or "code" field in the JSON output.
   research_guide: Optional natural language description of what data to search for and what images/charts to generate. Include details like chart types, data sources, labels, colors, and axis sorting. This guides the code generation phase to produce the correct visualizations. Use this when the task requires specific charts or images. 
-- output_text: {{"action": "output_text", "text": "Your response content here..."}}
+- output_text: {"action": "output_text", "text": "Your response content here..."}
   Output some text to the user without stopping the pipline.
-- ask_question: {{"action": "ask_question", "text": "Your question for the user here..."}}
+- ask_question: {"action": "ask_question", "text": "Your question for the user here..."}
   Ask the user a question. Use it incase you need some information from user.
-- ask_choice: {{"action": "ask_choice", "text": "Your question here...", "choices": ["option1", "option2"]}}
+- ask_choice: {"action": "ask_choice", "text": "Your question here...", "choices": ["option1", "option2"]}
   Give user some choices to choice only one of them.
-- summary_and_pause: {{"action": "summary_and_pause", "text": "Your progress summary here..."}}
+- summary_and_pause: {"action": "summary_and_pause", "text": "Your progress summary here..."}
   Output some text and stop the pipline.
-- attempt_completion: {{"action": "attempt_completion", "text": "Your final results here..."}}
+- attempt_completion: {"action": "attempt_completion", "text": "Your final results here..."}
   Output some text and stop the pipline in case of completion.
-- generate_document: {{"action": "generate_document", "title": "report_title"}}
+- generate_document: {"action": "generate_document", "title": "report_title"}
   Generate a complete business summary document based on the full conversation history. The title specifies the document title. The document will be saved as both .md and .docx files. Use this when the user asks to generate a report or document.
-- web_search: {{"action": "web_search", "query": "search query", "max_results": 10}}
+- web_search: {"action": "web_search", "query": "search query", "max_results": 10}
   Search the web using DuckDuckGo. Use this when the user asks for real-time information, news, facts, or data not available in the local database. Returns a list of results with title, URL, and snippet. Optionally set max_results (default 10, max 50) to control how many results to return.
-- fetch_webpage: {{"action": "fetch_webpage", "url": "https://example.com/page", "max_length": 10000}}
+- fetch_webpage: {"action": "fetch_webpage", "url": "https://example.com/page", "max_length": 10000}
   Fetch and extract the text content of a specific webpage. Use this after `web_search` to read the full content of a promising result. The url should be extracted from a previous search result. max_length controls max characters to return (default 10000).
+
+MULTI-ACTION SUPPORT:
+You can output MULTIPLE actions in one cycle by using an "actions" array instead of a single "action". Example:
+{"actions": [{"action": "explore_schema"}, {"action": "explore_functions"}]}
+
+GROUPING RULES:
+- Group 1 (Explore类): explore_schema, explore_functions, explore_base_knowledge. These can be batched together.
+- Group 2 (用户交互类): output_text, ask_question, ask_choice, summary_and_pause, attempt_completion. These can be batched together. summary_and_pause and attempt_completion must be the LAST action in the array, and each can appear at most once.
+- Group 1 and Group 2 CANNOT be mixed in the same "actions" array.
+- All other actions (generate_and_execute, generate_document, web_search, fetch_webpage) must be used as single actions only.
 """
 
 
@@ -77,7 +87,7 @@ def _build_action_prompt(
     db_summary = get_db_summary_for_agent(engine)
     func_catalog = get_func_summary_for_agent()
 
-    return f"""You are an action decision maker. Given the current context, decide the SINGLE next action to execute.
+    return f"""You are an action decision maker. Given the current context, decide the next action(s) to execute.
 
 Some Available Functions:
 {func_catalog}
@@ -102,6 +112,7 @@ Decision Rules:
 8. `explore_base_knowledge` searches the business domain knowledge base with an optional keyword. Use it to retrieve relevant business rules, domain context, documentation, or thinking strategies. DO NOT perform two explore_base_knowledge consecutively.
 9. `web_search` searches the web for real-time information. Use it when the user asks about current events, news, facts, or data that is unlikely to be in the local database.
 10. `fetch_webpage` fetches and reads the full text content of a specific URL. Use it after `web_search` to get detailed information from a specific page. The URL should come from a previous search result.
+11. When you have multiple actions that are independent and belong to the same group, use the "actions" array to output them together. This is more efficient than executing them one by one. For example, if you need to explore both schema and functions, output both in one cycle.
 
 """
 
@@ -131,16 +142,18 @@ def _event_stream_action(
 
         action_result = _parse_action_json(raw)
         action = action_result.get("action")
-        if action:
+        actions = action_result.get("actions")
+        if action or actions:
             yield f"data: {json.dumps({'phase': 'action', 'type': 'done', 'content': raw, 'action_result': action_result}, ensure_ascii=False)}\n\n"
 
+            action_label = action or f"multi({len(actions)} actions)"
             log_observe_cycle(session_id, cycle_index, "action", "decide",
                               prompt=prompt[:5000], response=raw[:5000],
                               token_estimate=len(prompt) // 3)
             record_session_operation(
                 session_id, "/api/action/stream/",
                 request_json, str(action_result), "",
-                "success", f"决定动作: {action}",
+                "success", f"决定动作: {action_label}",
                 prompt_length=len(prompt)
             )
             history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "action_decision", "content": parse_json_raw(raw)}])
@@ -165,6 +178,14 @@ def _parse_action_json(raw: str) -> dict:
     if result is None:
         return {"action": None, "error": f"Failed to parse JSON: {raw.strip()[:200]}"}
 
+    actions_list = result.get("actions")
+    if actions_list is not None and isinstance(actions_list, list):
+        for item in actions_list:
+            act = item.get("action", "")
+            if act not in VALID_ACTIONS:
+                return {"action": None, "error": f"Unknown action in actions list: {act}", "raw": result}
+        return _build_multi_action_result(actions_list)
+
     action = result.get("action", "")
     if action not in VALID_ACTIONS:
         return {"action": None, "error": f"Unknown action: {action}", "raw": result}
@@ -181,6 +202,27 @@ def _parse_action_json(raw: str) -> dict:
         "max_results": result.get("max_results"),
         "url": result.get("url"),
         "max_length": result.get("max_length"),
+    }
+
+
+def _build_multi_action_result(actions_list: list) -> dict:
+    return {
+        "actions": [
+            {
+                "action": item.get("action"),
+                "keyword": item.get("keyword"),
+                "funcs": item.get("funcs"),
+                "text": item.get("text"),
+                "choices": item.get("choices"),
+                "research_guide": item.get("research_guide"),
+                "title": item.get("title"),
+                "query": item.get("query"),
+                "max_results": item.get("max_results"),
+                "url": item.get("url"),
+                "max_length": item.get("max_length"),
+            }
+            for item in actions_list
+        ],
     }
 
 

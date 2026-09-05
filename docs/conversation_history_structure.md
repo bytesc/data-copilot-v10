@@ -10,10 +10,16 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 
 ## action
 
-LLM 输出的 JSON 对象，格式为 `{"action": "...", ...}`。
+LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explore_schema/functions/base_knowledge）可批量；用户交互类（output_text/ask_question/ask_choice/summary_and_pause/attempt_completion）可批量，summary_and_pause/attempt_completion 必须在最后。两类不可混排。
 
+单 action 格式 `{"action": "...", ...}`：
 ```json
 {"role":"assistant","type":"action_decision","content":{"action":"explore_schema","keyword":"..."}}
+```
+
+多 action 格式 `{"actions": [{...}, ...]}`：
+```json
+{"role":"assistant","type":"action_decision","content":{"actions":[{"action":"explore_schema"},{"action":"explore_functions"}]}}
 ```
 
 ## act

@@ -163,11 +163,9 @@ def _act_explore_schema(full_question: str, session_id: str, tables, search_keyw
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': '正在搜索数据库信息...'}, ensure_ascii=False)}\n\n"
 
     base_knowledge = BASE
+    full_schema = get_db_overview_markdown(engine, tables, include_samples=True)
 
-    if search_keyword and search_keyword.strip():
-        full_schema = search_db_markdown(engine, search_keyword.strip(), tables)
-    else:
-        full_schema = get_db_overview_markdown(engine, tables, include_samples=True)
+    keyword_hint = f"\nFocus hint: {search_keyword.strip()}" if search_keyword and search_keyword.strip() else ""
 
     prompt = f"""Analyze the following database schema and the user's question to select the relevant tables and columns.
 
@@ -183,6 +181,7 @@ def _act_explore_schema(full_question: str, session_id: str, tables, search_keyw
 
 Context:
 {full_question}
+{keyword_hint}
 
 LANGUAGE IS CRITICAL: The "plan" field text MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, write the plan in Chinese. If the user asked in English, write the plan in English.
 
@@ -249,11 +248,9 @@ Example:
 def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'msg', 'content': '正在搜索函数信息...'}, ensure_ascii=False)}\n\n"
 
-    if search_keyword and search_keyword.strip():
-        full_catalog = search_func_by_keyword(search_keyword.strip())
-    else:
-        full_catalog = get_func_catalog_markdown()
+    full_catalog = get_func_catalog_markdown()
 
+    keyword_hint = f"\nFocus hint: {search_keyword.strip()}" if search_keyword and search_keyword.strip() else ""
     func_names = ", ".join(FUNCTION_DICT.keys())
     prompt = f"""Analyze the following function catalog and the user's question to select the needed functions.
 
@@ -261,6 +258,7 @@ def _act_explore_functions(full_question: str, session_id: str, search_keyword: 
 
 Context:
 {full_question}
+{keyword_hint}
 
 Available functions: {func_names}
 
@@ -300,16 +298,12 @@ exe_sql, get_save_image_path
 def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyword: Optional[str] = None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': '正在搜索基础知识...'}, ensure_ascii=False)}\n\n"
 
-    if search_keyword and search_keyword.strip():
-        base_knowledge = get_base_knowledge_db(key=[search_keyword.strip()])
-        doc_knowledge = get_doc_knowledge_db(key=[search_keyword.strip()])
-        think_knowledge = get_think_knowledge_db(key=[search_keyword.strip()])
-        code_guide = get_code_guide_db(key=[search_keyword.strip()])
-    else:
-        base_knowledge = get_base_knowledge_db()
-        doc_knowledge = get_doc_knowledge_db()
-        think_knowledge = get_think_knowledge_db()
-        code_guide = get_code_guide_db()
+    base_knowledge = get_base_knowledge_db()
+    doc_knowledge = get_doc_knowledge_db()
+    think_knowledge = get_think_knowledge_db()
+    code_guide = get_code_guide_db()
+
+    keyword_hint = f"\nFocus hint: {search_keyword.strip()}" if search_keyword and search_keyword.strip() else ""
 
     all_knowledge = {}
     all_knowledge.update(base_knowledge)
@@ -329,6 +323,7 @@ def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyw
 
 Context:
 {full_question}
+{keyword_hint}
 
 Output ONLY a JSON object with the following structure:
 - "selected_ids": an array of knowledge entry IDs (integers) that are relevant. Empty list if none.

@@ -140,34 +140,55 @@ function historyToText(history) {
       // Action phase - decide what to do
       const actionResult = await runActionPhase()
       if (interruptRequested.value) { await pauseAfterInterrupt(); return }
-      const action = actionResult.action
-      if (!action) {
+
+      const actions = actionResult.actions || (actionResult.action ? [actionResult] : [])
+      if (actions.length === 0) {
         addMessage('system', 'error', { content: `Action failed: ${actionResult.error || 'unknown'}` })
         break
       }
 
-      // Act phase
-      const actResult = await runActPhase(action, fullQuestion, actionResult)
-      if (interruptRequested.value) { await pauseAfterInterrupt(); return }
-      if (actResult.function_solved) {
-        continue
+      // Act phase - execute each action sequentially
+      let loopCompleted = false
+      let loopPaused = false
+      let loopNeedsInput = false
+      let loopFullAns = ''
+      let loopChoices = []
+
+      for (const actItem of actions) {
+        const actResult = await runActPhase(actItem.action, fullQuestion, actItem)
+        if (interruptRequested.value) { await pauseAfterInterrupt(); return }
+
+        if (actResult.needs_user_input) {
+          loopNeedsInput = true
+          loopFullAns = actResult.full_ans
+          loopChoices = actResult.choices || []
+          break
+        }
+        if (actResult.paused) {
+          loopPaused = true
+          break
+        }
+        if (actResult.completed) {
+          loopCompleted = true
+          break
+        }
       }
 
-      if (actResult.needs_user_input) {
+      if (loopNeedsInput) {
         awaitingInput.value = true
-        inputPrompt.value = actResult.full_ans
-        inputChoices.value = actResult.choices || []
+        inputPrompt.value = loopFullAns
+        inputChoices.value = loopChoices
         isRunning.value = false
         return
       }
 
-      if (actResult.paused) {
+      if (loopPaused) {
         isPaused.value = true
         isRunning.value = false
         return
       }
 
-      if (actResult.completed) {
+      if (loopCompleted) {
         isCompleted.value = true
         isRunning.value = false
         return
