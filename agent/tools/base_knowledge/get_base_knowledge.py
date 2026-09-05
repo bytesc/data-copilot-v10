@@ -336,6 +336,7 @@ _BASE_MD = _read_doc("base_knowledge.md")
 _DOC_MD = _read_doc("doc_knowledge.md")
 _TARGET_MD = _read_doc("target_knowledge.md")
 _DB_QUERY_GUIDE_MD = _read_doc("db_query_guide.md")
+_THINK_KNOWLEDGE_MD = _read_doc("think_knowledge.md")
 
 
 def _get_db_brief():
@@ -375,7 +376,8 @@ DOC = _DynamicStr(lambda: "\ndoc reference(just for reference):\n" + _DOC_MD\
 
 TARGET = _DynamicStr(lambda: "\nTarget:\n" + _TARGET_MD)
 
-THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + base_knowledge_to_str(get_think_knowledge_db()))
+THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + _THINK_KNOWLEDGE_MD\
+       + "\n" + base_knowledge_to_str(get_think_knowledge_db()))
 
 
 def get_brief_info():

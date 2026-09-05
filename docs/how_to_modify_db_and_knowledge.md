@@ -61,10 +61,10 @@
 
 | 来源 | 路径/表 |
 |---|---|
-| MD 文件 | 无 |
+| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/think_knowledge.md` |
 | 数据库表 | `think_knowledge` 表（key-value 结构） |
 
-仅支持数据库表，以 `think knowledge for reference` 标签注入。
+两者合并后以 `think knowledge for reference` 标签注入。
 
 ### 3.7 BRIEF_INFO — 摘要信息
 
@@ -84,7 +84,7 @@
 | DB_QUERY_GUIDE | `db_query_guide.md` | `db_query_guide` | 合并 |
 | DOC | `doc_knowledge.md` | `doc_knowledge` | 合并 |
 | TARGET | `target_knowledge.md` | 无 | 仅 MD |
-| THINK_KNOWLEDGE | 无 | `think_knowledge` | 仅 DB |
+| THINK_KNOWLEDGE | `think_knowledge.md` | `think_knowledge` | 合并 |
 | BRIEF_INFO.db_brief | `db_brief.md` | `brief_info` 中 `attr='db_brief'` | 合并 |
 | BRIEF_INFO.base_knowledge_brief | `base_knowledge_brief.md` | `brief_info` 中 `attr='base_knowledge_brief'` | 合并 |
 
