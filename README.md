@@ -24,6 +24,7 @@
 - **文档自动生成**：一键生成 Markdown / DOCX / PDF 格式分析报告，含图表的智能排版
 - **任意 CSV 导入**：上传 CSV 自动建表，上传文档自动生成数据注释
 - **联网搜索**：支持 DuckDuckGo 联网搜索，结合外部信息分析
+- **MCP 外部工具集成**：通过 Model Context Protocol 连接外部 MCP 服务器，扩展 LLM 能力边界（如调用外部 API、访问第三方服务）
 - **全链路可观测**：每一步 LLM 调用、代码执行、结果均记录到数据库，支持会话回溯
 - **SSE 实时流式**：生成代码、执行结果、规划更新实时推送到前端
 
@@ -81,6 +82,20 @@
 | `search_web(query)` | DuckDuckGo 网页搜索 |
 | `fetch_webpage(url)` | 抓取网页内容 |
 
+### 动作类型
+
+| 动作 | 功能 |
+|------|------|
+| `explore_schema` | 探索数据库表结构 |
+| `explore_functions` | 探索可用函数目录 |
+| `explore_base_knowledge` | 搜索业务领域知识库 |
+| `explore_mcp` | 探索外部 MCP 服务器的可用工具列表 |
+| `exe_mcp` | 调用外部 MCP 服务器上的具体工具 |
+| `generate_and_execute` | 生成并执行代码（SQL/Python） |
+| `web_search` | DuckDuckGo 联网搜索 |
+| `fetch_webpage` | 抓取网页内容 |
+| `generate_document` | 自动生成分析报告（MD/DOCX/PDF） |
+
 ## 配置与使用
 
 ### 环境要求
@@ -136,6 +151,20 @@ VITE_API_BASE=/api
 - [DeepSeek](https://api-docs.deepseek.com/)
 - [智谱 GLM](https://open.bigmodel.cn/)
 - [OpenAI](https://platform.openai.com/)
+
+### MCP 服务器配置
+
+`./config/mcp_servers.yaml`
+
+```yaml
+mcp_servers:
+  - name: "weather"
+    description: "Weather forecast MCP server"
+    transport: "sse"
+    url: "http://localhost:8001/sse"
+```
+
+支持 `sse`（Server-Sent Events）传输方式。在 `mcp_servers` 列表中添加多个服务器配置，LLM 即可通过 `explore_mcp` 发现工具、`exe_mcp` 调用工具。
 
 ### 启动
 

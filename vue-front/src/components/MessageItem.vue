@@ -137,6 +137,8 @@ const assistantSummary = computed(() => {
   if (a === 'explore_base_knowledge') return 'Explore Base Knowledge'
   if (a === 'generate_and_execute') return 'Generate & Execute'
   if (a === 'solved') return 'Solved'
+  if (a === 'explore_mcp') return 'Explore MCP'
+  if (a === 'exe_mcp') return 'Execute MCP'
   return a || 'Entry'
 })
 

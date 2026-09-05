@@ -89,6 +89,18 @@ elif action == "my_new_action":
 
 可以是新文件或现有文件中的函数。函数应为生成器（generator），yield SSE 事件字典。
 
+如果需要连接外部 MCP 服务器，使用 `agent/tools/mcp_client/` 模块：
+```python
+from agent.tools.mcp_client import load_mcp_servers, get_mcp_server, MCPClient, MCPError
+
+server_config = get_mcp_server("server_name")
+with MCPClient(server_config) as client:
+    tools = client.list_tools()          # 获取工具列表
+    result = client.call_tool("name", {"key": "value"})  # 调用工具
+```
+
+MCP 服务器配置定义在 `config/mcp_servers.yaml`，支持 `sse` 传输方式。
+
 SSE 事件格式统一为：
 
 ```python

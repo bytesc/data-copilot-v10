@@ -10,10 +10,16 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 
 ## action
 
-LLM 输出的 JSON 对象，格式为 `{"action": "...", ...}`。
+LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explore_schema/functions/base_knowledge）可批量；用户交互类（output_text/ask_question/ask_choice/summary_and_pause/attempt_completion）可批量，summary_and_pause/attempt_completion 必须在最后。两类不可混排。
 
+单 action 格式 `{"action": "...", ...}`：
 ```json
 {"role":"assistant","type":"action_decision","content":{"action":"explore_schema","keyword":"..."}}
+```
+
+多 action 格式 `{"actions": [{...}, ...]}`：
+```json
+{"role":"assistant","type":"action_decision","content":{"actions":[{"action":"explore_schema"},{"action":"explore_functions"}]}}
 ```
 
 ## act
@@ -69,6 +75,39 @@ LLM 输出的 JSON 对象，格式为 `{"action": "...", ...}`。
 [ACT web_search] search_result:
 {search_result}
 [ACT web_search] query: {query}
+```
+
+### explore_mcp
+
+```json
+{"role":"assistant","type":"act","action":"explore_mcp",
+ "server":"server_name","tools":[{"name":"tool1","description":"...","inputSchema":{...}}],
+ "display_content":"Connecting to MCP server...","error":null}
+```
+
+上下文格式:
+```
+[ACT explore_mcp] server: {server_name}
+[ACT explore_mcp] tools: [{name, description, inputSchema}, ...]
+[ACT explore_mcp] result:
+{display_content}
+```
+
+### exe_mcp
+
+```json
+{"role":"assistant","type":"act","action":"exe_mcp",
+ "server":"server_name","tool":"tool_name",
+ "result":{"content":[{"type":"text","text":"..."}]},
+ "display_content":"...","error":null}
+```
+
+上下文格式:
+```
+[ACT exe_mcp] server: {server_name}
+[ACT exe_mcp] tool: {tool_name}
+[ACT exe_mcp] result:
+{display_content}
 ```
 
 ### fetch_webpage

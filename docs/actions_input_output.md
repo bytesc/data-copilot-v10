@@ -31,9 +31,19 @@
 {"question": "...", "session_id": "...", "conversation_history": [...], "cycle_index": 0}
 ```
 
-**输出**
+**输出（单 action）**
 ```json
 {"role":"assistant","type":"action_decision","content":{"action":"...", ...}}
+```
+
+**输出（多 action，Explore类可批量）**
+```json
+{"role":"assistant","type":"action_decision","content":{"actions":[{"action":"explore_schema"},{"action":"explore_functions"}]}}
+```
+
+**输出（多 action，用户交互类可批量，summary_and_pause/attempt_completion 必须在最后）**
+```json
+{"role":"assistant","type":"action_decision","content":{"actions":[{"action":"output_text","text":"..."},{"action":"ask_question","text":"..."}]}}
 ```
 
 **上下文**
@@ -50,6 +60,7 @@
 ```json
 {"action": "explore_schema", "keyword": "..."}
 ```
+keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用于过滤数据。
 
 **输出**
 ```json
@@ -76,6 +87,7 @@
 ```json
 {"action": "explore_base_knowledge", "keyword": "..."}
 ```
+keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用于过滤数据。
 
 **输出**
 ```json
@@ -99,6 +111,7 @@
 ```json
 {"action": "explore_functions", "keyword": "..."}
 ```
+keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用于过滤数据。
 
 **输出**
 ```json
@@ -314,7 +327,68 @@
 
 ---
 
-## 14. Observe
+#---
+
+## 14. explore_mcp
+
+**输入**
+```json
+{"action": "explore_mcp", "server": "server_name"}
+```
+server 为必填，需匹配 `config/mcp_servers.yaml` 中配置的服务器名称。
+
+**输出**
+```json
+{"role":"assistant","type":"act","action":"explore_mcp","server":"server_name","tools":[...],"display_content":"...","error":"..."}
+```
+
+**上下文（成功）**
+```
+[ACT explore_mcp] server: {server_name}
+[ACT explore_mcp] tools: [{name, description, inputSchema}, ...]
+[ACT explore_mcp] result:
+{display_content}
+```
+
+**上下文（失败）**
+```
+[ACT explore_mcp] server: {server_name}
+[ACT explore_mcp] error: {error}
+```
+
+---
+
+## 15. exe_mcp
+
+**输入**
+```json
+{"action": "exe_mcp", "server": "server_name", "tool": "tool_name", "params": {"key": "value"}}
+```
+server 和 tool 为必填。params 为可选参数，根据 `explore_mcp` 返回的 inputSchema 传入。
+
+**输出**
+```json
+{"role":"assistant","type":"act","action":"exe_mcp","server":"server_name","tool":"tool_name","result":{...},"display_content":"...","error":"..."}
+```
+
+**上下文（成功）**
+```
+[ACT exe_mcp] server: {server_name}
+[ACT exe_mcp] tool: {tool_name}
+[ACT exe_mcp] result:
+{display_content}
+```
+
+**上下文（失败）**
+```
+[ACT exe_mcp] server: {server_name}
+[ACT exe_mcp] tool: {tool_name}
+[ACT exe_mcp] error: {error}
+```
+
+---
+
+## 16. Observe
 
 **输入**
 ```json

@@ -80,6 +80,26 @@ def history_to_text(history: List[dict]) -> str:
                     lines.append(f"[ACT fetch_webpage] page_content:\n{entry['page_content']}")
                 if entry.get("url"):
                     lines.append(f"[ACT fetch_webpage] url: {entry['url']}")
+            elif action == "explore_mcp":
+                if entry.get("server"):
+                    lines.append(f"[ACT explore_mcp] server: {entry['server']}")
+                if entry.get("tools"):
+                    lines.append(f"[ACT explore_mcp] tools: {json.dumps(entry['tools'], ensure_ascii=False)}")
+                if entry.get("display_content"):
+                    lines.append(f"[ACT explore_mcp] result:\n{entry['display_content']}")
+                if entry.get("error"):
+                    lines.append(f"[ACT explore_mcp] error: {entry['error']}")
+            elif action == "exe_mcp":
+                if entry.get("server"):
+                    lines.append(f"[ACT exe_mcp] server: {entry['server']}")
+                if entry.get("tool"):
+                    lines.append(f"[ACT exe_mcp] tool: {entry['tool']}")
+                if entry.get("result"):
+                    lines.append(f"[ACT exe_mcp] result:\n{json.dumps(entry['result'], ensure_ascii=False)}")
+                if entry.get("display_content"):
+                    lines.append(f"[ACT exe_mcp] result:\n{entry['display_content']}")
+                if entry.get("error"):
+                    lines.append(f"[ACT exe_mcp] error: {entry['error']}")
             else:
                 if entry.get("search_result"):
                     lines.append(f"[ACT {action}] search_result:\n{entry['search_result']}")

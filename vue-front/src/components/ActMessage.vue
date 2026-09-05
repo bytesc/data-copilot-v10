@@ -124,6 +124,34 @@
       </details>
     </template>
 
+    <template v-else-if="message.action === 'explore_mcp'">
+      <details class="msg-collapse" open>
+        <summary class="collapse-summary">MCP Tools: {{ message.server || mcpServer }}</summary>
+        <div class="collapse-body">
+          <div v-if="message.error" class="error-block"><strong>Error:</strong> {{ message.error }}</div>
+          <div v-if="hasMcpDisplayContent" v-html="renderMd(mcpDisplayContent)"></div>
+          <div v-else-if="hasMcpTools">
+            <div v-for="tool in mcpTools" :key="tool.name" class="mcp-tool-entry">
+              <div class="mcp-tool-header"><strong>{{ tool.name }}</strong></div>
+              <div class="mcp-tool-desc">{{ tool.description }}</div>
+            </div>
+          </div>
+          <div v-else-if="message.tools && message.tools.length === 0">(No tools available)</div>
+        </div>
+      </details>
+    </template>
+
+    <template v-else-if="message.action === 'exe_mcp'">
+      <details class="msg-collapse" open>
+        <summary class="collapse-summary">MCP Execute: {{ message.server || mcpServer }}/{{ message.tool || mcpTool }}</summary>
+        <div class="collapse-body">
+          <div v-if="message.error" class="error-block"><strong>Error:</strong> {{ message.error }}</div>
+          <div v-if="hasMcpDisplayContent" v-html="renderMd(mcpDisplayContent)"></div>
+          <div v-else-if="hasMcpResult" class="mcp-result" v-html="renderMd(mcpResultText)"></div>
+        </div>
+      </details>
+    </template>
+
     <template v-else-if="message.action === 'generate_document'">
       <details class="msg-collapse" open>
         <summary class="collapse-summary">Document generated</summary>
@@ -272,6 +300,43 @@ const pageContent = computed(() => {
 
 const hasPageContent = computed(() => !!pageContent.value)
 
+const mcpServer = computed(() => {
+  return props.message.server || getSubPhaseContent('explore_mcp')
+})
+
+const mcpTool = computed(() => {
+  return props.message.tool || ''
+})
+
+const mcpTools = computed(() => {
+  return props.message.tools || props.message.parsed?.tools || []
+})
+
+const hasMcpTools = computed(() => mcpTools.value.length > 0)
+
+const mcpDisplayContent = computed(() => {
+  const sub = props.message.subPhases?.find(s => s.name === 'explore_mcp' || s.name === 'exe_mcp')
+  return props.message.display_content || props.message.parsed?.display_content || sub?.content || ''
+})
+
+const hasMcpDisplayContent = computed(() => !!mcpDisplayContent.value)
+
+const mcpResultText = computed(() => {
+  const r = props.message.result || props.message.parsed?.result
+  if (!r) return ''
+  if (typeof r === 'string') return r
+  return formatJson(r)
+})
+
+const hasMcpResult = computed(() => {
+  return props.message.result || props.message.parsed?.result
+})
+
+function getSubPhaseContent(name) {
+  const sub = props.message.subPhases?.find(s => s.name === name)
+  return sub?.content || ''
+}
+
 function renderMd(text) {
   return renderMarkdown(text || '')
 }
@@ -300,7 +365,41 @@ function subPhaseLabel(name) {
     generate_document: 'Generated Document',
     web_search: 'Web Search Results',
     fetch_webpage: 'Fetched Webpage',
+    explore_mcp: 'MCP Tools',
+    exe_mcp: 'MCP Execution Result',
   }
   return labels[name] || name
 }
 </script>
+
+<style scoped>
+.mcp-tool-entry {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.mcp-tool-entry:last-child {
+  border-bottom: none;
+}
+.mcp-tool-header {
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+.mcp-tool-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.mcp-result {
+  white-space: pre-wrap;
+}
+.error-block {
+  color: var(--accent-red);
+  padding: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  margin: 4px 0;
+}
+.search-query {
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+</style>

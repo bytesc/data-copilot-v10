@@ -1,9 +1,9 @@
-fastapi==0.103.2
-uvicorn==0.23.2
-starlette==0.27.0
-python-multipart==0.0.5
+fastapi>=0.115.0
+uvicorn>=0.31.1
+starlette>=1.0.0
+python-multipart>=0.0.9
 pyjwt==2.10.1
-pydantic==2.10.5
+pydantic>=2.12.0
 SQLAlchemy==2.0.36
 
 PyMySQL==1.1.0
@@ -29,3 +29,4 @@ beautifulsoup4==4.12.3
 
 ddgs==9.14.4
 
+mcp>=2.0.0

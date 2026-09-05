@@ -1,0 +1,15 @@
+mcp_servers:
+  - name: "calculator"
+    description: "Math calculation tools: add, subtract, multiply, divide, power, sqrt, sin, cos, average"
+    transport: "sse"
+    url: "http://localhost:8101/sse"
+
+  - name: "text"
+    description: "Text processing tools: uppercase, lowercase, reverse, word_count, char_count, concat, contains, replace"
+    transport: "sse"
+    url: "http://localhost:8102/sse"
+
+  - name: "datetime"
+    description: "Date and time tools: get_current_time, format_date, date_diff, weekday, timestamp, add_days"
+    transport: "sse"
+    url: "http://localhost:8103/sse"

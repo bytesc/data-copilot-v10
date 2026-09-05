@@ -29,11 +29,19 @@
 
 ## action
 
+支持单 action 输出 `action_result:{action, ...}` 或多 action 输出 `action_result:{actions:[{action, ...}, ...]}`。Explore 类（explore_schema/functions/base_knowledge）可批量；用户交互类（output_text/ask_question/ask_choice/summary_and_pause/attempt_completion）可批量，其中 summary_and_pause/attempt_completion 必须在最后。两类不可混排，其余 action 只能单次。
+
 ```
 成功：
   {phase:"action", type:"msg",    content:"正在决策下一步动作..."}
   {phase:"action", type:"chunk",  content:"..."}  ×N
   {phase:"action", type:"done",   content:"...", action_result:{action,text,...}}
+  {type:"history", history:[...]}
+
+多 action 成功：
+  {phase:"action", type:"msg",    content:"正在决策下一步动作..."}
+  {phase:"action", type:"chunk",  content:"..."}  ×N
+  {phase:"action", type:"done",   content:"...", action_result:{actions:[{action:"explore_schema"},{action:"explore_functions"}]}}
   {type:"history", history:[...]}
 
 重试后成功：
@@ -134,6 +142,38 @@
 
 失败：
   {phase:"act", type:"error", sub_phase:"fetch_webpage", content:"获取页面失败: ..."}
+```
+
+### explore_mcp
+
+```
+成功：
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"正在连接 MCP 服务器: {server_name}..."}
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"已连接到 {server_name}，正在获取工具列表..."}
+  {phase:"act", type:"chunk", sub_phase:"explore_mcp", content:"工具列表 markdown..."}
+  {phase:"act", type:"done",  sub_phase:"explore_mcp", content:"...",
+   result:{server:"...", tools:[{name,description,inputSchema}]}}
+  {type:"history", history:[...]}
+
+失败：
+  {phase:"act", type:"error", sub_phase:"explore_mcp", content:"未找到 MCP 服务器: {name}"}
+  {phase:"act", type:"error", sub_phase:"explore_mcp", content:"MCP 连接失败: {error}"}
+```
+
+### exe_mcp
+
+```
+成功：
+  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在执行 MCP 工具: {server}/{tool}..."}
+  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在调用 {tool}..."}
+  {phase:"act", type:"chunk", sub_phase:"exe_mcp", content:"执行结果 markdown..."}
+  {phase:"act", type:"done",  sub_phase:"exe_mcp", content:"...",
+   result:{server:"...", tool:"...", result:{...}}}
+  {type:"history", history:[...]}
+
+失败：
+  {phase:"act", type:"error", sub_phase:"exe_mcp", content:"未找到 MCP 服务器: {name}"}
+  {phase:"act", type:"error", sub_phase:"exe_mcp", content:"MCP 调用失败: {error}"}
 ```
 
 ### generate_document
