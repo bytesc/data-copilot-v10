@@ -208,7 +208,7 @@ def _event_stream_act(
 
 
 def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None):
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': '正在搜索数据库信息...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': 'Searching database information...'}, ensure_ascii=False)}\n\n"
 
     full_schema = get_db_overview_markdown(engine, tables, include_samples=True)
 
@@ -240,12 +240,12 @@ Example:
 {{"tables": {{"users": ["id", "name", "email"], "orders": []}}, "selected_guides": [1, 3, 7], "plan": "Query the users table to get customer IDs and emails, then join with orders table to find purchase records"}}
 ```
 """
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': '正在分析所需字段...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': 'Analyzing required fields...'}, ensure_ascii=False)}\n\n"
 
     error_msg = ""
     for i in range(2):
         if i > 0:
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': '解析失败，正在重新分析...'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': 'Parsing failed, re-analyzing...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
         for chunk in call_llm_stream(prompt + error_msg, llm):
@@ -289,7 +289,7 @@ Example:
 
 
 def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None):
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'msg', 'content': '正在搜索函数信息...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'msg', 'content': 'Searching function information...'}, ensure_ascii=False)}\n\n"
 
     full_catalog = get_func_catalog_markdown()
 
@@ -312,7 +312,7 @@ Output ONLY the function names separated by commas. Return "solved" if no functi
 Example:
 exe_sql, get_save_image_path
 """
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'status', 'content': '正在分析所需函数...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'status', 'content': 'Analyzing required functions...'}, ensure_ascii=False)}\n\n"
 
     raw = ""
     for chunk in call_llm_stream(prompt, llm):
@@ -341,7 +341,7 @@ exe_sql, get_save_image_path
 
 
 def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyword: Optional[str] = None):
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': '正在搜索基础知识...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': 'Searching base knowledge...'}, ensure_ascii=False)}\n\n"
 
     base_knowledge = get_base_knowledge_db()
     doc_knowledge = get_doc_knowledge_db()
@@ -380,12 +380,12 @@ Example:
 {{"selected_ids": [1, 3, 7], "summary": "The user's question relates to company data analysis, entries 1, 3, 7 provide relevant domain knowledge."}}
 """
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': '正在分析相关知识...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': 'Analyzing relevant knowledge...'}, ensure_ascii=False)}\n\n"
 
     error_msg = ""
     for i in range(2):
         if i > 0:
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': '解析失败，正在重新分析...'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': 'Parsing failed, re-analyzing...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
         for chunk in call_llm_stream(prompt + error_msg, llm):
@@ -428,7 +428,7 @@ def _parse_base_knowledge_json(raw: str) -> dict | None:
 
 
 def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions, request_json: str = "", research_guide: str = ""):
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': '正在生成并执行代码...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': 'Generating and executing code...'}, ensure_ascii=False)}\n\n"
     full_code = ""
     full_ans = ""
     exec_error = None
@@ -479,7 +479,7 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
 
 
 def _act_generate_document(conversation_history, session_id, title: str = "", request_json: str = ""):
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': '正在生成报告文档...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': 'Generating report document...'}, ensure_ascii=False)}\n\n"
     last_event = {}
     for event in generate_document_from_context(conversation_history, session_id, title, request_json):
         yield event
@@ -502,7 +502,7 @@ def _act_web_search(full_question: str, session_id: str, params: dict, request_j
     if not query:
         query = full_question.strip()
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'msg', 'content': f'正在搜索: {query}...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'msg', 'content': f'Searching: {query}...'}, ensure_ascii=False)}\n\n"
 
     try:
         max_results = min(int(max_results), 50)
@@ -517,14 +517,14 @@ def _act_web_search(full_question: str, session_id: str, params: dict, request_j
 
     if "error" in result_data:
         error_msg = result_data.get("error", "unknown error")
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'error', 'content': f'搜索失败: {error_msg}'}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'error', 'content': f'Search failed: {error_msg}'}, ensure_ascii=False)}\n\n"
         return {"search_results": result_data, "query": query}
 
     formatted = []
     for r in result_data.get("results", []):
         formatted.append(f"- **{r.get('title', '')}**\n  URL: {r.get('url', '')}\n  {r.get('snippet', '')}")
 
-    display_content = f"## 搜索结果: {query}\n\n共找到 {result_data.get('count', 0)} 条结果:\n\n" + "\n\n".join(formatted)
+    display_content = f"## Search Results: {query}\n\nFound {result_data.get('count', 0)} results:\n\n" + "\n\n".join(formatted)
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'chunk', 'content': display_content}, ensure_ascii=False)}\n\n"
 
@@ -550,7 +550,7 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
     if not url:
         url = full_question.strip()
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'msg', 'content': f'正在获取页面: {url[:100]}...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'msg', 'content': f'Fetching page: {url[:100]}...'}, ensure_ascii=False)}\n\n"
 
     try:
         max_length = min(int(max_length), 50000)
@@ -562,12 +562,12 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
         parsed = json.loads(content)
         if "error" in parsed:
             error_msg = parsed.get("error", "unknown error")
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'error', 'content': f'获取页面失败: {error_msg}'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'error', 'content': f'Fetch page failed: {error_msg}'}, ensure_ascii=False)}\n\n"
             return {"url": url, "content": content}
     except json.JSONDecodeError:
         pass
 
-    display_content = f"## 页面内容: {url}\n\n{content}\n\n---\n*内容长度: {len(content)} 字符*"
+    display_content = f"## Page Content: {url}\n\n{content}\n\n---\n*Content length: {len(content)} characters*"
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'chunk', 'content': display_content}, ensure_ascii=False)}\n\n"
 

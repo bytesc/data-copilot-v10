@@ -17,7 +17,7 @@ session_operation_log = Table(
     Column("ans", LONGTEXT, comment="返回的结果"),
     Column("code", LONGTEXT, comment="生成的代码"),
     Column("result_type", String(50), comment="success/error"),
-    Column("msg", String(512), comment="处理结果描述"),
+    Column("msg", String(512), comment="result description"),
     Column("prompt_length", Integer, comment="prompt长度"),
     Column("created_at", DateTime, comment="记录时间"),
 )

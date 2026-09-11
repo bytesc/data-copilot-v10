@@ -36,7 +36,7 @@ def _event_stream_observe(
     request_json: str = "",
 ):
     """Observe phase: LLM reviews execution results and updates the plan."""
-    yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'status', 'content': '正在审查执行结果...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'status', 'content': 'Reviewing execution results...'}, ensure_ascii=False)}\n\n"
 
     trimmed = prepare_trimmed_context(session_id, conversation_history)
     if conversation_history:
@@ -88,9 +88,9 @@ If todo is empty, the plan is complete. Keep descriptions concise.
 
     for i in range(2):
         if i > 0:
-            yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'msg', 'content': '解析失败，正在重新审查...'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'msg', 'content': 'Parsing failed, re-reviewing execution results...'}, ensure_ascii=False)}\n\n"
         else:
-            yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'msg', 'content': '正在审查执行结果...'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'msg', 'content': 'Reviewing execution results...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
         for chunk in call_llm_stream(observe_prompt + error_msg, llm):

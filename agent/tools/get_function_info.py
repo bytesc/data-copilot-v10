@@ -125,7 +125,7 @@ def get_function_info(question, llm, use_all_functions=False, brief=False):
 
 
 def filter_functions_stream(question, llm):
-    yield {"type": "status", "content": "正在分析可用函数..."}
+    yield {"type": "status", "content": "Analyzing available functions..."}
 
     function_prompt = get_function_prompt(question)
     prompt_length = len(function_prompt)

@@ -261,7 +261,7 @@ def generate_and_execute_stream(question, tables=None, retries=2,
                                  selected_fields=None, selected_functions=None, print_rows=5,
                                  research_guide=None,
                                  ):
-    yield {"type": "msg", "content": "正在分析问题...", "phase": "act", "sub_phase": "code"}
+    yield {"type": "msg", "content": "Analyzing question...", "phase": "act", "sub_phase": "code"}
 
     cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, selected_fields, selected_functions, research_guide)
     prompt_length = len(cot_prompt)
@@ -270,9 +270,9 @@ def generate_and_execute_stream(question, tables=None, retries=2,
 
     for i in range(retries):
         if i > 0:
-            yield {"type": "msg", "content": "执行出错，正在根据错误信息重新生成代码...", "phase": "act", "sub_phase": "code"}
+            yield {"type": "msg", "content": "Execution failed, regenerating code based on error...", "phase": "act", "sub_phase": "code"}
         else:
-            yield {"type": "msg", "content": "正在生成代码...", "phase": "act", "sub_phase": "code"}
+            yield {"type": "msg", "content": "Generating code...", "phase": "act", "sub_phase": "code"}
 
         full_prompt = cot_prompt + error_msg
         raw_content = ""
@@ -303,7 +303,7 @@ def generate_and_execute_stream(question, tables=None, retries=2,
 
         yield {"type": "chunk", "sub_type": "code_complete", "content": code, "phase": "act", "sub_phase": "code"}
 
-        yield {"type": "msg", "content": "正在执行代码...", "phase": "act", "sub_phase": "exec"}
+        yield {"type": "msg", "content": "Executing code...", "phase": "act", "sub_phase": "exec"}
 
         error_msg = ""
         formatted_result = ""

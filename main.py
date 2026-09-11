@@ -239,7 +239,7 @@ async def get_graph_api(request: Request, user_input: AgentInputDict):
             "question": user_input.question,
             "ans": ans,
             "type": "success",
-            "msg": "处理成功",
+"msg": "Processed successfully",
             "session_id": user_input.session_id or ""
         }
         record_session_operation(
@@ -251,7 +251,7 @@ async def get_graph_api(request: Request, user_input: AgentInputDict):
             "question": user_input.question,
             "ans": "",
             "type": "error",
-            "msg": "处理失败，请换个问法吧",
+            "msg": "Processing failed, please rephrase your question",
             "session_id": user_input.session_id or ""
         }
         record_session_operation(
@@ -314,7 +314,7 @@ async def db_comments(request: Request):
     processed_data = {
         "ans": comments_json,
         "type": "success",
-        "msg": "获取表注释和列注释成功"
+        "msg": "Table comments and column comments fetched successfully"
     }
     return JSONResponse(content=processed_data)
 
@@ -326,7 +326,7 @@ async def table_comments(request: Request):
     processed_data = {
         "ans": table_comments,
         "type": "success",
-        "msg": "表注释获取成功"
+        "msg": "Table comments fetched successfully"
     }
     return JSONResponse(content=processed_data)
 
@@ -346,13 +346,13 @@ async def filter_db_fields_api(request: Request, user_input: AgentInput):
         processed_data = {
             "ans": selected_fields,
             "type": "success",
-            "msg": "字段筛选成功"
+            "msg": "Fields filtered successfully"
         }
     else:
         processed_data = {
             "ans": {},
             "type": "error",
-            "msg": "字段筛选失败"
+            "msg": "Fields filtering failed"
         }
     return JSONResponse(content=processed_data)
 

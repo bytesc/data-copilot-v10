@@ -211,8 +211,8 @@ def filter_db_fields(question, engine, llm, tables=None, retries=2):
 
 
 def filter_db_fields_stream(question, engine, llm, tables=None):
-    yield {"type": "status", "content": "正在分析数据库结构..."}
-    yield {"type": "status", "content": "正在筛选相关表和字段..."}
+    yield {"type": "status", "content": "Analyzing database structure..."}
+    yield {"type": "status", "content": "Filtering relevant tables and fields..."}
 
     prompt = _build_filter_prompt(question, engine, tables)
     prompt_length = len(prompt)
@@ -227,4 +227,4 @@ def filter_db_fields_stream(question, engine, llm, tables=None):
         logging.info(f"filter_db_fields_stream: Question: {question}\nResult: {result}\n")
         yield {"type": "done", "content": full_content, "selected_fields": result, "prompt_length": prompt_length}
     else:
-        yield {"type": "error", "content": "字段筛选解析失败", "selected_fields": None, "prompt_length": prompt_length}
+        yield {"type": "error", "content": "Field filtering parsing failed", "selected_fields": None, "prompt_length": prompt_length}

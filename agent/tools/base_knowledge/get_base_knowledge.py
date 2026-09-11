@@ -114,7 +114,7 @@ def _parse_llm_response_with_ids(raw):
 
 
 def _llm_search_with_ids(prompt, knowledge):
-    yield {"type": "status", "content": "正在分析知识库..."}
+    yield {"type": "status", "content": "Analyzing knowledge base..."}
     full_content = ""
     for chunk in call_llm_stream(prompt, llm):
         full_content += chunk

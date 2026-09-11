@@ -191,9 +191,9 @@ def _event_stream_action(
     error_msg = ""
     for i in range(2):
         if i > 0:
-            yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': '解析失败，正在重新决策...'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': 'Parsing failed, re-deciding next action...'}, ensure_ascii=False)}\n\n"
         else:
-            yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': '正在决策下一步动作...'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': 'Deciding next action...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
         for chunk in call_llm_stream(prompt + error_msg, llm):
@@ -213,7 +213,7 @@ def _event_stream_action(
             record_session_operation(
                 session_id, "/api/action/stream/",
                 request_json, str(action_result), "",
-                "success", f"决定动作: {action_label}",
+                "success", f"Decided action: {action_label}",
                 prompt_length=len(prompt)
             )
             history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "action_decision", "content": parse_json_raw(raw)}])
@@ -226,7 +226,7 @@ def _event_stream_action(
     record_session_operation(
         session_id, "/api/action/stream/",
         request_json, str(action_result), "",
-        "error", action_result.get("error", "未知错误"),
+        "error", action_result.get("error", "Unknown error"),
         prompt_length=len(prompt)
     )
     error_content = action_result.get("error", "unknown")

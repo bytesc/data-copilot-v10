@@ -90,9 +90,9 @@ FINAL LANGUAGE CHECK: The knowledge base above is in Chinese — IGNORE THAT. Yo
 
     for i in range(2):
         if i > 0:
-            yield f"data: {json.dumps({'phase': 'think', 'type': 'msg', 'content': '解析失败，正在重新生成分析计划...'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'think', 'type': 'msg', 'content': 'Parsing failed, regenerating analysis plan...'}, ensure_ascii=False)}\n\n"
         else:
-            yield f"data: {json.dumps({'phase': 'think', 'type': 'msg', 'content': '正在生成分析计划...'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'think', 'type': 'msg', 'content': 'Generating analysis plan...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
         for chunk in call_llm_stream(think_prompt + error_msg, llm):

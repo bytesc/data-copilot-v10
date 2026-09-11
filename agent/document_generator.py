@@ -398,7 +398,7 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
     record_session_operation(
         session_id, "/api/generate-document/stream/",
         request_json, full_document[:5000], "",
-        "success", f"文档生成完成: {title}, 共{len(parts)}部分",
+        "success", f"Document generated: {title}, {len(parts)} parts",
         prompt_length=len(context)
     )
 
@@ -505,7 +505,7 @@ Write the complete business summary document in markdown format. Start with `# T
     record_session_operation(
         session_id, "act/generate_document",
         request_json, full_document[:5000], "",
-        "success", f"文档生成完成: {title}",
+        "success", f"Document generated: {title}",
         prompt_length=len(context)
     )
 
