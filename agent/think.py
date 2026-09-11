@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.action import ACTIONS
-from agent.tools.base_knowledge.get_base_knowledge import TARGET, BRIEF_INFO
+from agent.tools.base_knowledge.get_base_knowledge import TARGET, BRIEF_INFO, THINK_KNOWLEDGE
 from agent.tools.tools_def import llm
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
@@ -51,6 +51,8 @@ def _event_stream_think(
     think_prompt = f"""You are an autonomous data analysis Thinker. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
 
 {target_section}
+
+{THINK_KNOWLEDGE}
 
 ## Context
 {context if context else '(no context)'}
