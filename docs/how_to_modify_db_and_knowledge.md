@@ -57,7 +57,16 @@
 
 用于 think 阶段的 `## MCP Brief` 区段和 `explore_mcp` action。
 
-### 3.6 TARGET — 目标输出模板
+### 3.6 FUNCTION_BRIEF — 函数摘要
+
+| 来源 | 路径/表 |
+|---|---|
+| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/function_brief.md` |
+| 数据库表 | `brief_info` 中 `attr='function_brief'` 的行 |
+
+用于 think 阶段的 `## Function Brief` 区段。与代码自动生成的函数摘要（`get_func_summary_for_agent()`）合并后一起注入。
+
+### 3.7 TARGET — 目标输出模板
 
 | 来源 | 路径/表 |
 |---|---|
@@ -66,7 +75,7 @@
 
 仅支持 MD 文件，仅用于 think 阶段。需非空时才会注入。
 
-### 3.7 BASE — 基础业务知识（完整）
+### 3.8 BASE — 基础业务知识（完整）
 
 | 来源 | 路径/表 |
 |---|---|
@@ -75,7 +84,7 @@
 
 **不再注入 think / action 提示词**。仅通过 `explore_base_knowledge` action 按需获取。`BASE_KNOWLEDGE_BRIEF` 为其摘要版本。
 
-### 3.8 DOC — 文档知识
+### 3.9 DOC — 文档知识
 
 | 来源 | 路径/表 |
 |---|---|
@@ -84,7 +93,7 @@
 
 仅通过 `explore_base_knowledge` action 按需获取。
 
-### 3.9 THINK_KNOWLEDGE — 思考分析策略
+### 3.10 THINK_KNOWLEDGE — 思考分析策略
 
 | 来源 | 路径/表 |
 |---|---|
@@ -101,6 +110,7 @@
 | DB_BRIEF_BRIEF | `db_brief.md` | `brief_info.db_brief` | think | 合并 |
 | BASE_KNOWLEDGE_BRIEF | `base_knowledge_brief.md` | `brief_info.base_knowledge_brief` | think | 合并 |
 | MCP_BRIEF | `mcp_brief.md` | `brief_info.mcp_brief` | think / explore_mcp | 合并 |
+| FUNCTION_BRIEF | `function_brief.md` | `brief_info.function_brief` | think | 合并 |
 | Function Brief | 代码自动生成 | 无 | think | 自动 |
 | BASE | `base_knowledge.md` | `base_knowledge` | explore_base_knowledge | 合并（按需获取） |
 | DOC | `doc_knowledge.md` | `doc_knowledge` | explore_base_knowledge | 合并（按需获取） |

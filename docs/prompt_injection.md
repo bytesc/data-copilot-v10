@@ -20,6 +20,8 @@
 | `target_knowledge.md` | `_TARGET_MD` |
 | `db_query_guide.md` | `_DB_QUERY_GUIDE_MD` |
 | `base_knowledge_brief.md` | 通过 `get_brief_info()` 读取 |
+| `mcp_brief.md` | 通过 `_read_doc()` 读取 |
+| `function_brief.md` | 通过 `get_brief_info()` 读取 |
 
 ### 2. 数据库表（实时查询，无需重启）
 
@@ -39,7 +41,7 @@ value LONGTEXT
 | `code_guide` | `get_code_guide_db()` |
 | `think_knowledge` | `get_think_knowledge_db()` |
 
-另外，`brief_info` 表（结构为 `attr` / `value`）用于存储 `db_brief` 和 `base_knowledge_brief` 等附加信息。
+另外，`brief_info` 表（结构为 `attr` / `value`）用于存储 `db_brief`、`base_knowledge_brief`、`mcp_brief`、`function_brief` 等附加信息。
 
 ### 3. 动态注入机制：`_DynamicStr`
 

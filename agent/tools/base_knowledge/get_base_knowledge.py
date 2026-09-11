@@ -410,6 +410,8 @@ def get_brief_info():
     _entries = [
         ("db_brief", "db_brief.md"),
         ("base_knowledge_brief", "base_knowledge_brief.md"),
+        ("mcp_brief", "mcp_brief.md"),
+        ("function_brief", "function_brief.md"),
     ]
     for attr_name, md_filename in _entries:
         md_content = _read_doc(md_filename)

@@ -20,6 +20,8 @@ def init_brief_info():
     _entries = [
         ("db_brief", ""),
         ("base_knowledge_brief", ""),
+        ("mcp_brief", ""),
+        ("function_brief", ""),
     ]
     try:
         with sys_engine.connect() as conn:
