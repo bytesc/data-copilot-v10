@@ -87,10 +87,13 @@ def _eval_expression(expr: str) -> float:
 @mcp.tool()
 def calculate(expression: str) -> float:
     """Evaluate a math expression string. Supports basic arithmetic (+, -, *, /, **, %), trigonometric functions (sin, cos, tan), math functions (sqrt, log, log10, exp, ceil, floor, abs, round), and constants (pi, e). Examples: '3 + 5 * 2', 'sqrt(144) + sin(90)', 'log(100, 10)', 'pi * 2'"""
+    print(f"[mcp_calculator] calculate(expression='{expression}')")
     try:
-        return _eval_expression(expression)
+        result = _eval_expression(expression)
+        print(f"[mcp_calculator] calculate -> {result}")
+        return result
     except Exception as e:
-        print(f"[calculator_server] Error evaluating expression '{expression}': {e}", file=sys.stderr)
+        print(f"[mcp_calculator] calculate error: {e}", file=sys.stderr)
         raise
 
 
