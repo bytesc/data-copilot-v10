@@ -93,6 +93,8 @@ ACTIONS_BODY = "\n\n".join(_ACTION_DESCRIPTIONS[a] for a in VALID_ACTIONS)
 _GROUP_1_ACTIONS = ["explore_schema", "explore_functions"]
 if ENABLE_BASE_KNOWLEDGE:
     _GROUP_1_ACTIONS.append("explore_base_knowledge")
+if ENABLE_MCP:
+    _GROUP_1_ACTIONS.append("explore_mcp")
 
 _OTHER_ACTIONS = ["generate_and_execute", "generate_document"]
 if ENABLE_WEB_SEARCH:
@@ -100,7 +102,7 @@ if ENABLE_WEB_SEARCH:
 if ENABLE_FETCH_URL:
     _OTHER_ACTIONS.append("fetch_webpage")
 if ENABLE_MCP:
-    _OTHER_ACTIONS.extend(["explore_mcp", "exe_mcp"])
+    _OTHER_ACTIONS.append("exe_mcp")
 
 ACTIONS = f"""
 {ACTIONS_BODY}
