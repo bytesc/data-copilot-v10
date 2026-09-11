@@ -81,14 +81,12 @@ def history_to_text(history: List[dict]) -> str:
                 if entry.get("url"):
                     lines.append(f"[ACT fetch_webpage] url: {entry['url']}")
             elif action == "explore_mcp":
-                if entry.get("server"):
-                    lines.append(f"[ACT explore_mcp] server: {entry['server']}")
-                if entry.get("tools"):
-                    lines.append(f"[ACT explore_mcp] tools: {json.dumps(entry['tools'], ensure_ascii=False)}")
-                if entry.get("display_content"):
-                    lines.append(f"[ACT explore_mcp] result:\n{entry['display_content']}")
-                if entry.get("error"):
-                    lines.append(f"[ACT explore_mcp] error: {entry['error']}")
+                if entry.get("selected_tools") is not None:
+                    lines.append(f"[ACT explore_mcp] selected_tools: {json.dumps(entry['selected_tools'], ensure_ascii=False)}")
+                if entry.get("explore_plan"):
+                    lines.append(f"[ACT explore_mcp] explore_plan:\n{entry['explore_plan']}")
+                if entry.get("tool_detail"):
+                    lines.append(f"[ACT explore_mcp] tool_detail:\n{entry['tool_detail']}")
             elif action == "exe_mcp":
                 if entry.get("server"):
                     lines.append(f"[ACT exe_mcp] server: {entry['server']}")

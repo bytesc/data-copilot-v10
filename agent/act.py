@@ -20,6 +20,24 @@ from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context, save_session_step
+from utils.get_config import config_data
+
+# Feature toggles — mirror flags in agent/action.py so act.py rejects disabled actions
+_ENABLE_MCP = config_data.get('enable_mcp', True)
+_ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
+_ENABLE_WEB_SEARCH = config_data.get('enable_web_search', True)
+_ENABLE_FETCH_URL = config_data.get('enable_fetch_url', True)
+
+_DISABLED_ACTIONS = {}
+if not _ENABLE_MCP:
+    _DISABLED_ACTIONS["explore_mcp"] = "MCP support is disabled in config"
+    _DISABLED_ACTIONS["exe_mcp"] = "MCP support is disabled in config"
+if not _ENABLE_BASE_KNOWLEDGE:
+    _DISABLED_ACTIONS["explore_base_knowledge"] = "Base knowledge support is disabled in config"
+if not _ENABLE_WEB_SEARCH:
+    _DISABLED_ACTIONS["web_search"] = "Web search support is disabled in config"
+if not _ENABLE_FETCH_URL:
+    _DISABLED_ACTIONS["fetch_webpage"] = "Fetch URL support is disabled in config"
 
 router = APIRouter()
 
@@ -108,14 +126,12 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
         entries.append(entry)
     elif action == "explore_mcp":
         entry = {"role": "assistant", "type": "act", "action": "explore_mcp"}
-        if act_data.get("server"):
-            entry["server"] = act_data["server"]
-        if act_data.get("tools"):
-            entry["tools"] = act_data["tools"]
-        if act_data.get("display_content"):
-            entry["display_content"] = act_data["display_content"]
-        if act_data.get("error"):
-            entry["error"] = act_data["error"]
+        if act_data.get("selected_tools") is not None:
+            entry["selected_tools"] = act_data["selected_tools"]
+        if act_data.get("explore_plan"):
+            entry["explore_plan"] = act_data["explore_plan"]
+        if act_data.get("tool_detail"):
+            entry["tool_detail"] = act_data["tool_detail"]
         entries.append(entry)
     elif action == "exe_mcp":
         entry = {"role": "assistant", "type": "act", "action": "exe_mcp"}
@@ -149,6 +165,11 @@ def _event_stream_act(
     selected_fields = params.get("selected_fields")
     selected_functions = params.get("selected_functions")
     research_guide = params.get("research_guide")
+
+    if action in _DISABLED_ACTIONS:
+        reason = _DISABLED_ACTIONS[action]
+        yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Action `{action}` is not available: {reason}'}, ensure_ascii=False)}\n\n"
+        return
 
     act_data = {}
     if action == "explore_schema":
@@ -572,71 +593,120 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
 
 
 def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_json: str = ""):
-    server_name = (params.get("server") or "").strip()
-    if not server_name:
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'error', 'content': 'MCP server name is required'}, ensure_ascii=False)}\n\n"
-        return {"server": "", "tools": [], "display_content": "", "error": "Server name is required"}
+    search_keyword = (params.get("search_keyword") or "").strip()
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': f'正在连接 MCP 服务器: {server_name}...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': '正在连接 MCP 服务器获取工具列表...'}, ensure_ascii=False)}\n\n"
 
-    server_config = get_mcp_server(server_name)
-    if not server_config:
-        all_servers = [s.get("name") for s in load_mcp_servers()]
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'error', 'content': f'未找到 MCP 服务器: {server_name}，可用服务器: {all_servers}'}, ensure_ascii=False)}\n\n"
-        return {"server": server_name, "tools": [], "display_content": "", "error": f"Server '{server_name}' not found"}
+    all_servers_config = load_mcp_servers()
+    if not all_servers_config:
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'error', 'content': '没有配置任何 MCP 服务器'}, ensure_ascii=False)}\n\n"
+        return {"selected_tools": [], "catalog": "", "tool_detail": "", "explore_plan": "", "error": "No MCP servers configured"}
 
-    try:
-        with MCPClient(server_config) as client:
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': f'已连接到 {server_name}，正在获取工具列表...'}, ensure_ascii=False)}\n\n"
-            tools = client.list_tools()
-    except MCPError as e:
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'error', 'content': f'MCP 连接失败: {e}'}, ensure_ascii=False)}\n\n"
-        return {"server": server_name, "tools": [], "display_content": "", "error": str(e)}
+    all_tools = []
+    failed_servers = []
+    for srv in all_servers_config:
+        name = srv.get("name", "?")
+        try:
+            with MCPClient(srv) as client:
+                tools = client.list_tools()
+                for t in tools:
+                    t["_server"] = name
+                    all_tools.append(t)
+        except Exception as e:
+            failed_servers.append(f"{name}({e})")
 
-    formatted_tools = []
-    for tool in tools:
-        name = tool.get("name", "")
-        desc = tool.get("description", "")
-        input_schema = tool.get("inputSchema", {})
-        formatted_tools.append({
-            "name": name,
-            "description": desc,
-            "inputSchema": input_schema,
-        })
+    if not all_tools:
+        err = "所有 MCP 服务器均连接失败: " + ", ".join(failed_servers) if failed_servers else "MCP 服务器没有提供任何工具"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'error', 'content': err}, ensure_ascii=False)}\n\n"
+        return {"selected_tools": [], "catalog": "", "tool_detail": "", "explore_plan": "", "error": err}
 
-    lines = [f"## MCP 服务器: {server_name} 可用工具\n"]
-    if not formatted_tools:
-        lines.append("*(该服务器没有提供任何工具)*")
+    catalog_lines = ["## MCP 工具目录\n"]
+    for t in all_tools:
+        srv = t.get("_server", "?")
+        schema = t.get("inputSchema", {})
+        params_str = ""
+        if schema and schema.get("properties"):
+            props = []
+            for pn, pi in schema["properties"].items():
+                req = pn in (schema.get("required", []))
+                props.append(f"`{pn}`({pi.get('type','any')}){'必填' if req else ''}:{pi.get('description','')}")
+            params_str = " [" + "; ".join(props) + "]"
+        catalog_lines.append(f"- **{srv}/{t['name']}**: {t.get('description', '')}{params_str}")
+    catalog = "\n".join(catalog_lines)
+
+    keyword_hint = f"\nFocus hint: {search_keyword.strip()}" if search_keyword else ""
+
+    prompt = f"""Analyze the following MCP tool catalog and the user's question to select the relevant tools.
+
+{catalog}
+
+Context:
+{full_question}
+{keyword_hint}
+
+Output ONLY a JSON object with the following structure:
+- "selected_tools": an array of objects with "server" and "name" fields identifying which tools to use.
+- "plan": a brief plan describing how these tools will be used.
+
+Example:
+{{"selected_tools": [{{"server": "calculator", "name": "add"}}, {{"server": "text", "name": "uppercase"}}], "plan": "Use calculator to compute values, then use text to process the result."}}
+
+If no tools are needed, return {{"selected_tools": [], "plan": "No MCP tools needed."}}
+"""
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': '正在分析所需 MCP 工具...'}, ensure_ascii=False)}\n\n"
+
+    raw = ""
+    for chunk in call_llm_stream(prompt, llm):
+        raw += chunk
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+
+    parsed = _parse_mcp_explore_json(raw)
+    selected_tools = parsed.get("selected_tools", []) if parsed else []
+    explore_plan = parsed.get("plan", "")
+
+    if selected_tools:
+        selected_lines = ["## 已选 MCP 工具\n"]
+        for st in selected_tools:
+            svr = st.get("server", "")
+            name = st.get("name", "")
+            matching = [t for t in all_tools if t.get("_server") == svr and t.get("name") == name]
+            if matching:
+                t = matching[0]
+                schema = t.get("inputSchema", {})
+                params_str = ""
+                if schema and schema.get("properties"):
+                    props = []
+                    for pn, pi in schema["properties"].items():
+                        req = pn in (schema.get("required", []))
+                        props.append(f"`{pn}`({pi.get('type','any')}){'必填' if req else ''}:{pi.get('description','')}")
+                    params_str = " [" + "; ".join(props) + "]"
+                selected_lines.append(f"- **{svr}/{name}**: {t.get('description', '')}{params_str}")
+        tool_detail = "\n".join(selected_lines)
     else:
-        lines.append(f"共 {len(formatted_tools)} 个工具:\n")
-        for t in formatted_tools:
-            lines.append(f"- **{t['name']}**: {t['description']}")
-            schema = t.get("inputSchema", {})
-            if schema and schema.get("properties"):
-                lines.append("  参数:")
-                for prop_name, prop_info in schema["properties"].items():
-                    required = prop_name in (schema.get("required", []))
-                    req_mark = " (必填)" if required else ""
-                    prop_type = prop_info.get("type", "any")
-                    lines.append(f"    - `{prop_name}` ({prop_type}){req_mark}: {prop_info.get('description', '')}")
-
-    display_content = "\n".join(lines)
-
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'chunk', 'content': display_content}, ensure_ascii=False)}\n\n"
+        tool_detail = "*(No tools selected)*"
 
     log_observe_cycle(session_id, 0, "act", "explore_mcp",
-                      prompt=full_question[:5000], response=display_content[:5000],
-                      token_estimate=len(full_question) // 3)
+                      prompt=prompt[:5000], response=raw[:5000],
+                      exec_result=tool_detail[:10000],
+                      token_estimate=len(prompt) // 3)
 
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
-        json.dumps({"server": server_name, "tools_count": len(formatted_tools)}, ensure_ascii=False),
-        "success", f"Explore MCP: {server_name}",
+        json.dumps({"servers_count": len(all_servers_config), "tools_count": len(all_tools), "selected_count": len(selected_tools)}, ensure_ascii=False),
+        "success", f"Explore MCP: {len(all_tools)} tools from {len(all_servers_config)} servers",
     )
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'done', 'content': display_content, 'result': {'server': server_name, 'tools': formatted_tools}}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'done', 'content': tool_detail, 'result': {'selected_tools': selected_tools, 'catalog': catalog, 'explore_plan': explore_plan}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
-    return {"server": server_name, "tools": formatted_tools, "display_content": display_content}
+    return {"selected_tools": selected_tools, "explore_plan": explore_plan, "tool_detail": tool_detail, "catalog": catalog}
+
+
+def _parse_mcp_explore_json(raw: str) -> dict | None:
+    from utils.context_trim import parse_json
+    result = parse_json(raw)
+    if isinstance(result, dict) and "selected_tools" in result:
+        return result
+    return None
 
 
 def _act_exe_mcp(full_question: str, session_id: str, params: dict, request_json: str = ""):

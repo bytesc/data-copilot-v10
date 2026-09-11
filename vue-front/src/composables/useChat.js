@@ -294,6 +294,7 @@ function historyToText(history) {
         server: actionResult.server || undefined,
         tool: actionResult.tool || undefined,
         params: actionResult.params || undefined,
+        search_keyword: actionResult.keyword || undefined,
       },
     })
 
@@ -337,9 +338,9 @@ function historyToText(history) {
               selected_knowledge_ids: event.result.selected_knowledge_ids,
               knowledge_content: event.result.knowledge_content,
               summary: event.result.summary,
-              server: event.result.server,
-              tools: event.result.tools,
-              tool: event.result.tool,
+              selected_tools: event.result.selected_tools,
+              explore_plan: event.result.explore_plan,
+              catalog: event.result.catalog,
             })
           }
         }
@@ -623,10 +624,9 @@ function historyToText(history) {
         selected_knowledge_ids: entry.selected_knowledge_ids,
         knowledge_content: entry.knowledge_content,
         summary: entry.summary,
-        server: entry.server,
-        tools: entry.tools,
-        tool: entry.tool,
-        display_content: entry.display_content,
+        selected_tools: entry.selected_tools,
+        explore_plan: entry.explore_plan,
+        tool_detail: entry.tool_detail,
         collapsed: true,
       })
     } else if (entryType === 'document') {

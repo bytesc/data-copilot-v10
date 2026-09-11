@@ -15,6 +15,9 @@ from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, log_observe_session
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
+from utils.get_config import config_data
+
+_ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
 
 router = APIRouter()
 
@@ -59,7 +62,7 @@ Database Information:
 
 {BRIEF_INFO}
 
-Use `explore_schema` action to explore table schemas and sample data in detail. Use `explore_base_knowledge` action to explore business domain knowledge. Then use `generate_and_execute` action to exe_sql
+Use `explore_schema` action to explore table schemas and sample data in detail.""" + (" Use `explore_base_knowledge` action to explore business domain knowledge." if _ENABLE_BASE_KNOWLEDGE else "") + """ Then use `generate_and_execute` action to exe_sql
 
 Some Available Functions:
 {func_catalog}

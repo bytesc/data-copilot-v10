@@ -333,27 +333,25 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 **输入**
 ```json
-{"action": "explore_mcp", "server": "server_name"}
+{"action": "explore_mcp", "keyword": "..."}
 ```
-server 为必填，需匹配 `config/mcp_servers.yaml` 中配置的服务器名称。
+keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接所有配置的 MCP 服务器并获取全部工具列表，由 LLM 筛选。
 
 **输出**
 ```json
-{"role":"assistant","type":"act","action":"explore_mcp","server":"server_name","tools":[...],"display_content":"...","error":"..."}
+{"role":"assistant","type":"act","action":"explore_mcp",
+ "selected_tools":[{"server":"calculator","name":"add"},...],
+ "tool_detail":"格式化后的 markdown 展示",
+ "explore_plan":"..."}
 ```
 
 **上下文（成功）**
 ```
-[ACT explore_mcp] server: {server_name}
-[ACT explore_mcp] tools: [{name, description, inputSchema}, ...]
-[ACT explore_mcp] result:
-{display_content}
-```
-
-**上下文（失败）**
-```
-[ACT explore_mcp] server: {server_name}
-[ACT explore_mcp] error: {error}
+[ACT explore_mcp] selected_tools: [{"server":"calculator","name":"add"},...]
+[ACT explore_mcp] explore_plan:
+{plan}
+[ACT explore_mcp] tool_detail:
+{tool_detail}
 ```
 
 ---
@@ -364,7 +362,7 @@ server 为必填，需匹配 `config/mcp_servers.yaml` 中配置的服务器名�
 ```json
 {"action": "exe_mcp", "server": "server_name", "tool": "tool_name", "params": {"key": "value"}}
 ```
-server 和 tool 为必填。params 为可选参数，根据 `explore_mcp` 返回的 inputSchema 传入。
+server 和 tool 为必填，由 `explore_mcp` 选出的 `selected_tools` 指定。params 为可选参数。
 
 **输出**
 ```json

@@ -22,3 +22,9 @@ model_url: "https://tokenhub.tencentmaas.com/v1"
 # https://api.deepseek.com/v1/
 # https://dashscope.aliyuncs.com/compatible-mode/v1
 # https://api.openai.com/v1
+
+# Feature toggles - set false to disable the corresponding capability
+enable_mcp: true
+enable_base_knowledge: true
+enable_web_search: true
+enable_fetch_url: true

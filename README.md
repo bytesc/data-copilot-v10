@@ -84,17 +84,17 @@
 
 ### 动作类型
 
-| 动作 | 功能 |
-|------|------|
-| `explore_schema` | 探索数据库表结构 |
-| `explore_functions` | 探索可用函数目录 |
-| `explore_base_knowledge` | 搜索业务领域知识库 |
-| `explore_mcp` | 探索外部 MCP 服务器的可用工具列表 |
-| `exe_mcp` | 调用外部 MCP 服务器上的具体工具 |
-| `generate_and_execute` | 生成并执行代码（SQL/Python） |
-| `web_search` | DuckDuckGo 联网搜索 |
-| `fetch_webpage` | 抓取网页内容 |
-| `generate_document` | 自动生成分析报告（MD/DOCX/PDF） |
+| 动作 | 功能 | 可关闭 |
+|------|------|--------|
+| `explore_schema` | 探索数据库表结构 | 否 |
+| `explore_functions` | 探索可用函数目录 | 否 |
+| `explore_base_knowledge` | 搜索业务领域知识库 | 是（`enable_base_knowledge`） |
+| `explore_mcp` | 探索外部 MCP 服务器的可用工具列表 | 是（`enable_mcp`） |
+| `exe_mcp` | 调用外部 MCP 服务器上的具体工具 | 是（`enable_mcp`） |
+| `generate_and_execute` | 生成并执行代码（SQL/Python） | 否 |
+| `web_search` | DuckDuckGo 联网搜索 | 是（`enable_web_search`） |
+| `fetch_webpage` | 抓取网页内容 | 是（`enable_fetch_url`） |
+| `generate_document` | 自动生成分析报告（MD/DOCX/PDF） | 否 |
 
 ## 配置与使用
 
@@ -131,6 +131,12 @@ static_folder: "tmp_imgs"
 # 大模型配置
 model_name: "deepseek-v4-flash"
 model_url: "https://tokenhub.tencentmaas.com/v1"
+
+# 功能开关（设为 false 关闭对应能力）
+enable_mcp: true              # MCP 外部工具集成
+enable_base_knowledge: true   # 基础知识库检索
+enable_web_search: true       # 联网搜索
+enable_fetch_url: true        # 网页内容抓取
 ```
 
 ### 前端配置
@@ -154,17 +160,47 @@ VITE_API_BASE=/api
 
 ### MCP 服务器配置
 
-`./config/mcp_servers.yaml`
+MCP（Model Context Protocol）服务器通过 `config/mcp_servers.yaml` 定义，LLM 可通过 `explore_mcp` 发现工具、`exe_mcp` 调用工具。
 
 ```yaml
 mcp_servers:
-  - name: "weather"
-    description: "Weather forecast MCP server"
+  - name: "calculator"
+    description: "Math calculation tools"
     transport: "sse"
-    url: "http://localhost:8001/sse"
+    url: "http://localhost:8101/sse"
+  - name: "text"
+    description: "Text processing tools"
+    transport: "sse"
+    url: "http://localhost:8102/sse"
+  - name: "datetime"
+    description: "Date and time tools"
+    transport: "sse"
+    url: "http://localhost:8103/sse"
 ```
 
-支持 `sse`（Server-Sent Events）传输方式。在 `mcp_servers` 列表中添加多个服务器配置，LLM 即可通过 `explore_mcp` 发现工具、`exe_mcp` 调用工具。
+### MCP 测试服务器
+
+项目提供了三个基于官方 `mcp` 库的测试服务器，位于 `mcpserver/` 目录下：
+
+| 服务器 | 端口 | 工具 |
+|--------|------|------|
+| `calculator_server.py` | 8101 | add, subtract, multiply, divide, power, sqrt, sin, cos, average |
+| `text_server.py` | 8102 | uppercase, lowercase, reverse, word_count, char_count, concat, contains, replace |
+| `datetime_server.py` | 8103 | get_current_time, format_date, date_diff, weekday, timestamp, add_days |
+
+启动所有测试服务器：
+
+```bash
+python -m mcpserver.run_all
+```
+
+或分别启动：
+
+```bash
+python -m mcpserver.calculator_server
+python -m mcpserver.text_server
+python -m mcpserver.datetime_server
+```
 
 ### 启动
 

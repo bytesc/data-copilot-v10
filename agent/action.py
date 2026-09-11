@@ -15,17 +15,30 @@ from data_access.session_log import record_session_operation
 from agent.tools.tools_def import engine
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
+from utils.get_config import config_data
 
 router = APIRouter()
 
+ENABLE_MCP = config_data.get('enable_mcp', True)
+ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
+ENABLE_WEB_SEARCH = config_data.get('enable_web_search', True)
+ENABLE_FETCH_URL = config_data.get('enable_fetch_url', True)
+
 VALID_ACTIONS = [
-    "explore_schema", "explore_functions", "explore_base_knowledge",
+    "explore_schema", "explore_functions",
     "generate_and_execute",
     "output_text", "ask_question", "ask_choice",
     "summary_and_pause", "attempt_completion",
-    "generate_document", "web_search", "fetch_webpage",
-    "explore_mcp", "exe_mcp",
+    "generate_document",
 ]
+if ENABLE_BASE_KNOWLEDGE:
+    VALID_ACTIONS.append("explore_base_knowledge")
+if ENABLE_WEB_SEARCH:
+    VALID_ACTIONS.append("web_search")
+if ENABLE_FETCH_URL:
+    VALID_ACTIONS.append("fetch_webpage")
+if ENABLE_MCP:
+    VALID_ACTIONS.extend(["explore_mcp", "exe_mcp"])
 
 
 class ActionInput(BaseModel):
@@ -35,48 +48,95 @@ class ActionInput(BaseModel):
     cycle_index: int = 0
 
 
-ACTIONS = """
- 
-- explore_schema: {"action": "explore_schema", "keyword": "..."}
-  Explore the database schema and structure. Optional keyword hints the LLM to focus on specific tables/columns. Not used to query data, you should use `generate_and_execute` to exe_sql.
-- explore_base_knowledge: {"action": "explore_base_knowledge", "keyword": "..."}
-  Explore the base knowledge (business domain knowledge, documentation, thinking strategies). Optional keyword hints the LLM to focus on specific knowledge entries. Use this to retrieve relevant business context, domain rules, or documentation from the knowledge base.
-- explore_functions: {"action": "explore_functions", "keyword": "..."}
-  Explore the available function catalog. Optional keyword hints the LLM to focus on relevant functions. Use `explore_functions` for more available functions. Then use `generate_and_execute` action to call.
-- generate_and_execute: {"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"], "research_guide": "..."}
+_ACTION_DESCRIPTIONS = {
+    "explore_schema": """- explore_schema: {"action": "explore_schema", "keyword": "..."}
+  Explore the database schema and structure. Optional keyword hints the LLM to focus on specific tables/columns. Not used to query data, you should use `generate_and_execute` to exe_sql.""",
+    "explore_functions": """- explore_functions: {"action": "explore_functions", "keyword": "..."}
+  Explore the available function catalog. Optional keyword hints the LLM to focus on relevant functions. Use `explore_functions` for more available functions. Then use `generate_and_execute` action to call.""",
+    "generate_and_execute": """- generate_and_execute: {"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"], "research_guide": "..."}
   Decide to execute code that calls functions. funcs: list of function names to use. The actual code will be generated in the next phase. Do NOT include any code or "code" field in the JSON output.
-  research_guide: Optional natural language description of what data to search for and what images/charts to generate. Include details like chart types, data sources, labels, colors, and axis sorting. This guides the code generation phase to produce the correct visualizations. Use this when the task requires specific charts or images. 
-- output_text: {"action": "output_text", "text": "Your response content here..."}
-  Output some text to the user without stopping the pipline.
-- ask_question: {"action": "ask_question", "text": "Your question for the user here..."}
-  Ask the user a question. Use it incase you need some information from user.
-- ask_choice: {"action": "ask_choice", "text": "Your question here...", "choices": ["option1", "option2"]}
-  Give user some choices to choice only one of them.
-- summary_and_pause: {"action": "summary_and_pause", "text": "Your progress summary here..."}
-  Output some text and stop the pipline.
-- attempt_completion: {"action": "attempt_completion", "text": "Your final results here..."}
-  Output some text and stop the pipline in case of completion.
-- generate_document: {"action": "generate_document", "title": "report_title"}
-  Generate a complete business summary document based on the full conversation history. The title specifies the document title. The document will be saved as both .md and .docx files. Use this when the user asks to generate a report or document.
-- web_search: {"action": "web_search", "query": "search query", "max_results": 10}
-  Search the web using DuckDuckGo. Use this when the user asks for real-time information, news, facts, or data not available in the local database. Returns a list of results with title, URL, and snippet. Optionally set max_results (default 10, max 50) to control how many results to return.
-- fetch_webpage: {"action": "fetch_webpage", "url": "https://example.com/page", "max_length": 10000}
-   Fetch and extract the text content of a specific webpage. Use this after `web_search` to read the full content of a promising result. The url should be extracted from a previous search result. max_length controls max characters to return (default 10000).
-- explore_mcp: {"action": "explore_mcp", "server": "server_name"}
-   Explore available tools on an external MCP (Model Context Protocol) server. The server name must match one of the configured MCP servers. Returns a list of available tools with their descriptions and parameter schemas. Use this to discover what capabilities an MCP server offers.
-- exe_mcp: {"action": "exe_mcp", "server": "server_name", "tool": "tool_name", "params": {"key": "value"}}
-   Execute a specific tool on an MCP server. The server name must match a configured MCP server, and the tool name must be one returned by `explore_mcp`. Pass arguments as a params dict matching the tool's expected schema.
+  research_guide: Optional natural language description of what data to search for and what images/charts to generate. Include details like chart types, data sources, labels, colors, and axis sorting. This guides the code generation phase to produce the correct visualizations. Use this when the task requires specific charts or images.""",
+    "output_text": """- output_text: {"action": "output_text", "text": "Your response content here..."}
+  Output some text to the user without stopping the pipline.""",
+    "ask_question": """- ask_question: {"action": "ask_question", "text": "Your question for the user here..."}
+  Ask the user a question. Use it incase you need some information from user.""",
+    "ask_choice": """- ask_choice: {"action": "ask_choice", "text": "Your question here...", "choices": ["option1", "option2"]}
+  Give user some choices to choice only one of them.""",
+    "summary_and_pause": """- summary_and_pause: {"action": "summary_and_pause", "text": "Your progress summary here..."}
+  Output some text and stop the pipline.""",
+    "attempt_completion": """- attempt_completion: {"action": "attempt_completion", "text": "Your final results here..."}
+  Output some text and stop the pipline in case of completion.""",
+    "generate_document": """- generate_document: {"action": "generate_document", "title": "report_title"}
+  Generate a complete business summary document based on the full conversation history. The title specifies the document title. The document will be saved as both .md and .docx files. Use this when the user asks to generate a report or document.""",
+}
+
+if ENABLE_BASE_KNOWLEDGE:
+    _ACTION_DESCRIPTIONS["explore_base_knowledge"] = """- explore_base_knowledge: {"action": "explore_base_knowledge", "keyword": "..."}
+  Explore the base knowledge (business domain knowledge, documentation, thinking strategies). Optional keyword hints the LLM to focus on specific knowledge entries. Use this to retrieve relevant business context, domain rules, or documentation from the knowledge base."""
+
+if ENABLE_WEB_SEARCH:
+    _ACTION_DESCRIPTIONS["web_search"] = """- web_search: {"action": "web_search", "query": "search query", "max_results": 10}
+  Search the web using DuckDuckGo. Use this when the user asks for real-time information, news, facts, or data not available in the local database. Returns a list of results with title, URL, and snippet. Optionally set max_results (default 10, max 50) to control how many results to return."""
+
+if ENABLE_FETCH_URL:
+    _ACTION_DESCRIPTIONS["fetch_webpage"] = """- fetch_webpage: {"action": "fetch_webpage", "url": "https://example.com/page", "max_length": 10000}
+   Fetch and extract the text content of a specific webpage. Use this after `web_search` to read the full content of a promising result. The url should be extracted from a previous search result. max_length controls max characters to return (default 10000)."""
+
+if ENABLE_MCP:
+    _ACTION_DESCRIPTIONS["explore_mcp"] = """- explore_mcp: {"action": "explore_mcp", "keyword": "..."}
+   Explore available tools from all configured MCP (Model Context Protocol) servers. Optional keyword hints the LLM to focus on relevant tools. Returns a list of available tools with their server, descriptions and parameter schemas. Use this to discover what capabilities MCP servers offer. Then use `exe_mcp` action to call a specific tool."""
+    _ACTION_DESCRIPTIONS["exe_mcp"] = """- exe_mcp: {"action": "exe_mcp", "server": "server_name", "tool": "tool_name", "params": {"key": "value"}}
+   Execute a specific tool on an MCP server. The server name must match a configured MCP server, and the tool name must be one returned by `explore_mcp`. Pass arguments as a params dict matching the tool's expected schema."""
+
+ACTIONS_BODY = "\n\n".join(_ACTION_DESCRIPTIONS[a] for a in VALID_ACTIONS)
+
+_GROUP_1_ACTIONS = ["explore_schema", "explore_functions"]
+if ENABLE_BASE_KNOWLEDGE:
+    _GROUP_1_ACTIONS.append("explore_base_knowledge")
+
+_OTHER_ACTIONS = ["generate_and_execute", "generate_document"]
+if ENABLE_WEB_SEARCH:
+    _OTHER_ACTIONS.append("web_search")
+if ENABLE_FETCH_URL:
+    _OTHER_ACTIONS.append("fetch_webpage")
+if ENABLE_MCP:
+    _OTHER_ACTIONS.extend(["explore_mcp", "exe_mcp"])
+
+ACTIONS = f"""
+{ACTIONS_BODY}
 
 MULTI-ACTION SUPPORT:
 You can output MULTIPLE actions in one cycle by using an "actions" array instead of a single "action". Example:
-{"actions": [{"action": "explore_schema"}, {"action": "explore_functions"}]}
+{{"actions": [{{"action": "explore_schema"}}, {{"action": "explore_functions"}}]}}
 
 GROUPING RULES:
-- Group 1 (Explore类): explore_schema, explore_functions, explore_base_knowledge. These can be batched together.
+- Group 1 (Explore类): {', '.join(_GROUP_1_ACTIONS)}. These can be batched together.
 - Group 2 (用户交互类): output_text, ask_question, ask_choice, summary_and_pause, attempt_completion. These can be batched together. summary_and_pause and attempt_completion must be the LAST action in the array, and each can appear at most once.
 - Group 1 and Group 2 CANNOT be mixed in the same "actions" array.
-- All other actions (generate_and_execute, generate_document, web_search, fetch_webpage, explore_mcp, exe_mcp) must be used as single actions only.
+- All other actions ({', '.join(_OTHER_ACTIONS)}) must be used as single actions only.
 """
+
+_DECISION_RULES = [
+    "If the plan has an empty todo list, choose ask_question with a polite response to the user.",
+    "If the plan is complete or no further actions needed, choose attempt_completion.",
+    "If you need to ask the user something, choose ask_question or ask_choice.",
+    "If you want to pause and show progress, choose summary_and_pause.",
+    "`generate_and_execute` is the major action to solve complex problems.",
+    "`explore_schema` returns all relevant data structure and schema in the database at a time based on previous context. DO NOT try to perform two explore_schema with the same consecutively.",
+    "`explore_functions` returns all relevant available python function catalog at a time based on previous context. DO NOT try to perform two explore_functions with the same consecutively.",
+]
+if ENABLE_BASE_KNOWLEDGE:
+    _DECISION_RULES.append("`explore_base_knowledge` searches the business domain knowledge base with an optional keyword. Use it to retrieve relevant business rules, domain context, documentation, or thinking strategies. DO NOT perform two explore_base_knowledge consecutively.")
+if ENABLE_WEB_SEARCH:
+    _DECISION_RULES.append("`web_search` searches the web for real-time information. Use it when the user asks about current events, news, facts, or data that is unlikely to be in the local database.")
+if ENABLE_FETCH_URL:
+    _DECISION_RULES.append("`fetch_webpage` fetches and reads the full text content of a specific URL. Use it after `web_search` to get detailed information from a specific page. The URL should come from a previous search result.")
+_DECISION_RULES.append("When you have multiple actions that are independent and belong to the same group, use the \"actions\" array to output them together. This is more efficient than executing them one by one. For example, if you need to explore both schema and functions, output both in one cycle.")
+if ENABLE_MCP:
+    _DECISION_RULES.append("`explore_mcp` connects to an external MCP server to discover available tools. Use it when you need capabilities not available in the local system (e.g., send emails, query external APIs, access specialized services). First `explore_mcp` to see what's available, then `exe_mcp` to call a specific tool.")
+    _DECISION_RULES.append("`exe_mcp` calls a specific tool on an MCP server. Use it after `explore_mcp` has shown you the available tools. The `server` field must match the server name used in `explore_mcp`.")
+
+DECISION_RULES_STR = "\n".join(f"{i+1}. {r}" for i, r in enumerate(_DECISION_RULES))
 
 
 def _build_action_prompt(
@@ -107,19 +167,7 @@ Output ONLY a valid JSON object on a single line (no md block). Choose from:
 {ACTIONS}
 
 Decision Rules:
-1. If the plan has an empty todo list, choose ask_question with a polite response to the user.
-2. If the plan is complete or no further actions needed, choose attempt_completion.
-3. If you need to ask the user something, choose ask_question or ask_choice.
-4. If you want to pause and show progress, choose summary_and_pause.
-5. `generate_and_execute` is the major action to solve complex problems.
-6. `explore_schema` returns all relevant data structure and schema in the database at a time based on previous context. DO NOT try to perform two explore_schema with the same consecutively.
-7. `explore_functions` returns all relevant available python function catalog at a time based on previous context. DO NOT try to perform two explore_functions with the same consecutively.
-8. `explore_base_knowledge` searches the business domain knowledge base with an optional keyword. Use it to retrieve relevant business rules, domain context, documentation, or thinking strategies. DO NOT perform two explore_base_knowledge consecutively.
-9. `web_search` searches the web for real-time information. Use it when the user asks about current events, news, facts, or data that is unlikely to be in the local database.
-10. `fetch_webpage` fetches and reads the full text content of a specific URL. Use it after `web_search` to get detailed information from a specific page. The URL should come from a previous search result.
-11. When you have multiple actions that are independent and belong to the same group, use the "actions" array to output them together. This is more efficient than executing them one by one. For example, if you need to explore both schema and functions, output both in one cycle.
-12. `explore_mcp` connects to an external MCP server to discover available tools. Use it when you need capabilities not available in the local system (e.g., send emails, query external APIs, access specialized services). First `explore_mcp` to see what's available, then `exe_mcp` to call a specific tool.
-13. `exe_mcp` calls a specific tool on an MCP server. Use it after `explore_mcp` has shown you the available tools. The `server` field must match the server name used in `explore_mcp`.
+{DECISION_RULES_STR}
 
 """
 

@@ -125,19 +125,19 @@
     </template>
 
     <template v-else-if="message.action === 'explore_mcp'">
-      <details class="msg-collapse" open>
-        <summary class="collapse-summary">MCP Tools: {{ message.server || mcpServer }}</summary>
+      <details v-if="hasMcpExplorePlan" class="msg-collapse">
+        <summary class="collapse-summary">MCP Tool Selection Plan</summary>
+        <div class="collapse-body" v-html="renderMd(mcpExplorePlan)"></div>
+      </details>
+      <details v-if="hasMcpSelectedTools" class="msg-collapse">
+        <summary class="collapse-summary">Selected MCP Tools</summary>
         <div class="collapse-body">
-          <div v-if="message.error" class="error-block"><strong>Error:</strong> {{ message.error }}</div>
-          <div v-if="hasMcpDisplayContent" v-html="renderMd(mcpDisplayContent)"></div>
-          <div v-else-if="hasMcpTools">
-            <div v-for="tool in mcpTools" :key="tool.name" class="mcp-tool-entry">
-              <div class="mcp-tool-header"><strong>{{ tool.name }}</strong></div>
-              <div class="mcp-tool-desc">{{ tool.description }}</div>
-            </div>
-          </div>
-          <div v-else-if="message.tools && message.tools.length === 0">(No tools available)</div>
+          <pre><code>{{ formatJson(mcpSelectedTools) }}</code></pre>
         </div>
+      </details>
+      <details v-if="hasMcpToolDetail" class="msg-collapse">
+        <summary class="collapse-summary">Search Results: explore_mcp</summary>
+        <div class="collapse-body" v-html="renderMd(mcpToolDetail)"></div>
       </details>
     </template>
 
@@ -193,7 +193,7 @@
         <details class="msg-collapse" :open="sub.name === 'generate_document' || sub.name === 'completion'">
           <summary class="collapse-summary">{{ subPhaseLabel(sub.name) }}</summary>
           <div class="collapse-body">
-            <div v-if="sub.name === 'explore_schema' || sub.name === 'explore_functions' || sub.name === 'explore_base_knowledge'">
+            <div v-if="sub.name === 'explore_schema' || sub.name === 'explore_functions' || sub.name === 'explore_base_knowledge' || sub.name === 'explore_mcp'">
               <div v-html="renderMd(sub.content)"></div>
             </div>
             <div v-else v-html="renderMd(sub.content)"></div>
@@ -300,26 +300,24 @@ const pageContent = computed(() => {
 
 const hasPageContent = computed(() => !!pageContent.value)
 
-const mcpServer = computed(() => {
-  return props.message.server || getSubPhaseContent('explore_mcp')
+const mcpExplorePlan = computed(() => {
+  return props.message.explore_plan || props.message.parsed?.explore_plan || ''
 })
 
-const mcpTool = computed(() => {
-  return props.message.tool || ''
+const hasMcpExplorePlan = computed(() => !!mcpExplorePlan.value)
+
+const mcpToolDetail = computed(() => {
+  const sub = props.message.subPhases?.find(s => s.name === 'explore_mcp')
+  return props.message.tool_detail || props.message.parsed?.tool_detail || sub?.content || ''
 })
 
-const mcpTools = computed(() => {
-  return props.message.tools || props.message.parsed?.tools || []
+const hasMcpToolDetail = computed(() => !!mcpToolDetail.value)
+
+const mcpSelectedTools = computed(() => {
+  return props.message.selected_tools || props.message.parsed?.selected_tools || []
 })
 
-const hasMcpTools = computed(() => mcpTools.value.length > 0)
-
-const mcpDisplayContent = computed(() => {
-  const sub = props.message.subPhases?.find(s => s.name === 'explore_mcp' || s.name === 'exe_mcp')
-  return props.message.display_content || props.message.parsed?.display_content || sub?.content || ''
-})
-
-const hasMcpDisplayContent = computed(() => !!mcpDisplayContent.value)
+const hasMcpSelectedTools = computed(() => mcpSelectedTools.value.length > 0)
 
 const mcpResultText = computed(() => {
   const r = props.message.result || props.message.parsed?.result
@@ -331,11 +329,6 @@ const mcpResultText = computed(() => {
 const hasMcpResult = computed(() => {
   return props.message.result || props.message.parsed?.result
 })
-
-function getSubPhaseContent(name) {
-  const sub = props.message.subPhases?.find(s => s.name === name)
-  return sub?.content || ''
-}
 
 function renderMd(text) {
   return renderMarkdown(text || '')

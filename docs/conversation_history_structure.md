@@ -81,16 +81,18 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 
 ```json
 {"role":"assistant","type":"act","action":"explore_mcp",
- "server":"server_name","tools":[{"name":"tool1","description":"...","inputSchema":{...}}],
- "display_content":"Connecting to MCP server...","error":null}
+ "selected_tools":[{"server":"calculator","name":"add"},...],
+ "tool_detail":"格式化后的 markdown 选中工具展示",
+ "explore_plan":"..."}
 ```
 
 上下文格式:
 ```
-[ACT explore_mcp] server: {server_name}
-[ACT explore_mcp] tools: [{name, description, inputSchema}, ...]
-[ACT explore_mcp] result:
-{display_content}
+[ACT explore_mcp] selected_tools: [{"server":"calculator","name":"add"},...]
+[ACT explore_mcp] explore_plan:
+{plan}
+[ACT explore_mcp] tool_detail:
+{tool_detail}
 ```
 
 ### exe_mcp

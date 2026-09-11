@@ -33,6 +33,8 @@ from data_access.observe_log import (
     list_sessions, reconstruct_conversation_history
 )
 from data_access.report_log import create_report_log_table, get_generated_files
+_ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
+
 from data_access.base_knowledge_db import create_base_knowledge_table
 from data_access.db_query_guide_db import create_db_query_guide_table
 from data_access.doc_knowledge_db import create_doc_knowledge_table
@@ -43,13 +45,14 @@ from data_access.brief_info_db import create_brief_info_table, init_brief_info
 create_session_log_table()
 create_observe_log_tables()
 create_report_log_table()
-create_base_knowledge_table()
 create_db_query_guide_table()
-create_doc_knowledge_table()
-create_code_guide_table()
-create_think_knowledge_table()
 create_brief_info_table()
 init_brief_info()
+if _ENABLE_BASE_KNOWLEDGE:
+    create_base_knowledge_table()
+    create_doc_knowledge_table()
+    create_code_guide_table()
+    create_think_knowledge_table()
 
 # DATABASE_URL = config_data['mysql']
 # engine = sqlalchemy.create_engine(DATABASE_URL)
@@ -537,6 +540,45 @@ app.include_router(observe_router)
 app.include_router(action_router)
 app.include_router(document_router)
 
+
+def _check_mcp_servers():
+    try:
+        from agent.tools.mcp_client import load_mcp_servers
+        servers = load_mcp_servers()
+        if not servers:
+            return
+        import socket
+        for srv in servers:
+            name = srv.get("name", "?")
+            url = srv.get("url", "")
+            if not url:
+                continue
+            host, port = _parse_host_port(url)
+            if host and port:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(2)
+                try:
+                    s.connect((host, port))
+                    s.close()
+                except Exception:
+                    print(f"[WARNING] MCP server '{name}' ({url}) is not running")
+    except ImportError:
+        pass
+
+
+def _parse_host_port(url: str):
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if parsed.hostname and parsed.port:
+        return parsed.hostname, parsed.port
+    if parsed.hostname and parsed.scheme == "http":
+        return parsed.hostname, 80
+    if parsed.hostname and parsed.scheme == "https":
+        return parsed.hostname, 443
+    return None, None
+
+
+_check_mcp_servers()
 
 if __name__ == "__main__":
     try:

@@ -148,16 +148,17 @@
 
 ```
 成功：
-  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"正在连接 MCP 服务器: {server_name}..."}
-  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"已连接到 {server_name}，正在获取工具列表..."}
-  {phase:"act", type:"chunk", sub_phase:"explore_mcp", content:"工具列表 markdown..."}
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"正在连接 MCP 服务器获取工具列表..."}
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"正在分析所需 MCP 工具..."}
+  {phase:"act", type:"chunk", sub_phase:"explore_mcp", content:"..."}  ×N
   {phase:"act", type:"done",  sub_phase:"explore_mcp", content:"...",
-   result:{server:"...", tools:[{name,description,inputSchema}]}}
+   result:{selected_tools:[{server, name}, ...], catalog:"...", explore_plan:"..."},
+   search_keyword:"..."}
   {type:"history", history:[...]}
 
 失败：
-  {phase:"act", type:"error", sub_phase:"explore_mcp", content:"未找到 MCP 服务器: {name}"}
-  {phase:"act", type:"error", sub_phase:"explore_mcp", content:"MCP 连接失败: {error}"}
+  {phase:"act", type:"error", sub_phase:"explore_mcp", content:"没有配置任何 MCP 服务器"}
+  {phase:"act", type:"error", sub_phase:"explore_mcp", content:"MCP 服务器均连接失败/无工具"}
 ```
 
 ### exe_mcp
