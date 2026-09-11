@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.action import ACTIONS
-from agent.tools.base_knowledge.get_base_knowledge import TARGET, DB_BRIEF_BRIEF, BASE_KNOWLEDGE_BRIEF, MCP_BRIEF
+from agent.tools.base_knowledge.get_base_knowledge import TARGET, DB_BRIEF, BASE_KNOWLEDGE_BRIEF, MCP_BRIEF, FUNCTION_BRIEF
 from agent.tools.tools_def import llm
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
@@ -52,8 +52,7 @@ def _event_stream_think(
 
 {target_section}
 
-## Database Brief
-{DB_BRIEF_BRIEF}
+{DB_BRIEF}
 
 ## Domain Knowledge Brief
 {BASE_KNOWLEDGE_BRIEF}
@@ -62,6 +61,9 @@ def _event_stream_think(
 {MCP_BRIEF}
 
 ## Function Brief
+{FUNCTION_BRIEF}
+
+## Function Catalog
 {func_catalog}
 
 Use `explore_schema` action to explore table schemas and sample data in detail.""" + (" Use `explore_base_knowledge` action to explore business domain knowledge." if _ENABLE_BASE_KNOWLEDGE else "") + """ Then use `generate_and_execute` action to exe_sql. Use `explore_functions` action for more available functions, then use `generate_and_execute` action to call.

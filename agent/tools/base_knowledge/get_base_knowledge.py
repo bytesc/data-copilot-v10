@@ -338,39 +338,37 @@ _TARGET_MD = _read_doc("target_knowledge.md")
 _DB_QUERY_GUIDE_MD = _read_doc("db_query_guide.md")
 _THINK_KNOWLEDGE_MD = _read_doc("think_knowledge.md")
 _MCP_BRIEF_MD = _read_doc("mcp_brief.md")
+_BASE_KNOWLEDGE_BRIEF_MD = _read_doc("base_knowledge_brief.md")
+_FUNCTION_BRIEF_MD = _read_doc("function_brief.md")
 
 
-def _get_db_brief():
-    md = _DB_BRIEF_MD
+def _get_brief_value(attr, md_fallback):
     try:
         with sys_engine.connect() as conn:
             rows = conn.execute(select(brief_info)).fetchall()
             row_map = {row.attr: row.value for row in rows}
-        db_value = row_map.get("db_brief", "")
+        db_value = row_map.get(attr, "")
         if db_value:
-            md += "\n\n" + db_value
+            md_fallback += "\n\n" + db_value
     except Exception as e:
-        print(f"[WARNING] Failed to read brief_info for db_brief: {e}")
-    return "\nDataBase Brief:\n" + md
+        print(f"[WARNING] Failed to read brief_info for {attr}: {e}")
+    return md_fallback
+
+
+def _get_db_brief():
+    return "\nDataBase Brief:\n" + _get_brief_value("db_brief", _DB_BRIEF_MD)
+
 
 DB_BRIEF = _DynamicStr(_get_db_brief)
 
 
 def _get_mcp_brief():
-    md = _MCP_BRIEF_MD
-    try:
-        with sys_engine.connect() as conn:
-            rows = conn.execute(select(brief_info)).fetchall()
-            row_map = {row.attr: row.value for row in rows}
-        db_value = row_map.get("mcp_brief", "")
-        if db_value:
-            md += "\n\n" + db_value
-    except Exception as e:
-        print(f"[WARNING] Failed to read brief_info for mcp_brief: {e}")
-    return "\nMCP Brief:\n" + md
+    return "\nMCP Brief:\n" + _get_brief_value("mcp_brief", _MCP_BRIEF_MD)
 
 
 MCP_BRIEF = _DynamicStr(_get_mcp_brief)
+BASE_KNOWLEDGE_BRIEF = _DynamicStr(lambda: _get_brief_value("base_knowledge_brief", _BASE_KNOWLEDGE_BRIEF_MD))
+FUNCTION_BRIEF = _DynamicStr(lambda: _get_brief_value("function_brief", _FUNCTION_BRIEF_MD))
 
 
 def _format_db_query_guide():
@@ -398,33 +396,4 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + _TH
        + "\n" + base_knowledge_to_str(get_think_knowledge_db()))
 
 
-def get_brief_info():
-    try:
-        with sys_engine.connect() as conn:
-            rows = conn.execute(select(brief_info)).fetchall()
-            result = {row.attr: row.value for row in rows}
-    except Exception as e:
-        print(f"[WARNING] Failed to read brief_info: {e}")
-        result = {}
 
-    _entries = [
-        ("db_brief", "db_brief.md"),
-        ("base_knowledge_brief", "base_knowledge_brief.md"),
-        ("mcp_brief", "mcp_brief.md"),
-        ("function_brief", "function_brief.md"),
-    ]
-    for attr_name, md_filename in _entries:
-        md_content = _read_doc(md_filename)
-        db_value = result.get(attr_name, "")
-        combined = md_content + ("\n\n" + db_value if db_value else "")
-        result[attr_name] = combined
-
-    return result
-
-
-BRIEF_INFO = _DynamicStr(lambda: "\n" + "\n\n".join(
-    f"### {k}\n{v}" for k, v in get_brief_info().items() if v
-))
-
-DB_BRIEF_BRIEF = _DynamicStr(lambda: get_brief_info().get("db_brief", ""))
-BASE_KNOWLEDGE_BRIEF = _DynamicStr(lambda: get_brief_info().get("base_knowledge_brief", ""))

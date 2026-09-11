@@ -19,9 +19,9 @@
 | `doc_knowledge.md` | `_DOC_MD` |
 | `target_knowledge.md` | `_TARGET_MD` |
 | `db_query_guide.md` | `_DB_QUERY_GUIDE_MD` |
-| `base_knowledge_brief.md` | 通过 `get_brief_info()` 读取 |
-| `mcp_brief.md` | 通过 `_read_doc()` 读取 |
-| `function_brief.md` | 通过 `get_brief_info()` 读取 |
+| `base_knowledge_brief.md` | `_BASE_KNOWLEDGE_BRIEF_MD` |
+| `mcp_brief.md` | `_MCP_BRIEF_MD` |
+| `function_brief.md` | `_FUNCTION_BRIEF_MD` |
 
 ### 2. 数据库表（实时查询，无需重启）
 
@@ -41,7 +41,7 @@ value LONGTEXT
 | `code_guide` | `get_code_guide_db()` |
 | `think_knowledge` | `get_think_knowledge_db()` |
 
-另外，`brief_info` 表（结构为 `attr` / `value`）用于存储 `db_brief`、`base_knowledge_brief`、`mcp_brief`、`function_brief` 等附加信息。
+另外，`brief_info` 表（结构为 `attr` / `value`）用于存储 `db_brief`、`base_knowledge_brief`、`mcp_brief`、`function_brief` 的 DB 覆盖值，与对应 MD 文件合并后注入。
 
 ### 3. 动态注入机制：`_DynamicStr`
 
@@ -61,8 +61,14 @@ class _DynamicStr:
 模块级变量将 MD 内容（启动时缓存）和 DB 内容（实时查询）拼接：
 
 ```python
-DB_BRIEF = _DynamicStr(_get_db_brief)
-# _get_db_brief() 内部: _DB_BRIEF_MD + brief_info 表的 db_brief 字段
+def _get_brief_value(attr, md_fallback):
+    # 读取 brief_info 表对应 attr 的 DB 值，与 md_fallback 合并
+    ...
+
+DB_BRIEF = _DynamicStr(lambda: "\nDataBase Brief:\n" + _get_brief_value("db_brief", _DB_BRIEF_MD))
+BASE_KNOWLEDGE_BRIEF = _DynamicStr(lambda: _get_brief_value("base_knowledge_brief", _BASE_KNOWLEDGE_BRIEF_MD))
+MCP_BRIEF = _DynamicStr(lambda: "\nMCP Brief:\n" + _get_brief_value("mcp_brief", _MCP_BRIEF_MD))
+FUNCTION_BRIEF = _DynamicStr(lambda: _get_brief_value("function_brief", _FUNCTION_BRIEF_MD))
 
 BASE = _DynamicStr(lambda: "\nbase knowledge for reference:\n" + _BASE_MD
        + "\n" + base_knowledge_to_str(get_base_knowledge_db()))
@@ -75,11 +81,6 @@ DB_QUERY_GUIDE = _DynamicStr(_format_db_query_guide)
 # _format_db_query_guide() 内部: _DB_QUERY_GUIDE_MD + get_db_query_guide_db()
 
 THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + base_knowledge_to_str(get_think_knowledge_db()))
-
-BRIEF_INFO = _DynamicStr(lambda: "\n" + "\n\n".join(
-    f"### {k}\n{v}" for k, v in get_brief_info().items() if v
-))
-# get_brief_info() 内部: brief_info 表 + knowledge_docs/*_brief.md
 ```
 
 ---
@@ -90,17 +91,20 @@ BRIEF_INFO = _DynamicStr(lambda: "\n" + "\n\n".join(
 
 **文件：** `agent/think.py`
 
-**注入的变量：** `BASE`, `TARGET`, `DB_BRIEF`
+**注入的变量：** `TARGET`, `DB_BRIEF`, `BASE_KNOWLEDGE_BRIEF`, `MCP_BRIEF`, `FUNCTION_BRIEF`
 
 **注入方式：** f-string 直接嵌入
 
 ```
-{BASE}                    → MD base_knowledge.md + DB base_knowledge 表
 {TARGET}                  → MD target_knowledge.md（有内容时注入）
 {DB_BRIEF}                → MD db_brief.md + DB brief_info 表
+{BASE_KNOWLEDGE_BRIEF}    → MD base_knowledge_brief.md + DB brief_info 表
+{MCP_BRIEF}               → MD mcp_brief.md + DB brief_info 表
+{FUNCTION_BRIEF}          → MD function_brief.md + DB brief_info 表
++ Function Catalog         → 代码自动生成（get_func_summary_for_agent()）
 ```
 
-**功能：** Think 阶段生成 todo list 分析计划，`BASE` 提供背景知识，`TARGET` 提供目标模板（如有），`DB_BRIEF` 提供数据库概要。
+**功能：** Think 阶段生成 todo list 分析计划。各 Brief 提供基础概览，详细业务知识通过 `explore_base_knowledge` action 按需获取。
 
 ---
 
@@ -218,14 +222,14 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 | 功能 | 文件 | 注入变量 | 来源 |
 |------|------|----------|------|
-| **Think** | `think.py` | `BASE`, `TARGET`, `DB_BRIEF` | MD + DB |
+| **Think** | `think.py` | `TARGET`, `DB_BRIEF`, `BASE_KNOWLEDGE_BRIEF`, `MCP_BRIEF`, `FUNCTION_BRIEF`, Function Catalog | MD + DB + 自动生成 |
 | **Action** | `action.py` | 无（使用 db_summary / func_catalog） | 动态查询 |
 | **Act - explore_schema** | `act.py` | `BASE`, `DB_BRIEF`, `DB_QUERY_GUIDE` | MD + DB |
-| **Act - explore_functions** | `act.py` | 无（使用 func_catalog） | 动态查询 |
+| **Act - explore_functions** | `act.py` | `MCP_BRIEF` | MD + DB |
 | **Act - generate_and_execute** | `agent.py` | `BASE`, `TARGET`, `database`, `function_info` | MD + DB + 动态查询 |
 | **Act - generate_document** | `document_generator.py` | `BASE`, `DOC`, `TARGET` | MD + DB |
 | **Observe** | `observe.py` | `TARGET` | MD |
-| **（未注入）** | — | `THINK_KNOWLEDGE`, `BRIEF_INFO` | DB |
+| **（未注入）** | — | `THINK_KNOWLEDGE` | DB |
 
 ---
 
@@ -273,22 +277,29 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 │  knowledge_docs/*.md  ── _read_doc() ── 缓存变量                  │
 │                                                                  │
 │  data_copilot_v10_sys 表 ── get_*_db() ── dict                   │
-│  brief_info 表 ── get_brief_info() ── dict                        │
+│  brief_info 表 ── _get_brief_value() ── str                       │
 │                                                                  │
 │           _DynamicStr ── 拼接 MD + DB                            │
 │                                                                  │
 │  BASE / DOC / TARGET / DB_BRIEF / DB_QUERY_GUIDE /               │
-│  THINK_KNOWLEDGE / BRIEF_INFO                                     │
+│  THINK_KNOWLEDGE / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF /            │
+│  FUNCTION_BRIEF                                                    │
 └──────────────────────┬───────────────────────────────────────────┘
                        │
-    ┌──────────┬───────┼───────────┬──────────────┬──────────┐
-    ▼          ▼       ▼           ▼              ▼          ▼
-  Think    explore_  generate_   generate_      Observe   (未注入)
-           schema    &execute    document
-  {BASE}   {BASE}    knowledge   {BASE}         {TARGET}   THINK_
-  {TARGET} {DB_BRIEF}=BASE       {DOC}                     KNOWLEDGE
-  {DB_BRIEF}{DB_QUERY_ {TARGET}  {TARGET}                  BRIEF_INFO
-            GUIDE}
+    ┌──────────┬───────┼───────────┬──────────────┬────────┐
+    ▼          ▼       ▼           ▼              ▼        ▼
+  Think    explore_  generate_   generate_      Observe  (未注入)
+            schema    &execute    document
+  {TARGET}  {BASE}   knowledge   {BASE}         {TARGET}  THINK_
+  {DB_BRIEF}{DB_BRIEF}=BASE       {DOC}                  KNOWLEDGE
+  {BASE_    {DB_QUERY_{TARGET}    {TARGET}
+   KNOWLEDGE_GUIDE}
+   BRIEF}
+  {MCP_BRIEF}
+  {FUNCTION_
+   BRIEF}
+  + Function
+    Catalog
 ```
 
 ---
@@ -297,7 +308,7 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 
 | 文件 | 用途 |
 |------|------|
-| `agent/tools/base_knowledge/get_base_knowledge.py` | 核心：`_DynamicStr`、`get_*_db()`、`get_*_db_llm()`、`get_brief_info()`、模块级变量 |
+| `agent/tools/base_knowledge/get_base_knowledge.py` | 核心：`_DynamicStr`、`get_*_db()`、`get_*_db_llm()`、`_get_brief_value()`、模块级变量 |
 | `agent/tools/base_knowledge/set_base_knowledge.py` | 写入 `base_knowledge` 表 |
 | `agent/tools/base_knowledge/set_code_guide.py` | 写入 `code_guide` 表 |
 | `agent/tools/base_knowledge/set_think_knowledge.py` | 写入 `think_knowledge` 表 |
