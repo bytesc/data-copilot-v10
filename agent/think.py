@@ -50,20 +50,24 @@ def _event_stream_think(
 
     think_prompt = f"""You are an autonomous data analysis Thinker. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
 
+## User Request
+{context}
+
+## Reference Knowledge
 {target_section}
 
 {DB_BRIEF}
 
-## Domain Knowledge Brief
+### Domain Knowledge Brief
 {BASE_KNOWLEDGE_BRIEF}
 
-## MCP Brief
+### MCP Brief
 {MCP_BRIEF}
 
-## Function Brief
+### Function Brief
 {FUNCTION_BRIEF}
 
-## Function Catalog
+### Function Catalog
 {func_catalog}
 
 Use `explore_schema` action to explore table schemas and sample data in detail.""" + (" Use `explore_base_knowledge` action to explore business domain knowledge." if _ENABLE_BASE_KNOWLEDGE else "") + """ Then use `generate_and_execute` action to exe_sql. Use `explore_functions` action for more available functions, then use `generate_and_execute` action to call.
@@ -72,9 +76,6 @@ The system is working in Think → Action → Act → Observe cycles. You takes 
 
 ACTIONS AVAILABLE:
 {ACTIONS}
-
-Context (includes conversation history and user questions):
-{context}
 
 ⚠️ LANGUAGE — READ THIS FIRST: Before generating any output, check the user's question language. Your ENTIRE output (description and todo items) MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, you MUST write in Chinese. If the user asked in English, you MUST write in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context, database information, and knowledge base may contain mixed languages — they are for factual content ONLY. Their language must NEVER leak into your output. Every word you output must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
 
