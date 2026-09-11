@@ -16,6 +16,7 @@ from utils.context_trim import prepare_trimmed_context, save_session_step, parse
 from utils.get_config import config_data
 
 _ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
+_ENABLE_TARGET = config_data.get('enable_target_knowledge', False)
 
 router = APIRouter()
 
@@ -44,20 +45,20 @@ def _event_stream_observe(
         context = ""
 
     target_section = ""
-    if TARGET.strip() != "":
+    if _ENABLE_TARGET and TARGET.strip() != "":
         target_section = "The target document template below defines the content that must be included. Review the execution results against this template to determine what still needs to be done:\n\n" + TARGET
 
     observe_prompt = f"""You are an objective Observer. Your job is to review the execution results of the last step, update the plan accordingly.
 
-The system is working in Think → Action → Act → Observe cycles. You takes the `Observe` part.
-
 {target_section}
-
-ACTIONS AVAILABLE:
-{ACTIONS}
 
 Context (includes execution results and errors):
 {context if context else '(no context)'}
+
+The system is working in Think → Action → Act → Observe cycles. You takes the `Observe` part.
+
+ACTIONS AVAILABLE:
+{ACTIONS}
 
 ⚠️ LANGUAGE — READ THIS FIRST: Before generating any output, check the user's original question language. Your ENTIRE output (description and todo items) MUST be in the EXACT SAME language as the user's original question. If the user asked in Chinese, you MUST write in Chinese. If the user asked in English, you MUST write in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context may contain mixed languages — it is for factual content ONLY. Their language must NEVER leak into your output. Every word you output must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
 

@@ -12,6 +12,7 @@ from data_access.brief_info_db import brief_info
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from agent.tools.tools_def import llm, engine
 from agent.tools.search_db import get_db_structure_markdown
+from utils.get_config import config_data
 
 _KNOWLEDGE_DIR = os.path.dirname(os.path.abspath(__file__))
 _DOCS_DIR = os.path.join(_KNOWLEDGE_DIR, "knowledge_docs")
@@ -394,6 +395,36 @@ TARGET = _DynamicStr(lambda: ("\nTarget:\n" + _TARGET_MD) if _TARGET_MD else "")
 
 THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + _THINK_KNOWLEDGE_MD\
        + "\n" + base_knowledge_to_str(get_think_knowledge_db()))
+
+
+def _get_brief_info(enabled_knowledge=True, enabled_mcp=True):
+    parts = []
+
+    db = str(DB_BRIEF)
+    if db.strip():
+        parts.append(f"{db}\n\nUse `explore_schema` to explore table schemas and sample data.")
+
+    if enabled_knowledge:
+        bk = str(BASE_KNOWLEDGE_BRIEF)
+        if bk.strip():
+            parts.append(f"### Domain Knowledge Brief\n{bk}\n\nUse `explore_base_knowledge` to explore full business domain knowledge.")
+
+    if enabled_mcp:
+        mcp = str(MCP_BRIEF)
+        if mcp.strip():
+            parts.append(f"### MCP Brief\n{mcp}\n\nUse `explore_mcp` to explore available MCP tools.")
+
+    func = str(FUNCTION_BRIEF)
+    if func.strip():
+        parts.append(f"### Function Brief\n{func}\n\nUse `explore_functions` to explore available function details.")
+
+    return "\n\n".join(parts)
+
+
+BRIEF_INFO = _DynamicStr(lambda: _get_brief_info(
+    config_data.get('enable_base_knowledge', True),
+    config_data.get('enable_mcp', True),
+))
 
 
 

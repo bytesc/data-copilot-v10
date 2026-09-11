@@ -23,6 +23,8 @@ from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.utils.pd_to_walker import generate_random_string
 from agent.utils.get_config import config_data
 from data_access.session_log import record_session_operation
+
+_ENABLE_TARGET = config_data.get('enable_target_knowledge', False)
 from data_access.observe_log import log_observe_cycle
 from data_access.report_log import record_report_generation
 from utils.front_utils import history_to_text
@@ -277,6 +279,8 @@ def _parse_outline_json(raw: str) -> dict:
 def _event_stream_generate_document(conversation_history: List[dict], session_id: str, request_json: str = ""):
     context = history_to_text(conversation_history)
 
+    _target_section = str(TARGET) if _ENABLE_TARGET else ""
+
     yield f"data: {json.dumps({'phase': 'outline', 'type': 'msg', 'content': 'Generating document outline...'}, ensure_ascii=False)}\n\n"
 
     outline_prompt = f"""{OUTLINE_SYSTEM}
@@ -285,7 +289,7 @@ def _event_stream_generate_document(conversation_history: List[dict], session_id
 
 {DOC}
 
-{TARGET}
+{_target_section if _ENABLE_TARGET else ""}
 
 Conversation History:
 {context}"""
@@ -335,7 +339,7 @@ Full Document Outline (all sections):
 
 {DOC}
 
-{TARGET}
+{_target_section}
 
 Conversation History:
 {context}
@@ -435,6 +439,7 @@ def generate_document_from_context(conversation_history: List[dict], session_id:
 
 def _event_stream_generate_document_unified(conversation_history: List[dict], session_id: str, title: str = "", request_json: str = ""):
     context = history_to_text(conversation_history)
+    _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': 'Generating document...'}, ensure_ascii=False)}\n\n"
 
@@ -444,7 +449,7 @@ def _event_stream_generate_document_unified(conversation_history: List[dict], se
 
 {DOC}
 
-{TARGET}
+{_target_section}
 
 Conversation History:
 {context}

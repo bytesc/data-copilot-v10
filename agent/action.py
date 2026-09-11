@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-
+from agent.tools.base_knowledge.get_base_knowledge import BRIEF_INFO
 from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.tools_def import llm
@@ -112,8 +112,8 @@ You can output MULTIPLE actions in one cycle by using an "actions" array instead
 {{"actions": [{{"action": "explore_schema"}}, {{"action": "explore_functions"}}]}}
 
 GROUPING RULES:
-- Group 1 (Explore类): {', '.join(_GROUP_1_ACTIONS)}. These can be batched together.
-- Group 2 (用户交互类): output_text, ask_question, ask_choice, summary_and_pause, attempt_completion. These can be batched together. summary_and_pause and attempt_completion must be the LAST action in the array, and each can appear at most once.
+- Group 1 (Explore): {', '.join(_GROUP_1_ACTIONS)}. These can be batched together.
+- Group 2 (User Interaction): output_text, ask_question, ask_choice, summary_and_pause, attempt_completion. These can be batched together. summary_and_pause and attempt_completion must be the LAST action in the array, and each can appear at most once.
 - Group 1 and Group 2 CANNOT be mixed in the same "actions" array.
 - All other actions ({', '.join(_OTHER_ACTIONS)}) must be used as single actions only.
 """
@@ -156,13 +156,14 @@ def _build_action_prompt(
 
     return f"""You are an action decision maker. Given the current context, decide the next action(s) to execute.
 
-Some Available Functions:
-{func_catalog}
-Use `explore_functions` action for more available functions. Then use `generate_and_execute` action to call.
+## Context:
+{context if context else '(no context)'}
+
+## System Info
+{BRIEF_INFO}
 
 The system is working in Think → Action → Act → Observe cycles. You takes the `Action` part.
-Context:
-{context if context else '(no context)'}
+
 
 Output ONLY a valid JSON object on a single line (no md block). Choose from:
 

@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.action import ACTIONS
-from agent.tools.base_knowledge.get_base_knowledge import TARGET, DB_BRIEF, BASE_KNOWLEDGE_BRIEF, MCP_BRIEF, FUNCTION_BRIEF
+from agent.tools.base_knowledge.get_base_knowledge import TARGET, BRIEF_INFO
 from agent.tools.tools_def import llm
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
@@ -16,7 +16,7 @@ from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
 from utils.get_config import config_data
 
-_ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
+_ENABLE_TARGET = config_data.get('enable_target_knowledge', False)
 
 router = APIRouter()
 
@@ -45,39 +45,25 @@ def _event_stream_think(
     func_catalog = get_func_summary_for_agent()
 
     target_section = ""
-    if TARGET.strip() != "":
+    if _ENABLE_TARGET and TARGET.strip() != "":
         target_section = "The target document template below defines the final report structure and content that must be produced. Ensure your plan covers all sections, data points, images, and tables required by this template:\n\n" + TARGET
 
     think_prompt = f"""You are an autonomous data analysis Thinker. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
 
-## User Request
-{context}
-
-## Reference Knowledge
 {target_section}
 
-{DB_BRIEF}
+## Context
+{context if context else '(no context)'}
 
-### Domain Knowledge Brief
-{BASE_KNOWLEDGE_BRIEF}
-
-### MCP Brief
-{MCP_BRIEF}
-
-### Function Brief
-{FUNCTION_BRIEF}
-
-### Function Catalog
-{func_catalog}
-
-Use `explore_schema` action to explore table schemas and sample data in detail.""" + (" Use `explore_base_knowledge` action to explore business domain knowledge." if _ENABLE_BASE_KNOWLEDGE else "") + """ Then use `generate_and_execute` action to exe_sql. Use `explore_functions` action for more available functions, then use `generate_and_execute` action to call.
+## System Info
+{BRIEF_INFO}
 
 The system is working in Think → Action → Act → Observe cycles. You takes the `Think` part.
 
 ACTIONS AVAILABLE:
 {ACTIONS}
 
-⚠️ LANGUAGE — READ THIS FIRST: Before generating any output, check the user's question language. Your ENTIRE output (description and todo items) MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, you MUST write in Chinese. If the user asked in English, you MUST write in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context, database information, and knowledge base may contain mixed languages — they are for factual content ONLY. Their language must NEVER leak into your output. Every word you output must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
+LANGUAGE — READ THIS FIRST: Before generating any output, check the user's question language. Your ENTIRE output (description and todo items) MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, you MUST write in Chinese. If the user asked in English, you MUST write in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context, database information, and knowledge base may contain mixed languages — they are for factual content ONLY. Their language must NEVER leak into your output. Every word you output must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
 
 Rules:
 1. Each step should be a specific, actionable task.
@@ -96,7 +82,8 @@ If the question requires no data analysis (greeting, clarification, etc.), outpu
 The description should be a short paragraph describing the overall approach.
 The todo list contains the actionable steps. Keep task descriptions concise.
 
-⚠️ FINAL LANGUAGE CHECK: The knowledge base above is in Chinese — IGNORE THAT. Your output MUST be in the user's language. Check the user's question now: what language is it in? Write your ENTIRE response in that language. Do NOT copy the knowledge base's language."""
+FINAL LANGUAGE CHECK: The knowledge base above is in Chinese — IGNORE THAT. Your output MUST be in the user's language. Check the user's question now: what language is it in? Write your ENTIRE response in that language. Do NOT copy the knowledge base's language.
+"""
 
     prompt_length = len(think_prompt)
     error_msg = ""

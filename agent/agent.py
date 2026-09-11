@@ -42,7 +42,7 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
     knowledge = BASE + "\n"
 
     target_section = ""
-    if TARGET.strip() != "":
+    if config_data.get('enable_target_knowledge', False) and TARGET.strip() != "":
         target_section = "The target document template below defines the data and charts that the final report must contain. Your generated code MUST query the necessary data and produce the required charts/images to fulfill this template:\n\n" + TARGET + "\n"
     # print(rag_ans)
 
