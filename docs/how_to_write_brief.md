@@ -53,11 +53,10 @@ CREATE TABLE brief_info (
 
 **注入位置**：think 阶段 + `explore_schema` action。
 
-**作用**：说明数据库的整体领域和它能回答哪些类型的问题，帮助 LLM 决定是否需要调用 `explore_schema` 查看详细表结构。
+**作用**：说明数据库的整体领域和它能回答哪些类型的问题。
 
 - 数据库是什么领域？覆盖了多少实体和关系？
 - 能回答哪些典型问题（查询、分析路径）？
-- 保持概览级别，具体表和字段信息由 `explore_schema` 按需获取
 
 > ⚠️ 当系统切换连接了新数据库后，**必须更新**此 Brief，否则 LLM 会沿用旧数据库的描述。
 
@@ -65,20 +64,18 @@ CREATE TABLE brief_info (
 
 **注入位置**：think 阶段（`Domain Knowledge Brief` 区段）。
 
-**作用**：说明业务领域的范围和能分析哪些业务问题，帮助 LLM 决定是否需要调用 `explore_base_knowledge` 查看完整业务知识。
+**作用**：说明业务领域的范围和能分析哪些业务问题。
 
 - 业务领域范围和边界
 - 能回答哪些业务问题
-- 保持概览级别，完整业务知识由 `explore_base_knowledge` 按需获取
 
 ### MCP_BRIEF — MCP 服务器摘要
 
 **注入位置**：think 阶段（`MCP Brief` 区段）+ `explore_mcp` action。
 
-**作用**：说明有哪些 MCP 外部工具服务器可用、每个服务器提供什么能力，帮助 LLM 决定是否需要调用 `explore_mcp` 查看具体工具和参数。
+**作用**：说明有哪些 MCP 外部工具服务器可用、每个服务器提供什么能力。
 
 - MCP 服务器列表及简要功能描述
-- 保持概览级别，具体工具列表由 `explore_mcp` 按需获取
 
 > 新增 MCP 服务器时，除了配置 `config/mcp_servers.yaml`，还需在此 Brief 中添加服务器描述。
 
@@ -86,11 +83,10 @@ CREATE TABLE brief_info (
 
 **注入位置**：think 阶段（`Function Brief` 区段）。
 
-**作用**：说明有哪些类别的函数可用，帮助 LLM 决定是否需要调用 `explore_functions` 查看具体函数详情。
+**作用**：说明有哪些类别的函数可用。
 
 - 函数的大类划分（如数据库查询、数据加载、可视化、网络搜索等）
 - 每个大类能解决什么类型的问题
-- 保持概览级别，具体函数名和签名由 `explore_functions` 按需获取
 
 ---
 
@@ -126,7 +122,7 @@ What it can do:
 - 首行以 `DataBase:` 开头
 - 第二行概括数据库领域和规模（实体数、关系数）
 - `What it can do` 下列出 3-6 个典型查询/分析场景
-- 末尾补充关键指标，**不要**列具体表名和字段——表结构由 `explore_schema` 按需获取
+- 末尾补充关键指标
 
 ### base_knowledge_brief.md 写法
 
@@ -147,7 +143,7 @@ What it can do:
 - 首行以 `Knowledge Base:` 开头
 - 明确业务领域的边界（哪些问题能回答、哪些不能）
 - `What it can do` 聚焦业务分析能力，而非数据查询能力
-- 末尾注明关键指标，**不要**列详细业务条目——完整业务知识由 `explore_base_knowledge` 按需获取
+- 末尾注明关键指标
 
 ### mcp_brief.md 写法
 
@@ -165,7 +161,6 @@ Server List:
 要点：
 - 首行以 `MCP Servers:` 开头
 - `Server List` 下列出每个服务器名称和简要功能
-- **不要**列具体工具名和参数——工具详情由 `explore_mcp` 按需获取
 - 新增 MCP 服务器时必须同步更新
 
 ### function_brief.md 写法
@@ -192,7 +187,7 @@ Available Functions:
 要点：
 - 首行以 `Available Functions:` 开头
 - 按**大类**组织，每类描述能解决什么问题
-- **不要**列具体函数名和参数——具体信息由 `explore_functions` action 按需获取
+- **不要**列具体函数名和参数
 
 
 ## 相关文档
