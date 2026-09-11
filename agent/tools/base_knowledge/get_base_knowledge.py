@@ -390,7 +390,7 @@ DOC = _DynamicStr(lambda: "\ndoc reference(just for reference):\n" + _DOC_MD\
 + "\n" + base_knowledge_to_str(get_doc_knowledge_db()))
 
 
-TARGET = _DynamicStr(lambda: "\nTarget:\n" + _TARGET_MD)
+TARGET = _DynamicStr(lambda: ("\nTarget:\n" + _TARGET_MD) if _TARGET_MD else "")
 
 THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + _THINK_KNOWLEDGE_MD\
        + "\n" + base_knowledge_to_str(get_think_knowledge_db()))
