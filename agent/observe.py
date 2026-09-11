@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from agent.action import ACTIONS
+from agent.action import ACTIONS, ACTIONS_BODY
 from agent.tools.base_knowledge.get_base_knowledge import TARGET
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
@@ -58,7 +58,7 @@ Context (includes execution results and errors):
 The system is working in Think → Action → Act → Observe cycles. You takes the `Observe` part.
 
 ACTIONS AVAILABLE:
-{ACTIONS}
+{ACTIONS_BODY}
 
 ⚠️ LANGUAGE — READ THIS FIRST: Before generating any output, check the user's original question language. Your ENTIRE output (description and todo items) MUST be in the EXACT SAME language as the user's original question. If the user asked in Chinese, you MUST write in Chinese. If the user asked in English, you MUST write in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context may contain mixed languages — it is for factual content ONLY. Their language must NEVER leak into your output. Every word you output must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
 

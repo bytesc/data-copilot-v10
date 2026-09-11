@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from agent.action import ACTIONS
+from agent.action import ACTIONS, ACTIONS_BODY
 from agent.tools.base_knowledge.get_base_knowledge import TARGET, BRIEF_INFO, THINK_KNOWLEDGE
 from agent.tools.tools_def import llm
 from agent.tools.search_func import get_func_summary_for_agent
@@ -63,7 +63,7 @@ def _event_stream_think(
 The system is working in Think → Action → Act → Observe cycles. You takes the `Think` part.
 
 ACTIONS AVAILABLE:
-{ACTIONS}
+{ACTIONS_BODY}
 
 LANGUAGE — READ THIS FIRST: Before generating any output, check the user's question language. Your ENTIRE output (description and todo items) MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, you MUST write in Chinese. If the user asked in English, you MUST write in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context, database information, and knowledge base may contain mixed languages — they are for factual content ONLY. Their language must NEVER leak into your output. Every word you output must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
 
