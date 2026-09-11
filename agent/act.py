@@ -590,11 +590,11 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
 def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_json: str = ""):
     search_keyword = (params.get("search_keyword") or "").strip()
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': '正在连接 MCP 服务器获取工具列表...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': 'Connecting to MCP servers to fetch tool list...'}, ensure_ascii=False)}\n\n"
 
     all_servers_config = load_mcp_servers()
     if not all_servers_config:
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'error', 'content': '没有配置任何 MCP 服务器'}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'error', 'content': 'No MCP servers configured'}, ensure_ascii=False)}\n\n"
         return {"selected_tools": [], "catalog": "", "tool_detail": "", "explore_plan": "", "error": "No MCP servers configured"}
 
     all_tools = []
@@ -611,11 +611,11 @@ def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_
             failed_servers.append(f"{name}({e})")
 
     if not all_tools:
-        err = "所有 MCP 服务器均连接失败: " + ", ".join(failed_servers) if failed_servers else "MCP 服务器没有提供任何工具"
+        err = "All MCP servers failed to connect: " + ", ".join(failed_servers) if failed_servers else "No MCP servers provided any tools"
         yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'error', 'content': err}, ensure_ascii=False)}\n\n"
         return {"selected_tools": [], "catalog": "", "tool_detail": "", "explore_plan": "", "error": err}
 
-    catalog_lines = ["## MCP 工具目录\n"]
+    catalog_lines = ["## MCP Tool Catalog\n"]
     for t in all_tools:
         srv = t.get("_server", "?")
         schema = t.get("inputSchema", {})
@@ -624,7 +624,7 @@ def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_
             props = []
             for pn, pi in schema["properties"].items():
                 req = pn in (schema.get("required", []))
-                props.append(f"`{pn}`({pi.get('type','any')}){'必填' if req else ''}:{pi.get('description','')}")
+                props.append(f"`{pn}`({pi.get('type','any')}){'required' if req else ''}:{pi.get('description','')}")
             params_str = " [" + "; ".join(props) + "]"
         catalog_lines.append(f"- **{srv}/{t['name']}**: {t.get('description', '')}{params_str}")
     catalog = "\n".join(catalog_lines)
@@ -652,7 +652,7 @@ Example:
 
 If no tools are needed, return {{"selected_tools": [], "plan": "No MCP tools needed."}}
 """
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': '正在分析所需 MCP 工具...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': 'Analyzing required MCP tools...'}, ensure_ascii=False)}\n\n"
 
     raw = ""
     for chunk in call_llm_stream(prompt, llm):
@@ -664,7 +664,7 @@ If no tools are needed, return {{"selected_tools": [], "plan": "No MCP tools nee
     explore_plan = parsed.get("plan", "")
 
     if selected_tools:
-        selected_lines = ["## 已选 MCP 工具\n"]
+        selected_lines = ["## Selected MCP Tools\n"]
         for st in selected_tools:
             svr = st.get("server", "")
             name = st.get("name", "")
@@ -677,7 +677,7 @@ If no tools are needed, return {{"selected_tools": [], "plan": "No MCP tools nee
                     props = []
                     for pn, pi in schema["properties"].items():
                         req = pn in (schema.get("required", []))
-                        props.append(f"`{pn}`({pi.get('type','any')}){'必填' if req else ''}:{pi.get('description','')}")
+                        props.append(f"`{pn}`({pi.get('type','any')}){'required' if req else ''}:{pi.get('description','')}")
                     params_str = " [" + "; ".join(props) + "]"
                 selected_lines.append(f"- **{svr}/{name}**: {t.get('description', '')}{params_str}")
         tool_detail = "\n".join(selected_lines)
@@ -720,20 +720,20 @@ def _act_exe_mcp(full_question: str, session_id: str, params: dict, request_json
         yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'exe_mcp', 'type': 'error', 'content': 'MCP tool name is required'}, ensure_ascii=False)}\n\n"
         return {"server": server_name, "tool": "", "result": {}, "display_content": "", "error": "Tool name is required"}
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'exe_mcp', 'type': 'msg', 'content': f'正在执行 MCP 工具: {server_name}/{tool_name}...'}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'exe_mcp', 'type': 'msg', 'content': f'Executing MCP tool: {server_name}/{tool_name}...'}, ensure_ascii=False)}\n\n"
 
     server_config = get_mcp_server(server_name)
     if not server_config:
         all_servers = [s.get("name") for s in load_mcp_servers()]
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'exe_mcp', 'type': 'error', 'content': f'未找到 MCP 服务器: {server_name}，可用服务器: {all_servers}'}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'exe_mcp', 'type': 'error', 'content': f'MCP server not found: {server_name}, available servers: {all_servers}'}, ensure_ascii=False)}\n\n"
         return {"server": server_name, "tool": tool_name, "result": {}, "display_content": "", "error": f"Server '{server_name}' not found"}
 
     try:
         with MCPClient(server_config) as client:
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'exe_mcp', 'type': 'msg', 'content': f'正在调用 {tool_name}...'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'exe_mcp', 'type': 'msg', 'content': f'Calling {tool_name}...'}, ensure_ascii=False)}\n\n"
             result = client.call_tool(tool_name, tool_params)
     except MCPError as e:
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'exe_mcp', 'type': 'error', 'content': f'MCP 调用失败: {e}'}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'exe_mcp', 'type': 'error', 'content': f'MCP call failed: {e}'}, ensure_ascii=False)}\n\n"
         return {"server": server_name, "tool": tool_name, "result": {}, "display_content": "", "error": str(e)}
 
     result_content = result.get("content", [])
@@ -750,7 +750,7 @@ def _act_exe_mcp(full_question: str, session_id: str, params: dict, request_json
 
     result_text = "\n".join(result_text_parts) if result_text_parts else json.dumps(result, ensure_ascii=False, indent=2)
 
-    display_content = f"## MCP 工具执行结果: {server_name}/{tool_name}\n\n{result_text}"
+    display_content = f"## MCP Tool Execution Result: {server_name}/{tool_name}\n\n{result_text}"
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'exe_mcp', 'type': 'chunk', 'content': display_content}, ensure_ascii=False)}\n\n"
 
