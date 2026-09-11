@@ -6,9 +6,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent.action import ACTIONS
-from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, BASE, TARGET, BRIEF_INFO
-from agent.tools.tools_def import engine, llm
-from agent.tools.search_db import get_db_summary_for_agent
+from agent.tools.base_knowledge.get_base_knowledge import TARGET, DB_BRIEF_BRIEF, BASE_KNOWLEDGE_BRIEF, MCP_BRIEF
+from agent.tools.tools_def import llm
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
@@ -43,9 +42,7 @@ def _event_stream_think(
     else:
         context = question
 
-    db_summary = get_db_summary_for_agent(engine)
     func_catalog = get_func_summary_for_agent()
-    base_knowledge = BASE
 
     target_section = ""
     if TARGET.strip() != "":
@@ -53,20 +50,21 @@ def _event_stream_think(
 
     think_prompt = f"""You are an autonomous data analysis Thinker. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
 
-{base_knowledge}
-
 {target_section}
 
-Database Information:
-{DB_BRIEF}
+## Database Brief
+{DB_BRIEF_BRIEF}
 
-{BRIEF_INFO}
+## Domain Knowledge Brief
+{BASE_KNOWLEDGE_BRIEF}
 
-Use `explore_schema` action to explore table schemas and sample data in detail.""" + (" Use `explore_base_knowledge` action to explore business domain knowledge." if _ENABLE_BASE_KNOWLEDGE else "") + """ Then use `generate_and_execute` action to exe_sql
+## MCP Brief
+{MCP_BRIEF}
 
-Some Available Functions:
+## Function Brief
 {func_catalog}
-Use `explore_functions` action for more available functions. Then use `generate_and_execute` action to call.
+
+Use `explore_schema` action to explore table schemas and sample data in detail.""" + (" Use `explore_base_knowledge` action to explore business domain knowledge." if _ENABLE_BASE_KNOWLEDGE else "") + """ Then use `generate_and_execute` action to exe_sql. Use `explore_functions` action for more available functions, then use `generate_and_execute` action to call.
 
 The system is working in Think → Action → Act → Observe cycles. You takes the `Think` part.
 

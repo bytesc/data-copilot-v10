@@ -423,3 +423,6 @@ def get_brief_info():
 BRIEF_INFO = _DynamicStr(lambda: "\n" + "\n\n".join(
     f"### {k}\n{v}" for k, v in get_brief_info().items() if v
 ))
+
+DB_BRIEF_BRIEF = _DynamicStr(lambda: get_brief_info().get("db_brief", ""))
+BASE_KNOWLEDGE_BRIEF = _DynamicStr(lambda: get_brief_info().get("base_knowledge_brief", ""))
