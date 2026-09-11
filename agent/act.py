@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from agent.agent import generate_and_execute_stream
 from agent.document_generator import generate_document_from_context
-from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, BASE, TARGET, BRIEF_INFO, get_db_query_guide_db, get_base_knowledge_db, base_knowledge_to_str, get_doc_knowledge_db, get_think_knowledge_db, get_code_guide_db
+from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, BASE, TARGET, BRIEF_INFO, MCP_BRIEF, get_db_query_guide_db, get_base_knowledge_db, base_knowledge_to_str, get_doc_knowledge_db, get_think_knowledge_db, get_code_guide_db
 from agent.tools.tools_def import engine, llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.tools.copilot.sql_code import parse_selected_fields_json
@@ -636,7 +636,11 @@ def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_
 
     keyword_hint = f"\nFocus hint: {search_keyword.strip()}" if search_keyword else ""
 
+    mcp_brief = str(MCP_BRIEF)
+
     prompt = f"""Analyze the following MCP tool catalog and the user's question to select the relevant tools.
+
+{mcp_brief}
 
 {catalog}
 

@@ -337,6 +337,7 @@ _DOC_MD = _read_doc("doc_knowledge.md")
 _TARGET_MD = _read_doc("target_knowledge.md")
 _DB_QUERY_GUIDE_MD = _read_doc("db_query_guide.md")
 _THINK_KNOWLEDGE_MD = _read_doc("think_knowledge.md")
+_MCP_BRIEF_MD = _read_doc("mcp_brief.md")
 
 
 def _get_db_brief():
@@ -353,6 +354,23 @@ def _get_db_brief():
     return "\nDataBase Brief:\n" + md
 
 DB_BRIEF = _DynamicStr(_get_db_brief)
+
+
+def _get_mcp_brief():
+    md = _MCP_BRIEF_MD
+    try:
+        with sys_engine.connect() as conn:
+            rows = conn.execute(select(brief_info)).fetchall()
+            row_map = {row.attr: row.value for row in rows}
+        db_value = row_map.get("mcp_brief", "")
+        if db_value:
+            md += "\n\n" + db_value
+    except Exception as e:
+        print(f"[WARNING] Failed to read brief_info for mcp_brief: {e}")
+    return "\nMCP Brief:\n" + md
+
+
+MCP_BRIEF = _DynamicStr(_get_mcp_brief)
 
 
 def _format_db_query_guide():

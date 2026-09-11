@@ -6,7 +6,6 @@ import os
 
 SERVERS = [
     ("calculator", 8101, ["python", "-m", "mcpserver.calculator_server"]),
-    ("text",        8102, ["python", "-m", "mcpserver.text_server"]),
     ("datetime",    8103, ["python", "-m", "mcpserver.datetime_server"]),
 ]
 

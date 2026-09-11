@@ -180,12 +180,11 @@ mcp_servers:
 
 ### MCP 测试服务器
 
-项目提供了三个基于官方 `mcp` 库的测试服务器，位于 `mcpserver/` 目录下：
+项目提供了两个基于官方 `mcp` 库的测试服务器，位于 `mcpserver/` 目录下：
 
 | 服务器 | 端口 | 工具 |
 |--------|------|------|
 | `calculator_server.py` | 8101 | add, subtract, multiply, divide, power, sqrt, sin, cos, average |
-| `text_server.py` | 8102 | uppercase, lowercase, reverse, word_count, char_count, concat, contains, replace |
 | `datetime_server.py` | 8103 | get_current_time, format_date, date_diff, weekday, timestamp, add_days |
 
 启动所有测试服务器：
@@ -198,7 +197,6 @@ python -m mcpserver.run_all
 
 ```bash
 python -m mcpserver.calculator_server
-python -m mcpserver.text_server
 python -m mcpserver.datetime_server
 ```
 

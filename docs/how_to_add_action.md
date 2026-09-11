@@ -114,6 +114,8 @@ if __name__ == "__main__":
     mcp.run(transport="sse", host="0.0.0.0", port=8200)
 ```
 
+**MCP Brief** — `explore_mcp` 的 LLM prompt 中包含 MCP 服务器概览（类似 `DB_BRIEF`），定义在 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`，也可通过系统数据库 `brief_info` 表的 `mcp_brief` 属性覆盖。
+
 MCP 服务器配置定义在 `config/mcp_servers.yaml`，支持 `sse` 传输方式。参考实现见 `mcpserver/` 目录下的测试服务器。
 
 SSE 事件格式统一为：
