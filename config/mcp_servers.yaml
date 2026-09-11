@@ -1,6 +1,6 @@
 mcp_servers:
   - name: "calculator"
-    description: "Math calculation tools: add, subtract, multiply, divide, power, sqrt, sin, cos, average"
+    description: "Math expression evaluator: evaluate math expressions with arithmetic, trigonometric, and math functions"
     transport: "sse"
     url: "http://localhost:8101/sse"
 

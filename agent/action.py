@@ -86,7 +86,9 @@ if ENABLE_MCP:
     _ACTION_DESCRIPTIONS["explore_mcp"] = """- explore_mcp: {"action": "explore_mcp", "keyword": "..."}
    Explore available tools from all configured MCP (Model Context Protocol) servers. Optional keyword hints the LLM to focus on relevant tools. Returns a list of available tools with their server, descriptions and parameter schemas. Use this to discover what capabilities MCP servers offer. Then use `exe_mcp` action to call a specific tool."""
     _ACTION_DESCRIPTIONS["exe_mcp"] = """- exe_mcp: {"action": "exe_mcp", "server": "server_name", "tool": "tool_name", "params": {"key": "value"}}
-   Execute a specific tool on an MCP server. The server name must match a configured MCP server, and the tool name must be one returned by `explore_mcp`. Pass arguments as a params dict matching the tool's expected schema."""
+   Execute one or more tools on MCP servers. Single tool format: use "server", "tool", "params" fields. Multi-tool format: use "tools" array:
+   {"action": "exe_mcp", "tools": [{"server": "...", "tool": "...", "params": {...}}, ...]}
+   All tools are executed sequentially and results are returned together."""
 
 ACTIONS_BODY = "\n\n".join(_ACTION_DESCRIPTIONS[a] for a in VALID_ACTIONS)
 
@@ -263,6 +265,7 @@ def _parse_action_json(raw: str) -> dict:
         "server": result.get("server"),
         "tool": result.get("tool"),
         "params": result.get("params"),
+        "tools": result.get("tools"),
     }
 
 
@@ -284,6 +287,7 @@ def _build_multi_action_result(actions_list: list) -> dict:
                 "server": item.get("server"),
                 "tool": item.get("tool"),
                 "params": item.get("params"),
+                "tools": item.get("tools"),
             }
             for item in actions_list
         ],

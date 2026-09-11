@@ -20,6 +20,7 @@ export function useChat() {
 
   const messages = ref([])
   const generatedFiles = ref([])
+  const statusMsg = ref('')
 
   const serverUrl = ref(import.meta.env.VITE_SERVER_URL || 'http://127.0.0.1:8009')
 
@@ -294,6 +295,7 @@ function historyToText(history) {
         server: actionResult.server || undefined,
         tool: actionResult.tool || undefined,
         params: actionResult.params || undefined,
+        tools: actionResult.tools || undefined,
         search_keyword: actionResult.keyword || undefined,
       },
     })
@@ -306,6 +308,10 @@ function historyToText(history) {
       if (event.type === 'history') {
         handleHistoryEvent(event.history)
         continue
+      }
+
+      if (etype === 'msg') {
+        statusMsg.value = content
       }
 
       if (sub && sub !== currentSubPhase) {
@@ -363,6 +369,8 @@ function historyToText(history) {
         updateStreamingSubPhase(msgId, currentSubPhase, content, false, true)
       }
     }
+
+    statusMsg.value = ''
 
     if (currentSubContent) {
       addSubPhaseToMessage(msgId, currentSubPhase, currentSubContent)
@@ -627,6 +635,11 @@ function historyToText(history) {
         selected_tools: entry.selected_tools,
         explore_plan: entry.explore_plan,
         tool_detail: entry.tool_detail,
+        server: entry.server,
+        tool: entry.tool,
+        result: entry.result,
+        results: entry.results,
+        display_content: entry.display_content,
         collapsed: true,
       })
     } else if (entryType === 'document') {
@@ -795,6 +808,7 @@ function historyToText(history) {
     question,
     messages,
     generatedFiles,
+    statusMsg,
     isRunning,
     isCompleted,
     isPaused,

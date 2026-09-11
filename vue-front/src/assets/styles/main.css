@@ -465,11 +465,26 @@ html, body {
 
 .thinking-indicator {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   color: var(--text-muted);
   font-size: 13px;
   padding: 8px 0;
+}
+
+.thinking-indicator-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-msg {
+  font-size: 12px;
+  color: var(--accent-blue);
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
 }
 
 .thinking-text {

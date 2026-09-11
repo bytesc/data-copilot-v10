@@ -6,7 +6,7 @@ FUNCTION_DICT = {
     # "query_database": query_database,
     # "draw_graph": draw_graph,
     # "draw_compare_graph": draw_compare_graph,
-    # "explain_data": explain_data,
+    "explain_data": explain_data,
     "exe_sql": exe_sql,
     "load_data": load_data,
     "get_save_image_path": get_save_image_path,

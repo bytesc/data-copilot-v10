@@ -15,9 +15,12 @@
       />
 
       <div v-if="isRunning" class="thinking-indicator">
-        <span class="blink-cursor">|</span>
-        <span class="thinking-text">Thinking...</span>
-        <button class="interrupt-btn" :disabled="interruptRequested" @click="onInterrupt">{{ interruptRequested ? 'Interrupting...' : 'Interrupt' }}</button>
+        <div v-if="statusMsg" class="status-msg">{{ statusMsg }}</div>
+        <div class="thinking-indicator-row">
+          <span class="blink-cursor">|</span>
+          <span class="thinking-text">Thinking...</span>
+          <button class="interrupt-btn" :disabled="interruptRequested" @click="onInterrupt">{{ interruptRequested ? 'Interrupting...' : 'Interrupt' }}</button>
+        </div>
       </div>
     </div>
 
@@ -98,6 +101,7 @@ const {
   startChat, submitUserResponse, submitPausedInput, submitNewQuestion,
   requestInterrupt,
   interruptRequested,
+  statusMsg,
 } = props.chat
 
 const currentQuestion = ref('')

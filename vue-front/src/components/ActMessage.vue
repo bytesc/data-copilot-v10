@@ -143,11 +143,17 @@
 
     <template v-else-if="message.action === 'exe_mcp'">
       <details class="msg-collapse" open>
-        <summary class="collapse-summary">MCP Execute: {{ message.server || mcpServer }}/{{ message.tool || mcpTool }}</summary>
+        <summary class="collapse-summary">MCP Execute{{ mcpSummaryLabel }}</summary>
         <div class="collapse-body">
           <div v-if="message.error" class="error-block"><strong>Error:</strong> {{ message.error }}</div>
-          <div v-if="hasMcpDisplayContent" v-html="renderMd(mcpDisplayContent)"></div>
-          <div v-else-if="hasMcpResult" class="mcp-result" v-html="renderMd(mcpResultText)"></div>
+          <div v-if="hasMcpResults">
+            <div v-for="(r, i) in mcpResults" :key="i" class="mcp-tool-entry">
+              <div class="mcp-tool-header">{{ r.server }}/{{ r.tool }}</div>
+              <div v-if="r.error" class="error-block"><strong>Error:</strong> {{ r.error }}</div>
+              <div v-else class="mcp-result"><pre><code>{{ formatJson(r.result) }}</code></pre></div>
+            </div>
+          </div>
+          <div v-else-if="hasMcpResult" class="mcp-result"><pre><code>{{ formatJson(message.result) }}</code></pre></div>
         </div>
       </details>
     </template>
@@ -319,7 +325,41 @@ const mcpSelectedTools = computed(() => {
 
 const hasMcpSelectedTools = computed(() => mcpSelectedTools.value.length > 0)
 
-const mcpResultText = computed(() => {
+const mcpResults = computed(() => {
+  return props.message.results || props.message.parsed?.results || []
+})
+
+const hasMcpResults = computed(() => mcpResults.value.length > 0)
+
+const mcpSummaryLabel = computed(() => {
+  const results = mcpResults.value
+  if (results.length === 1) {
+    return `: ${results[0].server}/${results[0].tool}`
+  }
+  if (results.length > 1) {
+    return ` (${results.length} tools)`
+  }
+  if (props.message.server || props.message.tool) {
+    return `: ${props.message.server || ''}/${props.message.tool || ''}`
+  }
+  return ''
+})
+
+const mcpDisplayContent = computed(() => {
+  return props.message.display_content || props.message.parsed?.display_content || ''
+})
+
+const hasMcpDisplayContent = computed(() => !!mcpDisplayContent.value)
+
+function mcpResultText(r) {
+  const result = r.result || r
+  if (!result) return ''
+  const content = result.content || result
+  if (typeof content === 'string') return content
+  return formatJson(content)
+}
+
+const mcpResultSingleText = computed(() => {
   const r = props.message.result || props.message.parsed?.result
   if (!r) return ''
   if (typeof r === 'string') return r
