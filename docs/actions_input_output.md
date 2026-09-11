@@ -340,14 +340,14 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 **输出**
 ```json
 {"role":"assistant","type":"act","action":"explore_mcp",
- "selected_tools":[{"server":"calculator","name":"add"},...],
+ "selected_tools":[{"server":"calculator","name":"calculate"},...],
  "tool_detail":"格式化后的 markdown 展示",
  "explore_plan":"..."}
 ```
 
 **上下文（成功）**
 ```
-[ACT explore_mcp] selected_tools: [{"server":"calculator","name":"add"},...]
+[ACT explore_mcp] selected_tools: [{"server":"calculator","name":"calculate"},...]
 [ACT explore_mcp] explore_plan:
 {plan}
 [ACT explore_mcp] tool_detail:
@@ -362,26 +362,29 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 ```json
 {"action": "exe_mcp", "server": "server_name", "tool": "tool_name", "params": {"key": "value"}}
 ```
-server 和 tool 为必填，由 `explore_mcp` 选出的 `selected_tools` 指定。params 为可选参数。
+单工具格式，由 `explore_mcp` 选出的 `selected_tools` 指定。params 为可选参数。
+
+也支持多工具格式（批量执行）：
+```json
+{"action": "exe_mcp", "tools": [{"server": "...", "tool": "...", "params": {...}}, ...]}
+```
 
 **输出**
 ```json
-{"role":"assistant","type":"act","action":"exe_mcp","server":"server_name","tool":"tool_name","result":{...},"display_content":"...","error":"..."}
+{"role":"assistant","type":"act","action":"exe_mcp",
+ "results":[{"server":"...","tool":"...","result":{...}},...],
+ "error":null}
 ```
 
 **上下文（成功）**
 ```
-[ACT exe_mcp] server: {server_name}
-[ACT exe_mcp] tool: {tool_name}
-[ACT exe_mcp] result:
-{display_content}
+[ACT exe_mcp] {server}/{tool} result:
+{result_json}
 ```
 
 **上下文（失败）**
 ```
-[ACT exe_mcp] server: {server_name}
-[ACT exe_mcp] tool: {tool_name}
-[ACT exe_mcp] error: {error}
+[ACT exe_mcp] {server}/{tool} error: {error}
 ```
 
 ---

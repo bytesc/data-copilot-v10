@@ -149,6 +149,8 @@
 ```
 成功：
   {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"正在连接 MCP 服务器获取工具列表..."}
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"正在列出 MCP 服务器工具: calculator..."}
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"从 calculator 发现 1 个工具"}
   {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"正在分析所需 MCP 工具..."}
   {phase:"act", type:"chunk", sub_phase:"explore_mcp", content:"..."}  ×N
   {phase:"act", type:"done",  sub_phase:"explore_mcp", content:"...",
@@ -157,6 +159,7 @@
   {type:"history", history:[...]}
 
 失败：
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"无法连接 calculator: ..."}
   {phase:"act", type:"error", sub_phase:"explore_mcp", content:"没有配置任何 MCP 服务器"}
   {phase:"act", type:"error", sub_phase:"explore_mcp", content:"MCP 服务器均连接失败/无工具"}
 ```
@@ -164,17 +167,26 @@
 ### exe_mcp
 
 ```
-成功：
-  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在执行 MCP 工具: {server}/{tool}..."}
-  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在调用 {tool}..."}
-  {phase:"act", type:"chunk", sub_phase:"exe_mcp", content:"执行结果 markdown..."}
-  {phase:"act", type:"done",  sub_phase:"exe_mcp", content:"...",
-   result:{server:"...", tool:"...", result:{...}}}
+成功（单工具）：
+  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在执行 MCP 工具 [1/1]: calculator/calculate..."}
+  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在调用 calculate..."}
+  {phase:"act", type:"chunk", sub_phase:"exe_mcp", content:"### calculator/calculate\n\n..."}
+  {phase:"act", type:"done",  sub_phase:"exe_mcp", content:"## MCP Tool Execution Results\n\n...",
+   result:{results:[{server:"calculator",tool:"calculate",result:{...}}]}}
+  {type:"history", history:[...]}
+
+成功（多工具）：
+  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在执行 MCP 工具 [1/2]: calculator/add..."}
+  {phase:"act", type:"chunk", sub_phase:"exe_mcp", content:"### calculator/add\n\n..."}
+  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在执行 MCP 工具 [2/2]: calculator/multiply..."}
+  {phase:"act", type:"chunk", sub_phase:"exe_mcp", content:"### calculator/multiply\n\n..."}
+  {phase:"act", type:"done",  sub_phase:"exe_mcp", content:"## MCP Tool Execution Results\n\n...",
+   result:{results:[{server:"calculator",tool:"add",result:{...}},{server:"calculator",tool:"multiply",result:{...}}]}}
   {type:"history", history:[...]}
 
 失败：
+  {phase:"act", type:"error", sub_phase:"exe_mcp", content:"MCP 调用失败: calculator/calculate: ..."}
   {phase:"act", type:"error", sub_phase:"exe_mcp", content:"未找到 MCP 服务器: {name}"}
-  {phase:"act", type:"error", sub_phase:"exe_mcp", content:"MCP 调用失败: {error}"}
 ```
 
 ### generate_document

@@ -81,14 +81,14 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 
 ```json
 {"role":"assistant","type":"act","action":"explore_mcp",
- "selected_tools":[{"server":"calculator","name":"add"},...],
+ "selected_tools":[{"server":"calculator","name":"calculate"},...],
  "tool_detail":"格式化后的 markdown 选中工具展示",
  "explore_plan":"..."}
 ```
 
 上下文格式:
 ```
-[ACT explore_mcp] selected_tools: [{"server":"calculator","name":"add"},...]
+[ACT explore_mcp] selected_tools: [{"server":"calculator","name":"calculate"},...]
 [ACT explore_mcp] explore_plan:
 {plan}
 [ACT explore_mcp] tool_detail:
@@ -99,17 +99,14 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 
 ```json
 {"role":"assistant","type":"act","action":"exe_mcp",
- "server":"server_name","tool":"tool_name",
- "result":{"content":[{"type":"text","text":"..."}]},
- "display_content":"...","error":null}
+ "results":[{"server":"server_name","tool":"tool_name","result":{...}},...],
+ "error":null}
 ```
 
 上下文格式:
 ```
-[ACT exe_mcp] server: {server_name}
-[ACT exe_mcp] tool: {tool_name}
-[ACT exe_mcp] result:
-{display_content}
+[ACT exe_mcp] {server}/{tool} result:
+{result_json}
 ```
 
 ### fetch_webpage
