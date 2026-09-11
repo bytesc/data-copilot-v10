@@ -81,6 +81,7 @@
 | `load_data(url)` | 从 CSV 链接加载数据 |
 | `search_web(query)` | DuckDuckGo 网页搜索 |
 | `fetch_webpage(url)` | 抓取网页内容 |
+| `exe_mcp(server, tool, params)` | 调用 MCP 外部工具 |
 
 ### 动作类型
 

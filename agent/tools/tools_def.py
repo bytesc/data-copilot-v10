@@ -10,6 +10,7 @@ from .data_trans.download_csv_to_pd import download_csv_to_dataframe, extract_cs
 from .copilot.sql_code import query_database_func
 from .copilot.python_code import draw_graph_func, draw_compare_graph_func
 from .web_search.web_search import search_web, fetch_webpage
+from .mcp_client import load_mcp_servers, get_mcp_server, MCPClient, MCPError
 
 
 DATABASE_URL = config_data['mysql']
@@ -242,6 +243,57 @@ def load_data(url: str) -> pd.DataFrame:
     return df
 
 
+def exe_mcp(server: str, tool: str, params: dict = None) -> str:
+    """
+    exe_mcp(server: str, tool: str, params: dict = None) -> str:
+    Execute a tool on an MCP (Model Context Protocol) server. Use this to call external capabilities like sending emails, querying external APIs, or accessing specialized services.
+    Returns the tool execution result as a formatted string.
+
+    Args:
+    - server (str): The MCP server name (e.g. "calculator", "email", "weather").
+    - tool (str): The tool name to execute on the server.
+    - params (dict, optional): Parameters to pass to the tool.
+
+    Returns:
+    - str: Formatted result text from the MCP tool execution.
+    returns error message string in case of error
+
+    Example:
+    ```python
+        result = exe_mcp("calculator", "calculate", {"expression": "2 + 2"})
+        # Output(str):
+        # "### calculator/calculate\n\n4"
+    ```
+    """
+    server_config = get_mcp_server(server)
+    if not server_config:
+        return f"Error: MCP server not found: {server}"
+
+    try:
+        with MCPClient(server_config) as client:
+            result = client.call_tool(tool, params or {})
+    except MCPError as e:
+        return f"Error: MCP call failed - {server}/{tool}: {e}"
+    except Exception as e:
+        return f"Error: MCP call failed - {server}/{tool}: {e}"
+
+    result_content = result.get("content", [])
+    result_text_parts = []
+    for part in result_content:
+        if isinstance(part, dict):
+            if part.get("type") == "text":
+                result_text_parts.append(part.get("text", ""))
+            elif part.get("type") == "resource":
+                resource = part.get("resource", {})
+                result_text_parts.append(f"[Resource] {resource.get('text', '')}")
+        else:
+            result_text_parts.append(str(part))
+    result_text = "\n".join(result_text_parts) if result_text_parts else json.dumps(result, ensure_ascii=False, indent=2)
+
+    combined = f"### {server}/{tool}\n\n{result_text}"
+    return combined
+
+
 def get_save_image_path() -> str:
     """
        get_save_image_path() -> str:
@@ -253,7 +305,8 @@ def get_save_image_path() -> str:
        Example:
        ```python
         def func(data_dict):
-            import pandas as pd
+import json
+import pandas as pd
             import math
             import numpy as np
             import PIL
