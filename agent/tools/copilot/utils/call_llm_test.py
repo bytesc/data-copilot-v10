@@ -30,7 +30,6 @@ def call_llm(question, llm):
     response = llm.chat.completions.create(
         model=config_data["model_name"],
         messages=[
-            {"role": "system", "content": "You are a helpful assistant"},
             {"role": "user", "content": question},
         ],
         stream=False
@@ -46,7 +45,6 @@ def call_llm_stream(question, llm):
     response = llm.chat.completions.create(
         model=config_data["model_name"],
         messages=[
-            {"role": "system", "content": "You are a helpful assistant"},
             {"role": "user", "content": question},
         ],
         stream=True
