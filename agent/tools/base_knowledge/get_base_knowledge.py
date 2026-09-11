@@ -414,9 +414,17 @@ def _get_brief_info(enabled_knowledge=True, enabled_mcp=True):
         if mcp.strip():
             parts.append(f"### MCP Brief\n{mcp}\n\nUse `explore_mcp` to explore available MCP tools.")
 
+    func_hardcoded = """
+Database:
+- Execute SQL queries, load tables, get database schema
+Visualization:
+- Generate charts (line, bar, scatter, pie, etc.) and save images
+"""
     func = str(FUNCTION_BRIEF)
+    func_content = func_hardcoded
     if func.strip():
-        parts.append(f"### Function Brief\n{func}\n\nUse `explore_functions` to explore available function details.")
+        func_content += func
+    parts.append(f"### Function Brief\n{func_content}\n\nUse `explore_functions` to explore available function details.")
 
     return "\n\n".join(parts)
 
