@@ -534,11 +534,13 @@ from agent.act import router as act_router
 from agent.observe import router as observe_router
 from agent.action import router as action_router
 from agent.document_generator import router as document_router
+from agent.sys_knowledge_router import router as sys_knowledge_router
 app.include_router(think_router)
 app.include_router(act_router)
 app.include_router(observe_router)
 app.include_router(action_router)
 app.include_router(document_router)
+app.include_router(sys_knowledge_router)
 
 
 def _check_mcp_servers():
@@ -582,6 +584,6 @@ _check_mcp_servers()
 
 if __name__ == "__main__":
     try:
-        uvicorn.run(app, host=config_data['server_host'], port=config_data['server_port'])
+        uvicorn.run(app, host=config_data['server_host'], port=config_data['server_port'], loop="asyncio")
     finally:
         executor.shutdown(wait=True)
