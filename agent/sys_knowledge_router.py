@@ -5,6 +5,7 @@ from sqlalchemy import insert, select, update, delete
 from data_access.sys_db_conn import sys_engine
 from data_access.base_knowledge_db import base_knowledge
 from data_access.db_query_guide_db import db_query_guide
+from data_access.brief_info_db import brief_info
 
 router = APIRouter()
 
@@ -137,3 +138,27 @@ async def delete_db_query_guide(item_id: int):
         conn.execute(delete(db_query_guide).where(db_query_guide.c.id == item_id))
         conn.commit()
     return {"deleted": True, "id": item_id}
+
+
+# ---- brief_info (edit-only, no create/delete) ----
+
+class BriefInfoUpdate(BaseModel):
+    value: str
+
+
+@router.get("/api/sys-knowledge/brief-info/")
+async def list_brief_info():
+    with sys_engine.connect() as conn:
+        rows = conn.execute(select(brief_info).order_by(brief_info.c.attr)).fetchall()
+    return [{"attr": r.attr, "value": r.value or ""} for r in rows]
+
+
+@router.put("/api/sys-knowledge/brief-info/{attr}")
+async def update_brief_info(attr: str, entry: BriefInfoUpdate):
+    with sys_engine.connect() as conn:
+        existing = conn.execute(select(brief_info).where(brief_info.c.attr == attr)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail=f"Attribute '{attr}' not found")
+        conn.execute(update(brief_info).where(brief_info.c.attr == attr).values(value=entry.value))
+        conn.commit()
+    return {"attr": attr, "value": entry.value}

@@ -173,6 +173,88 @@ async def get_db_overview(request: Request):
     return JSONResponse(content=result)
 
 
+class CommentUpdate(BaseModel):
+    comment: str
+
+
+@app.get("/api/comment-manage/")
+async def get_comment_manage():
+    def _get():
+        from sqlalchemy import inspect, text
+        from sqlalchemy.exc import SQLAlchemyError
+        from sqlalchemy.types import TypeEngine
+        inspector = inspect(engine)
+        table_names = inspector.get_table_names()
+        tables = []
+        for table_name in table_names:
+            try:
+                table_comment = inspector.get_table_comment(table_name)
+                columns = inspector.get_columns(table_name)
+                cols = []
+                for col in columns:
+                    col_type = col["type"]
+                    if isinstance(col_type, TypeEngine):
+                        col_type_str = str(col_type)
+                    else:
+                        col_type_str = str(col_type)
+                    nullable = col.get("nullable", True)
+                    default = col.get("default")
+                    cols.append({
+                        "name": col["name"],
+                        "type": col_type_str,
+                        "nullable": nullable,
+                        "default": str(default) if default is not None else None,
+                        "comment": col.get("comment", "") or "",
+                    })
+                tables.append({
+                    "name": table_name,
+                    "comment": (table_comment or {}).get("text", "") or "",
+                    "columns": cols,
+                })
+            except SQLAlchemyError as e:
+                tables.append({"name": table_name, "comment": "", "columns": []})
+        return {"tables": tables}
+    loop = asyncio.get_event_loop()
+    return JSONResponse(content=await loop.run_in_executor(executor, _get))
+
+
+@app.put("/api/comment-manage/{table_name}/table-comment")
+async def update_table_comment(table_name: str, entry: CommentUpdate):
+    def _update():
+        from sqlalchemy import text
+        escaped = entry.comment.replace("'", "''")
+        with engine.connect() as conn:
+            conn.execute(text(f"ALTER TABLE `{table_name}` COMMENT = '{escaped}'"))
+            conn.commit()
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(executor, _update)
+    return {"table": table_name, "comment": entry.comment}
+
+
+@app.put("/api/comment-manage/{table_name}/column/{column_name}/comment")
+async def update_column_comment(table_name: str, column_name: str, entry: CommentUpdate):
+    def _update():
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        columns = inspector.get_columns(table_name)
+        col_info = next((c for c in columns if c["name"] == column_name), None)
+        if not col_info:
+            raise HTTPException(status_code=404, detail=f"Column '{column_name}' not found in '{table_name}'")
+        col_type = col_info["type"]
+        nullable = col_info.get("nullable", True)
+        default = col_info.get("default")
+        escaped = entry.comment.replace("'", "''")
+        nullable_str = "NULL" if nullable else "NOT NULL"
+        default_str = f"DEFAULT {default}" if default is not None else ""
+        sql = f"ALTER TABLE `{table_name}` MODIFY COLUMN `{column_name}` {col_type} {nullable_str} {default_str} COMMENT '{escaped}'"
+        with engine.connect() as conn:
+            conn.execute(text(sql))
+            conn.commit()
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(executor, _update)
+    return {"table": table_name, "column": column_name, "comment": entry.comment}
+
+
 @app.get("/api/session/{session_id}/history")
 async def get_session_history(request: Request, session_id: str):
     result = reconstruct_conversation_history(session_id)

@@ -1,4 +1,5 @@
 import io
+import re
 
 from data_access.read_db import execute_sql, execute_select
 from data_access.db_conn import engine
@@ -7,6 +8,28 @@ import numpy as np
 from sqlalchemy import create_engine, MetaData, Table, Column, text, inspect
 from sqlalchemy.types import VARCHAR, Integer, Float, DateTime, Boolean, Text
 from datetime import datetime
+
+
+def sanitize_column_name(name: str, used_names: set) -> str:
+    cleaned = re.sub(r'[^\w]', '_', str(name))
+    cleaned = re.sub(r'_+', '_', cleaned).strip('_')
+    if not cleaned or cleaned[0].isdigit():
+        cleaned = 'col_' + cleaned
+    if not cleaned:
+        cleaned = 'column'
+    while cleaned in used_names or cleaned.lower() in {
+        'select', 'insert', 'update', 'delete', 'drop', 'alter', 'create',
+        'table', 'where', 'from', 'and', 'or', 'not', 'null', 'true', 'false',
+        'order', 'group', 'by', 'having', 'join', 'union', 'into', 'values',
+        'set', 'distinct', 'as', 'exists', 'between', 'like', 'in', 'is',
+        'primary', 'key', 'index', 'constraint', 'default', 'check', 'foreign',
+        'references', 'add', 'column', 'modify', 'change', 'rename', 'analyze',
+        'use', 'show', 'describe', 'explain', 'grant', 'revoke', 'lock',
+        'unlock', 'execute', 'call', 'begin', 'commit', 'rollback',
+    }:
+        cleaned += '_'
+    used_names.add(cleaned)
+    return cleaned
 
 
 def pandas_type_to_sqlalchemy(dtype, max_length=None):
@@ -25,9 +48,23 @@ def pandas_type_to_sqlalchemy(dtype, max_length=None):
             return Text()
 
 
+def sanitize_table_name(name: str) -> str:
+    cleaned = re.sub(r'[^\w]', '_', str(name))
+    cleaned = re.sub(r'_+', '_', cleaned).strip('_')
+    if not cleaned or cleaned[0].isdigit():
+        cleaned = 'tbl_' + cleaned
+    if not cleaned:
+        cleaned = 'uploaded_data'
+    return cleaned.lower()
+
+
 def process_csv_to_database(file_content: bytes, table_name: str = "uploaded_data"):
     try:
         df = pd.read_csv(io.BytesIO(file_content))
+        table_name = sanitize_table_name(table_name)
+        used = set()
+        rename_map = {col: sanitize_column_name(col, used) for col in df.columns}
+        df.rename(columns=rename_map, inplace=True)
         inspector = inspect(engine)
         if inspector.has_table(table_name):
             with engine.connect() as conn:
