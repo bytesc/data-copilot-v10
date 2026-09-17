@@ -14,46 +14,52 @@
         <div v-if="tables.length === 0" class="empty-text">No tables</div>
         <div v-else class="table-list">
           <div v-for="tbl in tables" :key="tbl.name" class="table-card">
-            <div class="table-card-header">
+            <div class="table-card-header" @click="toggleCollapse(tbl.name)">
+              <span class="collapse-arrow">{{ isCollapsed(tbl.name) ? '▶' : '▼' }}</span>
               <span class="table-name-label">📊 {{ tbl.name }}</span>
-              <button
-                v-if="editingTable !== tbl.name"
-                class="btn-action btn-edit"
-                @click="startEditTable(tbl)"
-              >Edit</button>
+              <span class="table-col-count">{{ tbl.columns.length }} columns</span>
             </div>
 
-            <div v-if="editingTable === tbl.name" class="inline-edit">
-              <textarea v-model="editTableComment" class="form-textarea" rows="2" placeholder="Table comment..."></textarea>
-              <div class="edit-actions">
-                <span v-if="editError" class="form-error">{{ editError }}</span>
-                <button class="btn-secondary btn-sm" @click="cancelEditTable">Cancel</button>
-                <button class="btn-primary btn-sm" :disabled="savingTable" @click="saveTableComment(tbl.name)">
-                  {{ savingTable ? 'Saving...' : 'Save' }}
-                </button>
+            <div v-show="!isCollapsed(tbl.name)">
+              <div class="expanded-header">
+                <button
+                  v-if="editingTable !== tbl.name"
+                  class="btn-action btn-edit"
+                  @click="startEditTable(tbl)"
+                >Edit Table Comment</button>
               </div>
-            </div>
-            <div v-else class="table-comment-display">{{ tbl.comment || '(no comment)' }}</div>
-
-            <div class="columns-section">
-              <div v-for="col in tbl.columns" :key="col.name" class="column-row">
-                <div class="column-info">
-                  <span class="col-name">{{ col.name }}</span>
-                  <span class="col-type">{{ col.type }}</span>
+              <div v-if="editingTable === tbl.name" class="inline-edit">
+                <textarea v-model="editTableComment" class="form-textarea" rows="2" placeholder="Table comment..."></textarea>
+                <div class="edit-actions">
+                  <span v-if="editError" class="form-error">{{ editError }}</span>
+                  <button class="btn-secondary btn-sm" @click="cancelEditTable">Cancel</button>
+                  <button class="btn-primary btn-sm" :disabled="savingTable" @click="saveTableComment(tbl.name)">
+                    {{ savingTable ? 'Saving...' : 'Save' }}
+                  </button>
                 </div>
-                <div class="column-comment-area">
-                  <div v-if="editingColumn !== col.name + tbl.name" class="column-comment">
-                    <span class="col-comment-text">{{ col.comment || '(no comment)' }}</span>
-                    <button class="btn-action btn-edit btn-xs" @click="startEditColumn(tbl, col)">Edit</button>
+              </div>
+              <div v-else class="table-comment-display">{{ tbl.comment || '(no comment)' }}</div>
+
+              <div class="columns-section">
+                <div v-for="col in tbl.columns" :key="col.name" class="column-row">
+                  <div class="column-info">
+                    <span class="col-name">{{ col.name }}</span>
+                    <span class="col-type">{{ col.type }}</span>
                   </div>
-                  <div v-else class="inline-edit column-edit">
-                    <input v-model="editColComment" type="text" class="form-input col-comment-input" placeholder="Column comment..." />
-                    <div class="edit-actions">
-                      <span v-if="colEditError" class="form-error">{{ colEditError }}</span>
-                      <button class="btn-secondary btn-xs" @click="cancelEditColumn">Cancel</button>
-                      <button class="btn-primary btn-xs" :disabled="savingCol" @click="saveColumnComment(tbl.name, col.name)">
-                        {{ savingCol ? 'Saving...' : 'Save' }}
-                      </button>
+                  <div class="column-comment-area">
+                    <div v-if="editingColumn !== col.name + tbl.name" class="column-comment">
+                      <span class="col-comment-text">{{ col.comment || '(no comment)' }}</span>
+                      <button class="btn-action btn-edit btn-xs" @click="startEditColumn(tbl, col)">Edit</button>
+                    </div>
+                    <div v-else class="inline-edit column-edit">
+                      <input v-model="editColComment" type="text" class="form-input col-comment-input" placeholder="Column comment..." />
+                      <div class="edit-actions">
+                        <span v-if="colEditError" class="form-error">{{ colEditError }}</span>
+                        <button class="btn-secondary btn-xs" @click="cancelEditColumn">Cancel</button>
+                        <button class="btn-primary btn-xs" :disabled="savingCol" @click="saveColumnComment(tbl.name, col.name)">
+                          {{ savingCol ? 'Saving...' : 'Save' }}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -79,6 +85,26 @@ const editingTable = ref(null)
 const editTableComment = ref('')
 const savingTable = ref(false)
 const editError = ref('')
+
+const collapsedTables = ref(new Set())
+
+onMounted(() => {
+  fetchTables().then(() => {
+    const s = new Set()
+    tables.value.forEach(t => s.add(t.name))
+    collapsedTables.value = s
+  })
+})
+
+function toggleCollapse(name) {
+  const s = new Set(collapsedTables.value)
+  if (s.has(name)) s.delete(name); else s.add(name)
+  collapsedTables.value = s
+}
+
+function isCollapsed(name) {
+  return collapsedTables.value.has(name)
+}
 
 const editingColumn = ref(null)
 const editColComment = ref('')
@@ -168,7 +194,6 @@ async function saveColumnComment(tableName, columnName) {
   }
 }
 
-onMounted(fetchTables)
 </script>
 
 <style scoped>
@@ -233,8 +258,35 @@ onMounted(fetchTables)
 .table-card-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.table-card-header:hover {
+  opacity: 0.85;
+}
+
+.expanded-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   margin-bottom: 8px;
+  margin-top: 8px;
+}
+
+.collapse-arrow {
+  font-size: 10px;
+  color: var(--text-muted);
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.table-col-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-right: auto;
 }
 
 .table-name-label {

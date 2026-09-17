@@ -11,18 +11,6 @@
         <router-link to="/data" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">📊</span> Data
         </router-link>
-        <router-link to="/base-knowledge" class="nav-link" active-class="nav-link-active">
-          <span class="nav-icon">📚</span> Base Knowledge
-        </router-link>
-        <router-link to="/data-query-guide" class="nav-link" active-class="nav-link-active">
-          <span class="nav-icon">🗄️</span> Query Guide
-        </router-link>
-        <router-link to="/brief-info" class="nav-link" active-class="nav-link-active">
-          <span class="nav-icon">📝</span> Brief Info
-        </router-link>
-        <router-link to="/comment-manage" class="nav-link" active-class="nav-link-active">
-          <span class="nav-icon">💬</span> Comments
-        </router-link>
       </div>
     </nav>
 

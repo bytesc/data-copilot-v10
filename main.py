@@ -177,6 +177,32 @@ class CommentUpdate(BaseModel):
     comment: str
 
 
+@app.delete("/api/table/{table_name}")
+async def drop_table(table_name: str):
+    def _drop():
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        if not inspector.has_table(table_name):
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+        with engine.connect() as conn:
+            conn.execute(text(f"DROP TABLE IF EXISTS `{table_name}`"))
+            conn.commit()
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(executor, _drop)
+    return {"deleted": True, "table": table_name}
+
+
+@app.get("/api/table-names/")
+async def list_table_names():
+    def _list():
+        from sqlalchemy import inspect
+        inspector = inspect(engine)
+        return inspector.get_table_names()
+    loop = asyncio.get_event_loop()
+    names = await loop.run_in_executor(executor, _list)
+    return {"tables": names}
+
+
 @app.get("/api/comment-manage/")
 async def get_comment_manage():
     def _get():
