@@ -16,7 +16,7 @@
 |------|----------|
 | `db_brief.md` | `_DB_BRIEF_MD` |
 | `base_knowledge.md` | `_BASE_MD` |
-| `doc_knowledge.md` | `_DOC_MD` |
+| `doc_guide.md` | `_DOC_MD` |
 | `target_knowledge.md` | `_TARGET_MD` |
 | `db_query_guide.md` | `_DB_QUERY_GUIDE_MD` |
 | `base_knowledge_brief.md` | `_BASE_KNOWLEDGE_BRIEF_MD` |
@@ -36,10 +36,10 @@ value LONGTEXT
 | 表 | 查询函数 |
 |----|----------|
 | `base_knowledge` | `get_base_knowledge_db()` |
-| `doc_knowledge` | `get_doc_knowledge_db()` |
+| `doc_guide` | `get_doc_guide_db()` |
 | `db_query_guide` | `get_db_query_guide_db()` |
 | `code_guide` | `get_code_guide_db()` |
-| `think_knowledge` | `get_think_knowledge_db()` |
+| `think_guide` | `get_think_guide_db()` |
 
 另外，`brief_info` 表（结构为 `attr` / `value`）用于存储 `db_brief`、`base_knowledge_brief`、`mcp_brief`、`function_brief` 的 DB 覆盖值，与对应 MD 文件合并后注入。
 
@@ -73,14 +73,14 @@ FUNCTION_BRIEF = _DynamicStr(lambda: _get_brief_value("function_brief", _FUNCTIO
 BASE = _DynamicStr(lambda: "\nbase knowledge for reference:\n" + _BASE_MD
        + "\n" + base_knowledge_to_str(get_base_knowledge_db()))
 DOC = _DynamicStr(lambda: "\ndoc reference(just for reference):\n" + _DOC_MD
-       + "\n" + base_knowledge_to_str(get_doc_knowledge_db()))
+       + "\n" + base_knowledge_to_str(get_doc_guide_db()))
 
 TARGET = _DynamicStr(lambda: "\nTarget:\n" + _TARGET_MD)
 
 DB_QUERY_GUIDE = _DynamicStr(_format_db_query_guide)
 # _format_db_query_guide() 内部: _DB_QUERY_GUIDE_MD + get_db_query_guide_db()
 
-THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + base_knowledge_to_str(get_think_knowledge_db()))
+THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + base_knowledge_to_str(get_think_guide_db()))
 ```
 
 ---
@@ -194,7 +194,7 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 ```
 {BASE}                    → MD base_knowledge.md + DB base_knowledge 表
-{DOC}                     → MD doc_knowledge.md + DB doc_knowledge 表
+{DOC}                     → MD doc_guide.md + DB doc_guide 表
 {TARGET}                  → MD target_knowledge.md（有内容时注入）
 ```
 
@@ -251,9 +251,9 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 |------|------|
 | `get_base_knowledge_db_llm(context, key)` | 基于 `base_knowledge` 表 + 数据库结构生成查询方案 |
 | `get_db_query_guide_db_llm(context, key)` | 基于 `db_query_guide` 表生成 SQL 查询方案 |
-| `get_doc_knowledge_db_llm(context, key)` | 基于 `doc_knowledge` 表生成文档分析方案 |
+| `get_doc_guide_db_llm(context, key)` | 基于 `doc_guide` 表生成文档分析方案 |
 | `get_code_guide_db_llm(context, key)` | 基于 `code_guide` 表生成图表代码方案 |
-| `get_think_knowledge_db_llm(context, key)` | 基于 `think_knowledge` 表生成思考分析方案 |
+| `get_think_guide_db_llm(context, key)` | 基于 `think_guide` 表生成思考分析方案 |
 
 ---
 
@@ -263,7 +263,7 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 |------|--------|----------|
 | `set_base_knowledge(text)` | `base_knowledge` | `agent/tools/base_knowledge/set_base_knowledge.py` |
 | `set_code_guide(text)` | `code_guide` | `agent/tools/base_knowledge/set_code_guide.py` |
-| `set_think_knowledge(text)` | `think_knowledge` | `agent/tools/base_knowledge/set_think_knowledge.py` |
+| `set_think_guide(text)` | `think_guide` | `agent/tools/base_knowledge/set_think_guide.py` |
 
 写入后，下一次访问 `BASE` 等变量时自动生效，无需重启。
 
@@ -311,7 +311,7 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 | `agent/tools/base_knowledge/get_base_knowledge.py` | 核心：`_DynamicStr`、`get_*_db()`、`get_*_db_llm()`、`_get_brief_value()`、模块级变量 |
 | `agent/tools/base_knowledge/set_base_knowledge.py` | 写入 `base_knowledge` 表 |
 | `agent/tools/base_knowledge/set_code_guide.py` | 写入 `code_guide` 表 |
-| `agent/tools/base_knowledge/set_think_knowledge.py` | 写入 `think_knowledge` 表 |
+| `agent/tools/base_knowledge/set_think_guide.py` | 写入 `think_guide` 表 |
 | `agent/tools/base_knowledge/knowledge_docs/` | MD 知识文件目录 |
 | `agent/think.py` | Think 阶段 prompt 构建 |
 | `agent/action.py` | Action 阶段 prompt 构建 |
@@ -323,8 +323,8 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 | `data_access/code_guide_db.py` | `code_guide` 表定义 |
 | `data_access/base_knowledge_db.py` | `base_knowledge` 表定义 |
 | `data_access/db_query_guide_db.py` | `db_query_guide` 表定义 |
-| `data_access/doc_knowledge_db.py` | `doc_knowledge` 表定义 |
-| `data_access/think_knowledge_db.py` | `think_knowledge` 表定义 |
+| `data_access/doc_guide_db.py` | `doc_guide` 表定义 |
+| `data_access/think_guide_db.py` | `think_guide` 表定义 |
 | `data_access/sys_db_conn.py` | 系统数据库连接 |
 | `docker/docker-init.sql` | 数据库初始化脚本 |
 | `main.py` | 启动时创建所有系统表 |

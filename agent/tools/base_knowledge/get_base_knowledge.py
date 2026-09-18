@@ -5,9 +5,10 @@ from sqlalchemy import select
 from data_access.sys_db_conn import sys_engine
 from data_access.base_knowledge_db import base_knowledge
 from data_access.db_query_guide_db import db_query_guide
-from data_access.doc_knowledge_db import doc_knowledge
+from data_access.doc_guide_db import doc_guide
 from data_access.code_guide_db import code_guide
-from data_access.think_knowledge_db import think_knowledge
+from data_access.graph_code_guide_db import graph_code_guide
+from data_access.think_guide_db import think_guide
 from data_access.brief_info_db import brief_info
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from agent.tools.tools_def import llm, engine
@@ -83,10 +84,10 @@ def get_db_query_guide_db(key=None, threshold=0.3):
         return {}
 
 
-def get_doc_knowledge_db(key=None, threshold=0.3):
+def get_doc_guide_db(key=None, threshold=0.3):
     try:
         with sys_engine.connect() as conn:
-            rows = conn.execute(select(doc_knowledge)).fetchall()
+            rows = conn.execute(select(doc_guide)).fetchall()
             all_doc = {row.key: {"id": row.id, "value": row.value} for row in rows}
 
         if not key:
@@ -101,7 +102,7 @@ def get_doc_knowledge_db(key=None, threshold=0.3):
                     break
         return result
     except Exception as e:
-        print(f"[WARNING] Failed to read doc_knowledge from db: {e}")
+        print(f"[WARNING] Failed to read doc_guide from db: {e}")
         return {}
 
 
@@ -199,8 +200,8 @@ def get_db_query_guide_db_llm(context="", key=None):
     yield from _llm_search_with_ids(prompt, guide)
 
 
-def get_doc_knowledge_db_llm(context="", key=None):
-    doc = get_doc_knowledge_db(key)
+def get_doc_guide_db_llm(context="", key=None):
+    doc = get_doc_guide_db(key)
     if not doc:
         yield {"type": "done", "description": "", "useful_ids": []}
         return
@@ -211,7 +212,7 @@ def get_doc_knowledge_db_llm(context="", key=None):
         doc_text, "",
         "documentation expert",
         context,
-        "Analyze the user's question against the document knowledge. Output a natural language query plan describing:\n"
+        "Analyze the user's question against the document guide. Output a natural language query plan describing:\n"
         "1. Which tables to use\n"
         "2. Which fields/columns to select\n"
         "3. How to join tables (if multiple tables are needed)\n"
@@ -245,6 +246,28 @@ def get_code_guide_db(key=None, threshold=0.3):
         return {}
 
 
+def get_graph_code_guide_db(key=None, threshold=0.3):
+    try:
+        with sys_engine.connect() as conn:
+            rows = conn.execute(select(graph_code_guide)).fetchall()
+            all_guide = {row.key: {"id": row.id, "value": row.value} for row in rows}
+
+        if not key:
+            return all_guide
+
+        from difflib import SequenceMatcher
+        result = {}
+        for db_key, db_value in all_guide.items():
+            for search_key in key:
+                if SequenceMatcher(None, search_key, db_key).ratio() >= threshold:
+                    result[db_key] = db_value
+                    break
+        return result
+    except Exception as e:
+        print(f"[WARNING] Failed to read graph_code_guide from db: {e}")
+        return {}
+
+
 def get_code_guide_db_llm(context="", key=None):
     guide = get_code_guide_db(key)
     if not guide:
@@ -269,10 +292,10 @@ def get_code_guide_db_llm(context="", key=None):
     yield from _llm_search_with_ids(prompt, guide)
 
 
-def get_think_knowledge_db(key=None, threshold=0.3):
+def get_think_guide_db(key=None, threshold=0.3):
     try:
         with sys_engine.connect() as conn:
-            rows = conn.execute(select(think_knowledge)).fetchall()
+            rows = conn.execute(select(think_guide)).fetchall()
             all_knowledge = {row.key: {"id": row.id, "value": row.value} for row in rows}
 
         if not key:
@@ -287,12 +310,12 @@ def get_think_knowledge_db(key=None, threshold=0.3):
                     break
         return result
     except Exception as e:
-        print(f"[WARNING] Failed to read think_knowledge from db: {e}")
+        print(f"[WARNING] Failed to read think_guide from db: {e}")
         return {}
 
 
-def get_think_knowledge_db_llm(context="", key=None):
-    knowledge = get_think_knowledge_db(key)
+def get_think_guide_db_llm(context="", key=None):
+    knowledge = get_think_guide_db(key)
     if not knowledge:
         yield {"type": "done", "description": "", "useful_ids": []}
         return
@@ -303,7 +326,7 @@ def get_think_knowledge_db_llm(context="", key=None):
         knowledge_text, "",
         "thinking strategy expert",
         context,
-        "Analyze the user's question against the think knowledge. Output a natural language analysis plan describing:\n"
+        "Analyze the user's question against the think guide. Output a natural language query plan describing:\n"
         "1. The overall approach to solve the problem\n"
         "2. Key data points to focus on\n"
         "3. Analysis methods or techniques to apply\n"
@@ -334,10 +357,10 @@ class _DynamicStr:
 
 _DB_BRIEF_MD = _read_doc("db_brief.md")
 _BASE_MD = _read_doc("base_knowledge.md")
-_DOC_MD = _read_doc("doc_knowledge.md")
+_DOC_MD = _read_doc("doc_guide.md")
 _TARGET_MD = _read_doc("target_knowledge.md")
 _DB_QUERY_GUIDE_MD = _read_doc("db_query_guide.md")
-_THINK_KNOWLEDGE_MD = _read_doc("think_knowledge.md")
+_THINK_KNOWLEDGE_MD = _read_doc("think_guide.md")
 _MCP_BRIEF_MD = _read_doc("mcp_brief.md")
 _BASE_KNOWLEDGE_BRIEF_MD = _read_doc("base_knowledge_brief.md")
 _FUNCTION_BRIEF_MD = _read_doc("function_brief.md")
@@ -357,14 +380,16 @@ def _get_brief_value(attr, md_fallback):
 
 
 def _get_db_brief():
-    return "\nDataBase Brief:\n" + _get_brief_value("db_brief", _DB_BRIEF_MD)
+    v = _get_brief_value("db_brief", _DB_BRIEF_MD)
+    return ("\nDataBase Brief:\n" + v) if v.strip() else ""
 
 
 DB_BRIEF = _DynamicStr(_get_db_brief)
 
 
 def _get_mcp_brief():
-    return "\nMCP Brief:\n" + _get_brief_value("mcp_brief", _MCP_BRIEF_MD)
+    v = _get_brief_value("mcp_brief", _MCP_BRIEF_MD)
+    return ("\nMCP Brief:\n" + v) if v.strip() else ""
 
 
 MCP_BRIEF = _DynamicStr(_get_mcp_brief)
@@ -376,10 +401,12 @@ def _format_db_query_guide():
     md = _DB_QUERY_GUIDE_MD
     guide_db = get_db_query_guide_db()
     if guide_db:
-        md += "\n\n" + "\n\n".join(
+        if md.strip():
+            md += "\n\n"
+        md += "\n\n".join(
             f"### [id={v['id']}] {k}\n{v['value']}" for k, v in guide_db.items()
         )
-    return "\nSQL Query guide:\n" + md
+    return ("\nSQL Query guide:\n" + md) if md.strip() else ""
 
 DB_QUERY_GUIDE = _DynamicStr(_format_db_query_guide)
 
@@ -387,14 +414,14 @@ DB_QUERY_GUIDE = _DynamicStr(_format_db_query_guide)
 BASE = _DynamicStr(lambda: "\nbase knowledge for reference:\n" + _BASE_MD\
        + "\n" + base_knowledge_to_str(get_base_knowledge_db()))
 
-DOC = _DynamicStr(lambda: "\ndoc reference(just for reference):\n" + _DOC_MD\
-+ "\n" + base_knowledge_to_str(get_doc_knowledge_db()))
+DOC = _DynamicStr(lambda: ("\ndoc reference(just for reference):\n" + _DOC_MD\
++ "\n" + base_knowledge_to_str(get_doc_guide_db())) if (_DOC_MD.strip() or get_doc_guide_db()) else "")
 
 
 TARGET = _DynamicStr(lambda: ("\nTarget:\n" + _TARGET_MD) if _TARGET_MD else "")
 
-THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + _THINK_KNOWLEDGE_MD\
-       + "\n" + base_knowledge_to_str(get_think_knowledge_db()))
+THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _THINK_KNOWLEDGE_MD\
+       + "\n" + base_knowledge_to_str(get_think_guide_db())) if (_THINK_KNOWLEDGE_MD.strip() or get_think_guide_db()) else "")
 
 
 def _get_brief_info(enabled_knowledge=True, enabled_mcp=True):

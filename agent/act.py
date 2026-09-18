@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from agent.agent import generate_and_execute_stream
 from agent.document_generator import generate_document_from_context
-from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, TARGET, MCP_BRIEF, FUNCTION_BRIEF, BASE_KNOWLEDGE_BRIEF, get_db_query_guide_db, get_base_knowledge_db, base_knowledge_to_str, get_doc_knowledge_db, get_think_knowledge_db, get_code_guide_db
+from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, TARGET, MCP_BRIEF, FUNCTION_BRIEF, BASE_KNOWLEDGE_BRIEF, get_db_query_guide_db, get_base_knowledge_db, base_knowledge_to_str
 from agent.tools.tools_def import engine, llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.tools.copilot.sql_code import parse_selected_fields_json
@@ -344,17 +344,11 @@ def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyw
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': 'Searching base knowledge...'}, ensure_ascii=False)}\n\n"
 
     base_knowledge = get_base_knowledge_db()
-    doc_knowledge = get_doc_knowledge_db()
-    think_knowledge = get_think_knowledge_db()
-    code_guide = get_code_guide_db()
 
     keyword_hint = f"\nFocus hint: {search_keyword.strip()}" if search_keyword and search_keyword.strip() else ""
 
     all_knowledge = {}
     all_knowledge.update(base_knowledge)
-    all_knowledge.update(doc_knowledge)
-    all_knowledge.update(think_knowledge)
-    all_knowledge.update(code_guide)
 
     if not all_knowledge:
         yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'done', 'content': '*(No relevant knowledge found)*', 'result': {'selected_knowledge_ids': [], 'knowledge_content': '', 'summary': ''}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"

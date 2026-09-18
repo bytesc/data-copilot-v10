@@ -2,7 +2,7 @@ import logging
 
 import pandas as pd
 
-from .tools.base_knowledge.get_base_knowledge import BASE, TARGET
+from .tools.base_knowledge.get_base_knowledge import BASE, TARGET, get_code_guide_db, get_graph_code_guide_db, base_knowledge_to_str
 from .tools.copilot.utils.code_insert import insert_lines_into_function
 from .tools.tools_def import engine, llm, query_database, exe_sql
 
@@ -40,6 +40,12 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
     rag_ans = ""
     knowledge = ""
     knowledge = BASE + "\n"
+    code_guide_data = get_code_guide_db()
+    if code_guide_data:
+        knowledge += "\nCode Guide:\n" + base_knowledge_to_str(code_guide_data) + "\n"
+    graph_code_guide_data = get_graph_code_guide_db()
+    if graph_code_guide_data:
+        knowledge += "\nGraph Code Guide:\n" + base_knowledge_to_str(graph_code_guide_data) + "\n"
 
     target_section = ""
     if config_data.get('enable_target_knowledge', False) and TARGET.strip() != "":

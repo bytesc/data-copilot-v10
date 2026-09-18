@@ -80,12 +80,12 @@ CREATE TABLE IF NOT EXISTS `db_query_guide` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='查询指南表';
 
-CREATE TABLE IF NOT EXISTS `doc_knowledge` (
+CREATE TABLE IF NOT EXISTS `doc_guide` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `key` TEXT NOT NULL COMMENT '文档知识键',
-  `value` LONGTEXT COMMENT '文档知识值',
+  `key` TEXT NOT NULL COMMENT '文档指南键',
+  `value` LONGTEXT COMMENT '文档指南值',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文档知识表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文档指南表';
 
 CREATE TABLE IF NOT EXISTS `code_guide` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
@@ -94,12 +94,12 @@ CREATE TABLE IF NOT EXISTS `code_guide` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图表代码指南表';
 
-CREATE TABLE IF NOT EXISTS `think_knowledge` (
+CREATE TABLE IF NOT EXISTS `think_guide` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `key` TEXT NOT NULL COMMENT '思考知识键',
-  `value` LONGTEXT COMMENT '思考知识值',
+  `key` TEXT NOT NULL COMMENT '思考指南键',
+  `value` LONGTEXT COMMENT '思考指南值',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思考知识表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思考指南表';
 
 CREATE DATABASE IF NOT EXISTS data_copilot_v10_sys DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -182,12 +182,12 @@ CREATE TABLE IF NOT EXISTS `db_query_guide` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='查询指南表';
 
-CREATE TABLE IF NOT EXISTS `doc_knowledge` (
+CREATE TABLE IF NOT EXISTS `doc_guide` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `key` TEXT NOT NULL COMMENT '文档知识键',
-  `value` LONGTEXT COMMENT '文档知识值',
+  `key` TEXT NOT NULL COMMENT '文档指南键',
+  `value` LONGTEXT COMMENT '文档指南值',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文档知识表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文档指南表';
 
 CREATE TABLE IF NOT EXISTS `code_guide` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
@@ -196,12 +196,12 @@ CREATE TABLE IF NOT EXISTS `code_guide` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图表代码指南表';
 
-CREATE TABLE IF NOT EXISTS `think_knowledge` (
+CREATE TABLE IF NOT EXISTS `think_guide` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `key` TEXT NOT NULL COMMENT '思考知识键',
-  `value` LONGTEXT COMMENT '思考知识值',
+  `key` TEXT NOT NULL COMMENT '思考指南键',
+  `value` LONGTEXT COMMENT '思考指南值',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思考知识表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='思考指南表';
 
 CREATE TABLE IF NOT EXISTS `brief_info` (
   `attr` TEXT NOT NULL COMMENT '属性名称',

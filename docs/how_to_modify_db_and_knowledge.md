@@ -87,8 +87,8 @@
 
 | 来源 | 路径/表 |
 |---|---|
-| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/doc_knowledge.md` |
-| 数据库表 | `doc_knowledge` 表（key-value 结构） |
+| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/doc_guide.md` |
+| 数据库表 | `doc_guide` 表（key-value 结构） |
 
 仅通过 `explore_base_knowledge` action 按需获取。
 
@@ -96,8 +96,8 @@
 
 | 来源 | 路径/表 |
 |---|---|
-| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/think_knowledge.md` |
-| 数据库表 | `think_knowledge` 表（key-value 结构） |
+| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/think_guide.md` |
+| 数据库表 | `think_guide` 表（key-value 结构） |
 
 仅通过 `explore_base_knowledge` action 按需获取。
 
@@ -111,8 +111,8 @@
 | FUNCTION_BRIEF | `function_brief.md` | `brief_info.function_brief` | think | 合并 |
 | Function Catalog | 代码自动生成 | 无 | think | 自动 |
 | BASE | `base_knowledge.md` | `base_knowledge` | explore_base_knowledge | 合并（按需获取） |
-| DOC | `doc_knowledge.md` | `doc_knowledge` | explore_base_knowledge | 合并（按需获取） |
-| THINK_KNOWLEDGE | `think_knowledge.md` | `think_knowledge` | explore_base_knowledge | 合并（按需获取） |
+| DOC | `doc_guide.md` | `doc_guide` | explore_base_knowledge | 合并（按需获取） |
+| THINK_KNOWLEDGE | `think_guide.md` | `think_guide` | explore_base_knowledge | 合并（按需获取） |
 | DB_QUERY_GUIDE | `db_query_guide.md` | `db_query_guide` | explore_schema | 合并 |
 | TARGET | `target_knowledge.md` | 无 | think | 仅 MD |
 

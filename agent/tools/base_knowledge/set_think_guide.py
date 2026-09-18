@@ -1,12 +1,12 @@
 import json
 from sqlalchemy import select, insert
 from data_access.sys_db_conn import sys_engine
-from data_access.think_knowledge_db import think_knowledge
+from data_access.think_guide_db import think_guide
 from agent.tools.copilot.utils.call_llm_test import call_llm
 from agent.tools.tools_def import llm
 
 
-def set_think_knowledge(text=""):
+def set_think_guide(text=""):
     if not text or not text.strip():
         return {"success": False, "error": "Empty input text"}
 
@@ -37,7 +37,7 @@ Example:
         response = call_llm(prompt, llm)
         raw = response.content.strip()
     except Exception as e:
-        print(f"[WARNING] Failed to call LLM for set_think_knowledge: {e}")
+        print(f"[WARNING] Failed to call LLM for set_think_guide: {e}")
         return {"success": False, "error": f"LLM call failed: {e}"}
 
     knowledge = _parse_knowledge_json(raw)
@@ -48,18 +48,18 @@ Example:
         saved = _save_knowledge(knowledge)
         return {"success": True, "saved": saved, "count": len(knowledge)}
     except Exception as e:
-        print(f"[WARNING] Failed to save think_knowledge: {e}")
+        print(f"[WARNING] Failed to save think_guide: {e}")
         return {"success": False, "error": f"DB save failed: {e}"}
 
 
 def _get_existing_knowledge():
     try:
         with sys_engine.connect() as conn:
-            result = conn.execute(select(think_knowledge))
+            result = conn.execute(select(think_guide))
             rows = result.fetchall()
             return {row.key: row.value for row in rows}
     except Exception as e:
-        print(f"[WARNING] Failed to read existing think_knowledge: {e}")
+        print(f"[WARNING] Failed to read existing think_guide: {e}")
         return {}
 
 
@@ -75,15 +75,15 @@ def _save_knowledge(knowledge):
         try:
             for key, value in knowledge.items():
                 existing = conn.execute(
-                    select(think_knowledge).where(think_knowledge.c.key == key)
+                    select(think_guide).where(think_guide.c.key == key)
                 ).fetchone()
                 if existing:
                     conn.execute(
-                        think_knowledge.update().where(think_knowledge.c.key == key).values(value=str(value))
+                        think_guide.update().where(think_guide.c.key == key).values(value=str(value))
                     )
                 else:
                     conn.execute(
-                        insert(think_knowledge).values(key=key, value=str(value))
+                        insert(think_guide).values(key=key, value=str(value))
                     )
             trans.commit()
             return list(knowledge.keys())
