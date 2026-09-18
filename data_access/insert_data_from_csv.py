@@ -58,6 +58,57 @@ def sanitize_table_name(name: str) -> str:
     return cleaned.lower()
 
 
+def _create_table_from_df(df, table_name, column_types):
+    inspector = inspect(engine)
+    if inspector.has_table(table_name):
+        with engine.connect() as conn:
+            conn.execute(text(f"DROP TABLE IF EXISTS `{table_name}`"))
+            conn.commit()
+    df.iloc[:0].to_sql(name=table_name, con=engine, index=False, dtype=column_types)
+
+
+def _insert_rows_bulk(df, table_name):
+    df.to_sql(name=table_name, con=engine, index=False, if_exists='append')
+
+
+def _validate_rows(df, column_types):
+    errors = []
+    for col in df.columns:
+        dtype = column_types[col]
+        for i in range(len(df)):
+            val = df.iloc[i][col]
+            line_no = i + 2
+            if pd.isna(val):
+                continue
+            if isinstance(dtype, Integer):
+                try:
+                    if not isinstance(val, (int, float, np.integer, np.floating)):
+                        int(val)
+                    elif isinstance(val, float) and np.isnan(val):
+                        raise ValueError
+                except (ValueError, TypeError):
+                    errors.append(f"Row {line_no}, column '{col}': Cannot convert '{val}' to integer")
+            elif isinstance(dtype, Float):
+                try:
+                    float(val)
+                except (ValueError, TypeError):
+                    errors.append(f"Row {line_no}, column '{col}': Cannot convert '{val}' to number")
+            elif isinstance(dtype, DateTime):
+                try:
+                    pd.to_datetime(val)
+                except (ValueError, TypeError):
+                    errors.append(f"Row {line_no}, column '{col}': Cannot convert '{val}' to datetime")
+            elif isinstance(dtype, Boolean):
+                if str(val).lower() not in ('true', 'false', '1', '0', 'yes', 'no'):
+                    errors.append(f"Row {line_no}, column '{col}': Cannot convert '{val}' to boolean")
+            elif isinstance(dtype, VARCHAR):
+                max_len = dtype.length
+                str_val = str(val)
+                if len(str_val) > max_len:
+                    errors.append(f"Row {line_no}, column '{col}': Value too long ({len(str_val)} chars, max {max_len})")
+    return errors
+
+
 def process_csv_to_database(file_content: bytes, table_name: str = "uploaded_data"):
     try:
         df = pd.read_csv(io.BytesIO(file_content))
@@ -65,11 +116,7 @@ def process_csv_to_database(file_content: bytes, table_name: str = "uploaded_dat
         used = set()
         rename_map = {col: sanitize_column_name(col, used) for col in df.columns}
         df.rename(columns=rename_map, inplace=True)
-        inspector = inspect(engine)
-        if inspector.has_table(table_name):
-            with engine.connect() as conn:
-                conn.execute(text(f"DROP TABLE IF EXISTS `{table_name}`"))
-                conn.commit()
+
         column_types = {}
         for col in df.columns:
             col_data = df[col]
@@ -77,7 +124,6 @@ def process_csv_to_database(file_content: bytes, table_name: str = "uploaded_dat
             if len(col_data_not_null) == 0:
                 column_types[col] = VARCHAR(255)
                 continue
-
             max_length = None
             if col_data.dtype == 'object':
                 try:
@@ -85,38 +131,34 @@ def process_csv_to_database(file_content: bytes, table_name: str = "uploaded_dat
                     max_length = min(max_length * 2, 8000)
                 except:
                     max_length = 255
-
             column_types[col] = pandas_type_to_sqlalchemy(col_data.dtype, max_length)
 
-        try:
-            df.to_sql(
-                name=table_name,
-                con=engine,
-                index=False,
-                dtype=column_types
-            )
-            result_msg = f"Successfully created table '{table_name}' and inserted {len(df)} records."
-            print(result_msg)
-
+        validation_errors = _validate_rows(df, column_types)
+        if validation_errors:
             return {
-                "type": "success",
-                "message": result_msg,
-                "row_count": len(df),
-                "table_name": table_name
-            }
-        except Exception as e:
-            print(str(e))
-            return {
-                "type": "error",
-                "message": str(e),
+                "success": False,
+                "error": "Validation failed:\n" + "\n".join(validation_errors),
                 "row_count": 0,
                 "table_name": table_name
             }
-    except Exception as e:
-        print(str(e))
+
+        _create_table_from_df(df, table_name, column_types)
+        _insert_rows_bulk(df, table_name)
+        result_msg = f"Successfully created table '{table_name}' and inserted {len(df)} records."
+        print(result_msg)
         return {
-            "type": "error",
-            "message": str(e),
+            "success": True,
+            "message": result_msg,
+            "row_count": len(df),
+            "table_name": table_name
+        }
+
+    except Exception as e:
+        err_msg = str(e)
+        print(err_msg)
+        return {
+            "success": False,
+            "error": f"Import failed. The DB reports: {err_msg}",
             "row_count": 0,
             "table_name": table_name
         }

@@ -27,6 +27,7 @@
                   </tbody>
                 </table>
               </div>
+              <button class="btn-export-data" @click="exportData(table.name)">Export Data</button>
             </div>
           </details>
         </div>
@@ -95,6 +96,16 @@ async function loadTables() {
   } finally {
     loading.value = false
   }
+}
+
+function exportData(tableName) {
+  const url = `/api/table/${encodeURIComponent(tableName)}/export-data-csv`
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${tableName}_data.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
 
 function promptDelete(table) {
@@ -204,5 +215,22 @@ async function executeDelete() {
 .btn-danger:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn-export-data {
+  margin-top: 10px;
+  padding: 5px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-export-data:hover {
+  border-color: var(--accent-green, #2ecc71);
+  color: var(--accent-green, #2ecc71);
 }
 </style>

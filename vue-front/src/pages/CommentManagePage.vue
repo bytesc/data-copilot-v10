@@ -27,6 +27,16 @@
                   class="btn-action btn-edit"
                   @click="startEditTable(tbl)"
                 >Edit Table Comment</button>
+                <button class="btn-action btn-export" @click="exportCsv(tbl.name)">Export CSV</button>
+                <button class="btn-action btn-import" @click="triggerImport(tbl.name)">Import CSV</button>
+                <input
+                  ref="fileInputs"
+                  type="file"
+                  accept=".csv"
+                  style="display:none"
+                  :data-table="tbl.name"
+                  @change="importCsv($event, tbl.name)"
+                />
               </div>
               <div v-if="editingTable === tbl.name" class="inline-edit">
                 <textarea v-model="editTableComment" class="form-textarea" rows="2" placeholder="Table comment..."></textarea>
@@ -170,6 +180,56 @@ function cancelEditColumn() {
   editingColumn.value = null
   editColComment.value = ''
   colEditError.value = ''
+}
+
+const fileInputs = ref([])
+
+function exportCsv(tableName) {
+  const url = `/api/comment-manage/${encodeURIComponent(tableName)}/export-csv`
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${tableName}_comments.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
+function triggerImport(tableName) {
+  const inputs = fileInputs.value
+  if (!inputs || !inputs.length) return
+  for (const el of inputs) {
+    if (el.dataset.table === tableName) {
+      el.value = ''
+      el.click()
+      break
+    }
+  }
+}
+
+async function importCsv(event, tableName) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  const formData = new FormData()
+  formData.append('file', file)
+  try {
+    const res = await fetch(`/api/comment-manage/${encodeURIComponent(tableName)}/import-csv`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.detail || `HTTP ${res.status}`)
+    }
+    const result = await res.json()
+    if (!result.success) {
+      alert(`Import failed:\n${result.error}`)
+      return
+    }
+    alert(`Import successful!\nTable comment updated: ${result.table_comment_updated}\nColumns updated: ${result.columns_updated}`)
+    await fetchTables()
+  } catch (e) {
+    alert(`Import failed: ${e.message}`)
+  }
 }
 
 async function saveColumnComment(tableName, columnName) {
@@ -449,6 +509,18 @@ async function saveColumnComment(tableName, columnName) {
   border-color: var(--accent-blue);
   color: var(--accent-blue);
 }
+
+.btn-export:hover {
+  border-color: var(--accent-green, #2ecc71);
+  color: var(--accent-green, #2ecc71);
+}
+
+.btn-import:hover {
+  border-color: var(--accent-orange, #e67e22);
+  color: var(--accent-orange, #e67e22);
+}
+
+
 
 .btn-xs {
   padding: 3px 8px;

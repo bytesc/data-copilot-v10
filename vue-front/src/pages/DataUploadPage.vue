@@ -95,16 +95,19 @@ async function upload() {
 
     if (res.ok) {
       const data = await res.json()
-      if (data.error) {
-        result.value = { success: false, message: `Upload failed: ${data.error}` }
+      if (!data.success) {
+        result.value = { success: false, message: `Upload failed: ${data.error || 'unknown error'}` }
       } else {
-        result.value = {
-          success: true,
-          message: `File uploaded successfully! Table: ${data.table_name || tableName.value || 'uploaded_data'}, Rows: ${data.row_count || 'N/A'}`,
+        let msg = data.message || `File uploaded successfully! Table: ${data.table_name || tableName.value || 'uploaded_data'}, Rows: ${data.row_count || 'N/A'}`
+        if (data.errors && data.errors.length) {
+          msg += `\nRow errors:\n${data.errors.slice(0, 10).join('\n')}`
+          if (data.errors.length > 10) msg += `\n...and ${data.errors.length - 10} more`
         }
+        result.value = { success: true, message: msg }
       }
     } else {
-      result.value = { success: false, message: `Upload failed: HTTP ${res.status}` }
+      const data = await res.json().catch(() => ({}))
+      result.value = { success: false, message: `Upload failed: ${data.detail || `HTTP ${res.status}`}` }
     }
   } catch (e) {
     result.value = { success: false, message: `Upload failed: ${e.message}` }

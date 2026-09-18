@@ -2,6 +2,7 @@ import os
 os.environ['MPLBACKEND'] = 'Agg'
 
 import asyncio
+import io
 import json
 import mimetypes
 from concurrent.futures import ThreadPoolExecutor
@@ -205,6 +206,27 @@ async def list_table_names():
     return {"tables": names}
 
 
+@app.get("/api/table/{table_name}/export-data-csv")
+async def export_table_data_csv(table_name: str):
+    def _export():
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        if not inspector.has_table(table_name):
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+        df = pd.read_sql(text(f"SELECT * FROM `{table_name}`"), engine)
+        buf = io.BytesIO()
+        df.to_csv(buf, index=False, encoding="utf-8-sig")
+        buf.seek(0)
+        return buf.getvalue()
+    loop = asyncio.get_event_loop()
+    csv_bytes = await loop.run_in_executor(executor, _export)
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{table_name}_data.csv"'}
+    )
+
+
 @app.get("/api/comment-manage/")
 async def get_comment_manage():
     def _get():
@@ -244,6 +266,95 @@ async def get_comment_manage():
         return {"tables": tables}
     loop = asyncio.get_event_loop()
     return JSONResponse(content=await loop.run_in_executor(executor, _get))
+
+
+@app.get("/api/comment-manage/{table_name}/export-csv")
+async def export_comments_csv(table_name: str):
+    def _export():
+        from sqlalchemy import inspect
+        from sqlalchemy.exc import SQLAlchemyError
+        inspector = inspect(engine)
+        if not inspector.has_table(table_name):
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+        table_comment = inspector.get_table_comment(table_name)
+        table_comment_text = (table_comment or {}).get("text", "") or ""
+        columns = inspector.get_columns(table_name)
+        rows = []
+        rows.append({"column_name": "__table_comment__", "comment": table_comment_text})
+        for col in columns:
+            rows.append({"column_name": col["name"], "comment": col.get("comment", "") or ""})
+        df = pd.DataFrame(rows)
+        buf = io.BytesIO()
+        df.to_csv(buf, index=False, encoding="utf-8-sig")
+        buf.seek(0)
+        return buf.getvalue()
+    loop = asyncio.get_event_loop()
+    csv_bytes = await loop.run_in_executor(executor, _export)
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{table_name}_comments.csv"'}
+    )
+
+
+@app.post("/api/comment-manage/{table_name}/import-csv")
+async def import_comments_csv(table_name: str, file: UploadFile = File(...)):
+    if not file.filename.lower().endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported")
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    def _import(bytes_content):
+        from sqlalchemy import inspect, text
+        from sqlalchemy.exc import SQLAlchemyError
+        try:
+            inspector = inspect(engine)
+            if not inspector.has_table(table_name):
+                return {"success": False, "error": f"Table '{table_name}' not found"}
+            df = pd.read_csv(io.BytesIO(bytes_content))
+            if "column_name" not in df.columns or "comment" not in df.columns:
+                return {"success": False, "error": "CSV must contain 'column_name' and 'comment' columns"}
+            columns_info = {c["name"]: c for c in inspector.get_columns(table_name)}
+            errors = []
+            for i, row in df.iterrows():
+                line_no = i + 2
+                col_name = str(row["column_name"]).strip()
+                if not col_name:
+                    continue
+                if col_name not in columns_info and col_name != "__table_comment__":
+                    errors.append(f"Row {line_no}: Unknown column '{col_name}'")
+            if errors:
+                return {"success": False, "error": f"Validation failed:\n" + "\n".join(errors)}
+            with engine.connect() as conn:
+                for i, row in df.iterrows():
+                    col_name = str(row["column_name"]).strip()
+                    comment = str(row["comment"]) if pd.notna(row.get("comment")) else ""
+                    if not col_name:
+                        continue
+                    if col_name == "__table_comment__":
+                        escaped = comment.replace("'", "''")
+                        conn.execute(text(f"ALTER TABLE `{table_name}` COMMENT = '{escaped}'"))
+                    elif col_name in columns_info:
+                        col_info = columns_info[col_name]
+                        col_type = col_info["type"]
+                        nullable = col_info.get("nullable", True)
+                        default = col_info.get("default")
+                        escaped = comment.replace("'", "''")
+                        nullable_str = "NULL" if nullable else "NOT NULL"
+                        default_str = f"DEFAULT {default}" if default is not None else ""
+                        sql = f"ALTER TABLE `{table_name}` MODIFY COLUMN `{col_name}` {col_type} {nullable_str} {default_str} COMMENT '{escaped}'"
+                        conn.execute(text(sql))
+                conn.commit()
+            return {
+                "success": True,
+                "table_comment_updated": True,
+                "columns_updated": len(df) - (1 if "__table_comment__" in df["column_name"].values else 0)
+            }
+        except Exception as e:
+            return {"success": False, "error": f"Import failed. The DB reports: {str(e)}"}
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(executor, _import, content)
+    return JSONResponse(content=result)
 
 
 @app.put("/api/comment-manage/{table_name}/table-comment")
@@ -523,19 +634,13 @@ async def upload_csv(
         table_name: str = Form("uploaded_data")
 ):
     if not file.filename.lower().endswith('.csv'):
-        raise HTTPException(
-            status_code=400,
-            detail="Only CSV files are supported"
-        )
-    try:
-        content = await file.read()
-        if len(content) == 0:
-            raise HTTPException(status_code=400, detail="Uploaded file is empty")
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(executor, process_csv_to_database, content, table_name)
-        return JSONResponse(content=result)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}")
+        raise HTTPException(status_code=400, detail="Only CSV files are supported")
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(executor, process_csv_to_database, content, table_name)
+    return JSONResponse(content=result)
 
 
 @app.post("/upload-txt/")
