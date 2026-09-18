@@ -1,4 +1,4 @@
-from sqlalchemy import Table, Column, Text, MetaData
+from sqlalchemy import Table, Column, Text, MetaData, Integer
 from sqlalchemy.dialects.mysql import LONGTEXT
 
 from data_access.sys_db_conn import sys_engine
@@ -7,6 +7,7 @@ metadata = MetaData()
 
 doc_guide = Table(
     "doc_guide", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True, comment="主键"),
     Column("key", Text, nullable=False, comment="文档指南键"),
     Column("value", LONGTEXT, comment="文档指南值"),
 )

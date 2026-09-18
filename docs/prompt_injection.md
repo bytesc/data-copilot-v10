@@ -39,6 +39,7 @@ value LONGTEXT
 | `doc_guide` | `get_doc_guide_db()` |
 | `db_query_guide` | `get_db_query_guide_db()` |
 | `code_guide` | `get_code_guide_db()` |
+| `graph_code_guide` | `get_graph_code_guide_db()` |
 | `think_guide` | `get_think_guide_db()` |
 
 另外，`brief_info` 表（结构为 `attr` / `value`）用于存储 `db_brief`、`base_knowledge_brief`、`mcp_brief`、`function_brief` 的 DB 覆盖值，与对应 MD 文件合并后注入。
@@ -65,22 +66,23 @@ def _get_brief_value(attr, md_fallback):
     # 读取 brief_info 表对应 attr 的 DB 值，与 md_fallback 合并
     ...
 
-DB_BRIEF = _DynamicStr(lambda: "\nDataBase Brief:\n" + _get_brief_value("db_brief", _DB_BRIEF_MD))
-BASE_KNOWLEDGE_BRIEF = _DynamicStr(lambda: _get_brief_value("base_knowledge_brief", _BASE_KNOWLEDGE_BRIEF_MD))
-MCP_BRIEF = _DynamicStr(lambda: "\nMCP Brief:\n" + _get_brief_value("mcp_brief", _MCP_BRIEF_MD))
-FUNCTION_BRIEF = _DynamicStr(lambda: _get_brief_value("function_brief", _FUNCTION_BRIEF_MD))
+DB_BRIEF = _DynamicStr(lambda: ("\nDataBase Brief:\n" + v) if v.strip() else "")
+MCP_BRIEF = _DynamicStr(lambda: ("\nMCP Brief:\n" + v) if v.strip() else "")
+BASE_KNOWLEDGE_BRIEF = _DynamicStr(lambda: _get_brief_value(...))
+FUNCTION_BRIEF = _DynamicStr(lambda: _get_brief_value(...))
 
 BASE = _DynamicStr(lambda: "\nbase knowledge for reference:\n" + _BASE_MD
        + "\n" + base_knowledge_to_str(get_base_knowledge_db()))
-DOC = _DynamicStr(lambda: "\ndoc reference(just for reference):\n" + _DOC_MD
-       + "\n" + base_knowledge_to_str(get_doc_guide_db()))
+DOC = _DynamicStr(lambda: ("\ndoc reference(just for reference):\n" + _DOC_MD
+       + "\n" + base_knowledge_to_str(get_doc_guide_db())) if (_DOC_MD.strip() or get_doc_guide_db()) else "")
 
 TARGET = _DynamicStr(lambda: "\nTarget:\n" + _TARGET_MD)
 
 DB_QUERY_GUIDE = _DynamicStr(_format_db_query_guide)
-# _format_db_query_guide() 内部: _DB_QUERY_GUIDE_MD + get_db_query_guide_db()
+# _format_db_query_guide() 内部: 内容均为空时返回 ""，不显示标签
 
-THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + base_knowledge_to_str(get_think_guide_db()))
+THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _THINK_KNOWLEDGE_MD
+       + "\n" + base_knowledge_to_str(get_think_guide_db())) if (_THINK_KNOWLEDGE_MD.strip() or get_think_guide_db()) else "")
 ```
 
 ---
@@ -91,17 +93,18 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + bas
 
 **文件：** `agent/think.py`
 
-**注入的变量：** `TARGET`, `DB_BRIEF`, `BASE_KNOWLEDGE_BRIEF`, `MCP_BRIEF`, `FUNCTION_BRIEF`
+**注入的变量：** `TARGET`, `THINK_KNOWLEDGE`, `BRIEF_INFO`
 
 **注入方式：** f-string 直接嵌入
 
 ```
 {TARGET}                  → MD target_knowledge.md（有内容时注入）
-{DB_BRIEF}                → MD db_brief.md + DB brief_info 表
-{BASE_KNOWLEDGE_BRIEF}    → MD base_knowledge_brief.md + DB brief_info 表
-{MCP_BRIEF}               → MD mcp_brief.md + DB brief_info 表
-{FUNCTION_BRIEF}          → MD function_brief.md + DB brief_info 表
-+ Function Catalog         → 代码自动生成（get_func_summary_for_agent()）
+{THINK_KNOWLEDGE}         → MD think_guide.md + DB think_guide 表（全量）
+{BRIEF_INFO}              → BRIEF_INFO 聚合
+                            ├── DB_BRIEF → MD + brief_info.db_brief
+                            ├── Domain Knowledge Brief → MD + brief_info.base_knowledge_brief
+                            ├── MCP Brief → MD + brief_info.mcp_brief
+                            └── Function Brief → MD + brief_info.function_brief + 硬编码
 ```
 
 **功能：** Think 阶段生成 todo list 分析计划。各 Brief 提供基础概览，详细业务知识通过 `explore_base_knowledge` action 按需获取。
@@ -124,14 +127,13 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + bas
 
 **文件：** `agent/act.py` → `_act_explore_schema()`
 
-**注入的变量：** `BASE`, `DB_BRIEF`, `DB_QUERY_GUIDE`
+**注入的变量：** `DB_BRIEF`, `DB_QUERY_GUIDE`
 
 **注入方式：** f-string 直接嵌入
 
 ```
-{BASE}                    → MD base_knowledge.md + DB base_knowledge 表
 {DB_BRIEF}                → MD db_brief.md + DB brief_info 表
-{DB_QUERY_GUIDE}          → MD db_query_guide.md + DB db_query_guide 表
+{DB_QUERY_GUIDE}          → MD db_query_guide.md + DB db_query_guide 表（内容为空时不显示标签）
 + full_schema             → 动态查询的数据库结构
 ```
 
@@ -151,7 +153,24 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: "\nthink knowledge for reference:\n" + bas
 
 ---
 
-### 5. Act — generate_and_execute 子阶段（代码生成与执行）
+### 5. Act — explore_base_knowledge 子阶段
+
+**文件：** `agent/act.py` → `_act_explore_base_knowledge()`
+
+**注入的变量：** `BASE_KNOWLEDGE_BRIEF`
+
+**注入方式：** f-string 直接嵌入
+
+```
+{BASE_KNOWLEDGE_BRIEF}    → MD + brief_info.base_knowledge_brief
++ knowledge_text          → get_base_knowledge_db()  ← 仅 base_knowledge 表
+```
+
+**功能：** 查询业务知识并筛选出相关的条目。doc_guide、think_guide、code_guide 不再由此阶段注入。
+
+---
+
+### 6. Act — generate_and_execute 子阶段（代码生成与执行）
 
 **文件：** `agent/agent.py` → `get_cot_code_prompt()`
 
@@ -169,7 +188,7 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 | 注入内容 | 来源 | 说明 |
 |----------|------|------|
-| `knowledge` | `BASE` | MD base_knowledge.md + DB base_knowledge 表 |
+| `knowledge` | `BASE` + `code_guide` + `graph_code_guide` | MD base_knowledge.md + DB base_knowledge 表 + DB code_guide 表 + DB graph_code_guide 表 |
 | `target_section` | `TARGET` | MD target_knowledge.md（有内容时注入） |
 | `database` | `get_db_info_prompt()` | 数据库表结构（仅当选择了查询函数时注入） |
 | `function_info` | `FUNCTION_DICT` | 选中函数的完整 docstring |
@@ -179,7 +198,7 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 ---
 
-### 6. Act — generate_document 子阶段（报告生成）
+### 8. Act — generate_document 子阶段（报告生成）
 
 **文件：** `agent/document_generator.py`
 
@@ -202,7 +221,7 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 ---
 
-### 7. Observe 阶段 — 结果审查
+### 9. Observe 阶段 — 结果审查
 
 **文件：** `agent/observe.py`
 
@@ -222,14 +241,14 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 | 功能 | 文件 | 注入变量 | 来源 |
 |------|------|----------|------|
-| **Think** | `think.py` | `TARGET`, `DB_BRIEF`, `BASE_KNOWLEDGE_BRIEF`, `MCP_BRIEF`, `FUNCTION_BRIEF`, Function Catalog | MD + DB + 自动生成 |
-| **Action** | `action.py` | 无（使用 db_summary / func_catalog） | 动态查询 |
-| **Act - explore_schema** | `act.py` | `BASE`, `DB_BRIEF`, `DB_QUERY_GUIDE` | MD + DB |
-| **Act - explore_functions** | `act.py` | `MCP_BRIEF` | MD + DB |
-| **Act - generate_and_execute** | `agent.py` | `BASE`, `TARGET`, `database`, `function_info` | MD + DB + 动态查询 |
+| **Think** | `think.py` | `TARGET`, `THINK_KNOWLEDGE`, `BRIEF_INFO`（含 DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / FUNCTION_BRIEF） | MD + DB |
+| **Action** | `action.py` | `BRIEF_INFO` | MD + DB |
+| **Act - explore_schema** | `act.py` | `DB_BRIEF`, `DB_QUERY_GUIDE` | MD + DB |
+| **Act - explore_functions** | `act.py` | 无 | 动态查询 |
+| **Act - explore_base_knowledge** | `act.py` | `BASE_KNOWLEDGE_BRIEF`, `base_knowledge` 表 | MD + DB |
+| **Act - generate_and_execute** | `agent.py` | `BASE`, `code_guide`, `graph_code_guide`, `TARGET` | MD + DB |
 | **Act - generate_document** | `document_generator.py` | `BASE`, `DOC`, `TARGET` | MD + DB |
 | **Observe** | `observe.py` | `TARGET` | MD |
-| **（未注入）** | — | `THINK_KNOWLEDGE` | DB |
 
 ---
 
@@ -253,6 +272,7 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 | `get_db_query_guide_db_llm(context, key)` | 基于 `db_query_guide` 表生成 SQL 查询方案 |
 | `get_doc_guide_db_llm(context, key)` | 基于 `doc_guide` 表生成文档分析方案 |
 | `get_code_guide_db_llm(context, key)` | 基于 `code_guide` 表生成图表代码方案 |
+| `get_graph_code_guide_db(key)` | 读取 `graph_code_guide` 表全部记录（无 LLM 查询版本） |
 | `get_think_guide_db_llm(context, key)` | 基于 `think_guide` 表生成思考分析方案 |
 
 ---
@@ -272,34 +292,32 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 ## 数据流图
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                    启动时加载（缓存）                               │
-│  knowledge_docs/*.md  ── _read_doc() ── 缓存变量                  │
-│                                                                  │
-│  data_copilot_v10_sys 表 ── get_*_db() ── dict                   │
-│  brief_info 表 ── _get_brief_value() ── str                       │
-│                                                                  │
-│           _DynamicStr ── 拼接 MD + DB                            │
-│                                                                  │
-│  BASE / DOC / TARGET / DB_BRIEF / DB_QUERY_GUIDE /               │
-│  THINK_KNOWLEDGE / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF /            │
-│  FUNCTION_BRIEF                                                    │
-└──────────────────────┬───────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                       启动时加载（缓存）                              │
+│  knowledge_docs/*.md  ── _read_doc() ── 缓存变量                     │
+│                                                                     │
+│  data_copilot_v10_sys 表 ── get_*_db() ── dict                      │
+│  brief_info 表 ── _get_brief_value() ── str                          │
+│                                                                     │
+│           _DynamicStr ── 拼接 MD + DB                               │
+│                                                                     │
+│  BASE / DOC / TARGET / DB_BRIEF / DB_QUERY_GUIDE /                  │
+│  THINK_KNOWLEDGE / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF /               │
+│  FUNCTION_BRIEF                                                       │
+└──────────────────────┬──────────────────────────────────────────────┘
                        │
-    ┌──────────┬───────┼───────────┬──────────────┬────────┐
-    ▼          ▼       ▼           ▼              ▼        ▼
-  Think    explore_  generate_   generate_      Observe  (未注入)
-            schema    &execute    document
-  {TARGET}  {BASE}   knowledge   {BASE}         {TARGET}  THINK_
-  {DB_BRIEF}{DB_BRIEF}=BASE       {DOC}                  KNOWLEDGE
-  {BASE_    {DB_QUERY_{TARGET}    {TARGET}
-   KNOWLEDGE_GUIDE}
-   BRIEF}
-  {MCP_BRIEF}
-  {FUNCTION_
-   BRIEF}
-  + Function
-    Catalog
+     ┌──────────┬───────┼───────────┬──────────┬─────────────┬─────────┐
+     ▼          ▼       ▼           ▼          ▼             ▼         ▼
+   Think    explore_ explore_   generate_   generate_    explore_  Observe
+             schema   base_      &execute    document     functions
+                      knowledge
+   {TARGET}  {DB_BRIEF}{BASE_   knowledge  {BASE}       无         {TARGET}
+   {THINK_   {DB_QUERY_ KNOWLEDGE= BASE +   {DOC}
+    KNOWLEDGE}GUIDE}   _BRIEF}   code_      {TARGET}
+   {BRIEF_             + base_    guide +
+    INFO}              knowledge  graph_
+                       表（仅此  code_guide
+                       一张表）  {TARGET}
 ```
 
 ---
@@ -321,6 +339,7 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 | `agent/observe.py` | Observe 阶段 prompt 构建 |
 | `data_access/brief_info_db.py` | `brief_info` 表定义 |
 | `data_access/code_guide_db.py` | `code_guide` 表定义 |
+| `data_access/graph_code_guide_db.py` | `graph_code_guide` 表定义 |
 | `data_access/base_knowledge_db.py` | `base_knowledge` 表定义 |
 | `data_access/db_query_guide_db.py` | `db_query_guide` 表定义 |
 | `data_access/doc_guide_db.py` | `doc_guide` 表定义 |

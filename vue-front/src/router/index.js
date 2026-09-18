@@ -6,6 +6,7 @@ import BaseKnowledgePage from '@/pages/BaseKnowledgePage.vue'
 import DataQueryGuidePage from '@/pages/DataQueryGuidePage.vue'
 import BriefInfoPage from '@/pages/BriefInfoPage.vue'
 import CommentManagePage from '@/pages/CommentManagePage.vue'
+import GuideManagePage from '@/pages/GuideManagePage.vue'
 
 const routes = [
   { path: '/', name: 'chat', component: ChatPage },
@@ -18,6 +19,7 @@ const routes = [
       { path: 'query-guide', name: 'data-query-guide', component: DataQueryGuidePage },
       { path: 'brief-info', name: 'brief-info', component: BriefInfoPage },
       { path: 'comments', name: 'comment-manage', component: CommentManagePage },
+      { path: 'guides', name: 'guide-manage', component: GuideManagePage },
     ],
   },
 ]

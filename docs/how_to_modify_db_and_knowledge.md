@@ -90,7 +90,7 @@
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/doc_guide.md` |
 | 数据库表 | `doc_guide` 表（key-value 结构） |
 
-仅通过 `explore_base_knowledge` action 按需获取。
+全量注入 `generate_document` 阶段 prompt。内容为空时标签不显示。
 
 ### 3.10 THINK_KNOWLEDGE — 思考分析策略
 
@@ -99,22 +99,42 @@
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/think_guide.md` |
 | 数据库表 | `think_guide` 表（key-value 结构） |
 
-仅通过 `explore_base_knowledge` action 按需获取。
+全量注入 think 阶段 prompt。内容为空时标签不显示。
+
+### 3.11 CODE_GUIDE — 图表代码指南
+
+| 来源 | 路径/表 |
+|---|---|
+| MD 文件 | 无 |
+| 数据库表 | `code_guide` 表（key-value 结构） |
+
+全量注入 `generate_and_execute` 阶段 prompt。内容为空时标签不显示。
+
+### 3.12 GRAPH_CODE_GUIDE — 图表代码指南
+
+| 来源 | 路径/表 |
+|---|---|
+| MD 文件 | 无 |
+| 数据库表 | `graph_code_guide` 表（key-value 结构） |
+
+全量注入 `generate_and_execute` 阶段 prompt。内容为空时标签不显示。
 
 ## 4. 汇总
 
 | 配置项 | MD 文件 | DB 表 | 使用阶段 | 关系 |
-|---|---|---|---|---|---|
-| DB_BRIEF | `db_brief.md` | `brief_info.db_brief` | think / explore_schema | 合并 |
+|---|---|---|---|---|---|---|
+| DB_BRIEF | `db_brief.md` | `brief_info.db_brief` | think / explore_schema | 合并，空时不显示标签 |
 | BASE_KNOWLEDGE_BRIEF | `base_knowledge_brief.md` | `brief_info.base_knowledge_brief` | think | 合并 |
-| MCP_BRIEF | `mcp_brief.md` | `brief_info.mcp_brief` | think / explore_mcp | 合并 |
+| MCP_BRIEF | `mcp_brief.md` | `brief_info.mcp_brief` | think / explore_mcp | 合并，空时不显示标签 |
 | FUNCTION_BRIEF | `function_brief.md` | `brief_info.function_brief` | think | 合并 |
 | Function Catalog | 代码自动生成 | 无 | think | 自动 |
-| BASE | `base_knowledge.md` | `base_knowledge` | explore_base_knowledge | 合并（按需获取） |
-| DOC | `doc_guide.md` | `doc_guide` | explore_base_knowledge | 合并（按需获取） |
-| THINK_KNOWLEDGE | `think_guide.md` | `think_guide` | explore_base_knowledge | 合并（按需获取） |
-| DB_QUERY_GUIDE | `db_query_guide.md` | `db_query_guide` | explore_schema | 合并 |
-| TARGET | `target_knowledge.md` | 无 | think | 仅 MD |
+| BASE | `base_knowledge.md` | `base_knowledge` | explore_base_knowledge / generate_and_execute / generate_document | 合并 |
+| DOC | `doc_guide.md` | `doc_guide` | generate_document | 合并，空时不显示标签 |
+| THINK_KNOWLEDGE | `think_guide.md` | `think_guide` | think | 合并，空时不显示标签 |
+| CODE_GUIDE | 无 | `code_guide` | generate_and_execute | 仅 DB，空时不显示标签 |
+| GRAPH_CODE_GUIDE | 无 | `graph_code_guide` | generate_and_execute | 仅 DB，空时不显示标签 |
+| DB_QUERY_GUIDE | `db_query_guide.md` | `db_query_guide` | explore_schema | 合并，空时不显示标签 |
+| TARGET | `target_knowledge.md` | 无 | think / generate_and_execute / generate_document / observe | 仅 MD |
 
 ## 5. 验证
 

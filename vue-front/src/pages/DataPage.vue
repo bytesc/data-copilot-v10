@@ -31,6 +31,7 @@ const tabs = [
   { path: '/data/base-knowledge', icon: '📚', label: 'Base Knowledge' },
   { path: '/data/query-guide', icon: '🗄️', label: 'Query Guide' },
   { path: '/data/brief-info', icon: '📝', label: 'Brief Info' },
+  { path: '/data/guides', icon: '📋', label: 'Guides' },
 ]
 </script>
 
