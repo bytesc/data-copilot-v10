@@ -744,6 +744,61 @@ async def plain_chat_stream(request: Request, user_input: AgentInput):
     )
 
 
+@app.get("/api/tools/functions")
+async def list_python_functions():
+    def _list():
+        from agent.tools.get_function_info import FUNCTION_DICT, FUNCTION_DESCRIPTION
+        result = []
+        for name, func in FUNCTION_DICT.items():
+            result.append({
+                "name": name,
+                "description": FUNCTION_DESCRIPTION.get(name, func.__doc__ or ""),
+                "doc": func.__doc__ or ""
+            })
+        return result
+    loop = asyncio.get_event_loop()
+    return JSONResponse(content=await loop.run_in_executor(executor, _list))
+
+
+@app.get("/api/tools/mcp")
+async def list_mcp_tools():
+    def _list():
+        from agent.tools.mcp_client import load_mcp_servers, MCPClient
+        servers = load_mcp_servers()
+        result = []
+        for srv in servers:
+            info = {
+                "server_name": srv.get("name", ""),
+                "server_description": srv.get("description", ""),
+                "url": srv.get("url", ""),
+                "tools": [],
+                "error": None
+            }
+            try:
+                client = MCPClient(srv)
+                client.connect()
+                tools = client.list_tools()
+                for t in tools:
+                    params = t.get("inputSchema", {}).get("properties", {})
+                    param_names = list(params.keys()) if params else []
+                    info["tools"].append({
+                        "name": t.get("name", ""),
+                        "description": t.get("description", ""),
+                        "parameters": param_names
+                    })
+                client.close()
+            except Exception as e:
+                info["error"] = str(e)
+            result.append(info)
+        return result
+    loop = asyncio.get_event_loop()
+    try:
+        result = await asyncio.wait_for(loop.run_in_executor(executor, _list), timeout=10)
+    except asyncio.TimeoutError:
+        return JSONResponse(content=[{"server_name": "MCP", "error": "Timeout: MCP servers did not respond within 10 seconds"}])
+    return JSONResponse(content=result)
+
+
 from agent.think import router as think_router
 from agent.act import router as act_router
 from agent.observe import router as observe_router

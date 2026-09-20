@@ -1,10 +1,9 @@
 <template>
-  <div class="data-page">
-    <div class="data-page-header">
+  <div class="knowledge-page">
+    <div class="page-header">
       <router-link to="/" class="back-link">← Back to Chat</router-link>
-      <h2>Data Management</h2>
+      <h2>Knowledge Management</h2>
     </div>
-
     <nav class="sub-nav">
       <router-link
         v-for="tab in tabs"
@@ -17,7 +16,6 @@
         {{ tab.label }}
       </router-link>
     </nav>
-
     <div class="sub-page-content">
       <router-view />
     </div>
@@ -26,21 +24,21 @@
 
 <script setup>
 const tabs = [
-  { path: '/data', icon: '📂', label: 'Upload' },
-  { path: '/data/comments', icon: '💬', label: 'Comments' },
-  { path: '/data/query-guide', icon: '🗄️', label: 'Query Guide' },
+  { path: '/knowledge/base-knowledge', icon: '📚', label: 'Base Knowledge' },
+  { path: '/knowledge/brief-info', icon: '📝', label: 'Brief Info' },
+  { path: '/knowledge/guides', icon: '📋', label: 'Guides' },
 ]
 </script>
 
 <style scoped>
-.data-page {
+.knowledge-page {
   height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.data-page-header {
+.page-header {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -50,20 +48,9 @@ const tabs = [
   flex-shrink: 0;
 }
 
-.data-page-header h2 {
+.page-header h2 {
   font-size: 18px;
   color: var(--text-primary);
-}
-
-.back-link {
-  color: var(--accent-blue);
-  text-decoration: none;
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.back-link:hover {
-  text-decoration: underline;
 }
 
 .sub-nav {
@@ -110,12 +97,23 @@ const tabs = [
   min-height: 0;
 }
 
+.back-link {
+  color: var(--accent-blue);
+  text-decoration: none;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 768px) {
-  .data-page-header {
+  .page-header {
     padding: 12px 16px;
   }
 
-  .data-page-header h2 {
+  .page-header h2 {
     font-size: 16px;
   }
 

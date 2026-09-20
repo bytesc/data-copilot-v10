@@ -11,6 +11,12 @@
         <router-link to="/data" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">📊</span> Data
         </router-link>
+        <router-link to="/knowledge" class="nav-link" active-class="nav-link-active">
+          <span class="nav-icon">📖</span> Knowledge
+        </router-link>
+        <router-link to="/tools" class="nav-link" active-class="nav-link-active">
+          <span class="nav-icon">🔧</span> Tools
+        </router-link>
       </div>
     </nav>
 
