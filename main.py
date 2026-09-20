@@ -761,33 +761,41 @@ async def list_python_functions():
 
 
 @app.get("/api/tools/mcp")
-def list_mcp_tools():
+async def list_mcp_tools():
     from agent.tools.mcp_client import load_mcp_servers, MCPClient
 
     servers = load_mcp_servers()
     results = []
-    for srv in servers:
-        info = {
-            "server_name": srv.get("name", ""),
-            "server_description": srv.get("description", ""),
-            "url": srv.get("url", ""),
-            "tools": [],
-            "error": None
-        }
+
+    async def _fetch(srv):
+        name = srv.get("name", "")
+        desc = srv.get("description", "")
+        url = srv.get("url", "")
+        info = {"server_name": name, "server_description": desc, "url": url, "tools": [], "error": None}
         try:
-            with MCPClient(srv) as client:
-                tools = client.list_tools()
-                for t in tools:
-                    params = t.get("inputSchema", {}).get("properties", {})
-                    param_names = list(params.keys()) if params else []
-                    info["tools"].append({
-                        "name": t.get("name", ""),
-                        "description": t.get("description", ""),
-                        "parameters": param_names
-                    })
+            loop = asyncio.get_event_loop()
+            def _run():
+                with MCPClient(srv) as client:
+                    return client.list_tools()
+            tools = await asyncio.wait_for(
+                loop.run_in_executor(executor, _run),
+                timeout=35
+            )
+            for t in tools:
+                params = t.get("inputSchema", {}).get("properties", {})
+                param_names = list(params.keys()) if params else []
+                info["tools"].append({
+                    "name": t.get("name", ""),
+                    "description": t.get("description", ""),
+                    "parameters": param_names
+                })
+        except asyncio.TimeoutError:
+            info["error"] = "Connection timed out after 35 seconds"
         except Exception as e:
             info["error"] = str(e)
         results.append(info)
+
+    await asyncio.gather(*[_fetch(srv) for srv in servers])
     return JSONResponse(content=results)
 
 
