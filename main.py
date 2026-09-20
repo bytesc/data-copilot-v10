@@ -761,22 +761,21 @@ async def list_python_functions():
 
 
 @app.get("/api/tools/mcp")
-async def list_mcp_tools():
-    def _list():
-        from agent.tools.mcp_client import load_mcp_servers, MCPClient
-        servers = load_mcp_servers()
-        result = []
-        for srv in servers:
-            info = {
-                "server_name": srv.get("name", ""),
-                "server_description": srv.get("description", ""),
-                "url": srv.get("url", ""),
-                "tools": [],
-                "error": None
-            }
-            try:
-                client = MCPClient(srv)
-                client.connect()
+def list_mcp_tools():
+    from agent.tools.mcp_client import load_mcp_servers, MCPClient
+
+    servers = load_mcp_servers()
+    results = []
+    for srv in servers:
+        info = {
+            "server_name": srv.get("name", ""),
+            "server_description": srv.get("description", ""),
+            "url": srv.get("url", ""),
+            "tools": [],
+            "error": None
+        }
+        try:
+            with MCPClient(srv) as client:
                 tools = client.list_tools()
                 for t in tools:
                     params = t.get("inputSchema", {}).get("properties", {})
@@ -786,17 +785,10 @@ async def list_mcp_tools():
                         "description": t.get("description", ""),
                         "parameters": param_names
                     })
-                client.close()
-            except Exception as e:
-                info["error"] = str(e)
-            result.append(info)
-        return result
-    loop = asyncio.get_event_loop()
-    try:
-        result = await asyncio.wait_for(loop.run_in_executor(executor, _list), timeout=10)
-    except asyncio.TimeoutError:
-        return JSONResponse(content=[{"server_name": "MCP", "error": "Timeout: MCP servers did not respond within 10 seconds"}])
-    return JSONResponse(content=result)
+        except Exception as e:
+            info["error"] = str(e)
+        results.append(info)
+    return JSONResponse(content=results)
 
 
 from agent.think import router as think_router
