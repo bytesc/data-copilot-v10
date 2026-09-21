@@ -235,7 +235,16 @@ def list_sessions(limit=50):
     try:
         with sys_engine.connect() as conn:
             result = conn.execute(
-                select(observe_session_log)
+                select(
+                    observe_session_log.c.id,
+                    observe_session_log.c.session_id,
+                    observe_session_log.c.question,
+                    observe_session_log.c.status,
+                    observe_session_log.c.total_cycles,
+                    observe_session_log.c.total_tokens,
+                    observe_session_log.c.created_at,
+                    observe_session_log.c.updated_at,
+                )
                 .order_by(desc(observe_session_log.c.updated_at))
                 .limit(limit)
             ).fetchall()
