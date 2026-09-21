@@ -2,6 +2,8 @@ import json
 import yaml
 import threading
 import urllib.request
+import subprocess
+import sys
 from urllib.parse import urlparse
 from typing import Optional
 
@@ -48,7 +50,7 @@ class MCPClient:
     def __init__(self, server_config: dict):
         self.name = server_config.get("name", "")
         self.description = server_config.get("description", "")
-        self.transport = server_config.get("transport", "sse")
+        self.transport = server_config.get("transport", "stdio")
         self.url = server_config.get("url", "")
         self.command = server_config.get("command", "")
         self.args = server_config.get("args", [])
@@ -56,21 +58,34 @@ class MCPClient:
         self._request_id = 0
         self._responses: dict[int, dict] = {}
         self._response_event = threading.Event()
-        self._sse_resp = None
-        self._read_thread: Optional[threading.Thread] = None
         self._closed = False
         self._lock = threading.Lock()
+
+        # SSE transport resources
+        self._sse_resp = None
+        self._read_thread: Optional[threading.Thread] = None
+
+        # stdio transport resources
+        self._process: Optional[subprocess.Popen] = None
+        self._stdout_thread: Optional[threading.Thread] = None
 
     def _next_id(self) -> int:
         self._request_id += 1
         return self._request_id
 
     def connect(self):
-        if self.transport != "sse":
-            raise MCPError(f"Unsupported transport: {self.transport}. Only 'sse' is supported.")
-        if not self.url:
-            raise MCPConnectionError(f"MCP server '{self.name}' has no URL configured.")
+        if self.transport == "sse":
+            self._connect_sse()
+        elif self.transport == "stdio":
+            self._connect_stdio()
+        else:
+            raise MCPError(f"Unsupported transport: {self.transport}. Supported: 'sse', 'stdio'")
 
+    # ── SSE transport ────────────────────────────────────────────────
+
+    def _connect_sse(self):
+        if not self.url:
+            raise MCPConnectionError(f"MCP server '{self.name}' has no URL configured for sse transport.")
         try:
             req = urllib.request.Request(self.url, headers={"Accept": "text/event-stream"})
             self._sse_resp = urllib.request.urlopen(req, timeout=30)
@@ -104,21 +119,12 @@ class MCPClient:
             self._read_thread = threading.Thread(target=self._read_sse_loop, args=(self._sse_resp,), daemon=True)
             self._read_thread.start()
 
-            result = self._send_request("initialize", {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "data-copilot", "version": "1.0"}
-            })
-            if "error" in result:
-                raise MCPConnectionError(f"Initialize failed: {result['error']}")
-
-            self._send_notification("notifications/initialized", {})
-
+            self._send_initialize()
         except Exception as e:
             self.close()
             if isinstance(e, MCPError):
                 raise
-            raise MCPConnectionError(f"Failed to connect to MCP server '{self.name}': {e}")
+            raise MCPConnectionError(f"Failed to connect to SSE MCP server '{self.name}': {e}")
 
     def _read_sse_loop(self, resp):
         try:
@@ -148,22 +154,91 @@ class MCPClient:
         except Exception:
             pass
 
-    def _send_request(self, method: str, params: dict = None) -> dict:
+    def _send_via_sse(self, data: bytes) -> bytes:
+        req = urllib.request.Request(
+            self._message_endpoint, data=data,
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        resp = urllib.request.urlopen(req, timeout=30)
+        body = resp.read()
+        resp.close()
+        return body
+
+    # ── stdio transport ──────────────────────────────────────────────
+
+    def _connect_stdio(self):
+        if not self.command:
+            raise MCPConnectionError(f"MCP server '{self.name}' has no command configured for stdio transport.")
+        try:
+            self._process = subprocess.Popen(
+                [self.command] + self.args,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self._stdout_thread = threading.Thread(target=self._read_stdio_loop, daemon=True)
+            self._stdout_thread.start()
+
+            self._send_initialize()
+        except Exception as e:
+            self.close()
+            if isinstance(e, MCPError):
+                raise
+            raise MCPConnectionError(f"Failed to connect to stdio MCP server '{self.name}': {e}")
+
+    def _read_stdio_loop(self):
+        try:
+            while not self._closed and self._process and self._process.stdout:
+                line = self._process.stdout.readline()
+                if not line:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                    if "id" in msg:
+                        with self._lock:
+                            self._responses[msg["id"]] = msg
+                        self._response_event.set()
+                except json.JSONDecodeError:
+                    pass
+        except Exception:
+            pass
+
+    def _send_via_stdio(self, data: bytes) -> bytes:
+        self._process.stdin.write(data.decode("utf-8") if isinstance(data, bytes) else data)
+        self._process.stdin.write("\n")
+        self._process.stdin.flush()
+        return b""
+
+    # ── shared JSON-RPC logic ────────────────────────────────────────
+
+    def _send_initialize(self):
+        result = self._dispatch_request("initialize", {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "data-copilot", "version": "1.0"}
+        })
+        if "error" in result:
+            raise MCPConnectionError(f"Initialize failed: {result['error']}")
+        self._dispatch_notification("notifications/initialized", {})
+
+    def _dispatch_request(self, method: str, params: dict = None) -> dict:
         req_id = self._next_id()
         body = {"jsonrpc": "2.0", "id": req_id, "method": method}
         if params is not None:
             body["params"] = params
 
         self._response_event.clear()
+
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         try:
-            data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-            req = urllib.request.Request(
-                self._message_endpoint, data=data,
-                headers={"Content-Type": "application/json"}, method="POST",
-            )
-            resp = urllib.request.urlopen(req, timeout=30)
-            resp.read()
-            resp.close()
+            if self.transport == "sse":
+                self._send_via_sse(data)
+            elif self.transport == "stdio":
+                self._send_via_stdio(data)
         except Exception as e:
             raise MCPConnectionError(f"Failed to send request '{method}': {e}")
 
@@ -174,24 +249,23 @@ class MCPClient:
             response = self._responses.pop(req_id, {})
         return response
 
-    def _send_notification(self, method: str, params: dict = None):
+    def _dispatch_notification(self, method: str, params: dict = None):
         body = {"jsonrpc": "2.0", "method": method}
         if params is not None:
             body["params"] = params
         try:
             data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-            req = urllib.request.Request(
-                self._message_endpoint, data=data,
-                headers={"Content-Type": "application/json"}, method="POST",
-            )
-            resp = urllib.request.urlopen(req, timeout=10)
-            resp.read()
-            resp.close()
+            if self.transport == "sse":
+                self._send_via_sse(data)
+            elif self.transport == "stdio":
+                self._send_via_stdio(data)
         except Exception:
             pass
 
+    # ── public API ───────────────────────────────────────────────────
+
     def list_tools(self) -> list[dict]:
-        result = self._send_request("tools/list", {})
+        result = self._dispatch_request("tools/list", {})
         if "error" in result:
             raise MCPToolError(f"tools/list failed: {result['error']}")
         return result.get("result", {}).get("tools", [])
@@ -200,7 +274,7 @@ class MCPClient:
         params = {"name": tool_name}
         if arguments is not None:
             params["arguments"] = arguments
-        result = self._send_request("tools/call", params)
+        result = self._dispatch_request("tools/call", params)
         if "error" in result:
             raise MCPToolError(f"tools/call '{tool_name}' failed: {result['error']}")
         return result.get("result", {})
@@ -214,6 +288,13 @@ class MCPClient:
             except Exception:
                 pass
             self._sse_resp = None
+        if self._process is not None:
+            try:
+                self._process.terminate()
+                self._process.wait(timeout=5)
+            except Exception:
+                self._process.kill()
+            self._process = None
 
     def __enter__(self):
         self.connect()

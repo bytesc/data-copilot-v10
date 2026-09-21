@@ -165,20 +165,24 @@ VITE_API_BASE=/api
 
 MCP（Model Context Protocol）服务器通过 `config/mcp_servers.yaml` 定义，LLM 可通过 `explore_mcp` 发现工具、`exe_mcp` 调用工具。
 
+支持两种传输方式：
+- **`sse`** — 远程 HTTP 服务，需配置 `url`
+- **`stdio`** — 本地子进程，需配置 `command` + `args`
+
 ```yaml
 mcp_servers:
+  # SSE 示例：远程 HTTP 服务
   - name: "calculator"
     description: "Math calculation tools"
     transport: "sse"
     url: "http://localhost:8101/sse"
-  - name: "text"
-    description: "Text processing tools"
-    transport: "sse"
-    url: "http://localhost:8102/sse"
-  - name: "datetime"
-    description: "Date and time tools"
-    transport: "sse"
-    url: "http://localhost:8103/sse"
+
+  # stdio 示例：本地子进程（如 npx 启动的官方 MCP 服务器）
+  - name: "filesystem"
+    description: "File system access tools"
+    transport: "stdio"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
 ```
 
 ### MCP 测试服务器
@@ -188,7 +192,7 @@ mcp_servers:
 | 服务器 | 端口 | 工具 |
 |--------|------|------|
 | `calculator_server.py` | 8101 | add, subtract, multiply, divide, power, sqrt, sin, cos, average |
-| `datetime_server.py` | 8103 | get_current_time, format_date, date_diff, weekday, timestamp, add_days |
+| `datetime_server.py` | 8103 | get_current_time (with timestamp), weekday, add_days |
 
 启动所有测试服务器：
 

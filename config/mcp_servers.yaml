@@ -1,10 +1,15 @@
+# MCP server configuration.
+# Supported transport: "sse" (remote) or "stdio" (local subprocess).
+#   SSE: requires "url", e.g. http://localhost:8101/sse
+#   stdio: requires "command" and optional "args", e.g. ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+
 mcp_servers:
   - name: "calculator"
-    description: "Math expression evaluator: evaluate math expressions with arithmetic, trigonometric, and math functions"
+    description: "Math expression evaluator"
     transport: "sse"
     url: "http://localhost:8101/sse"
 
   - name: "datetime"
-    description: "Date and time tools: get_current_time, format_date, date_diff, weekday, timestamp, add_days"
+    description: "Date and time tools: get_current_time (with timestamp), weekday, add_days"
     transport: "sse"
     url: "http://localhost:8103/sse"

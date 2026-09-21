@@ -822,6 +822,9 @@ def _check_mcp_servers():
         import socket
         for srv in servers:
             name = srv.get("name", "?")
+            transport = srv.get("transport", "stdio")
+            if transport != "sse":
+                continue
             url = srv.get("url", "")
             if not url:
                 continue
