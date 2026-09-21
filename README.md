@@ -112,6 +112,14 @@
 pip install -r requirement.txt
 ```
 
+### 初始化系统数据库
+
+使用 `init.sql` 创建 `data_copilot_v10_sys` 库下的所有系统表：
+
+```bash
+mysql -u root -p < init.sql
+```
+
 ### 配置文件
 
 `./config/config.yaml`

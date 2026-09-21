@@ -345,5 +345,6 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 | `data_access/doc_guide_db.py` | `doc_guide` 表定义 |
 | `data_access/think_guide_db.py` | `think_guide` 表定义 |
 | `data_access/sys_db_conn.py` | 系统数据库连接 |
-| `docker/docker-init.sql` | 数据库初始化脚本 |
+| `docker/docker-init.sql` | Docker 数据库初始化脚本（含业务库和系统库） |
+| `init.sql` | 系统数据库 `data_copilot_v10_sys` 独立初始化脚本 |
 | `main.py` | 启动时创建所有系统表 |
