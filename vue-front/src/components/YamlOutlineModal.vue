@@ -6,6 +6,7 @@
         <div class="modal-header">
           <h3>Document Generation</h3>
           <p class="modal-subtitle">Resume from a saved draft or start fresh.</p>
+          <button class="close-btn" @click="onClose" title="Close">✕</button>
         </div>
         <div class="modal-body pick-body">
           <div v-if="availableFiles.length === 0 && !loadingFiles" class="empty-text">No saved files found.</div>
@@ -24,7 +25,7 @@
                   <span class="pick-time">{{ formatTime(f.mtime) }}</span>
                 </div>
               </div>
-              <button class="pick-delete" @click.stop="deleteFile(f)" title="Delete">✕</button>
+              <button class="pick-delete" @click.stop="confirmDelete(f)" title="Delete">✕</button>
             </div>
           </div>
           <button class="btn btn-primary start-fresh-btn" @click="startFresh">Start Fresh</button>
@@ -39,13 +40,14 @@
         <div class="modal-header">
           <h3>Step 1: Edit YAML Outline</h3>
           <p class="modal-subtitle">{{ sectionCount }} sections will be generated. Modify then click next.</p>
+          <button class="close-btn" @click="onClose" title="Close">✕</button>
         </div>
         <div class="modal-body">
           <div v-if="yamlLoading" class="loading-overlay">Generating YAML outline...</div>
           <textarea ref="yamlTextarea" class="code-editor" v-model="yamlContent" spellcheck="false"></textarea>
         </div>
         <div class="modal-footer" v-if="!yamlLoading">
-          <button class="btn btn-secondary" @click="backToPick">Back</button>
+          <button class="btn btn-secondary" style="margin-right:auto" @click="backToPick">Back</button>
           <button class="btn btn-primary" :disabled="generatingDraft" @click="startGeneratingSections">
             {{ generatingDraft ? 'Starting...' : 'Generate Sections' }}
           </button>
@@ -57,6 +59,7 @@
         <div class="modal-header">
           <h3>Step 2: Section {{ currentSectionIndex + 1 }} / {{ totalSections }}</h3>
           <p class="modal-subtitle">{{ currentSectionHeading || 'Generating...' }}</p>
+          <button class="close-btn" @click="onClose" title="Close">✕</button>
         </div>
         <div class="modal-body">
           <!-- Streaming preview for current section -->
@@ -112,6 +115,7 @@
         <div class="modal-header">
           <h3>Step 3: Review Full Document & Finalize</h3>
           <p class="modal-subtitle">All {{ confirmedSections.length }} sections confirmed. You can still edit any section below.</p>
+          <button class="close-btn" @click="onClose" title="Close">✕</button>
         </div>
         <div class="modal-body">
           <div class="confirmed-indicator">
@@ -136,6 +140,7 @@
       <template v-if="step === 'done'">
         <div class="modal-header">
           <h3>Document Generated</h3>
+          <button class="close-btn" @click="onClose" title="Close">✕</button>
         </div>
         <div class="modal-body done-body">
           <p class="done-title">{{ finalTitle }}</p>
@@ -149,6 +154,16 @@
           <button class="btn btn-primary" @click="onClose">Close</button>
         </div>
       </template>
+    <!-- Confirm dialog -->
+      <div v-if="confirmFile" class="confirm-overlay" @click.self="confirmFile = null">
+        <div class="confirm-dialog">
+          <p>Delete "{{ confirmFile.name }}"? This will also remove any associated drafts.</p>
+          <div class="confirm-actions">
+            <button class="btn btn-secondary" @click="confirmFile = null">Cancel</button>
+            <button class="btn btn-danger" @click="doDelete">Delete</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -190,6 +205,7 @@ const finalDownloadMd = ref('')
 const finalDownloadDocx = ref('')
 const finalDownloadPdf = ref('')
 const finalTextarea = ref(null)
+const confirmFile = ref(null)
 
 const docTitle = computed(() => {
   const m = yamlContent.value.match(/^title:\s*["'](.+?)["']/m)
@@ -307,12 +323,13 @@ async function loadFile(file) {
       } catch { break }
     }
     if (sectionFiles.length > 0) {
+      const last = sectionFiles.pop()
       confirmedSections.value = sectionFiles
       currentSectionIndex.value = sectionFiles.length
-      totalSections.value = sectionFiles.length
+      totalSections.value = sectionFiles.length + 1
       currentSectionDone.value = true
-      currentSectionHeading.value = sectionFiles[sectionFiles.length - 1].heading
-      currentSectionEdit.value = sectionFiles[sectionFiles.length - 1].content
+      currentSectionHeading.value = last.heading
+      currentSectionEdit.value = last.content
       step.value = 'sections'
       await nextTick()
       if (sectionTextarea.value) sectionTextarea.value.focus()
@@ -338,7 +355,14 @@ function backToPick() {
   fetchAvailableFiles()
 }
 
-async function deleteFile(file) {
+function confirmDelete(file) {
+  confirmFile.value = file
+}
+
+async function doDelete() {
+  const file = confirmFile.value
+  if (!file) return
+  confirmFile.value = null
   try {
     await fetch(`/api/doc-workspace/yaml/${file.name}`, { method: 'DELETE' })
     availableFiles.value = availableFiles.value.filter(f => f.name !== file.name)
@@ -352,7 +376,7 @@ function onClose() {
 }
 
 function onOverlayClick() {
-  if (step.value === 'done') onClose()
+  onClose()
 }
 
 // YAML outline generation
@@ -552,10 +576,12 @@ onMounted(fetchAvailableFiles)
 <style scoped>
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal-container { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius); width: 90vw; height: 85vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-.modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+.modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; position: relative; }
 .modal-header h3 { margin: 0 0 4px; font-size: 16px; color: var(--text-primary); }
 .modal-subtitle { margin: 0; font-size: 12px; color: var(--text-muted); }
-.modal-body { flex: 1; padding: 12px 20px; overflow: hidden; display: flex; flex-direction: column; }
+.close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1; border-radius: var(--radius-sm); }
+.close-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.modal-body { flex: 1; padding: 12px 20px; overflow-y: auto; display: flex; flex-direction: column; }
 .code-editor { flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; font-family: 'Consolas','Courier New',monospace; font-size: 13px; line-height: 1.5; resize: none; outline: none; tab-size: 2; }
 .code-editor:focus { border-color: var(--accent-blue); }
 .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border-color); flex-shrink: 0; }
@@ -602,5 +628,13 @@ onMounted(fetchAvailableFiles)
 .pick-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pick-name { font-family: 'Consolas',monospace; font-size: 13px; color: var(--text-primary); word-break: break-all; }
 .pick-time { font-size: 11px; color: var(--text-muted); }
+.pick-delete { margin-left: auto; background: none; border: none; color: #d34f4f; font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm); flex-shrink: 0; }
+.pick-delete:hover { background: rgba(211,79,79,0.1); }
 .start-fresh-btn { align-self: center; margin-top: 12px; padding: 10px 24px; font-size: 14px; }
+.confirm-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: var(--radius); }
+.confirm-dialog { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 24px; max-width: 400px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+.confirm-dialog p { margin: 0 0 16px; font-size: 14px; color: var(--text-primary); line-height: 1.5; word-break: break-all; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.btn-danger { background: #d34f4f; color: #fff; border-color: #d34f4f; }
+.btn-danger:hover { opacity: 0.9; }
 </style>
