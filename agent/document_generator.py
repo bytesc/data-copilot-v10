@@ -162,7 +162,7 @@ Rules:
 6. LANGUAGE IS CRITICAL: Write in the EXACT SAME LANGUAGE as the Document Title below. Ignore the language of the conversation history or knowledge base.
 7. Be thorough but concise.
 8. Use proper markdown headings (up to `###`), lists, and tables as needed.
-9. If this section has sub-sections listed in the outline, include each sub-section's heading as `### Subsection Heading` and write its content.
+9. If this section has sub-sections listed in the outline, include each sub-section's heading as `### Subsection Heading` and write its content. The heading text must appear ONLY as the `###` marker — do NOT repeat it in the content body.
 
 Document Title: {title}
 Section Heading: {heading}
@@ -173,7 +173,7 @@ Full Outline (all sections):
 
 {used_hint}
 
-Write the content for the section "{heading}". Do NOT repeat the main heading — it will be added automatically. Start directly with the content."""
+Write the content for the section "{heading}". Do NOT repeat the heading — it will be added automatically. Start directly with the content. For any subsection, use `### Subsection Heading` as the only occurrence of that heading text — do NOT repeat it in the body."""
 
 
 def _extract_image_urls(text: str) -> Set[str]:
@@ -205,6 +205,7 @@ def _markdown_to_docx(markdown_text: str, output_path: str):
 
     lines = markdown_text.split('\n')
     i = 0
+    title_centered = False
     while i < len(lines):
         line = lines[i]
         stripped = line.strip()
@@ -218,6 +219,9 @@ def _markdown_to_docx(markdown_text: str, output_path: str):
             level = len(heading_match.group(1))
             text = heading_match.group(2)
             p = doc.add_heading(level=min(level, 3))
+            if level == 1 and not title_centered:
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                title_centered = True
             _add_inline_runs(p, text)
             i += 1
             continue

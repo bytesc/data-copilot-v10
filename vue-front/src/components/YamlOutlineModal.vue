@@ -44,7 +44,7 @@
           <div v-if="yamlLoading" class="loading-overlay">Generating YAML outline...</div>
           <textarea ref="yamlTextarea" class="code-editor" v-model="yamlContent" spellcheck="false"></textarea>
         </div>
-        <div class="modal-footer">
+        <div class="modal-footer" v-if="!yamlLoading">
           <button class="btn btn-secondary" @click="backToPick">Back</button>
           <button class="btn btn-primary" :disabled="generatingDraft" @click="startGeneratingSections">
             {{ generatingDraft ? 'Starting...' : 'Generate Sections' }}
@@ -191,6 +191,11 @@ const finalDownloadDocx = ref('')
 const finalDownloadPdf = ref('')
 const finalTextarea = ref(null)
 
+const docTitle = computed(() => {
+  const m = yamlContent.value.match(/^title:\s*["'](.+?)["']/m)
+  return m ? m[1] : ''
+})
+
 const isBusy = computed(() => yamlLoading.value || generatingDraft.value || finalizing.value)
 watch(isBusy, (v) => emit('running', v))
 
@@ -201,10 +206,11 @@ const sectionCount = computed(() => {
 
 const mergedContent = computed({
   get: () => {
+    const titleLine = docTitle.value ? `# ${docTitle.value}\n\n` : ''
     const parts = confirmedSections.value.map((s, i) =>
       `## ${s.heading}\n\n${s.content}`
     ).join('\n\n')
-    return parts
+    return titleLine + parts
   },
   set: (val) => {
     // Reset tracking when user edits the merged text directly
@@ -472,7 +478,8 @@ function backToSectionEdit() {
 async function finalizeDoc() {
   finalizing.value = true
   try {
-    const fullMd = confirmedSections.value.map((s, i) =>
+    const titleLine = docTitle.value ? `# ${docTitle.value}\n\n` : ''
+    const fullMd = titleLine + confirmedSections.value.map((s, i) =>
       `## ${s.heading}\n\n${s.content}`
     ).join('\n\n')
     const payload = {

@@ -50,14 +50,18 @@ SSE: `yaml_outline: msg → chunk×N → done { content, yaml_base, yaml_file }`
 
 **YAML 格式定义**:
 ```yaml
-title: "文档标题"                      # 文档标题
+title: "文档标题"                      # 文档标题（最终文档居中显示）
 sections:                             # 章节列表
   - heading: "1. 章节标题"             # 章节标题（可带编号）
     description: "章节描述"            # 章节内容简述
     subsections:                      # 子节列表（可选）
       - heading: "1.1 子节标题"        # 子节标题
-        description: "子节描述"        # 子节内容简述
+        description: "子节描述"        # 子节内容简述（标题文本不会在正文中重复）
 ```
+
+> **注意**:
+> - 文档标题在 `.docx` / `.pdf` 输出中居中显示，`.md` 中保持 `# Title` 格式
+> - 子节标题仅作为 `###` 标记出现一次，不会在正文中重复写入
 
 ### 4. 逐节生成（每节一次请求）
 
