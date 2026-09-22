@@ -1025,16 +1025,43 @@ async def read_workspace_file(filename: str):
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
-@router.delete("/api/doc-workspace/yaml/{filename:path}")
-async def delete_yaml_with_drafts(filename: str):
+@router.delete("/api/doc-workspace/outline/{filename:path}")
+async def delete_outline_file(filename: str):
     import re as _re
     if _re.search(r'[/\\]|\.\.', filename):
         return JSONResponse(content={"error": "Invalid filename"}, status_code=400)
     if not filename.endswith(".yaml"):
         return JSONResponse(content={"error": "Not a YAML file"}, status_code=400)
-    base = filename.replace("outline_", "").replace(".yaml", "")
+    path = os.path.join(DOC_WORKSPACE, filename)
+    try:
+        os.remove(path)
+        return JSONResponse(content={"deleted": filename})
+    except FileNotFoundError:
+        return JSONResponse(content={"error": "File not found"}, status_code=404)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@router.post("/api/doc-workspace/save/{filename:path}")
+async def save_workspace_file(filename: str, request: Request):
+    import re as _re
+    if _re.search(r'[/\\]|\.\.', filename):
+        return JSONResponse(content={"error": "Invalid filename"}, status_code=400)
+    body = await request.json()
+    content = body.get("content", "")
+    path = os.path.join(DOC_WORKSPACE, filename)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return JSONResponse(content={"saved": filename})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@router.delete("/api/doc-workspace/drafts/{session_id}/{yaml_id}")
+async def delete_draft_files(session_id: str, yaml_id: str):
+    base = f"{session_id}_{yaml_id}"
     patterns = [
-        f"outline_{base}.yaml",
         f"draft_{base}.md",
         f"draft_{base}_s*.md",
     ]

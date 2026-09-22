@@ -18,14 +18,19 @@
               :key="f.name"
               class="pick-item"
             >
-              <div class="pick-item-body" @click="loadFile(f)">
+              <div class="pick-item-body">
                 <span class="pick-icon">Outline</span>
                 <div class="pick-info">
                   <span class="pick-name">{{ f.name }}</span>
                   <span class="pick-time">{{ formatTime(f.mtime) }}</span>
                 </div>
               </div>
-              <button class="pick-delete" @click.stop="confirmDelete(f)" title="Delete">✕</button>
+              <div class="pick-actions">
+                <button class="pick-continue" @click.stop="loadFile(f)" title="Continue">Continue</button>
+                <button class="pick-edit" @click.stop="confirmEditOutline(f)" title="Edit YAML">Edit</button>
+                <button class="pick-view" @click.stop="viewYaml(f)" title="View YAML">View</button>
+                <button class="pick-delete" @click.stop="confirmDelete(f)" title="Delete">✕</button>
+              </div>
             </div>
           </div>
           <button class="btn btn-primary start-fresh-btn" @click="startFresh">Start Fresh</button>
@@ -48,6 +53,7 @@
         </div>
         <div class="modal-footer" v-if="!yamlLoading">
           <button class="btn btn-secondary" style="margin-right:auto" @click="backToPick">Back</button>
+          <button class="btn btn-secondary" @click="saveYaml" :disabled="!yamlBase">Save</button>
           <button class="btn btn-primary" :disabled="generatingDraft" @click="startGeneratingSections">
             {{ generatingDraft ? 'Starting...' : 'Generate Sections' }}
           </button>
@@ -129,7 +135,8 @@
           ></textarea>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="backToSectionEdit">Back</button>
+          <button class="btn btn-secondary" style="margin-right:auto" @click="backToSectionEdit">Back</button>
+          <button class="btn btn-secondary" @click="saveDraft" :disabled="!yamlBase">Save Draft</button>
           <button class="btn btn-primary" :disabled="finalizing" @click="finalizeDoc">
             {{ finalizing ? 'Finalizing...' : 'Finalize to docx/pdf' }}
           </button>
@@ -154,6 +161,16 @@
           <button class="btn btn-primary" @click="onClose">Close</button>
         </div>
       </template>
+    <!-- YAML viewer -->
+      <div v-if="viewYamlFile" class="yaml-overlay" @click.self="viewYamlFile = null">
+        <div class="confirm-dialog yaml-viewer">
+          <div class="yaml-viewer-header">
+            <span>{{ viewYamlFile.name }}</span>
+            <button class="close-btn" @click="viewYamlFile = null" title="Close">✕</button>
+          </div>
+          <textarea class="code-editor yaml-viewer-body" readonly :value="yamlViewContent" spellcheck="false"></textarea>
+        </div>
+      </div>
     <!-- Confirm dialog -->
       <div v-if="confirmFile" class="confirm-overlay" @click.self="confirmFile = null">
         <div class="confirm-dialog">
@@ -161,6 +178,16 @@
           <div class="confirm-actions">
             <button class="btn btn-secondary" @click="confirmFile = null">Cancel</button>
             <button class="btn btn-danger" @click="doDelete">Delete</button>
+          </div>
+        </div>
+      </div>
+    <!-- Edit YAML confirm dialog -->
+      <div v-if="editYamlFile" class="confirm-overlay" @click.self="editYamlFile = null">
+        <div class="confirm-dialog">
+          <p>Edit "{{ editYamlFile.name }}"? This will discard any generated drafts and return to the YAML editing step.</p>
+          <div class="confirm-actions">
+            <button class="btn btn-secondary" @click="editYamlFile = null">Cancel</button>
+            <button class="btn btn-primary" @click="doEditYaml">Edit</button>
           </div>
         </div>
       </div>
@@ -206,6 +233,9 @@ const finalDownloadDocx = ref('')
 const finalDownloadPdf = ref('')
 const finalTextarea = ref(null)
 const confirmFile = ref(null)
+const editYamlFile = ref(null)
+const viewYamlFile = ref(null)
+const yamlViewContent = ref('')
 
 const docTitle = computed(() => {
   const m = yamlContent.value.match(/^title:\s*["'](.+?)["']/m)
@@ -355,6 +385,63 @@ function backToPick() {
   fetchAvailableFiles()
 }
 
+async function saveFile(filename, content) {
+  try {
+    await fetch(`/api/doc-workspace/save/${filename}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    })
+  } catch {}
+}
+
+function saveYaml() {
+  if (!yamlBase.value) return
+  saveFile(`outline_${yamlBase.value}.yaml`, yamlContent.value)
+}
+
+function saveDraft() {
+  if (!yamlBase.value) return
+  saveFile(`draft_${yamlBase.value}.md`, mergedContent.value)
+}
+
+async function doEditYaml() {
+  const file = editYamlFile.value
+  if (!file) return
+  editYamlFile.value = null
+  try {
+    const res = await fetch(`/api/doc-workspace/file/${file.name}`)
+    if (!res.ok) return
+    const data = await res.json()
+    const base = file.name.replace(/^outline_/, '').replace(/\.yaml$/, '')
+    const idx = base.lastIndexOf('_')
+    const sessionId = base.slice(0, idx)
+    const yamlId = base.slice(idx + 1)
+    await fetch(`/api/doc-workspace/drafts/${sessionId}/${yamlId}`, { method: 'DELETE' })
+    yamlContent.value = data.content
+    step.value = 'yaml'
+    await nextTick()
+    if (yamlTextarea.value) yamlTextarea.value.focus()
+  } catch {}
+}
+
+function confirmEditOutline(file) {
+  editYamlFile.value = file
+}
+
+async function viewYaml(file) {
+  try {
+    const res = await fetch(`/api/doc-workspace/file/${file.name}`)
+    if (res.ok) {
+      const data = await res.json()
+      yamlViewContent.value = data.content
+      viewYamlFile.value = file
+    }
+  } catch {}
+}
+
+
+
 function confirmDelete(file) {
   confirmFile.value = file
 }
@@ -364,7 +451,7 @@ async function doDelete() {
   if (!file) return
   confirmFile.value = null
   try {
-    await fetch(`/api/doc-workspace/yaml/${file.name}`, { method: 'DELETE' })
+    await fetch(`/api/doc-workspace/outline/${file.name}`, { method: 'DELETE' })
     availableFiles.value = availableFiles.value.filter(f => f.name !== file.name)
   } catch {}
 }
@@ -628,11 +715,27 @@ onMounted(fetchAvailableFiles)
 .pick-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pick-name { font-family: 'Consolas',monospace; font-size: 13px; color: var(--text-primary); word-break: break-all; }
 .pick-time { font-size: 11px; color: var(--text-muted); }
-.pick-delete { margin-left: auto; background: none; border: none; color: #d34f4f; font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm); flex-shrink: 0; }
+.pick-actions { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0; }
+.pick-continue { background: var(--accent-blue); border: 1px solid var(--accent-blue); color: #fff; font-size: 13px; cursor: pointer; padding: 4px 12px; border-radius: var(--radius-sm); line-height: 1; font-weight: 600; }
+.pick-continue:hover { opacity: 0.9; }
+.pick-edit { background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--accent-blue); font-size: 13px; cursor: pointer; padding: 4px 10px; border-radius: var(--radius-sm); line-height: 1; }
+.pick-edit:hover { background: var(--accent-blue); color: #fff; }
+.pick-view { background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 13px; cursor: pointer; padding: 4px 10px; border-radius: var(--radius-sm); line-height: 1; }
+.pick-view:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--accent-blue); }
+.pick-delete { background: none; border: none; color: #d34f4f; font-size: 18px; cursor: pointer; padding: 4px 10px; border-radius: var(--radius-sm); line-height: 1; }
 .pick-delete:hover { background: rgba(211,79,79,0.1); }
+.yaml-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1100; }
+.yaml-viewer { width: 95vw; max-width: 1400px; height: 90vh; display: flex; flex-direction: column; }
+.yaml-viewer .code-editor { width: 100%; }
+.yaml-viewer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.yaml-viewer-header .close-btn { position: static; font-size: 20px; padding: 2px 8px; }
+.yaml-viewer-actions { display: flex; align-items: center; gap: 8px; }
+.btn-sm { padding: 4px 12px; font-size: 12px; }
+.yaml-viewer-body { min-height: 300px; }
 .start-fresh-btn { align-self: center; margin-top: 12px; padding: 10px 24px; font-size: 14px; }
 .confirm-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10; border-radius: var(--radius); }
-.confirm-dialog { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 24px; max-width: 400px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+.confirm-dialog { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+.confirm-dialog:not(.yaml-viewer) { max-width: 400px; }
 .confirm-dialog p { margin: 0 0 16px; font-size: 14px; color: var(--text-primary); line-height: 1.5; word-break: break-all; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .btn-danger { background: #d34f4f; color: #fff; border-color: #d34f4f; }
