@@ -231,6 +231,11 @@
    heading:"...", section_file:"draft_{session_id}_{base}_s00.md", total_sections:N}
   # 前端显示 textarea，用户编辑后点 Confirm & Next → 下一节 (section_index+1)
 
+  # POST /api/generate-document/yaml-to-prompt/ （非SSE，普通 JSON 请求）
+  # Request:  { yaml_content: string }
+  # Response: { prompt: string }
+  # 后端用 YAML_TO_CHAT_PROMPT 模板拼装英文指令 + YAML，前端通过 submitNewQuestion() 发给主 LLM
+
   # POST /api/generate-document/finalize/
   {phase:"finalize", type:"done", content:"<full markdown>", title:"...",
    file_name:"doc_xxxx", download_url_md:"...", download_url_docx:"...", download_url_pdf:"..."}

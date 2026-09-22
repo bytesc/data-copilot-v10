@@ -27,15 +27,14 @@ GET /api/doc-workspace/files/
 ```
 返回 `doc_workspace/` 下所有 `.yaml` 文件。
 
-### 2. 点击 YAML 文件恢复
+### 2. 恢复（Continue 按钮触发）
 
 ```
 GET /api/doc-workspace/file/outline_{session_id}_{base}.yaml
-→ 返回 YAML 内容
 ```
 前端从文件名提取 `base_full = {session_id}_{base}`，按优先级恢复：
 1. `GET /api/doc-workspace/file/draft_{base_full}.md` → **200** → 解析章节，跳转 **review**
-2. 无合并稿，逐文件请求 `GET /api/doc-workspace/file/draft_{base_full}_s00.md`、`s01.md`... → **有文件** → 恢复已确认节，跳转 **sections**（最后一节可编辑）
+2. 无合并稿，逐文件请求 `GET /api/doc-workspace/file/draft_{base_full}_sNN.md` → **有文件** → 恢复已确认节（最后一节不加入 confirmedSections，放入编辑缓冲区避免重复），跳转 **sections**
 3. 都 **404** → 跳转 **YAML 编辑**
 
 ### 3. 生成 YAML 大纲
@@ -46,36 +45,26 @@ Body: { conversation_history, session_id }
 ```
 SSE: `yaml_outline: msg → chunk×N → done { content, yaml_base, yaml_file }`
 
-保存 `outline_{session_id}_{yaml_base}.yaml`。
-
 **YAML 格式定义**:
 ```yaml
-title: "文档标题"                      # 文档标题（最终文档居中显示）
-sections:                             # 章节列表
-  - heading: "1. 章节标题"             # 章节标题（可带编号）
-    description: "章节描述"            # 章节内容简述
-    subsections:                      # 子节列表（可选）
-      - heading: "1.1 子节标题"        # 子节标题
-        description: "子节描述"        # 子节内容简述（标题文本不会在正文中重复）
+title: "文档标题"                      # 最终 .docx/.pdf 居中显示
+sections:
+  - heading: "1. 章节标题"
+    description: "章节描述"
+    subsections:
+      - heading: "1.1 子节标题"
+        description: "子节描述"        # 标题文本不会在正文中重复
 ```
 
-> **注意**:
-> - 文档标题在 `.docx` / `.pdf` 输出中居中显示，`.md` 中保持 `# Title` 格式
-> - 子节标题仅作为 `###` 标记出现一次，不会在正文中重复写入
-
-### 4. 逐节生成（每节一次请求）
+### 4. 逐节生成
 
 ```
 POST /api/generate-document/stream/from-yaml/
-Body: {
-  conversation_history, yaml_outline, session_id,
-  yaml_base, section_index: N,
-  confirmed_sections: [{ heading, content }, ...]  // 前面已确认节的内容
-}
+Body: { conversation_history, yaml_outline, session_id, yaml_base, section_index, confirmed_sections }
 ```
-SSE: `msg → section_msg → chunk×N → section_done { content, section_file, total_sections }`
+SSE: `msg → section_msg → chunk×N → section_done`
 
-`confirmed_sections` 让 LLM 看到前面节的内容，避免重复。每节即时保存 `draft_{session_id}_{base}_sNN.md`。
+> `YAML_PART_SYSTEM` 规则 1 强制 LLM 不输出 `##` 标题（后端自动追加）。
 
 ### 5. 最终输出
 
@@ -85,54 +74,79 @@ Body: { markdown_content, session_id, yaml_base, conversation_history }
 ```
 SSE: `finalize: done { download_url_md/docx/pdf }`
 
-保存 `doc_xxx.md/.docx/.pdf` 到 `tmp_imgs/`，写入 `report_generation_log` 表供 RightPanel 显示。自动清理 `doc_workspace/` 中对应的 `outline_{sid}_{base}.yaml`、`draft_{sid}_{base}.md`、`draft_{sid}_{base}_s*.md`。
+保存到 `tmp_imgs/`，**自动清理** `doc_workspace/` 中对应文件。
 
-### 6. 关闭弹窗
+---
 
-前端仅关闭弹窗，无后端调用。清理已在 finalize 后端完成。
+## 弹窗 UI 交互
 
-## observe_cycle_log 记录
+| 步骤 | 底部按钮 |
+|------|----------|
+| pick | 每项右侧：**Ask AI** \| **Continue** \| **Edit** \| **View** \| **✕** |
+| yaml | Back \| Save \| Generate Sections |
+| sections | Confirm & Next / Confirm & Finish |
+| review | Back \| Save Draft \| Finalize to docx/pdf |
+| 所有步骤 | 右上角 ✕ 关闭 + 点击遮罩层关闭 |
 
-| 模式 | 函数 | 笔数 | cycle_index | sub_phase |
-|------|------|------|-------------|-----------|
-| Generate Report | `_event_stream_generate_document` | 1 + N | 0=outline, 1..N=part | outline, part |
-| Generate Document | `_event_stream_generate_document_unified` | 1 | 0 | full |
-| YAML Outline | `_event_stream_generate_yaml_outline` | 1 | 0 | outline |
-| | `_event_stream_generate_from_yaml` | N | 1..N | part |
-| | `_event_stream_finalize` | 0 | — | — |
+### Ask AI
 
-## 上下文记录
+调用 `POST /api/generate-document/yaml-to-prompt/`，后端用英文指令 + YAML 组合 prompt，前端通过 `submitNewQuestion()` 发给主 LLM（仅收集信息，不生成文档）。
 
-三种模式均**不将文档生成过程追加到 conversation_history**。done event 返回的 `conversation_history` 是原始输入的原样回传，不包含文档生成消息。
+### 自定义弹窗确认
+
+- **删除** → `DELETE /api/doc-workspace/outline/{filename}`（仅删 outline）
+- **Edit** → `DELETE /api/doc-workspace/drafts/{session_id}/{yaml_id}`（删草稿，保留 outline）
+
+### Save（不跳步骤）
+
+- YAML: 保存 `outline_{yamlBase}.yaml`
+- Review: 保存 `draft_{yamlBase}.md`
+- 调用 `POST /api/doc-workspace/save/{filename}`
+
+---
+
+## 后端 API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/doc-workspace/files/` | 列出 outline YAML |
+| GET | `/api/doc-workspace/file/{filename}` | 读取文件 |
+| POST | `/api/doc-workspace/save/{filename}` | 保存文件 |
+| DELETE | `/api/doc-workspace/outline/{filename}` | 仅删 outline |
+| DELETE | `/api/doc-workspace/drafts/{session_id}/{yaml_id}` | 按 session+yaml_id 删草稿 |
+| POST | `/api/generate-document/generate-yaml-outline/` | 生成 YAML 大纲（SSE） |
+| POST | `/api/generate-document/stream/from-yaml/` | 逐节生成（SSE） |
+| POST | `/api/generate-document/finalize/` | 最终输出（SSE） |
+| POST | `/api/generate-document/yaml-to-prompt/` | YAML → 指令 prompt |
 
 ---
 
 ## 文件存储
 
-| 路径 | 内容 | 命名 | Git |
-|------|------|------|-----|
-| `doc_workspace/` | YAML 大纲 | `outline_{session_id}_{rand8}.yaml` | ❌ |
-| `doc_workspace/` | 单节草稿 | `draft_{session_id}_{base}_sNN.md` | ❌ |
-| `doc_workspace/` | 合并草稿 | `draft_{session_id}_{base}.md` | ❌ |
-| `tmp_imgs/` | 最终文档 | `doc_{rand8}.md/.docx/.pdf` | ❌ |
-
-`doc_workspace/.gitkeep` 保留在 git 中。
-
----
-
-## 前端组件
-
-| 组件 | 路径 | 说明 |
+| 路径 | 内容 | 命名 |
 |------|------|------|
-| `YamlOutlineModal.vue` | `vue-front/src/components/YamlOutlineModal.vue` | 三步流程：YAML编辑 → 逐节确认 → review/finalize |
-| `RightPanel.vue` | `vue-front/src/components/RightPanel.vue` | 三个按钮入口 |
-| `useChat.js` | `vue-front/src/composables/useChat.js` | `fetchGeneratedFilesForSession()` 刷新文件列表 |
+| `doc_workspace/` | YAML 大纲 | `outline_{sid}_{rand8}.yaml` |
+| `doc_workspace/` | 单节草稿 | `draft_{sid}_{base}_sNN.md` |
+| `doc_workspace/` | 合并草稿 | `draft_{sid}_{base}.md` |
+| `tmp_imgs/` | 最终文档 | `doc_{rand8}.md/.docx/.pdf` |
 
 ---
 
-## 后端核心文件
+## 重复标题防护
+
+| 模式 | 方式 |
+|------|------|
+| YAML Outline | 规则 1 + 尾部指令禁止 LLM 输出 `##` |
+| Generate Report | prompt 尾部显式禁止重复 |
+| Generate Document | 单轮自包含 |
+
+---
+
+## 组件 & 文件
 
 | 文件 | 说明 |
 |------|------|
-| `agent/document_generator.py` | 所有文档生成逻辑：prompt、SSE 流、文件转换 |
-| `data_access/report_log.py` | 文档日志（`report_generation_log` 表） |
+| `vue-front/src/components/YamlOutlineModal.vue` | 主弹窗组件 |
+| `vue-front/src/composables/useChat.js` | `submitNewQuestion()` |
+| `agent/document_generator.py` | 全部后端逻辑 |
+| `data_access/report_log.py` | 文档日志 |
