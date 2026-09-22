@@ -788,6 +788,15 @@ function historyToText(history) {
     }
   }
 
+  async function fetchGeneratedFilesForSession() {
+    try {
+      const files = await fetchGeneratedFiles(sessionId.value)
+      generatedFiles.value = files
+    } catch {
+      generatedFiles.value = []
+    }
+  }
+
   function reset() {
     messages.value = []
     conversationHistory.value = []
@@ -806,6 +815,7 @@ function historyToText(history) {
   return {
     sessionId,
     question,
+    conversationHistory,
     messages,
     generatedFiles,
     statusMsg,
@@ -823,6 +833,7 @@ function historyToText(history) {
     resumeSession,
     generateDocument,
     generateDocumentUnified,
+    fetchGeneratedFilesForSession,
     reset,
     serverUrl,
     requestInterrupt,

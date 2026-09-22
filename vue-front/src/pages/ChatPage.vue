@@ -28,6 +28,7 @@
         :is-running="chat.isRunning.value"
         @generate-doc="chat.generateDocumentUnified()"
         @generate-doc-unified="chat.generateDocument()"
+        @generate-yaml-doc="onYamlDoc"
       />
     </aside>
 
@@ -36,6 +37,14 @@
       :server-url="chat.serverUrl.value"
       @close="showResume = false"
       @resume="onResume"
+    />
+    <YamlOutlineModal
+      v-if="showYamlOutline"
+      :server-url="chat.serverUrl.value"
+      :conversation-history="chat.conversationHistory.value"
+      :session-id="chat.sessionId.value"
+      @close="showYamlOutline = false"
+      @files-updated="chat.fetchGeneratedFilesForSession()"
     />
   </div>
 </template>
@@ -47,14 +56,20 @@ import LeftPanel from '@/components/LeftPanel.vue'
 import RightPanel from '@/components/RightPanel.vue'
 import ChatArea from '@/components/ChatArea.vue'
 import ResumeModal from '@/components/ResumeModal.vue'
+import YamlOutlineModal from '@/components/YamlOutlineModal.vue'
 
 const chat = useChat()
 const isPanelCollapsed = ref(false)
 const isRightPanelCollapsed = ref(false)
 const showResume = ref(false)
+const showYamlOutline = ref(false)
 
 function onResume(sessionData) {
   showResume.value = false
   chat.resumeSession(sessionData)
+}
+
+function onYamlDoc() {
+  showYamlOutline.value = true
 }
 </script>

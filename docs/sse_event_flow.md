@@ -214,6 +214,25 @@
    title:"...", file_name:"doc_xxxx", download_url_md:"...",
    download_url_docx:"...", download_url_pdf:"...", conversation_history:[...]}
 
+  # YAML 大纲 → 逐节生成 Markdown → 用户编辑 → Finalize（YAML Outline 模式）
+  # POST /api/generate-document/generate-yaml-outline/
+  {phase:"yaml_outline", type:"msg",   content:"Generating YAML outline..."}
+  {phase:"yaml_outline", type:"chunk", content:"..."}  ×N
+  {phase:"yaml_outline", type:"done",  content:"<YAML string>", yaml_file:"outline_xxxx.yaml"}
+
+  # POST /api/generate-document/stream/from-yaml/
+  {phase:"document_from_yaml", type:"msg",         content:"Generating N sections from YAML outline..."}
+  {phase:"document_from_yaml", type:"section_msg", content:"Generating section 1/N: {heading}", section_index:0, heading:"..."}
+  {phase:"document_from_yaml", type:"chunk",       content:"..."}  ×N
+  {phase:"document_from_yaml", type:"section_done", content:"...", section_index:0, heading:"..."}
+  ...（重复 N 次）
+  {phase:"document_from_yaml", type:"done", content:"<full markdown>",
+   title:"...", md_file:"draft_xxxx.md", sections_count:N}
+
+  # POST /api/generate-document/finalize/
+  {phase:"finalize", type:"done", content:"<full markdown>", title:"...",
+   file_name:"doc_xxxx", download_url_md:"...", download_url_docx:"...", download_url_pdf:"..."}
+
   {type:"history", history:[...]}
 ```
 

@@ -13,6 +13,10 @@ tmp_imgs/*.docx
 tmp_imgs/*.md
 tmp_imgs/*.pdf
 
+# Intermediate YAML outlines and Markdown drafts
+doc_workspace/*.yaml
+doc_workspace/*.md
+
 temp.png
 temp.html
 

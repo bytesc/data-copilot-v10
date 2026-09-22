@@ -6,7 +6,7 @@ from typing import List, Optional, Set
 
 import httpx
 from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -29,8 +29,28 @@ from data_access.observe_log import log_observe_cycle
 from data_access.report_log import record_report_generation
 from utils.front_utils import history_to_text
 
+DOC_WORKSPACE = "doc_workspace"
+os.makedirs(DOC_WORKSPACE, exist_ok=True)
+
+
 class DocumentInput(BaseModel):
     conversation_history: List[dict]
+    session_id: Optional[str] = None
+
+
+class YamlOutlineInput(BaseModel):
+    conversation_history: List[dict]
+    session_id: Optional[str] = None
+
+
+class YamlDocumentInput(BaseModel):
+    conversation_history: List[dict]
+    yaml_outline: str
+    session_id: Optional[str] = None
+
+
+class FinalizeInput(BaseModel):
+    markdown_content: str
     session_id: Optional[str] = None
 
 
@@ -98,6 +118,53 @@ You must follow the structural directive below exactly:
 9. All tables must be well-formatted markdown tables.
 10. If the conversation history does not contain enough data for a meaningful section, state what is not available rather than inventing data.
 """
+
+
+YAML_OUTLINE_SYSTEM = """You are a business document outline generator. Based on the conversation history, generate a YAML outline that defines the document structure.
+
+The YAML must follow this exact structure:
+```yaml
+title: "Document Title"
+sections:
+  - heading: "1. Section Heading"
+    description: "Brief description of what this section covers"
+    subsections:
+      - heading: "1.1 Subsection Heading"
+        description: "Brief description"
+
+Rules:
+1. Use numbered headings for clarity (1., 1.1, 2., etc.)
+2. Each section can have 0 or more subsections
+3. Keep descriptions concise (1-2 sentences)
+4. Focus on business insights and data analysis — no technical implementation details
+5. LANGUAGE IS CRITICAL: Write the title and all headings in the EXACT SAME LANGUAGE as the user's original question.
+
+Output ONLY valid YAML inside a ```yaml code block. Do not include any other text."""
+
+
+YAML_PART_SYSTEM = """You are a professional business document writer. Based on the conversation history and the document outline below, write the content for a specific section of the document.
+
+Rules:
+1. Write in markdown format. Start with the section heading as `## Heading`.
+2. Focus on business insights, data analysis results, trends, patterns, and conclusions.
+3. CRITICAL: The output must contain NO code blocks, no SQL, no Python, no YAML.
+4. Do NOT describe the agent's execution process, tool calls, or workflow steps.
+5. CHARTS AND IMAGES: Include relevant charts from the conversation history. Use markdown image syntax: `![description](image_url)`. Reference actual image URLs — do NOT make up URLs. Do NOT repeat images already used in other sections — if the prompt lists "already used" images below, strictly avoid them.
+6. LANGUAGE IS CRITICAL: Write in the EXACT SAME LANGUAGE as the Document Title below. Ignore the language of the conversation history or knowledge base.
+7. Be thorough but concise.
+8. Use proper markdown headings (up to `###`), lists, and tables as needed.
+9. If this section has sub-sections listed in the outline, include each sub-section's heading as `### Subsection Heading` and write its content.
+
+Document Title: {title}
+Section Heading: {heading}
+Section Description: {description}
+
+Full Outline (all sections):
+{outline_overview}
+
+{used_hint}
+
+Write the content for the section "{heading}". Do NOT repeat the main heading — it will be added automatically. Start directly with the content."""
 
 
 def _extract_image_urls(text: str) -> Set[str]:
@@ -276,6 +343,55 @@ def _parse_outline_json(raw: str) -> dict:
     return {"title": "Summary Document", "parts": []}
 
 
+def _parse_yaml_outline(raw: str) -> str:
+    match = re.search(r'```(?:yaml)?\s*\n(.*?)```', raw, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return raw.strip()
+
+
+def _parse_yaml_sections(yaml_str: str) -> dict:
+    import yaml as _yaml
+    try:
+        data = _yaml.safe_load(yaml_str)
+        if not isinstance(data, dict):
+            return {"title": "Summary Document", "sections": []}
+        title = data.get("title", "Summary Document")
+        raw_sections = data.get("sections", [])
+        sections = []
+        for s in raw_sections:
+            section = {
+                "heading": s.get("heading", ""),
+                "description": s.get("description", ""),
+                "subsections": []
+            }
+            for sub in s.get("subsections", []):
+                section["subsections"].append({
+                    "heading": sub.get("heading", ""),
+                    "description": sub.get("description", ""),
+                })
+            sections.append(section)
+        return {"title": title, "sections": sections}
+    except Exception:
+        return {"title": "Summary Document", "sections": []}
+
+
+def _save_intermediate_yaml(yaml_str: str) -> str:
+    file_name = f"outline_{generate_random_string(8)}.yaml"
+    path = os.path.join(DOC_WORKSPACE, file_name)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(yaml_str)
+    return file_name
+
+
+def _save_intermediate_markdown(markdown_text: str) -> str:
+    file_name = f"draft_{generate_random_string(8)}.md"
+    path = os.path.join(DOC_WORKSPACE, file_name)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(markdown_text)
+    return file_name
+
+
 def _event_stream_generate_document(conversation_history: List[dict], session_id: str, request_json: str = ""):
     context = history_to_text(conversation_history)
 
@@ -430,9 +546,6 @@ async def generate_document_stream_api(request: Request, user_input: DocumentInp
     )
 
 
-
-
-
 def generate_document_from_context(conversation_history: List[dict], session_id: str, title: str = "", request_json: str = ""):
     yield from _event_stream_generate_document_unified(conversation_history, session_id, title, request_json)
 
@@ -533,3 +646,312 @@ async def generate_document_unified_stream_api(request: Request, user_input: Doc
             "X-Accel-Buffering": "no",
         }
     )
+
+
+# ── YAML Outline generation ──────────────────────────────────────────────
+
+
+def _event_stream_generate_yaml_outline(conversation_history: List[dict], session_id: str, request_json: str = ""):
+    context = history_to_text(conversation_history)
+    _target_section = str(TARGET) if _ENABLE_TARGET else ""
+
+    yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'msg', 'content': 'Generating YAML outline...'}, ensure_ascii=False)}\n\n"
+
+    prompt = f"""{YAML_OUTLINE_SYSTEM}
+
+{BASE}
+
+{DOC}
+
+{_target_section if _ENABLE_TARGET else ""}
+
+Conversation History:
+{context}"""
+
+    raw = ""
+    for chunk in call_llm_stream(prompt, llm):
+        raw += chunk
+        yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+
+    yaml_str = _parse_yaml_outline(raw)
+    yaml_file_name = _save_intermediate_yaml(yaml_str)
+
+    log_observe_cycle(session_id, 0, "generate_yaml_outline", "outline",
+                      prompt=prompt[:10000], response=raw[:10000],
+                      token_estimate=len(prompt) // 3)
+
+    yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'done', 'content': yaml_str, 'yaml_file': yaml_file_name}, ensure_ascii=False)}\n\n"
+
+    record_session_operation(
+        session_id, "/api/generate-document/generate-yaml-outline/",
+        request_json, yaml_str[:5000], "",
+        "success", f"YAML outline generated: {yaml_file_name}",
+        prompt_length=len(context)
+    )
+
+
+@router.post("/api/generate-document/generate-yaml-outline/")
+async def generate_yaml_outline_api(request: Request, user_input: YamlOutlineInput):
+    return StreamingResponse(
+        _event_stream_generate_yaml_outline(
+            user_input.conversation_history,
+            user_input.session_id or "",
+            user_input.model_dump_json(),
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+# ── Section-by-section Markdown generation from YAML ─────────────────────
+
+
+def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outline: str, session_id: str, request_json: str = ""):
+    context = history_to_text(conversation_history)
+    _target_section = str(TARGET) if _ENABLE_TARGET else ""
+    yaml_outline = _parse_yaml_outline(yaml_outline)
+    parsed = _parse_yaml_sections(yaml_outline)
+    if not parsed.get("sections"):
+        error_msg = f"Failed to parse YAML outline: no sections found"
+        print(f"[ERROR] {error_msg}")
+        yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'error', 'content': error_msg}, ensure_ascii=False)}\n\n"
+        return
+
+    title = parsed["title"]
+    sections = parsed["sections"]
+
+    yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'msg', 'content': f'Generating {len(sections)} sections from YAML outline...'}, ensure_ascii=False)}\n\n"
+
+    outline_overview = "\n".join(
+        f"  {s['heading']} — {s['description']}"
+        + ("".join(f"\n    - {sub['heading']}: {sub['description']}" for sub in s["subsections"]))
+        for s in sections
+    )
+
+    document_parts = []
+    used_images: Set[str] = set()
+
+    for i, section in enumerate(sections):
+        heading = section["heading"]
+        description = section["description"]
+
+        yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'section_msg', 'content': f'Generating section {i + 1}/{len(sections)}: {heading}', 'section_index': i, 'heading': heading}, ensure_ascii=False)}\n\n"
+
+        used_hint = ""
+        if used_images:
+            used_list = "\n".join(f"- {url}" for url in sorted(used_images))
+            used_hint = f"\nAlready used images (DO NOT reuse):\n{used_list}"
+
+        section_prompt = f"""{YAML_PART_SYSTEM.format(
+            title=title,
+            heading=heading,
+            description=description,
+            outline_overview=outline_overview,
+            used_hint=used_hint,
+        )}
+
+{BASE}
+
+{DOC}
+
+{_target_section}
+
+Conversation History:
+{context}
+
+Write the content for the section "{heading}" in markdown format."""
+
+        part_raw = ""
+        for chunk in call_llm_stream(section_prompt, llm):
+            part_raw += chunk
+            yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'chunk', 'content': chunk, 'section_index': i}, ensure_ascii=False)}\n\n"
+
+        new_images = _extract_image_urls(part_raw)
+        used_images.update(new_images)
+
+        document_parts.append((heading, part_raw))
+        yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'section_done', 'content': part_raw, 'section_index': i, 'heading': heading}, ensure_ascii=False)}\n\n"
+
+        log_observe_cycle(session_id, i + 1, "generate_from_yaml", "part",
+                          prompt=section_prompt[:10000], response=part_raw[:10000],
+                          token_estimate=len(section_prompt) // 3)
+
+    full_document = f"# {title}\n\n"
+    for heading, content in document_parts:
+        full_document += f"## {heading}\n\n{content}\n\n"
+
+    full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_document, flags=re.DOTALL)
+
+    md_file_name = _save_intermediate_markdown(full_document)
+
+    _done_event = {
+        'phase': 'document_from_yaml', 'type': 'done',
+        'content': full_document,
+        'title': title,
+        'md_file': md_file_name,
+        'sections_count': len(sections),
+    }
+    yield f"data: {json.dumps(_done_event, ensure_ascii=False)}\n\n"
+
+    record_session_operation(
+        session_id, "/api/generate-document/stream/from-yaml/",
+        request_json, full_document[:5000], "",
+        "success", f"Markdown draft generated from YAML: {title}, {len(sections)} sections",
+        prompt_length=len(context)
+    )
+
+    record_report_generation(
+        session_id=session_id,
+        file_name=md_file_name,
+        chat_history=json.dumps(conversation_history, ensure_ascii=False),
+        outline=json.dumps({"title": title, "yaml_outline": yaml_outline}, ensure_ascii=False),
+        full_text=full_document,
+    )
+
+
+@router.post("/api/generate-document/stream/from-yaml/")
+async def generate_document_from_yaml_api(request: Request, user_input: YamlDocumentInput):
+    return StreamingResponse(
+        _event_stream_generate_from_yaml(
+            user_input.conversation_history,
+            user_input.yaml_outline,
+            user_input.session_id or "",
+            user_input.model_dump_json(),
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+# ── Finalize: convert edited Markdown to docx/pdf ────────────────────────
+
+
+def _event_stream_finalize(markdown_content: str, session_id: str, request_json: str = ""):
+    full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', markdown_content, flags=re.DOTALL)
+
+    title_match = re.search(r'^#\s+(.+)$', full_document, re.MULTILINE)
+    title = title_match.group(1).strip() if title_match else "Summary Document"
+
+    static_folder = config_data.get("static_folder", "tmp_imgs")
+    os.makedirs(static_folder, exist_ok=True)
+
+    file_name = f"doc_{generate_random_string(8)}"
+
+    md_path = os.path.join(static_folder, file_name + ".md")
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(full_document)
+
+    docx_path = os.path.join(static_folder, file_name + ".docx")
+    try:
+        _markdown_to_docx(full_document, docx_path)
+    except Exception:
+        docx_path = None
+
+    pdf_path = os.path.join(static_folder, file_name + ".pdf")
+    try:
+        _markdown_to_pdf(full_document, pdf_path)
+    except Exception:
+        pdf_path = None
+
+    static_url = config_data["static_path"].rstrip("/")
+    static_folder = config_data.get("static_folder", "tmp_imgs")
+    download_url_md = f"{static_url}/{static_folder}/{file_name}.md"
+    download_url_docx = f"{static_url}/{static_folder}/{file_name}.docx" if docx_path else ""
+    download_url_pdf = f"{static_url}/{static_folder}/{file_name}.pdf" if pdf_path else ""
+
+    _finalize_event = {
+        'phase': 'finalize', 'type': 'done',
+        'content': full_document,
+        'title': title,
+        'file_name': file_name,
+        'download_url_md': download_url_md,
+        'download_url_docx': download_url_docx,
+        'download_url_pdf': download_url_pdf,
+    }
+    yield f"data: {json.dumps(_finalize_event, ensure_ascii=False)}\n\n"
+
+    record_session_operation(
+        session_id, "/api/generate-document/finalize/",
+        request_json, full_document[:5000], "",
+        "success", f"Document finalized: {title}",
+        prompt_length=0
+    )
+
+
+@router.post("/api/generate-document/finalize/")
+async def finalize_document_api(request: Request, user_input: FinalizeInput):
+    return StreamingResponse(
+        _event_stream_finalize(
+            user_input.markdown_content,
+            user_input.session_id or "",
+            user_input.model_dump_json(),
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
+# ── Doc workspace file management ────────────────────────────────────────
+
+
+@router.get("/api/doc-workspace/files/")
+async def list_workspace_files():
+    try:
+        files = os.listdir(DOC_WORKSPACE)
+        yaml_files = sorted([f for f in files if f.endswith(".yaml")], reverse=True)
+        md_files = sorted([f for f in files if f.endswith(".md")], reverse=True)
+        result = []
+        for f in yaml_files:
+            path = os.path.join(DOC_WORKSPACE, f)
+            mtime = os.path.getmtime(path)
+            result.append({"name": f, "type": "yaml", "mtime": mtime})
+        for f in md_files:
+            path = os.path.join(DOC_WORKSPACE, f)
+            mtime = os.path.getmtime(path)
+            result.append({"name": f, "type": "md", "mtime": mtime})
+        return JSONResponse(content={"files": result})
+    except Exception as e:
+        return JSONResponse(content={"files": [], "error": str(e)})
+
+
+@router.get("/api/doc-workspace/file/{filename:path}")
+async def read_workspace_file(filename: str):
+    import re as _re
+    if _re.search(r'[/\\]|\.\.', filename):
+        return JSONResponse(content={"error": "Invalid filename"}, status_code=400)
+    path = os.path.join(DOC_WORKSPACE, filename)
+    if not os.path.isfile(path):
+        return JSONResponse(content={"error": "File not found"}, status_code=404)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return JSONResponse(content={"name": filename, "content": content})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@router.delete("/api/doc-workspace/files/{filename:path}")
+async def delete_workspace_file(filename: str):
+    import re as _re
+    if _re.search(r'[/\\]|\.\.', filename):
+        return JSONResponse(content={"error": "Invalid filename"}, status_code=400)
+    path = os.path.join(DOC_WORKSPACE, filename)
+    if not os.path.isfile(path):
+        return JSONResponse(content={"error": "File not found"}, status_code=404)
+    try:
+        os.remove(path)
+        return JSONResponse(content={"deleted": filename})
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)

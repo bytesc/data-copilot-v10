@@ -8,6 +8,9 @@
       <button class="ctrl-btn" @click="$emit('generate-doc-unified')" :disabled="isRunning">
         <span class="btn-icon">📋</span> Generate Document
       </button>
+      <button class="ctrl-btn" @click="$emit('generate-yaml-doc')" :disabled="isRunning">
+        <span class="btn-icon">📐</span> YAML Outline
+      </button>
     </div>
 
     <div class="right-panel-divider"></div>
@@ -33,7 +36,7 @@ defineProps({
   isRunning: { type: Boolean, default: false },
 })
 
-defineEmits(['generate-doc', 'generate-doc-unified'])
+defineEmits(['generate-doc', 'generate-doc-unified', 'generate-yaml-doc'])
 </script>
 
 <style scoped>
