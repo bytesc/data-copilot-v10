@@ -26,7 +26,7 @@ const routes = [
     path: '/knowledge',
     component: KnowledgePage,
     children: [
-      { path: '', redirect: '/knowledge/base-knowledge' },
+      { path: '', name: 'knowledge-redirect', redirect: '/knowledge/base-knowledge' },
       { path: 'base-knowledge', name: 'base-knowledge', component: BaseKnowledgePage },
       { path: 'brief-info', name: 'brief-info', component: BriefInfoPage },
       { path: 'guides', name: 'guide-manage', component: GuideManagePage },

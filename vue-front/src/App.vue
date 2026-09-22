@@ -11,10 +11,10 @@
         <router-link to="/data" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">📊</span> Data
         </router-link>
-        <router-link to="/knowledge" class="nav-link" active-class="nav-link-active">
+        <router-link v-if="enableBaseKnowledge" to="/knowledge" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">📖</span> Knowledge
         </router-link>
-        <router-link to="/tools" class="nav-link" active-class="nav-link-active">
+        <router-link v-if="enableMcp" to="/tools" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">🔧</span> Tools
         </router-link>
       </div>
@@ -43,6 +43,8 @@ import { ref, onMounted } from 'vue'
 import IcpArea from '@/components/IcpArea.vue'
 
 const isDark = ref(true)
+const enableMcp = ref(true)
+const enableBaseKnowledge = ref(true)
 
 function applyTheme() {
   const theme = isDark.value ? 'dark' : 'light'
@@ -55,10 +57,19 @@ function toggleTheme() {
   applyTheme()
 }
 
-onMounted(() => {
+onMounted(async () => {
   const saved = localStorage.getItem('theme')
   isDark.value = saved !== 'light'
   applyTheme()
+
+  try {
+    const res = await fetch('/api/config')
+    if (res.ok) {
+      const cfg = await res.json()
+      enableMcp.value = cfg.enable_mcp
+      enableBaseKnowledge.value = cfg.enable_base_knowledge
+    }
+  } catch (_) { /* ignore */ }
 })
 </script>
 

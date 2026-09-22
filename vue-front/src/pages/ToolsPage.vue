@@ -10,6 +10,7 @@
         @click="activeTab = 'functions'"
       >🐍 Python Functions</button>
       <button
+        v-if="enableMcp"
         class="sub-nav-link"
         :class="{ active: activeTab === 'mcp' }"
         @click="activeTab = 'mcp'"
@@ -60,6 +61,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 
+const enableMcp = ref(true)
 const activeTab = ref('functions')
 const pythonFunctions = ref([])
 const mcpServers = ref([])
@@ -68,6 +70,13 @@ const loadingMcp = ref(true)
 const error = ref('')
 
 onMounted(async () => {
+  try {
+    const cfgRes = await fetch('/api/config')
+    if (cfgRes.ok) {
+      const cfg = await cfgRes.json()
+      enableMcp.value = cfg.enable_mcp
+    }
+  } catch (_) { /* ignore */ }
   try {
     const funcRes = await fetch('/api/tools/functions')
     if (funcRes.ok) {

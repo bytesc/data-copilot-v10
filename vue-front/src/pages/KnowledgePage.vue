@@ -23,11 +23,32 @@
 </template>
 
 <script setup>
-const tabs = [
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+const enableBaseKnowledge = ref(true)
+const tabs = ref([
   { path: '/knowledge/base-knowledge', icon: '📚', label: 'Base Knowledge' },
   { path: '/knowledge/brief-info', icon: '📝', label: 'Brief Info' },
   { path: '/knowledge/guides', icon: '📋', label: 'Guides' },
-]
+])
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/config')
+    if (res.ok) {
+      const cfg = await res.json()
+      enableBaseKnowledge.value = cfg.enable_base_knowledge
+      if (!cfg.enable_base_knowledge) {
+        tabs.value = tabs.value.filter(t => t.path !== '/knowledge/base-knowledge')
+        if (router.currentRoute.value.path === '/knowledge/base-knowledge') {
+          router.replace('/knowledge/brief-info')
+        }
+      }
+    }
+  } catch (_) { /* ignore */ }
+})
 </script>
 
 <style scoped>

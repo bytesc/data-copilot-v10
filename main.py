@@ -127,6 +127,16 @@ class UserInputLog(BaseModel):
 # print(get_db())
 
 
+@app.get("/api/config")
+async def get_config():
+    return JSONResponse(content={
+        "enable_mcp": config_data.get("enable_mcp", True),
+        "enable_base_knowledge": config_data.get("enable_base_knowledge", True),
+        "enable_web_search": config_data.get("enable_web_search", True),
+        "enable_fetch_url": config_data.get("enable_fetch_url", True),
+        "enable_target_knowledge": config_data.get("enable_target_knowledge", False),
+    })
+
 @app.get("/api/sessions/")
 async def get_sessions(request: Request, limit: int = 50):
     sessions = list_sessions(limit)

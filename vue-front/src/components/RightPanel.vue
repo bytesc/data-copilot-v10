@@ -3,10 +3,10 @@
     <div class="doc-section">
       <span class="section-label">Document</span>
       <button class="ctrl-btn" @click="$emit('generate-doc')" :disabled="isRunning">
-        <span class="btn-icon">📋</span> Generate Document
+        <span class="btn-icon">📄</span> Generate Report
       </button>
       <button class="ctrl-btn" @click="$emit('generate-doc-unified')" :disabled="isRunning">
-        <span class="btn-icon">📄</span> Generate Report
+        <span class="btn-icon">📋</span> Generate Document
       </button>
     </div>
 

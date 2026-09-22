@@ -26,8 +26,8 @@
         v-if="!isRightPanelCollapsed"
         :files="chat.generatedFiles.value"
         :is-running="chat.isRunning.value"
-        @generate-doc="chat.generateDocument()"
-        @generate-doc-unified="chat.generateDocumentUnified()"
+        @generate-doc="chat.generateDocumentUnified()"
+        @generate-doc-unified="chat.generateDocument()"
       />
     </aside>
 
