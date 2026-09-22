@@ -12,17 +12,19 @@
           <div v-if="loadingFiles" class="loading-text">Checking saved files...</div>
           <div v-else-if="availableFiles.length > 0">
             <h4 class="pick-section-title">Resume from saved:</h4>
-            <div
+<div
               v-for="f in availableFiles"
               :key="f.name"
               class="pick-item"
-              @click="loadFile(f)"
             >
-              <span class="pick-icon">{{ f.type === 'yaml' ? 'Outline' : 'Draft' }}</span>
-              <div class="pick-info">
-                <span class="pick-name">{{ f.name }}</span>
-                <span class="pick-time">{{ formatTime(f.mtime) }}</span>
+              <div class="pick-item-body" @click="loadFile(f)">
+                <span class="pick-icon">Outline</span>
+                <div class="pick-info">
+                  <span class="pick-name">{{ f.name }}</span>
+                  <span class="pick-time">{{ formatTime(f.mtime) }}</span>
+                </div>
               </div>
+              <button class="pick-delete" @click.stop="deleteFile(f)" title="Delete">✕</button>
             </div>
           </div>
           <button class="btn btn-primary start-fresh-btn" @click="startFresh">Start Fresh</button>
@@ -328,6 +330,13 @@ function startFresh() {
 function backToPick() {
   step.value = 'pick'
   fetchAvailableFiles()
+}
+
+async function deleteFile(file) {
+  try {
+    await fetch(`/api/doc-workspace/yaml/${file.name}`, { method: 'DELETE' })
+    availableFiles.value = availableFiles.value.filter(f => f.name !== file.name)
+  } catch {}
 }
 
 function onClose() {

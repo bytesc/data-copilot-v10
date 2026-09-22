@@ -863,14 +863,6 @@ Write the content for the section "{heading}" in markdown format."""
             full_text=full_document,
         )
 
-    record_report_generation(
-        session_id=session_id,
-        file_name=md_file_name,
-        chat_history=json.dumps(conversation_history, ensure_ascii=False),
-        outline=json.dumps({"title": title, "yaml_outline": yaml_outline}, ensure_ascii=False),
-        full_text=full_document,
-    )
-
 
 @router.post("/api/generate-document/stream/from-yaml/")
 async def generate_document_from_yaml_api(request: Request, user_input: YamlDocumentInput):
@@ -1027,3 +1019,28 @@ async def read_workspace_file(filename: str):
         return JSONResponse(content={"name": filename, "content": content})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@router.delete("/api/doc-workspace/yaml/{filename:path}")
+async def delete_yaml_with_drafts(filename: str):
+    import re as _re
+    if _re.search(r'[/\\]|\.\.', filename):
+        return JSONResponse(content={"error": "Invalid filename"}, status_code=400)
+    if not filename.endswith(".yaml"):
+        return JSONResponse(content={"error": "Not a YAML file"}, status_code=400)
+    base = filename.replace("outline_", "").replace(".yaml", "")
+    patterns = [
+        f"outline_{base}.yaml",
+        f"draft_{base}.md",
+        f"draft_{base}_s*.md",
+    ]
+    deleted = []
+    import glob
+    for pattern in patterns:
+        for f in glob.glob(os.path.join(DOC_WORKSPACE, pattern)):
+            try:
+                os.remove(f)
+                deleted.append(os.path.basename(f))
+            except Exception:
+                pass
+    return JSONResponse(content={"deleted": deleted})
