@@ -46,6 +46,7 @@
       @close="showYamlOutline = false"
       @files-updated="chat.generatedFiles.value.push($event)"
       @running="yamlBusy = $event"
+      @send-yaml="onSendYaml"
     />
   </div>
 </template>
@@ -73,5 +74,10 @@ function onResume(sessionData) {
 
 function onYamlDoc() {
   showYamlOutline.value = true
+}
+
+function onSendYaml(yamlContent) {
+  showYamlOutline.value = false
+  chat.submitNewQuestion(yamlContent)
 }
 </script>

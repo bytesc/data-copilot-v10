@@ -176,6 +176,20 @@ Full Outline (all sections):
 Write the content for the section "{heading}". Do NOT repeat the heading — it will be added automatically. Start directly with the content. For any subsection, use `### Subsection Heading` as the only occurrence of that heading text — do NOT repeat it in the body."""
 
 
+YAML_TO_CHAT_PROMPT = """The user provides the following document outline as a YAML template. Your task is to gather all the information needed to fill in this outline.
+
+For each section and subsection in the outline:
+1. Read the heading and description carefully
+2. Analyze the conversation history and available data to find relevant information
+3. If information is missing, ask the user targeted questions to collect it, one section at a time
+4. Do NOT generate the document content — only collect and organize the required information
+
+Document Outline (YAML):
+{yaml_content}
+
+Please analyze this outline and tell me what information you already have and what additional data you need to complete each section."""
+
+
 def _extract_image_urls(text: str) -> Set[str]:
     return set(re.findall(r'!\[[^\]]*\]\(([^)]+)\)', text))
 
@@ -735,6 +749,16 @@ async def generate_yaml_outline_api(request: Request, user_input: YamlOutlineInp
             "X-Accel-Buffering": "no",
         }
     )
+
+
+@router.post("/api/generate-document/yaml-to-prompt/")
+async def yaml_to_prompt_api(request: Request):
+    body = await request.json()
+    yaml_content = body.get("yaml_content", "")
+    if not yaml_content:
+        return JSONResponse(content={"error": "yaml_content is required"}, status_code=400)
+    prompt = YAML_TO_CHAT_PROMPT.format(yaml_content=yaml_content)
+    return JSONResponse(content={"prompt": prompt})
 
 
 # ── Section-by-section Markdown generation from YAML ─────────────────────

@@ -26,6 +26,7 @@
                 </div>
               </div>
               <div class="pick-actions">
+                <button class="pick-chat" @click.stop="sendYamlToChat(f)" title="Use as Chat Prompt">Use as Chat Prompt</button>
                 <button class="pick-continue" @click.stop="loadFile(f)" title="Continue">Continue</button>
                 <button class="pick-edit" @click.stop="confirmEditOutline(f)" title="Edit YAML">Edit</button>
                 <button class="pick-view" @click.stop="viewYaml(f)" title="View YAML">View</button>
@@ -204,7 +205,7 @@ const props = defineProps({
   conversationHistory: { type: Array, default: () => [] },
   sessionId: { type: String, default: '' },
 })
-const emit = defineEmits(['close', 'files-updated', 'running'])
+const emit = defineEmits(['close', 'files-updated', 'running', 'send-yaml'])
 
 const step = ref('pick')
 const availableFiles = ref([])
@@ -422,6 +423,22 @@ async function doEditYaml() {
     step.value = 'yaml'
     await nextTick()
     if (yamlTextarea.value) yamlTextarea.value.focus()
+  } catch {}
+}
+
+async function sendYamlToChat(file) {
+  try {
+    const res = await fetch(`/api/doc-workspace/file/${file.name}`)
+    if (!res.ok) return
+    const data = await res.json()
+    const promptRes = await fetch('/api/generate-document/yaml-to-prompt/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ yaml_content: data.content }),
+    })
+    if (!promptRes.ok) return
+    const promptData = await promptRes.json()
+    emit('send-yaml', promptData.prompt)
   } catch {}
 }
 
@@ -716,6 +733,8 @@ onMounted(fetchAvailableFiles)
 .pick-name { font-family: 'Consolas',monospace; font-size: 13px; color: var(--text-primary); word-break: break-all; }
 .pick-time { font-size: 11px; color: var(--text-muted); }
 .pick-actions { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0; }
+.pick-chat { background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 13px; cursor: pointer; padding: 4px 10px; border-radius: var(--radius-sm); line-height: 1; }
+.pick-chat:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--accent-blue); }
 .pick-continue { background: var(--accent-blue); border: 1px solid var(--accent-blue); color: #fff; font-size: 13px; cursor: pointer; padding: 4px 12px; border-radius: var(--radius-sm); line-height: 1; font-weight: 600; }
 .pick-continue:hover { opacity: 0.9; }
 .pick-edit { background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--accent-blue); font-size: 13px; cursor: pointer; padding: 4px 10px; border-radius: var(--radius-sm); line-height: 1; }

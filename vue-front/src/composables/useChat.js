@@ -530,7 +530,7 @@ function historyToText(history) {
   async function submitNewQuestion(newQuestion) {
     isCompleted.value = false
     question.value = newQuestion
-    addMessage('user', 'question', { content: newQuestion })
+    addMessage('user', 'question', { content: newQuestion, collapsed: true })
     conversationHistory.value.push({ role: 'user', type: 'question', content: newQuestion })
     cycleIndex.value = 0
 
