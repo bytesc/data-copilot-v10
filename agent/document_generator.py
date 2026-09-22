@@ -154,7 +154,7 @@ Output ONLY valid YAML inside a ```yaml code block. Do not include any other tex
 YAML_PART_SYSTEM = """You are a professional business document writer. Based on the conversation history and the document outline below, write the content for a specific section of the document.
 
 Rules:
-1. Write in markdown format. Start with the section heading as `## Heading`.
+1. Write in markdown format. Do NOT include the section heading — it will be added automatically.
 2. Focus on business insights, data analysis results, trends, patterns, and conclusions.
 3. CRITICAL: The output must contain NO code blocks, no SQL, no Python, no YAML.
 4. Do NOT describe the agent's execution process, tool calls, or workflow steps.
