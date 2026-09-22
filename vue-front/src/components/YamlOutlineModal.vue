@@ -26,7 +26,7 @@
                 </div>
               </div>
               <div class="pick-actions">
-                <button class="pick-chat" @click.stop="sendYamlToChat(f)" title="Use as Chat Prompt">Use as Chat Prompt</button>
+                <button class="pick-chat" @click.stop="sendYamlToChat(f)" title="Ask AI to gather info">Ask AI</button>
                 <button class="pick-continue" @click.stop="loadFile(f)" title="Continue">Continue</button>
                 <button class="pick-edit" @click.stop="confirmEditOutline(f)" title="Edit YAML">Edit</button>
                 <button class="pick-view" @click.stop="viewYaml(f)" title="View YAML">View</button>
