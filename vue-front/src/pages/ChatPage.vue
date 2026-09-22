@@ -25,7 +25,7 @@
       <RightPanel
         v-if="!isRightPanelCollapsed"
         :files="chat.generatedFiles.value"
-        :is-running="chat.isRunning.value"
+        :is-running="chat.isRunning.value || yamlBusy"
         @generate-doc="chat.generateDocumentUnified()"
         @generate-doc-unified="chat.generateDocument()"
         @generate-yaml-doc="onYamlDoc"
@@ -44,7 +44,8 @@
       :conversation-history="chat.conversationHistory.value"
       :session-id="chat.sessionId.value"
       @close="showYamlOutline = false"
-      @files-updated="chat.fetchGeneratedFilesForSession()"
+      @files-updated="chat.generatedFiles.value.push($event)"
+      @running="yamlBusy = $event"
     />
   </div>
 </template>
@@ -63,6 +64,7 @@ const isPanelCollapsed = ref(false)
 const isRightPanelCollapsed = ref(false)
 const showResume = ref(false)
 const showYamlOutline = ref(false)
+const yamlBusy = ref(false)
 
 function onResume(sessionData) {
   showResume.value = false

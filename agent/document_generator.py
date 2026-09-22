@@ -43,15 +43,24 @@ class YamlOutlineInput(BaseModel):
     session_id: Optional[str] = None
 
 
+class SectionContent(BaseModel):
+    heading: str
+    content: str
+
 class YamlDocumentInput(BaseModel):
     conversation_history: List[dict]
     yaml_outline: str
     session_id: Optional[str] = None
+    section_index: Optional[int] = None
+    confirmed_sections: Optional[List[SectionContent]] = None
+    yaml_base: Optional[str] = None
 
 
 class FinalizeInput(BaseModel):
     markdown_content: str
     session_id: Optional[str] = None
+    yaml_base: Optional[str] = None
+    conversation_history: Optional[List[dict]] = None
 
 
 OUTLINE_SYSTEM = """You are a business document outline generator. Based on the conversation history between a user and a data analysis AI assistant, generate a structured outline for a business summary document.
@@ -376,16 +385,18 @@ def _parse_yaml_sections(yaml_str: str) -> dict:
         return {"title": "Summary Document", "sections": []}
 
 
-def _save_intermediate_yaml(yaml_str: str) -> str:
-    file_name = f"outline_{generate_random_string(8)}.yaml"
+def _save_intermediate_yaml(yaml_str: str, base_name: str, session_id: str = "") -> str:
+    prefix = f"{session_id}_" if session_id else ""
+    file_name = f"outline_{prefix}{base_name}.yaml"
     path = os.path.join(DOC_WORKSPACE, file_name)
     with open(path, "w", encoding="utf-8") as f:
         f.write(yaml_str)
     return file_name
 
 
-def _save_intermediate_markdown(markdown_text: str) -> str:
-    file_name = f"draft_{generate_random_string(8)}.md"
+def _save_intermediate_markdown(markdown_text: str, base_name: str, session_id: str = "") -> str:
+    prefix = f"{session_id}_" if session_id else ""
+    file_name = f"draft_{prefix}{base_name}.md"
     path = os.path.join(DOC_WORKSPACE, file_name)
     with open(path, "w", encoding="utf-8") as f:
         f.write(markdown_text)
@@ -668,19 +679,34 @@ def _event_stream_generate_yaml_outline(conversation_history: List[dict], sessio
 Conversation History:
 {context}"""
 
-    raw = ""
-    for chunk in call_llm_stream(prompt, llm):
-        raw += chunk
-        yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+    error_hint = ""
+    for attempt in range(2):
+        if attempt > 0:
+            yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'msg', 'content': 'Parsing failed, re-generating YAML outline...'}, ensure_ascii=False)}\n\n"
 
-    yaml_str = _parse_yaml_outline(raw)
-    yaml_file_name = _save_intermediate_yaml(yaml_str)
+        raw = ""
+        for chunk in call_llm_stream(prompt + error_hint, llm):
+            raw += chunk
+            yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+
+        yaml_str = _parse_yaml_outline(raw)
+        parsed = _parse_yaml_sections(yaml_str)
+        if parsed.get("sections"):
+            break
+
+        error_hint = "\n\nPrevious attempt failed. Output valid YAML inside ```yaml block with proper structure (title + sections list)."
+    else:
+        yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'error', 'content': 'Failed to generate valid YAML outline after retries'}, ensure_ascii=False)}\n\n"
+        return
+
+    yaml_base = generate_random_string(8)
+    yaml_file_name = _save_intermediate_yaml(yaml_str, yaml_base, session_id)
 
     log_observe_cycle(session_id, 0, "generate_yaml_outline", "outline",
                       prompt=prompt[:10000], response=raw[:10000],
                       token_estimate=len(prompt) // 3)
 
-    yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'done', 'content': yaml_str, 'yaml_file': yaml_file_name}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'done', 'content': yaml_str, 'yaml_file': yaml_file_name, 'yaml_base': yaml_base}, ensure_ascii=False)}\n\n"
 
     record_session_operation(
         session_id, "/api/generate-document/generate-yaml-outline/",
@@ -710,7 +736,7 @@ async def generate_yaml_outline_api(request: Request, user_input: YamlOutlineInp
 # ── Section-by-section Markdown generation from YAML ─────────────────────
 
 
-def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outline: str, session_id: str, request_json: str = ""):
+def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outline: str, session_id: str, request_json: str = "", section_index: Optional[int] = None, confirmed_sections: Optional[List[dict]] = None, yaml_base: str = ""):
     context = history_to_text(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
     yaml_outline = _parse_yaml_outline(yaml_outline)
@@ -723,28 +749,49 @@ def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outl
 
     title = parsed["title"]
     sections = parsed["sections"]
+    total = len(sections)
+
+    if section_index is not None:
+        sections = [sections[section_index]] if 0 <= section_index < total else []
+        if not sections:
+            yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'error', 'content': f'Invalid section_index: {section_index}, total: {total}'}, ensure_ascii=False)}\n\n"
+            return
 
     yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'msg', 'content': f'Generating {len(sections)} sections from YAML outline...'}, ensure_ascii=False)}\n\n"
 
     outline_overview = "\n".join(
         f"  {s['heading']} — {s['description']}"
         + ("".join(f"\n    - {sub['heading']}: {sub['description']}" for sub in s["subsections"]))
-        for s in sections
+        for s in parsed["sections"]
     )
 
     document_parts = []
+    section_files = []
     used_images: Set[str] = set()
+    base_name = yaml_base if yaml_base else f"{session_id}_{generate_random_string(8)}" if session_id else generate_random_string(8)
 
     for i, section in enumerate(sections):
+        actual_idx = section_index if section_index is not None else i
         heading = section["heading"]
         description = section["description"]
 
-        yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'section_msg', 'content': f'Generating section {i + 1}/{len(sections)}: {heading}', 'section_index': i, 'heading': heading}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'section_msg', 'content': f'Generating section {actual_idx + 1}/{total}: {heading}', 'section_index': actual_idx, 'heading': heading, 'total_sections': total}, ensure_ascii=False)}\n\n"
 
         used_hint = ""
         if used_images:
             used_list = "\n".join(f"- {url}" for url in sorted(used_images))
             used_hint = f"\nAlready used images (DO NOT reuse):\n{used_list}"
+
+        previous_sections_text = ""
+        if confirmed_sections:
+            prev_parts = []
+            for cs in confirmed_sections:
+                h = cs.get("heading", "")
+                c = cs.get("content", "")
+                if h and c:
+                    prev_parts.append(f"### {h}\n\n{c}")
+            if prev_parts:
+                previous_sections_text = "\n\nAlready written sections (read for context — do NOT repeat this content):\n\n" + "\n\n---\n\n".join(prev_parts)
 
         section_prompt = f"""{YAML_PART_SYSTEM.format(
             title=title,
@@ -758,7 +805,7 @@ def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outl
 
 {DOC}
 
-{_target_section}
+{_target_section}{previous_sections_text}
 
 Conversation History:
 {context}
@@ -774,35 +821,47 @@ Write the content for the section "{heading}" in markdown format."""
         used_images.update(new_images)
 
         document_parts.append((heading, part_raw))
-        yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'section_done', 'content': part_raw, 'section_index': i, 'heading': heading}, ensure_ascii=False)}\n\n"
 
-        log_observe_cycle(session_id, i + 1, "generate_from_yaml", "part",
+        sec_file = f"draft_{base_name}_s{actual_idx:02d}.md"
+        sec_path = os.path.join(DOC_WORKSPACE, sec_file)
+        with open(sec_path, "w", encoding="utf-8") as f:
+            f.write(f"## {heading}\n\n{part_raw}")
+        section_files.append({"name": sec_file, "heading": heading, "index": actual_idx})
+
+        yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'section_done', 'content': part_raw, 'section_index': actual_idx, 'heading': heading, 'section_file': sec_file, 'total_sections': total}, ensure_ascii=False)}\n\n"
+
+        log_observe_cycle(session_id, actual_idx + 1, "generate_from_yaml", "part",
                           prompt=section_prompt[:10000], response=part_raw[:10000],
                           token_estimate=len(section_prompt) // 3)
 
-    full_document = f"# {title}\n\n"
-    for heading, content in document_parts:
-        full_document += f"## {heading}\n\n{content}\n\n"
-
-    full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_document, flags=re.DOTALL)
-
-    md_file_name = _save_intermediate_markdown(full_document)
-
-    _done_event = {
-        'phase': 'document_from_yaml', 'type': 'done',
-        'content': full_document,
-        'title': title,
-        'md_file': md_file_name,
-        'sections_count': len(sections),
-    }
-    yield f"data: {json.dumps(_done_event, ensure_ascii=False)}\n\n"
-
-    record_session_operation(
-        session_id, "/api/generate-document/stream/from-yaml/",
-        request_json, full_document[:5000], "",
-        "success", f"Markdown draft generated from YAML: {title}, {len(sections)} sections",
-        prompt_length=len(context)
-    )
+    if section_index is None:
+        full_document = f"# {title}\n\n"
+        for heading, content in document_parts:
+            full_document += f"## {heading}\n\n{content}\n\n"
+        full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_document, flags=re.DOTALL)
+        merged_file = _save_intermediate_markdown(full_document, base_name)
+        _done_event = {
+            'phase': 'document_from_yaml', 'type': 'done',
+            'content': full_document,
+            'title': title,
+            'md_file': merged_file,
+            'section_files': section_files,
+            'sections_count': len(sections),
+        }
+        yield f"data: {json.dumps(_done_event, ensure_ascii=False)}\n\n"
+        record_session_operation(
+            session_id, "/api/generate-document/stream/from-yaml/",
+            request_json, full_document[:5000], "",
+            "success", f"Markdown draft generated from YAML: {title}, {len(sections)} sections",
+            prompt_length=len(context)
+        )
+        record_report_generation(
+            session_id=session_id,
+            file_name=merged_file,
+            chat_history=json.dumps(conversation_history, ensure_ascii=False),
+            outline=json.dumps({"title": title, "yaml_outline": yaml_outline}, ensure_ascii=False),
+            full_text=full_document,
+        )
 
     record_report_generation(
         session_id=session_id,
@@ -815,12 +874,16 @@ Write the content for the section "{heading}" in markdown format."""
 
 @router.post("/api/generate-document/stream/from-yaml/")
 async def generate_document_from_yaml_api(request: Request, user_input: YamlDocumentInput):
+    confirmed = [{"heading": s.heading, "content": s.content} for s in (user_input.confirmed_sections or [])]
     return StreamingResponse(
         _event_stream_generate_from_yaml(
             user_input.conversation_history,
             user_input.yaml_outline,
             user_input.session_id or "",
             user_input.model_dump_json(),
+            section_index=user_input.section_index,
+            confirmed_sections=confirmed,
+            yaml_base=user_input.yaml_base or "",
         ),
         media_type="text/event-stream",
         headers={
@@ -834,7 +897,22 @@ async def generate_document_from_yaml_api(request: Request, user_input: YamlDocu
 # ── Finalize: convert edited Markdown to docx/pdf ────────────────────────
 
 
-def _event_stream_finalize(markdown_content: str, session_id: str, request_json: str = ""):
+def _cleanup_workspace_files(base_name: str):
+    import glob
+    patterns = [
+        f"outline_{base_name}.yaml",
+        f"draft_{base_name}.md",
+        f"draft_{base_name}_s*.md",
+    ]
+    for pattern in patterns:
+        for f in glob.glob(os.path.join(DOC_WORKSPACE, pattern)):
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+
+
+def _event_stream_finalize(markdown_content: str, session_id: str, request_json: str = "", yaml_base: str = "", conversation_history: Optional[List[dict]] = None):
     full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', markdown_content, flags=re.DOTALL)
 
     title_match = re.search(r'^#\s+(.+)$', full_document, re.MULTILINE)
@@ -876,7 +954,19 @@ def _event_stream_finalize(markdown_content: str, session_id: str, request_json:
         'download_url_docx': download_url_docx,
         'download_url_pdf': download_url_pdf,
     }
+
+    record_report_generation(
+        session_id=session_id,
+        file_name=file_name,
+        chat_history=json.dumps(conversation_history, ensure_ascii=False) if conversation_history else "",
+        outline=json.dumps({"title": title}),
+        full_text=full_document,
+    )
+
     yield f"data: {json.dumps(_finalize_event, ensure_ascii=False)}\n\n"
+
+    if yaml_base:
+        _cleanup_workspace_files(yaml_base)
 
     record_session_operation(
         session_id, "/api/generate-document/finalize/",
@@ -893,6 +983,8 @@ async def finalize_document_api(request: Request, user_input: FinalizeInput):
             user_input.markdown_content,
             user_input.session_id or "",
             user_input.model_dump_json(),
+            yaml_base=user_input.yaml_base or "",
+            conversation_history=user_input.conversation_history,
         ),
         media_type="text/event-stream",
         headers={
@@ -911,16 +1003,11 @@ async def list_workspace_files():
     try:
         files = os.listdir(DOC_WORKSPACE)
         yaml_files = sorted([f for f in files if f.endswith(".yaml")], reverse=True)
-        md_files = sorted([f for f in files if f.endswith(".md")], reverse=True)
         result = []
         for f in yaml_files:
             path = os.path.join(DOC_WORKSPACE, f)
             mtime = os.path.getmtime(path)
             result.append({"name": f, "type": "yaml", "mtime": mtime})
-        for f in md_files:
-            path = os.path.join(DOC_WORKSPACE, f)
-            mtime = os.path.getmtime(path)
-            result.append({"name": f, "type": "md", "mtime": mtime})
         return JSONResponse(content={"files": result})
     except Exception as e:
         return JSONResponse(content={"files": [], "error": str(e)})
@@ -938,20 +1025,5 @@ async def read_workspace_file(filename: str):
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
         return JSONResponse(content={"name": filename, "content": content})
-    except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
-
-
-@router.delete("/api/doc-workspace/files/{filename:path}")
-async def delete_workspace_file(filename: str):
-    import re as _re
-    if _re.search(r'[/\\]|\.\.', filename):
-        return JSONResponse(content={"error": "Invalid filename"}, status_code=400)
-    path = os.path.join(DOC_WORKSPACE, filename)
-    if not os.path.isfile(path):
-        return JSONResponse(content={"error": "File not found"}, status_code=404)
-    try:
-        os.remove(path)
-        return JSONResponse(content={"deleted": filename})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)

@@ -214,20 +214,22 @@
    title:"...", file_name:"doc_xxxx", download_url_md:"...",
    download_url_docx:"...", download_url_pdf:"...", conversation_history:[...]}
 
-  # YAML 大纲 → 逐节生成 Markdown → 用户编辑 → Finalize（YAML Outline 模式）
+  # YAML Outline 模式 — 每节单独请求，用户逐节确认
   # POST /api/generate-document/generate-yaml-outline/
   {phase:"yaml_outline", type:"msg",   content:"Generating YAML outline..."}
   {phase:"yaml_outline", type:"chunk", content:"..."}  ×N
-  {phase:"yaml_outline", type:"done",  content:"<YAML string>", yaml_file:"outline_xxxx.yaml"}
+  {phase:"yaml_outline", type:"done",  content:"<YAML string>",
+   yaml_file:"outline_{session_id}_{rand}.yaml", yaml_base:"{rand}"}
 
-  # POST /api/generate-document/stream/from-yaml/
-  {phase:"document_from_yaml", type:"msg",         content:"Generating N sections from YAML outline..."}
-  {phase:"document_from_yaml", type:"section_msg", content:"Generating section 1/N: {heading}", section_index:0, heading:"..."}
+  # POST /api/generate-document/stream/from-yaml/ （每节一次请求）
+  # Request body 含 section_index, confirmed_sections（前面已确认节的内容让LLM看到）
+  {phase:"document_from_yaml", type:"msg",         content:"Generating..."}
+  {phase:"document_from_yaml", type:"section_msg", content:"Generating section 1/N: {heading}",
+   section_index:0, heading:"...", total_sections:N}
   {phase:"document_from_yaml", type:"chunk",       content:"..."}  ×N
-  {phase:"document_from_yaml", type:"section_done", content:"...", section_index:0, heading:"..."}
-  ...（重复 N 次）
-  {phase:"document_from_yaml", type:"done", content:"<full markdown>",
-   title:"...", md_file:"draft_xxxx.md", sections_count:N}
+  {phase:"document_from_yaml", type:"section_done", content:"...", section_index:0,
+   heading:"...", section_file:"draft_{session_id}_{base}_s00.md", total_sections:N}
+  # 前端显示 textarea，用户编辑后点 Confirm & Next → 下一节 (section_index+1)
 
   # POST /api/generate-document/finalize/
   {phase:"finalize", type:"done", content:"<full markdown>", title:"...",

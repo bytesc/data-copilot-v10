@@ -4,7 +4,7 @@
       <!-- Recovery: pick existing file -->
       <template v-if="step === 'pick'">
         <div class="modal-header">
-          <h3>📐 Document Generation</h3>
+          <h3>Document Generation</h3>
           <p class="modal-subtitle">Resume from a saved draft or start fresh.</p>
         </div>
         <div class="modal-body pick-body">
@@ -18,17 +18,14 @@
               class="pick-item"
               @click="loadFile(f)"
             >
-              <span class="pick-icon">{{ f.type === 'yaml' ? '📐' : '📝' }}</span>
+              <span class="pick-icon">{{ f.type === 'yaml' ? 'Outline' : 'Draft' }}</span>
               <div class="pick-info">
                 <span class="pick-name">{{ f.name }}</span>
                 <span class="pick-time">{{ formatTime(f.mtime) }}</span>
               </div>
-              <span class="pick-type">{{ f.type === 'yaml' ? 'Outline' : 'Draft' }}</span>
             </div>
           </div>
-          <button class="btn btn-primary start-fresh-btn" @click="startFresh">
-            ✨ Start Fresh
-          </button>
+          <button class="btn btn-primary start-fresh-btn" @click="startFresh">Start Fresh</button>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="$emit('close')">Cancel</button>
@@ -38,78 +35,113 @@
       <!-- Step 1: YAML Outline -->
       <template v-if="step === 'yaml'">
         <div class="modal-header">
-          <h3>📐 Step 1: Edit YAML Outline</h3>
-          <p class="modal-subtitle">Modify the outline structure, then click "Generate Markdown Draft".</p>
+          <h3>Step 1: Edit YAML Outline</h3>
+          <p class="modal-subtitle">{{ sectionCount }} sections will be generated. Modify then click next.</p>
         </div>
-        <div v-if="yamlLoading" class="loading-text">Generating YAML outline...</div>
-        <div v-else class="modal-body">
+        <div class="modal-body">
+          <div v-if="yamlLoading" class="loading-overlay">Generating YAML outline...</div>
           <textarea ref="yamlTextarea" class="code-editor" v-model="yamlContent" spellcheck="false"></textarea>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="backToPick">Back</button>
-          <button class="btn btn-primary" :disabled="generatingDraft" @click="generateDraft">
-            {{ generatingDraft ? 'Generating...' : '📝 Generate Markdown Draft' }}
+          <button class="btn btn-primary" :disabled="generatingDraft" @click="startGeneratingSections">
+            {{ generatingDraft ? 'Starting...' : 'Generate Sections' }}
           </button>
         </div>
       </template>
 
-      <!-- Step 2: Markdown Draft -->
-      <template v-if="step === 'markdown'">
+      <!-- Step 2: Generate sections one by one, confirmed by user -->
+      <template v-if="step === 'sections'">
         <div class="modal-header">
-          <h3>📝 Step 2: Review &amp; Edit Markdown Draft</h3>
-          <p class="modal-subtitle" v-if="!draftDone">Generating sections from YAML outline...</p>
-          <p class="modal-subtitle" v-else>You can edit the markdown below, then click "Finalize" to generate docx/pdf.</p>
+          <h3>Step 2: Section {{ currentSectionIndex + 1 }} / {{ totalSections }}</h3>
+          <p class="modal-subtitle">{{ currentSectionHeading || 'Generating...' }}</p>
         </div>
         <div class="modal-body">
-          <div v-if="sectionStatus" class="section-status">{{ sectionStatus }}</div>
-          <textarea
-            v-if="draftDone"
-            ref="mdTextarea"
-            class="code-editor"
-            v-model="markdownContent"
-            spellcheck="false"
-          ></textarea>
-          <div v-else class="markdown-preview">
-            <div v-for="(part, i) in completedSections" :key="i" class="section-block">
+          <!-- Streaming preview for current section -->
+          <div v-if="!currentSectionDone" class="markdown-preview">
+            <div v-for="(part, i) in confirmedSections" :key="i" class="section-block confirmed">
               <div class="section-heading">{{ part.heading }}</div>
               <div class="section-content" v-html="renderMd(part.content)"></div>
             </div>
-            <div v-if="currentSectionContent" class="section-block streaming">
+            <div class="section-block streaming">
               <div class="section-heading">{{ currentSectionHeading }}</div>
               <div class="section-content streaming-content" v-html="renderMd(currentSectionContent)"></div>
             </div>
           </div>
+          <!-- Editable textarea for current section -->
+          <div v-else class="section-edit-area">
+            <div class="confirmed-indicator">
+              <span v-for="(part, i) in confirmedSections" :key="i" class="confirmed-badge" @click="editSection(i)">Section {{ i + 1 }}</span>
+              <span class="current-badge">Section {{ currentSectionIndex + 1 }}</span>
+            </div>
+            <div class="confirmed-preview">
+              <div
+                v-for="(part, i) in confirmedSections"
+                :key="'confirmed-' + i"
+                class="section-block confirmed"
+                @click="editSection(i)"
+              >
+                <div class="section-heading">{{ part.heading }}</div>
+                <div class="section-content truncated" v-html="renderMd(truncate(part.content, 300))"></div>
+              </div>
+            </div>
+            <label class="section-edit-label">{{ currentSectionHeading }}</label>
+            <textarea
+              ref="sectionTextarea"
+              class="code-editor"
+              v-model="currentSectionEdit"
+              spellcheck="false"
+            ></textarea>
+          </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="draftDone ? (step = 'yaml') : $emit('close')">
-            {{ draftDone ? 'Back' : 'Cancel' }}
-          </button>
           <button
-            v-if="draftDone"
+            v-if="currentSectionDone"
             class="btn btn-primary"
-            :disabled="finalizing"
-            @click="finalizeDoc"
+            @click="confirmSection"
           >
-            {{ finalizing ? 'Finalizing...' : '✅ Finalize to docx/pdf' }}
+            {{ currentSectionIndex + 1 < totalSections ? 'Confirm & Next' : 'Confirm & Finish' }}
           </button>
         </div>
       </template>
 
-      <!-- Step 3: Finalize done -->
+      <!-- Step 3: Review & Finalize -->
+      <template v-if="step === 'review'">
+        <div class="modal-header">
+          <h3>Step 3: Review Full Document & Finalize</h3>
+          <p class="modal-subtitle">All {{ confirmedSections.length }} sections confirmed. You can still edit any section below.</p>
+        </div>
+        <div class="modal-body">
+          <div class="confirmed-indicator">
+            <span v-for="(_, i) in confirmedSections" :key="i" class="confirmed-badge" @click="editSection(i)">Section {{ i + 1 }}</span>
+          </div>
+          <textarea
+            ref="finalTextarea"
+            class="code-editor"
+            v-model="mergedContent"
+            spellcheck="false"
+          ></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="backToSectionEdit">Back</button>
+          <button class="btn btn-primary" :disabled="finalizing" @click="finalizeDoc">
+            {{ finalizing ? 'Finalizing...' : 'Finalize to docx/pdf' }}
+          </button>
+        </div>
+      </template>
+
+      <!-- Done -->
       <template v-if="step === 'done'">
         <div class="modal-header">
-          <h3>✅ Document Generated</h3>
+          <h3>Document Generated</h3>
         </div>
         <div class="modal-body done-body">
           <p class="done-title">{{ finalTitle }}</p>
           <div class="download-links">
-            <a v-if="finalDownloadMd" :href="finalDownloadMd + '?download=1'" class="download-btn md" target="_blank">📄 Download .md</a>
-            <a v-if="finalDownloadDocx" :href="finalDownloadDocx + '?download=1'" class="download-btn docx" target="_blank">📄 Download .docx</a>
-            <a v-if="finalDownloadPdf" :href="finalDownloadPdf + '?download=1'" class="download-btn pdf" target="_blank">📄 Download .pdf</a>
+            <a v-if="finalDownloadMd" :href="finalDownloadMd + '?download=1'" class="download-btn md" target="_blank">Download .md</a>
+            <a v-if="finalDownloadDocx" :href="finalDownloadDocx + '?download=1'" class="download-btn docx" target="_blank">Download .docx</a>
+            <a v-if="finalDownloadPdf" :href="finalDownloadPdf + '?download=1'" class="download-btn pdf" target="_blank">Download .pdf</a>
           </div>
-        </div>
-        <div class="modal-body done-body">
-          <p class="done-note">Saved intermediate files have been cleaned up.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-primary" @click="onClose">Close</button>
@@ -120,7 +152,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
 
 const props = defineProps({
@@ -128,88 +160,167 @@ const props = defineProps({
   conversationHistory: { type: Array, default: () => [] },
   sessionId: { type: String, default: '' },
 })
+const emit = defineEmits(['close', 'files-updated', 'running'])
 
-const emit = defineEmits(['close', 'files-updated'])
-
-// ---------- state ----------
 const step = ref('pick')
 const availableFiles = ref([])
 const loadingFiles = ref(true)
 
 const yamlLoading = ref(false)
 const yamlContent = ref('')
+const yamlBase = ref('')
 const yamlTextarea = ref(null)
-
 const generatingDraft = ref(false)
-const draftDone = ref(false)
-const markdownContent = ref('')
-const mdTextarea = ref(null)
 
-const sectionStatus = ref('')
-const completedSections = ref([])
+const totalSections = ref(0)
+const currentSectionIndex = ref(0)
 const currentSectionHeading = ref('')
 const currentSectionContent = ref('')
+const currentSectionEdit = ref('')
+const currentSectionDone = ref(false)
+const sectionTextarea = ref(null)
+
+const confirmedSections = ref([])
 
 const finalizing = ref(false)
 const finalTitle = ref('')
 const finalDownloadMd = ref('')
 const finalDownloadDocx = ref('')
 const finalDownloadPdf = ref('')
+const finalTextarea = ref(null)
 
-const apiBase = ''
+const isBusy = computed(() => yamlLoading.value || generatingDraft.value || finalizing.value)
+watch(isBusy, (v) => emit('running', v))
 
-// ---------- helpers ----------
+const sectionCount = computed(() => {
+  const m = yamlContent.value.match(/^  - heading:/gm)
+  return m ? m.length : 0
+})
+
+const mergedContent = computed({
+  get: () => {
+    const parts = confirmedSections.value.map((s, i) =>
+      `## ${s.heading}\n\n${s.content}`
+    ).join('\n\n')
+    return parts
+  },
+  set: (val) => {
+    // Reset tracking when user edits the merged text directly
+    // Keeps merged content as-is for finalize
+  }
+})
+
 function renderMd(text) {
   if (!text) return ''
   return marked.parse(text)
 }
 
-function formatTime(ts) {
-  const d = new Date(ts * 1000)
-  return d.toLocaleString()
+function truncate(text, maxLen) {
+  if (!text || text.length <= maxLen) return text || ''
+  return text.slice(0, maxLen) + '...'
 }
 
-// ---------- file listing ----------
+function formatTime(ts) {
+  return new Date(ts * 1000).toLocaleString()
+}
+
 async function fetchAvailableFiles() {
   loadingFiles.value = true
   try {
-    const res = await fetch(`${apiBase}/api/doc-workspace/files/`)
+    const res = await fetch('/api/doc-workspace/files/')
     if (res.ok) {
       const data = await res.json()
-      availableFiles.value = data.files || []
+      const sid = props.sessionId
+      availableFiles.value = (data.files || []).filter(f => f.name.startsWith(`outline_${sid}_`))
     }
   } catch {}
   loadingFiles.value = false
 }
 
+function parseSectionsFromMd(text) {
+  const lines = text.split('\n')
+  const sections = []
+  let current = null
+  for (const line of lines) {
+    const m = line.match(/^##\s+(.+)$/)
+    if (m) {
+      if (current) sections.push(current)
+      current = { heading: m[1].trim(), content: '' }
+    } else if (current) {
+      current.content += line + '\n'
+    }
+  }
+  if (current) sections.push(current)
+  return sections
+}
+
 async function loadFile(file) {
   try {
-    const res = await fetch(`${apiBase}/api/doc-workspace/file/${file.name}`)
+    const res = await fetch(`/api/doc-workspace/file/${file.name}`)
     if (!res.ok) return
     const data = await res.json()
-    if (file.type === 'yaml') {
-      yamlContent.value = data.content
-      yamlLoading.value = false
-      step.value = 'yaml'
-      await nextTick()
-      if (yamlTextarea.value) {
-        yamlTextarea.value.focus()
-        yamlTextarea.value.select()
+    yamlContent.value = data.content
+
+    const base = file.name.replace(/^outline_/, '').replace(/\.yaml$/, '')
+    yamlBase.value = base
+
+    // 1. Try merged draft
+    try {
+      const draftRes = await fetch(`/api/doc-workspace/file/draft_${base}.md`)
+      if (draftRes.ok) {
+        const draftData = await draftRes.json()
+        const sections = parseSectionsFromMd(draftData.content)
+        if (sections.length > 0) {
+          confirmedSections.value = sections
+          step.value = 'review'
+          await nextTick()
+          if (finalTextarea.value) finalTextarea.value.focus()
+          return
+        }
       }
-    } else {
-      markdownContent.value = data.content
-      draftDone.value = true
-      step.value = 'markdown'
-      await nextTick()
-      if (mdTextarea.value) {
-        mdTextarea.value.focus()
-      }
+    } catch {}
+
+    // 2. Try individual section files
+    const sectionFiles = []
+    for (let i = 0; i < 100; i++) {
+      const name = `draft_${base}_s${String(i).padStart(2, '0')}.md`
+      try {
+        const secRes = await fetch(`/api/doc-workspace/file/${name}`)
+        if (secRes.ok) {
+          const secData = await secRes.json()
+          const content = secData.content || ''
+          const headingMatch = content.match(/^##\s+(.+)$/m)
+          const heading = headingMatch ? headingMatch[1].trim() : `Section ${i + 1}`
+          const body = content.replace(/^##\s+.+(\n|$)/, '').trim()
+          sectionFiles.push({ heading, content: body, index: i })
+        } else {
+          break
+        }
+      } catch { break }
     }
+    if (sectionFiles.length > 0) {
+      confirmedSections.value = sectionFiles
+      currentSectionIndex.value = sectionFiles.length
+      totalSections.value = sectionFiles.length
+      currentSectionDone.value = true
+      currentSectionHeading.value = sectionFiles[sectionFiles.length - 1].heading
+      currentSectionEdit.value = sectionFiles[sectionFiles.length - 1].content
+      step.value = 'sections'
+      await nextTick()
+      if (sectionTextarea.value) sectionTextarea.value.focus()
+      return
+    }
+
+    // 3. Nothing found — start from YAML
+    step.value = 'yaml'
+    await nextTick()
+    if (yamlTextarea.value) yamlTextarea.value.focus()
   } catch {}
 }
 
 function startFresh() {
   step.value = 'yaml'
+  yamlContent.value = ''
   yamlLoading.value = true
   generateYamlOutline()
 }
@@ -220,6 +331,7 @@ function backToPick() {
 }
 
 function onClose() {
+  emit('running', false)
   cleanupUsedFiles()
   emit('close')
 }
@@ -228,7 +340,7 @@ function onOverlayClick() {
   if (step.value === 'done') onClose()
 }
 
-// ---------- YAML outline generation ----------
+// YAML outline generation
 async function generateYamlOutline() {
   try {
     const payload = {
@@ -236,96 +348,131 @@ async function generateYamlOutline() {
       session_id: props.sessionId,
     }
     let rawYaml = ''
-    const gen = createSSEStream(
-      `${apiBase}/api/generate-document/generate-yaml-outline/`,
-      payload
-    )
+    const gen = createSSEStream('/api/generate-document/generate-yaml-outline/', payload)
     for await (const event of gen) {
       if (event.phase === 'yaml_outline') {
         if (event.type === 'chunk') {
           rawYaml += event.content || ''
+          yamlContent.value = rawYaml
         } else if (event.type === 'done') {
           yamlContent.value = event.content || rawYaml
+          const base = event.yaml_base || ''
+          const sid = props.sessionId
+          yamlBase.value = sid ? `${sid}_${base}` : base
         }
       }
     }
     yamlLoading.value = false
     await nextTick()
-    if (yamlTextarea.value) {
-      yamlTextarea.value.focus()
-      yamlTextarea.value.select()
-    }
+    if (yamlTextarea.value) yamlTextarea.value.focus()
   } catch (e) {
     yamlContent.value = `# Error generating YAML outline:\n# ${e.message}`
     yamlLoading.value = false
   }
 }
 
-// ---------- markdown generation ----------
-async function generateDraft() {
+// Start generating sections one by one
+function startGeneratingSections() {
   generatingDraft.value = true
-  step.value = 'markdown'
+  step.value = 'sections'
+  confirmedSections.value = []
+  currentSectionIndex.value = 0
+  totalSections.value = sectionCount.value
+  generateNextSection()
+}
+
+async function generateNextSection() {
+  currentSectionDone.value = false
+  currentSectionContent.value = ''
+  currentSectionEdit.value = ''
+
+  const payload = {
+    conversation_history: props.conversationHistory,
+    yaml_outline: yamlContent.value,
+    session_id: props.sessionId,
+    section_index: currentSectionIndex.value,
+    yaml_base: yamlBase.value,
+  }
 
   try {
-    const payload = {
-      conversation_history: props.conversationHistory,
-      yaml_outline: yamlContent.value,
-      session_id: props.sessionId,
-    }
-    const gen = createSSEStream(
-      `${apiBase}/api/generate-document/stream/from-yaml/`,
-      payload
-    )
+    const gen = createSSEStream('/api/generate-document/stream/from-yaml/', payload)
     for await (const event of gen) {
       if (event.phase === 'document_from_yaml') {
-        if (event.type === 'msg') {
-          sectionStatus.value = event.content || ''
-        } else if (event.type === 'section_msg') {
-          sectionStatus.value = event.content || ''
+        if (event.type === 'section_msg') {
           currentSectionHeading.value = event.heading || ''
-          currentSectionContent.value = ''
         } else if (event.type === 'chunk') {
           currentSectionContent.value += event.content || ''
         } else if (event.type === 'section_done') {
-          completedSections.value.push({
-            heading: event.heading || '',
-            content: event.content || '',
-          })
-          currentSectionContent.value = ''
-          currentSectionHeading.value = ''
-        } else if (event.type === 'done') {
-          const full = event.content || ''
-          markdownContent.value = full
-          draftDone.value = true
-          sectionStatus.value = ''
+          currentSectionContent.value = event.content || ''
+          currentSectionEdit.value = event.content || ''
+          currentSectionDone.value = true
+          totalSections.value = event.total_sections || totalSections.value
           await nextTick()
-          if (mdTextarea.value) {
-            mdTextarea.value.focus()
-          }
+          if (sectionTextarea.value) sectionTextarea.value.focus()
         } else if (event.type === 'error') {
-          sectionStatus.value = `Error: ${event.content || 'Unknown error'}`
+          currentSectionContent.value = `Error: ${event.content || 'Unknown'}`
+          currentSectionDone.value = true
         }
       }
     }
   } catch (e) {
-    sectionStatus.value = `Error: ${e.message}`
+    currentSectionContent.value = `Error: ${e.message}`
+    currentSectionDone.value = true
   } finally {
     generatingDraft.value = false
   }
 }
 
-// ---------- finalize ----------
+// Confirm current section and move to next
+function confirmSection() {
+  confirmedSections.value.push({
+    heading: currentSectionHeading.value,
+    content: currentSectionEdit.value,
+  })
+  if (currentSectionIndex.value + 1 < totalSections.value) {
+    currentSectionIndex.value++
+    generateNextSection()
+  } else {
+    step.value = 'review'
+    nextTick(() => {
+      if (finalTextarea.value) finalTextarea.value.focus()
+    })
+  }
+}
+
+function editSection(idx) {
+  step.value = 'sections'
+  currentSectionIndex.value = idx
+  const sec = confirmedSections.value[idx]
+  currentSectionHeading.value = sec.heading
+  currentSectionEdit.value = sec.content
+  currentSectionDone.value = true
+  confirmedSections.value.splice(idx, 1)
+  nextTick(() => {
+    if (sectionTextarea.value) sectionTextarea.value.focus()
+  })
+}
+
+function backToSectionEdit() {
+  if (confirmedSections.value.length > 0) {
+    editSection(confirmedSections.value.length - 1)
+  }
+}
+
+// Finalize
 async function finalizeDoc() {
   finalizing.value = true
   try {
+    const fullMd = confirmedSections.value.map((s, i) =>
+      `## ${s.heading}\n\n${s.content}`
+    ).join('\n\n')
     const payload = {
-      markdown_content: markdownContent.value,
+      markdown_content: fullMd,
       session_id: props.sessionId,
+      yaml_base: yamlBase.value,
+      conversation_history: props.conversationHistory,
     }
-    const gen = createSSEStream(
-      `${apiBase}/api/generate-document/finalize/`,
-      payload
-    )
+    const gen = createSSEStream('/api/generate-document/finalize/', payload)
     for await (const event of gen) {
       if (event.phase === 'finalize' && event.type === 'done') {
         step.value = 'done'
@@ -333,25 +480,25 @@ async function finalizeDoc() {
         finalDownloadMd.value = event.download_url_md || ''
         finalDownloadDocx.value = event.download_url_docx || ''
         finalDownloadPdf.value = event.download_url_pdf || ''
-        emit('files-updated')
+        emit('files-updated', {
+          id: Date.now(),
+          title: event.title || 'Document',
+          downloadUrlMd: event.download_url_md || '',
+          downloadUrlDocx: event.download_url_docx || '',
+          downloadUrlPdf: event.download_url_pdf || '',
+          createdAt: Date.now(),
+        })
       }
     }
   } catch (e) {
-    sectionStatus.value = `Finalize error: ${e.message}`
+    console.error('Finalize error:', e)
   } finally {
     finalizing.value = false
   }
 }
 
-async function cleanupUsedFiles() {
-  for (const f of availableFiles.value) {
-    try {
-      await fetch(`${apiBase}/api/doc-workspace/files/${f.name}`, { method: 'DELETE' })
-    } catch {}
-  }
-}
+async function cleanupUsedFiles() {}
 
-// ---------- SSE helper ----------
 async function* createSSEStream(url, payload) {
   const response = await fetch(url, {
     method: 'POST',
@@ -387,259 +534,57 @@ onMounted(fetchAvailableFiles)
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-.modal-container {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  width: 90vw;
-  height: 85vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-.modal-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
-.modal-header h3 {
-  margin: 0 0 4px;
-  font-size: 16px;
-  color: var(--text-primary);
-}
-.modal-subtitle {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.modal-body {
-  flex: 1;
-  padding: 12px 20px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.code-editor {
-  flex: 1;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 12px;
-  font-family: 'Consolas', 'Courier New', monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  resize: none;
-  outline: none;
-  tab-size: 2;
-}
-.code-editor:focus {
-  border-color: var(--accent-blue);
-}
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 20px;
-  border-top: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
-.btn {
-  padding: 8px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  border: 1px solid var(--border-color);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-.btn-secondary:hover {
-  background: var(--bg-hover);
-}
-.btn-primary {
-  background: var(--accent-blue);
-  color: #fff;
-  border-color: var(--accent-blue);
-}
-.btn-primary:hover:not(:disabled) {
-  opacity: 0.9;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.loading-text {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  color: var(--text-muted);
-}
-.empty-text {
-  font-size: 14px;
-  color: var(--text-muted);
-  text-align: center;
-  padding: 24px;
-}
-.section-status {
-  font-size: 13px;
-  color: var(--text-muted);
-  padding: 6px 0;
-  flex-shrink: 0;
-}
-.markdown-preview {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 0;
-}
-.section-block {
-  margin-bottom: 16px;
-}
-.section-heading {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--accent-blue);
-  margin-bottom: 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--border-color);
-}
-.section-content {
-  font-size: 13px;
-  color: var(--text-primary);
-  line-height: 1.6;
-}
-.streaming {
-  opacity: 0.8;
-}
-.streaming-content::after {
-  content: '▌';
-  animation: blink 0.8s infinite;
-}
-@keyframes blink {
-  50% { opacity: 0; }
-}
-.done-body {
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 16px;
-}
-.done-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.done-note {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.download-links {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-.download-btn {
-  display: inline-block;
-  padding: 10px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: all 0.2s;
-}
-.download-btn.md {
-  background: #4a90d9;
-  color: #fff;
-}
-.download-btn.docx {
-  background: #2b579a;
-  color: #fff;
-}
-.download-btn.pdf {
-  background: #d34f4f;
-  color: #fff;
-}
-.download-btn:hover {
-  opacity: 0.85;
-}
-
-/* Pick/resume panel */
-.pick-body {
-  flex-direction: column;
-  gap: 12px;
-  padding: 20px;
-  overflow-y: auto;
-}
-.pick-section-title {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin: 0 0 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.pick-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: 6px;
-}
-.pick-item:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent-blue);
-}
-.pick-icon {
-  font-size: 20px;
-  flex-shrink: 0;
-}
-.pick-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.pick-name {
-  font-family: 'Consolas', monospace;
-  font-size: 13px;
-  color: var(--text-primary);
-  word-break: break-all;
-}
-.pick-time {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-.pick-type {
-  font-size: 11px;
-  color: var(--accent-cyan);
-  background: var(--bg-secondary);
-  padding: 2px 8px;
-  border-radius: 10px;
-  flex-shrink: 0;
-}
-.start-fresh-btn {
-  align-self: center;
-  margin-top: 12px;
-  padding: 10px 24px;
-  font-size: 14px;
-}
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal-container { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius); width: 90vw; height: 85vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+.modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+.modal-header h3 { margin: 0 0 4px; font-size: 16px; color: var(--text-primary); }
+.modal-subtitle { margin: 0; font-size: 12px; color: var(--text-muted); }
+.modal-body { flex: 1; padding: 12px 20px; overflow: hidden; display: flex; flex-direction: column; }
+.code-editor { flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; font-family: 'Consolas','Courier New',monospace; font-size: 13px; line-height: 1.5; resize: none; outline: none; tab-size: 2; }
+.code-editor:focus { border-color: var(--accent-blue); }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border-color); flex-shrink: 0; }
+.btn { padding: 8px 16px; border-radius: var(--radius-sm); font-size: 13px; border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s; }
+.btn-secondary { background: var(--bg-tertiary); color: var(--text-secondary); }
+.btn-secondary:hover { background: var(--bg-hover); }
+.btn-primary { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+.btn-primary:hover:not(:disabled) { opacity: 0.9; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.loading-text { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-muted); }
+.loading-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 14px; color: var(--text-muted); z-index: 1; pointer-events: none; }
+.empty-text { font-size: 14px; color: var(--text-muted); text-align: center; padding: 24px; }
+.markdown-preview { flex: 1; overflow-y: auto; padding: 8px 0; }
+.section-block { margin-bottom: 12px; }
+.section-block.confirmed { opacity: 0.6; }
+.section-heading { font-size: 14px; font-weight: 700; color: var(--accent-blue); margin-bottom: 4px; padding-bottom: 2px; border-bottom: 1px solid var(--border-color); }
+.section-content { font-size: 13px; color: var(--text-primary); line-height: 1.6; }
+.streaming { opacity: 0.8; }
+.streaming-content::after { content: '|'; animation: blink 0.8s infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.section-edit-area { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.confirmed-preview { max-height: 30%; overflow-y: auto; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 12px; flex-shrink: 0; }
+.confirmed-preview .section-block { margin-bottom: 8px; cursor: pointer; }
+.confirmed-preview .section-block:hover { background: var(--bg-hover); }
+.confirmed-preview .section-content.truncated { font-size: 12px; opacity: 0.7; }
+.section-edit-label { font-size: 14px; font-weight: 700; color: var(--accent-blue); flex-shrink: 0; }
+.confirmed-indicator { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+.confirmed-badge { font-size: 11px; color: var(--accent-green); background: var(--bg-tertiary); padding: 3px 8px; border-radius: 10px; cursor: pointer; }
+.confirmed-badge:hover { background: var(--bg-hover); }
+.current-badge { font-size: 11px; color: var(--accent-cyan); background: var(--bg-tertiary); padding: 3px 8px; border-radius: 10px; }
+.done-body { align-items: center; justify-content: center; text-align: center; gap: 16px; }
+.done-title { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+.download-links { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.download-btn { display: inline-block; padding: 10px 20px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
+.download-btn.md { background: #4a90d9; color: #fff; }
+.download-btn.docx { background: #2b579a; color: #fff; }
+.download-btn.pdf { background: #d34f4f; color: #fff; }
+.download-btn:hover { opacity: 0.85; }
+.pick-body { flex-direction: column; gap: 12px; padding: 20px; overflow-y: auto; }
+.pick-section-title { font-size: 13px; color: var(--text-secondary); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.pick-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s; margin-bottom: 6px; }
+.pick-item:hover { background: var(--bg-hover); border-color: var(--accent-blue); }
+.pick-icon { font-size: 11px; color: var(--accent-cyan); background: var(--bg-secondary); padding: 2px 8px; border-radius: 10px; flex-shrink: 0; }
+.pick-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pick-name { font-family: 'Consolas',monospace; font-size: 13px; color: var(--text-primary); word-break: break-all; }
+.pick-time { font-size: 11px; color: var(--text-muted); }
+.start-fresh-btn { align-self: center; margin-top: 12px; padding: 10px 24px; font-size: 14px; }
 </style>

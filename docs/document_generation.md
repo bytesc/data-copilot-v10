@@ -1,118 +1,118 @@
 # 文档生成系统
 
-系统提供三种文档生成模式，均可输出 `.md`、`.docx`、`.pdf` 三种格式。
+三种模式，输出 `.md` / `.docx` / `.pdf`。
 
 ---
 
 ## 模式对比
 
-| | Generate Report（📄） | Generate Document（📋） | YAML Outline（📐） |
+| | Generate Report (📄) | Generate Document (📋) | YAML Outline (📐) |
 |---|---|---|---|
-| **按钮位置** | RightPanel | RightPanel | RightPanel |
-| **后端端点** | `POST /api/generate-document/stream/` | `POST /api/generate-document/stream/unified/` | 三步：① `generate-yaml-outline/` ② `stream/from-yaml/` ③ `finalize/` |
-| **LLM 调用** | 两轮：先大纲 JSON → 逐节生成正文 | 一轮：整篇一次性生成 | 两轮：先 YAML 大纲 → 逐节生成正文 |
-| **人工干预** | 无 | 无 | ✅ 可编辑 YAML 大纲 + 可编辑 Markdown 草稿 |
-| **SSE 流程** | `outline` → `part` × N → `document` | `act(sub_phase:generate_document)` 单段流式 | `yaml_outline` → `document_from_yaml(section_msg/section_done)` → `finalize` |
-| **文档结构** | 编号章节，H3 封顶 | 结论先行，无标题深度限制 | 由 YAML 大纲完全定义 |
-| **图片去重** | ✅ 跨章节去重 | ❌ 不涉及 | ✅ 跨章节去重 |
-| **适用场景** | 长文报告，逐步生成体验好 | 快速一次性出完整文档 | 需要用户审核和修改大纲/内容的场景 |
+| 按钮 | RightPanel | RightPanel | RightPanel |
+| 后端 | `POST /api/generate-document/stream/` | `POST /api/generate-document/stream/unified/` | 三步：① outline ② from-yaml ③ finalize |
+| LLM | 2轮：大纲JSON → 逐节 | 1轮：整篇 | 2轮：YAML → 逐节 |
+| 人工干预 | 无 | 无 | ✅ 编辑YAML + 逐节确认 |
+| SSE | `outline` → `part`×N → `document` | `act(sub_phase:generate_document)` 单段 | `yaml_outline` → `document_from_yaml(section_msg/section_done)` → `finalize` |
+| 图片去重 | ✅ | ❌ | ✅ |
+| 适用 | 长报告逐步生成 | 快速一次性 | 需用户审核大纲/每节内容 |
 
 ---
 
-## 三步流程详解（YAML Outline 模式）
+## YAML Outline 模式 — 接口流程
 
-### Step 1: 生成 YAML 大纲
+### 1. 弹窗打开（恢复面板）
 
-**端点**: `POST /api/generate-document/generate-yaml-outline/`
-
-**请求**:
-```json
-{
-  "conversation_history": [{...}],
-  "session_id": "20260922xxxxxx"
-}
 ```
-
-**SSE 事件流**:
+GET /api/doc-workspace/files/
 ```
-{phase:"yaml_outline", type:"msg",   content:"Generating YAML outline..."}
-{phase:"yaml_outline", type:"chunk", content:"..."}  ×N
-{phase:"yaml_outline", type:"done",  content:"<实际 YAML 文本>",
- yaml_file:"outline_xxxx.yaml"}
+返回 `doc_workspace/` 下所有 `.yaml` 文件。
+
+### 2. 点击 YAML 文件恢复
+
 ```
+GET /api/doc-workspace/file/outline_{session_id}_{base}.yaml
+→ 返回 YAML 内容
+```
+前端从文件名提取 `base_full = {session_id}_{base}`，按优先级恢复：
+1. `GET /api/doc-workspace/file/draft_{base_full}.md` → **200** → 解析章节，跳转 **review**
+2. 无合并稿，逐文件请求 `GET /api/doc-workspace/file/draft_{base_full}_s00.md`、`s01.md`... → **有文件** → 恢复已确认节，跳转 **sections**（最后一节可编辑）
+3. 都 **404** → 跳转 **YAML 编辑**
 
-YAML 文件自动保存到 `doc_workspace/outline_xxxx.yaml`。前端展示 YAML 文本供用户编辑。
+### 3. 生成 YAML 大纲
 
-**YAML 格式**:
+```
+POST /api/generate-document/generate-yaml-outline/
+Body: { conversation_history, session_id }
+```
+SSE: `yaml_outline: msg → chunk×N → done { content, yaml_base, yaml_file }`
+
+保存 `outline_{session_id}_{yaml_base}.yaml`。
+
+**YAML 格式定义**:
 ```yaml
-title: "Document Title"
-sections:
-  - heading: "1. Section Heading"
-    description: "Brief description"
-    subsections:
-      - heading: "1.1 Subsection Heading"
-        description: "Brief description"
+title: "文档标题"                      # 文档标题
+sections:                             # 章节列表
+  - heading: "1. 章节标题"             # 章节标题（可带编号）
+    description: "章节描述"            # 章节内容简述
+    subsections:                      # 子节列表（可选）
+      - heading: "1.1 子节标题"        # 子节标题
+        description: "子节描述"        # 子节内容简述
 ```
 
-### Step 2: 生成 Markdown 草稿
+### 4. 逐节生成（每节一次请求）
 
-**端点**: `POST /api/generate-document/stream/from-yaml/`
-
-**请求**:
-```json
-{
-  "conversation_history": [{...}],
-  "yaml_outline": "title: ...\nsections:\n  ...",
-  "session_id": "20260922xxxxxx"
+```
+POST /api/generate-document/stream/from-yaml/
+Body: {
+  conversation_history, yaml_outline, session_id,
+  yaml_base, section_index: N,
+  confirmed_sections: [{ heading, content }, ...]  // 前面已确认节的内容
 }
 ```
+SSE: `msg → section_msg → chunk×N → section_done { content, section_file, total_sections }`
 
-**SSE 事件流**:
+`confirmed_sections` 让 LLM 看到前面节的内容，避免重复。每节即时保存 `draft_{session_id}_{base}_sNN.md`。
+
+### 5. 最终输出
+
 ```
-{phase:"document_from_yaml", type:"msg",         content:"Generating N sections from YAML outline..."}
-{phase:"document_from_yaml", type:"section_msg", content:"Generating section 1/N: 1. Market Overview", section_index:0, heading:"1. Market Overview"}
-{phase:"document_from_yaml", type:"chunk",       content:"..."}  ×N
-{phase:"document_from_yaml", type:"section_done", content:"...", section_index:0, heading:"1. Market Overview"}
-...（重复 N 次，图片跨节去重）
-{phase:"document_from_yaml", type:"done", content:"<完整 Markdown 文本>",
- title:"...", md_file:"draft_xxxx.md", sections_count:N}
+POST /api/generate-document/finalize/
+Body: { markdown_content, session_id, yaml_base, conversation_history }
 ```
+SSE: `finalize: done { download_url_md/docx/pdf }`
 
-Markdown 文件自动保存到 `doc_workspace/draft_xxxx.md`。前端逐节 streaming 展示，完成后显示可编辑的 textarea。
+保存 `doc_xxx.md/.docx/.pdf` 到 `tmp_imgs/`，写入 `report_generation_log` 表供 RightPanel 显示。自动清理 `doc_workspace/` 中对应的 `outline_{sid}_{base}.yaml`、`draft_{sid}_{base}.md`、`draft_{sid}_{base}_s*.md`。
 
-### Step 3: 最终输出
+### 6. 关闭弹窗
 
-**端点**: `POST /api/generate-document/finalize/`
+前端仅关闭弹窗，无后端调用。清理已在 finalize 后端完成。
 
-**请求**:
-```json
-{
-  "markdown_content": "# Title\n\n...（用户可能编辑后的 Markdown）",
-  "session_id": "20260922xxxxxx"
-}
-```
+## observe_cycle_log 记录
 
-**SSE 事件流**:
-```
-{phase:"finalize", type:"done", content:"<完整 Markdown>", title:"...",
- file_name:"doc_xxxx",
- download_url_md:"http://.../tmp_imgs/doc_xxxx.md",
- download_url_docx:"http://.../tmp_imgs/doc_xxxx.docx",
- download_url_pdf:"http://.../tmp_imgs/doc_xxxx.pdf"}
-```
+| 模式 | 函数 | 笔数 | cycle_index | sub_phase |
+|------|------|------|-------------|-----------|
+| Generate Report | `_event_stream_generate_document` | 1 + N | 0=outline, 1..N=part | outline, part |
+| Generate Document | `_event_stream_generate_document_unified` | 1 | 0 | full |
+| YAML Outline | `_event_stream_generate_yaml_outline` | 1 | 0 | outline |
+| | `_event_stream_generate_from_yaml` | N | 1..N | part |
+| | `_event_stream_finalize` | 0 | — | — |
 
-最终文件输出到 `tmp_imgs/`，前端展示下载链接。
+## 上下文记录
+
+三种模式均**不将文档生成过程追加到 conversation_history**。done event 返回的 `conversation_history` 是原始输入的原样回传，不包含文档生成消息。
 
 ---
 
 ## 文件存储
 
-| 目录 | 内容 | Git 跟踪 |
-|------|------|----------|
-| `doc_workspace/` | 中间 YAML 大纲（`outline_*.yaml`）和 Markdown 草稿（`draft_*.md`） | ❌（gitignore） |
-| `tmp_imgs/` | 最终输出的 `.md` / `.docx` / `.pdf` | ❌（gitignore） |
+| 路径 | 内容 | 命名 | Git |
+|------|------|------|-----|
+| `doc_workspace/` | YAML 大纲 | `outline_{session_id}_{rand8}.yaml` | ❌ |
+| `doc_workspace/` | 单节草稿 | `draft_{session_id}_{base}_sNN.md` | ❌ |
+| `doc_workspace/` | 合并草稿 | `draft_{session_id}_{base}.md` | ❌ |
+| `tmp_imgs/` | 最终文档 | `doc_{rand8}.md/.docx/.pdf` | ❌ |
 
-`doc_workspace/.gitkeep` 保留在 git 中以确保目录存在。
+`doc_workspace/.gitkeep` 保留在 git 中。
 
 ---
 
@@ -120,9 +120,9 @@ Markdown 文件自动保存到 `doc_workspace/draft_xxxx.md`。前端逐节 stre
 
 | 组件 | 路径 | 说明 |
 |------|------|------|
-| `YamlOutlineModal.vue` | `vue-front/src/components/YamlOutlineModal.vue` | 三步流程的整体 UI：YAML 编辑 → Markdown 预览/编辑 → 下载链接 |
-| `RightPanel.vue` | `vue-front/src/components/RightPanel.vue` | 提供三个按钮入口 |
-| `useChat.js` | `vue-front/src/composables/useChat.js` | `generateDocument()`、`generateDocumentUnified()`、`fetchGeneratedFilesForSession()` |
+| `YamlOutlineModal.vue` | `vue-front/src/components/YamlOutlineModal.vue` | 三步流程：YAML编辑 → 逐节确认 → review/finalize |
+| `RightPanel.vue` | `vue-front/src/components/RightPanel.vue` | 三个按钮入口 |
+| `useChat.js` | `vue-front/src/composables/useChat.js` | `fetchGeneratedFilesForSession()` 刷新文件列表 |
 
 ---
 
@@ -130,5 +130,5 @@ Markdown 文件自动保存到 `doc_workspace/draft_xxxx.md`。前端逐节 stre
 
 | 文件 | 说明 |
 |------|------|
-| `agent/document_generator.py` | 所有文档生成逻辑：三种模式的 prompt、SSE 流、md/docx/pdf 转换 |
-| `data_access/report_log.py` | 文档生成日志记录（`report_generation_log` 表） |
+| `agent/document_generator.py` | 所有文档生成逻辑：prompt、SSE 流、文件转换 |
+| `data_access/report_log.py` | 文档日志（`report_generation_log` 表） |
