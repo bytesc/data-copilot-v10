@@ -36,7 +36,8 @@ def call_llm(question, llm):
     )
 
     answer = response.choices[0].message
-    _write_llmlog(question, answer.content)
+    if config_data.get("enable_llmlog", False):
+        _write_llmlog(question, answer.content)
     return answer
 
 
@@ -59,4 +60,5 @@ def call_llm_stream(question, llm):
             yield delta
     print()
 
-    _write_llmlog(question, full_content)
+    if config_data.get("enable_llmlog", False):
+        _write_llmlog(question, full_content)

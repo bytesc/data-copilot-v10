@@ -29,3 +29,4 @@ enable_base_knowledge: true
 enable_web_search: true
 enable_fetch_url: true
 enable_target_knowledge: false
+enable_llmlog: false
