@@ -132,26 +132,28 @@ You must follow the structural directive below exactly:
 
 YAML_OUTLINE_SYSTEM = """You are a business document outline generator. Based on the conversation history, generate a YAML outline that defines the document structure.
 
-The YAML must follow this exact structure:
+This YAML is the blueprint that will drive the entire document generation process. Each section, element type, and description will be passed to the writer as strict instructions. The quality of the final document depends on the precision of this outline.
+
+The YAML must follow this exact structure — every field matters:
 title: "Document Title"
 sections:
-  - heading: "1. Section Heading"
-    description: "Brief description of the section content and purpose."
-    elements:
-      - type: text
-        description: "Brief description of the text paragraph(s) to write"
-      - type: table
-        description: "Brief description of the table to include"
-      - type: image
-        description: "Brief description of the chart/image to include"
+  - heading: "1. Section Heading"         # displayed as ## in the document
+    description: "Brief description."     # context for the writer
+    elements:                             # each item = one content block, MUST be in order
+      - type: text                        # text → paragraphs of analysis
+        description: "Brief description of what this text should cover"
+      - type: table                       # table → a markdown data table
+        description: "Brief description of what this table should show"
+      - type: image                       # image → chart/figure from conversation
+        description: "Brief description of what this chart illustrates"
     subsections:
       - heading: "1.1 Subsection Heading"
-        description: "Brief description of the subsection."
+        description: "Brief description."
         elements:
           - type: text
-            description: "Brief description of the text to write"
+            description: "Brief description."
           - type: image
-            description: "Brief description of the image to show"
+            description: "Brief description."
   - heading: "2. Next Section Heading"
     description: "Brief description."
     elements: []
@@ -160,7 +162,9 @@ sections:
 Rules:
 1. Use numbered headings for clarity (1., 1.1, 2., etc.)
 2. Every section MUST include both "elements" and "subsections" keys. If a section or subsection has no content, use an empty list `[]`.
-3. The "elements" field lists every piece of content in order: text paragraphs, data tables, and charts/images. Each element has a type (text, table, or image) and a brief description (1 sentence).
+3. The "elements" array defines every content block in exact order. Each element has:
+   - type: one of text / table / image (text = paragraphs, table = data table, image = chart/figure)
+   - description: 1 sentence describing what this specific block should contain
 4. Keep descriptions concise (1-2 sentences for section/subsection, 1 sentence per element).
 5. Focus on business insights and data analysis — no technical implementation details.
 6. LANGUAGE IS CRITICAL: Write the title and all headings in the EXACT SAME LANGUAGE as the user's original question.
@@ -171,17 +175,24 @@ Output ONLY the YAML. Do NOT wrap it in a code block or markdown fence. Do NOT i
 
 YAML_PART_SYSTEM = """You are a professional business document writer. Based on the conversation history and the document outline below, write the content for a specific section of the document.
 
+The outline below defines every content block via "elements" in strict order. You MUST follow this order exactly — do NOT add, skip, or reorder any element.
+
+Element type rules:
+- [text]  → Write one or more paragraphs of analysis, insights, or narrative.
+- [table] → Output a markdown table with headers and data rows. The table MUST be immediately recognizable as structured tabular data.
+- [image] → Embed a chart/figure from the conversation using `![description](actual_image_url)`. Do NOT make up URLs.
+
 Rules:
 1. Write in markdown format. Do NOT include the section heading — it will be added automatically.
 2. Focus on business insights, data analysis results, trends, patterns, and conclusions.
 3. CRITICAL: The output must contain NO code blocks, no SQL, no Python, no YAML.
 4. Do NOT describe the agent's execution process, tool calls, or workflow steps.
-5. CHARTS AND IMAGES: Include relevant charts from the conversation history. Use markdown image syntax: `![description](image_url)`. Reference actual image URLs — do NOT make up URLs. Do NOT repeat images already used in other sections — if the prompt lists "already used" images below, strictly avoid them.
+5. CHARTS AND IMAGES: Only include images that exist in the conversation history. Use markdown image syntax: `![description](image_url)`. Do NOT make up URLs. Do NOT repeat images already used in other sections — if the prompt lists "already used" images below, strictly avoid them.
 6. LANGUAGE IS CRITICAL: Write in the EXACT SAME LANGUAGE as the Document Title below. Ignore the language of the conversation history or knowledge base.
 7. Be thorough but concise.
-8. Use proper markdown headings (up to `###`), lists, and tables as needed.
+8. Use proper markdown headings (up to `###`), lists, and bold/italic as needed.
 9. If this section has sub-sections listed in the outline, include each sub-section's heading as `### Subsection Heading` and write its content. The heading text must appear ONLY as the `###` marker — do NOT repeat it in the content body.
-10. The outline below lists "elements" (text/table/image) for each section and subsection in the order they should appear. Follow this order when writing the content. Each [text] element corresponds to one or more paragraphs of analysis, each [table] requires a markdown table, and each [image] requires embedding a chart from the conversation history.
+10. CRITICAL — elements order enforcement: The outline lists elements for each section and subsection in the order they MUST appear. Write each content block in that exact order, matching the element type to the correct output format. Every [text], [table], and [image] in the list below must be addressed. Do NOT add content blocks that are not listed.
 
 Document Title: {title}
 Section Heading: {heading}
