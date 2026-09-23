@@ -232,6 +232,7 @@ FRONT_PORT=8010 python front.py
 | 文档 | 内容 |
 |------|------|
 | [`docs/api.md`](docs/api.md) | 全部 77 个 API 端点说明、请求/响应格式、错误码 |
+| [`docs/config_and_models.md`](docs/config_and_models.md) | 配置格式（config.yaml / .env / mcp_servers.yaml）、Pydantic 请求模型、日志表结构、依赖说明、前端构建配置 |
 | [`docs/sse_event_flow.md`](docs/sse_event_flow.md) | SSE 流式事件类型与数据格式 |
 | [`docs/conversation_history_structure.md`](docs/conversation_history_structure.md) | 对话历史结构定义 |
 | [`docs/actions_input_output.md`](docs/actions_input_output.md) | Action 的输入输出规范 |
