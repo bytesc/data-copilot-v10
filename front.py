@@ -16,7 +16,9 @@ client = httpx.AsyncClient(base_url=BACKEND_URL, timeout=600.0)
 
 PROXY_PATHS = ("/api", "/upload-csv", "/upload-txt", "/tmp_imgs")
 STREAM_PATHS = ("/api/generate-and-execute/stream/", "/api/plain-chat/stream/",
-                "/api/filter-db-fields/stream/", "/api/filter-functions/stream/")
+                "/api/filter-db-fields/stream/", "/api/filter-functions/stream/",
+                "/api/think/stream/", "/api/act/stream/", "/api/observe/stream/",
+                "/api/action/stream/", "/api/generate-document/stream/")
 STATIC_EXTS = {".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg",
                ".ico", ".webp", ".woff", ".woff2", ".ttf", ".eot", ".json", ".map"}
 
