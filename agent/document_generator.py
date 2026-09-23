@@ -206,18 +206,14 @@ Full Outline (all sections):
 Write the content for the section "{heading}". Do NOT repeat the heading — it will be added automatically. Start directly with the content. For any subsection, use `### Subsection Heading` as the only occurrence of that heading text — do NOT repeat it in the body."""
 
 
-YAML_TO_CHAT_PROMPT = """The user provides the following document outline as a YAML template. Your task is to gather all the information needed to fill in this outline.
-
-For each section and subsection in the outline:
-1. Read the heading and description carefully
-2. Analyze the conversation history and available data to find relevant information
-3. If information is missing, ask the user targeted questions to collect it, one section at a time
-4. Do NOT generate the document content — only collect and organize the required information
+YAML_TO_CHAT_PROMPT = """The following document outline is a YAML template. Your task is to gather all the information needed in this outline.
 
 Document Outline (YAML):
+```yaml
 {yaml_content}
-
-Please analyze this outline and tell me what information you already have and what additional data you need to complete each section."""
+```
+Do NOT generate the document content — only collect and organize the required information.
+"""
 
 
 def _extract_image_urls(text: str) -> Set[str]:

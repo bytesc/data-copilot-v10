@@ -110,6 +110,11 @@ const pausedInput = ref('')
 const messagesContainer = ref(null)
 const userInputRef = ref(null)
 
+function setQuestion(text) {
+  currentQuestion.value = text
+}
+defineExpose({ setQuestion })
+
 function onSubmitQuestion() {
   const q = currentQuestion.value.trim()
   if (!q || isRunning.value) return

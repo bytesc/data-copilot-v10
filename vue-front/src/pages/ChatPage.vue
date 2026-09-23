@@ -15,7 +15,7 @@
     </aside>
 
     <main class="chat-area">
-      <ChatArea :chat="chat" />
+      <ChatArea ref="chatAreaRef" :chat="chat" />
     </main>
 
     <aside class="right-panel" :class="{ collapsed: isRightPanelCollapsed }">
@@ -60,6 +60,7 @@ import ChatArea from '@/components/ChatArea.vue'
 import ResumeModal from '@/components/ResumeModal.vue'
 import YamlOutlineModal from '@/components/YamlOutlineModal.vue'
 
+const chatAreaRef = ref(null)
 const chat = useChat()
 const isPanelCollapsed = ref(false)
 const isRightPanelCollapsed = ref(false)
@@ -78,6 +79,6 @@ function onYamlDoc() {
 
 function onSendYaml(yamlContent) {
   showYamlOutline.value = false
-  chat.submitNewQuestion(yamlContent)
+  chatAreaRef.value?.setQuestion(yamlContent)
 }
 </script>
