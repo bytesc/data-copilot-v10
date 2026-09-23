@@ -283,4 +283,15 @@ onMounted(async () => {
   padding: 12px;
   font-style: italic;
 }
+
+@media (max-width: 768px) {
+  .page-header { padding: 12px 16px; }
+  .page-header h2 { font-size: 16px; }
+  .sub-nav { padding: 0 12px; overflow-x: auto; }
+  .sub-nav-link { padding: 10px 12px; font-size: 12px; }
+  .page-body { padding: 12px 16px; }
+  .tool-card { padding: 10px 12px; }
+  .mcp-server-card { padding: 12px; }
+  .server-header { flex-direction: column; align-items: flex-start; gap: 4px; }
+}
 </style>

@@ -233,4 +233,8 @@ async function executeDelete() {
   border-color: var(--accent-green, #2ecc71);
   color: var(--accent-green, #2ecc71);
 }
+
+@media (max-width: 768px) {
+  .confirm-modal { width: 90vw; max-width: 90vw; }
+}
 </style>

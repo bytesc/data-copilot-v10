@@ -265,4 +265,11 @@ onMounted(fetchItems)
   border-color: var(--accent-blue);
   color: var(--accent-blue);
 }
+
+@media (max-width: 768px) {
+  .page-header { padding: 12px 16px; }
+  .page-header-left h2 { font-size: 16px; }
+  .page-body { padding: 12px 16px; }
+  .brief-card { padding: 12px; }
+}
 </style>

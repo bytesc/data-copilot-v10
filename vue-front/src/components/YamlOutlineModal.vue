@@ -879,4 +879,16 @@ onMounted(fetchAvailableFiles)
 .yaml-format-hint summary { cursor: pointer; user-select: none; padding: 4px 8px; border-radius: var(--radius-sm); background: var(--bg-tertiary); display: inline-block; }
 .yaml-format-hint summary:hover { background: var(--bg-hover); }
 .yaml-format-pre { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px; font-family: 'Consolas','Courier New',monospace; font-size: 12px; line-height: 1.4; overflow-x: auto; margin: 6px 0 0; white-space: pre; color: var(--text-secondary); }
+
+@media (max-width: 768px) {
+  .modal-container { width: 100vw; height: 100vh; border-radius: 0; }
+  .pick-item { flex-wrap: wrap; gap: 8px; }
+  .pick-actions { margin-left: 0; width: 100%; flex-wrap: wrap; justify-content: flex-end; }
+  .modal-header { padding: 12px 14px; }
+  .modal-header h3 { font-size: 14px; }
+  .modal-body { padding: 10px 14px; }
+  .modal-footer { padding: 10px 14px; }
+  .code-editor { font-size: 12px; padding: 8px; }
+  .user-prompt-input { max-width: 100%; }
+}
 </style>

@@ -531,4 +531,16 @@ async function saveColumnComment(tableName, columnName) {
   padding: 5px 12px;
   font-size: 12px;
 }
+
+@media (max-width: 768px) {
+  .page-header { padding: 12px 16px; }
+  .page-header-left h2 { font-size: 16px; }
+  .page-body { padding: 12px 16px; }
+  .table-card { padding: 12px; }
+  .column-row { flex-direction: column; gap: 6px; }
+  .column-info { min-width: 0; width: 100%; }
+  .column-comment { flex-wrap: wrap; }
+  .expanded-header { flex-wrap: wrap; gap: 6px; justify-content: flex-start; }
+  .expanded-header .btn-action { font-size: 11px; padding: 4px 8px; }
+}
 </style>

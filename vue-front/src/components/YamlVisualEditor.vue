@@ -349,4 +349,10 @@ function removeSubElement(si, ti, ei) {
 .ve-element-row .ve-input-flex {
   flex: 1;
 }
+
+@media (max-width: 768px) {
+  .ve-element-row { flex-wrap: wrap; }
+  .ve-card { padding: 8px; }
+  .ve-sub-group { padding: 6px; }
+}
 </style>

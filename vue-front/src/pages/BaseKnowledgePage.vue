@@ -372,4 +372,21 @@ onMounted(fetchItems)
   padding: 40px;
   text-align: center;
 }
+
+@media (max-width: 768px) {
+  .page-header { padding: 12px 16px; }
+  .page-header-left h2 { font-size: 16px; }
+  .page-body { padding: 12px 16px; }
+  .data-table, .data-table thead, .data-table tbody, .data-table tr, .data-table th, .data-table td { display: block; }
+  .data-table thead { display: none; }
+  .data-table tr { padding: 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 8px; background: var(--bg-secondary); }
+  .data-table td { border: none; padding: 4px 0; }
+  .col-id, .col-key, .col-value, .col-actions { width: auto; }
+  .col-id::before { content: "ID: "; font-weight: 600; color: var(--text-muted); }
+  .col-key::before { content: "Key: "; font-weight: 600; color: var(--text-muted); }
+  .col-value::before { content: "Value: "; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px; }
+  .col-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .search-input { max-width: 100%; }
+  .modal-content { width: 95vw; max-width: 95vw; margin: 0 10px; }
+}
 </style>
