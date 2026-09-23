@@ -487,14 +487,14 @@ async function saveFile(filename, content) {
   } catch {}
 }
 
-function saveYaml() {
+async function saveYaml() {
   if (!yamlBase.value) return
-  saveFile(`outline_${yamlBase.value}.yaml`, yamlContent.value)
+  await saveFile(`outline_${yamlBase.value}.yaml`, yamlContent.value)
 }
 
-function saveDraft() {
+async function saveDraft() {
   if (!yamlBase.value) return
-  saveFile(`draft_${yamlBase.value}.md`, mergedContent.value)
+  await saveFile(`draft_${yamlBase.value}.md`, mergedContent.value)
 }
 
 async function doEditYaml() {
@@ -611,7 +611,8 @@ async function generateYamlOutline() {
 }
 
 // Start generating sections one by one
-function startGeneratingSections() {
+async function startGeneratingSections() {
+  await saveYaml()
   generatingDraft.value = true
   step.value = 'sections'
   confirmedSections.value = []
@@ -663,7 +664,7 @@ async function generateNextSection() {
 }
 
 // Confirm current section and move to next
-function confirmSection() {
+async function confirmSection() {
   confirmedSections.value.push({
     heading: currentSectionHeading.value,
     content: currentSectionEdit.value,
@@ -672,6 +673,7 @@ function confirmSection() {
     currentSectionIndex.value++
     generateNextSection()
   } else {
+    await saveDraft()
     step.value = 'review'
     nextTick(() => {
       if (finalTextarea.value) finalTextarea.value.focus()

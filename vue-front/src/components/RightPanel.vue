@@ -5,11 +5,11 @@
       <button class="ctrl-btn" @click="$emit('generate-doc')" :disabled="isRunning">
         <span class="btn-icon">📄</span> Generate Report
       </button>
-      <button class="ctrl-btn" @click="$emit('generate-doc-unified')" :disabled="isRunning">
+      <!-- <button class="ctrl-btn" @click="$emit('generate-doc-unified')" :disabled="isRunning">
         <span class="btn-icon">📋</span> Generate Document
-      </button>
-      <button class="ctrl-btn" @click="$emit('generate-yaml-doc')" :disabled="isRunning">
-        <span class="btn-icon">📐</span> YAML Outline
+      </button> -->
+      <button class="ctrl-btn highlight-btn" @click="$emit('generate-yaml-doc')" :disabled="isRunning">
+        <span class="btn-icon">📐</span> Generate Structured Report
       </button>
     </div>
 
@@ -77,6 +77,17 @@ defineEmits(['generate-doc', 'generate-doc-unified', 'generate-yaml-doc'])
 .ctrl-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.highlight-btn {
+  color: var(--accent-blue);
+  font-weight: 600;
+  border-color: var(--accent-blue);
+}
+
+.highlight-btn:hover:not(:disabled) {
+  color: #fff;
+  background: var(--accent-blue);
 }
 
 .btn-icon {
