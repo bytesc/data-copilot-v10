@@ -160,7 +160,12 @@ sections:
               class="code-editor"
               v-model="currentSectionEdit"
               spellcheck="false"
+
             ></textarea>
+            <details class="preview-toggle">
+              <summary>Preview (images, tables)</summary>
+              <div class="edit-preview" v-html="renderMd(currentSectionEdit)"></div>
+            </details>
           </div>
         </div>
         <div class="modal-footer">
@@ -191,6 +196,10 @@ sections:
             v-model="mergedContent"
             spellcheck="false"
           ></textarea>
+          <details class="preview-toggle">
+            <summary>Preview (images, tables)</summary>
+            <div class="edit-preview" v-html="renderMd(mergedContent)"></div>
+          </details>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" style="margin-right:auto" @click="backToSectionEdit">Back</button>
@@ -846,6 +855,14 @@ onMounted(fetchAvailableFiles)
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .btn-danger { background: #d34f4f; color: #fff; border-color: #d34f4f; }
 .btn-danger:hover { opacity: 0.9; }
+.preview-toggle { flex-shrink: 0; margin-top: 6px; }
+.preview-toggle summary { font-size: 12px; color: var(--accent-blue); cursor: pointer; user-select: none; padding: 4px 8px; border-radius: var(--radius-sm); background: var(--bg-tertiary); display: inline-block; }
+.preview-toggle summary:hover { background: var(--bg-hover); }
+.edit-preview { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 16px; margin-top: 6px; max-height: 400px; overflow-y: auto; font-size: 13px; line-height: 1.6; }
+.edit-preview img { max-width: 100%; height: auto; border-radius: var(--radius-sm); margin: 8px 0; }
+.edit-preview table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+.edit-preview th, .edit-preview td { border: 1px solid var(--border-color); padding: 6px 10px; text-align: left; }
+.edit-preview th { background: var(--bg-tertiary); font-weight: 600; }
 .user-prompt-area { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 24px; }
 .user-prompt-label { font-size: 14px; color: var(--text-secondary); font-weight: 600; }
 .user-prompt-input { width: 100%; max-width: 560px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px; font-family: inherit; font-size: 14px; line-height: 1.5; resize: vertical; outline: none; }

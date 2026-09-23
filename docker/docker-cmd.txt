@@ -10,6 +10,10 @@
 #   2. docker/docker-compose.yml  — volumes 挂载路径
 #   3. docker/nginx.conf          — location 路径
 # ============================================================
+# ============================================================
+# doc_workspace/（YAML 大纲和草稿）已挂载为 volume：
+#   docker/docker-compose.yml  — backend.volumes
+# ============================================================
 
 docker compose -f docker/docker-compose.yml -p docker up -d 
 docker compose -f docker/docker-compose.yml -p docker up -d --build
