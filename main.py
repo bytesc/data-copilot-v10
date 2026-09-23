@@ -757,9 +757,29 @@ async def plain_chat_stream(request: Request, user_input: AgentInput):
 @app.get("/api/tools/functions")
 async def list_python_functions():
     def _list():
-        from agent.tools.get_function_info import FUNCTION_DICT, FUNCTION_DESCRIPTION
+        from agent.tools.get_function_info import FUNCTION_DICT, FUNCTION_DESCRIPTION, CUSTOM_FUNC_NAMES
         result = []
         for name, func in FUNCTION_DICT.items():
+            if name in CUSTOM_FUNC_NAMES:
+                continue
+            result.append({
+                "name": name,
+                "description": FUNCTION_DESCRIPTION.get(name, func.__doc__ or ""),
+                "doc": func.__doc__ or ""
+            })
+        return result
+    loop = asyncio.get_event_loop()
+    return JSONResponse(content=await loop.run_in_executor(executor, _list))
+
+
+@app.get("/api/tools/custom-functions")
+async def list_custom_functions():
+    def _list():
+        from agent.tools.get_function_info import FUNCTION_DICT, FUNCTION_DESCRIPTION, CUSTOM_FUNC_NAMES
+        result = []
+        for name, func in FUNCTION_DICT.items():
+            if name not in CUSTOM_FUNC_NAMES:
+                continue
             result.append({
                 "name": name,
                 "description": FUNCTION_DESCRIPTION.get(name, func.__doc__ or ""),

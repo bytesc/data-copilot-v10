@@ -363,7 +363,7 @@ _DB_QUERY_GUIDE_MD = _read_doc("db_query_guide.md")
 _THINK_KNOWLEDGE_MD = _read_doc("think_guide.md")
 _MCP_BRIEF_MD = _read_doc("mcp_brief.md")
 _BASE_KNOWLEDGE_BRIEF_MD = _read_doc("base_knowledge_brief.md")
-_FUNCTION_BRIEF_MD = _read_doc("function_brief.md")
+_CUSTOM_FUNC_BRIEF_MD = _read_doc("custom_func_brief.md")
 
 
 def _get_brief_value(attr, md_fallback):
@@ -394,7 +394,7 @@ def _get_mcp_brief():
 
 MCP_BRIEF = _DynamicStr(_get_mcp_brief)
 BASE_KNOWLEDGE_BRIEF = _DynamicStr(lambda: _get_brief_value("base_knowledge_brief", _BASE_KNOWLEDGE_BRIEF_MD))
-FUNCTION_BRIEF = _DynamicStr(lambda: _get_brief_value("function_brief", _FUNCTION_BRIEF_MD))
+CUSTOM_FUNC_BRIEF = _DynamicStr(lambda: _get_brief_value("custom_func_brief", _CUSTOM_FUNC_BRIEF_MD))
 
 
 def _format_db_query_guide():
@@ -447,11 +447,11 @@ Database:
 Visualization:
 - Generate charts (line, bar, scatter, pie, etc.) and save images
 """
-    func = str(FUNCTION_BRIEF)
-    func_content = func_hardcoded
-    if func.strip():
-        func_content += func
-    parts.append(f"### Function Brief\n{func_content}\n\nUse `explore_functions` to explore available function details.")
+    parts.append(f"### Function Brief\n{func_hardcoded}\n\nUse `explore_functions` to explore available function details.")
+
+    custom_func = str(CUSTOM_FUNC_BRIEF)
+    if custom_func.strip():
+        parts.append(f"### Custom Function Brief\n{custom_func}\n\nUse `explore_functions` to explore available function details.")
 
     return "\n\n".join(parts)
 

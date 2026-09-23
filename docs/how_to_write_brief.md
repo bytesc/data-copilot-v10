@@ -13,7 +13,8 @@ Brief 是注入 LLM prompt 的概览性知识，帮助 LLM 理解数据库、业
 | DB_BRIEF | `knowledge_docs/db_brief.md` | `db_brief` | think / explore_schema | `DataBase Brief` |
 | BASE_KNOWLEDGE_BRIEF | `knowledge_docs/base_knowledge_brief.md` | `base_knowledge_brief` | think | `Domain Knowledge Brief` |
 | MCP_BRIEF | `knowledge_docs/mcp_brief.md` | `mcp_brief` | think / explore_mcp | `MCP Brief` |
-| FUNCTION_BRIEF | `knowledge_docs/function_brief.md` | `function_brief` | think | `Function Brief` |
+| FUNCTION_BRIEF | 代码硬编码 | 无 | think | `Function Brief` |
+| CUSTOM_FUNC_BRIEF | `knowledge_docs/custom_func_brief.md` | `custom_func_brief` | think | `Custom Function Brief` |
 
 ---
 
@@ -35,7 +36,7 @@ MD 文件和 `brief_info` 表的内容**不是二选一，而是合并**
 ```sql
 -- sys 数据库
 CREATE TABLE brief_info (
-    attr  TEXT      NOT NULL,  -- 属性名称：db_brief / base_knowledge_brief / mcp_brief / function_brief
+    attr  TEXT      NOT NULL,  -- 属性名称：db_brief / base_knowledge_brief / mcp_brief / custom_func_brief
     value LONGTEXT            -- 属性值：追加到对应 MD 文件后的文本内容
 );
 ```
@@ -85,8 +86,18 @@ CREATE TABLE brief_info (
 
 **作用**：说明有哪些类别的函数可用。
 
+- 内容完全硬编码在代码中，不依赖 MD 文件或数据库
 - 函数的大类划分（如数据库查询、数据加载、可视化、网络搜索等）
 - 每个大类能解决什么类型的问题
+
+### CUSTOM_FUNC_BRIEF — 自定义函数摘要
+
+**注入位置**：think 阶段（`Custom Function Brief` 区段）。
+
+**作用**：说明自定义/额外注册的函数的能力。
+
+- 内容来自 MD 文件 `custom_func_brief.md` + `brief_info` 表的 `custom_func_brief` 行
+- 用于描述用户自定义的函数（如 HDB 预测、地图、学校查询等）
 
 ---
 
@@ -163,32 +174,24 @@ Server List:
 - `Server List` 下列出每个服务器名称和简要功能
 - 新增 MCP 服务器时必须同步更新
 
-### function_brief.md 写法
+### custom_func_brief.md 写法
 
-格式参考 `knowledge_docs/function_brief.md`：
+格式参考 `knowledge_docs/custom_func_brief.md`：
 
 ```markdown
-Available Functions:
-一句话说明系统提供了哪些类别的函数。
+Custom Functions:
+一句话说明系统提供了哪些自定义函数。
 
-数据库查询类：
-- 执行 SQL、加载数据表等
+HDB 分析类：
+- HDB 房价预测、价格趋势分析
+- HDB 详细信息查询
 
-数据分析类：
-- 数据合并、过滤、统计等
-
-可视化类：
-- 绘制折线图、柱状图、散点图等
-
-网络搜索类：
-- 搜索网页、获取页面内容等
-
-MCP 外部工具类：
-- 调用 MCP 服务器上的工具（如计算器、外部 API、第三方服务等）
+地理信息类：
+- 地图可视化，学校/幼儿园位置查询
 ```
 
 要点：
-- 首行以 `Available Functions:` 开头
+- 首行以 `Custom Functions:` 开头
 - 按**大类**组织，每类描述能解决什么问题
 - **不要**列具体函数名和参数
 

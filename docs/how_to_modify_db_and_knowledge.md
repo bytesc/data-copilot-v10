@@ -56,14 +56,14 @@
 
 用于 think 阶段的 `## MCP Brief` 区段和 `explore_mcp` action。
 
-### 3.6 FUNCTION_BRIEF — 函数摘要
+### 3.6 CUSTOM_FUNC_BRIEF — 自定义函数摘要
 
 | 来源 | 路径/表 |
 |---|---|
-| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/function_brief.md` |
-| 数据库表 | `brief_info` 中 `attr='function_brief'` 的行 |
+| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md` |
+| 数据库表 | `brief_info` 中 `attr='custom_func_brief'` 的行 |
 
-用于 think 阶段的 `## Function Brief` 区段。与代码自动生成的函数摘要（`get_func_summary_for_agent()`）合并后一起注入。
+用于 think 阶段的 `## Custom Function Brief` 区段。描述自定义/额外注册的函数能力，与代码自动生成的主函数摘要（`get_func_summary_for_agent()`）互补。
 
 ### 3.7 TARGET — 目标输出模板
 
@@ -126,7 +126,8 @@
 | DB_BRIEF | `db_brief.md` | `brief_info.db_brief` | think / explore_schema | 合并，空时不显示标签 |
 | BASE_KNOWLEDGE_BRIEF | `base_knowledge_brief.md` | `brief_info.base_knowledge_brief` | think | 合并 |
 | MCP_BRIEF | `mcp_brief.md` | `brief_info.mcp_brief` | think / explore_mcp | 合并，空时不显示标签 |
-| FUNCTION_BRIEF | `function_brief.md` | `brief_info.function_brief` | think | 合并 |
+| FUNCTION_BRIEF | 代码硬编码 | 无 | think | 固定 |
+| CUSTOM_FUNC_BRIEF | `custom_func_brief.md` | `brief_info.custom_func_brief` | think | 合并 |
 | Function Catalog | 代码自动生成 | 无 | think | 自动 |
 | BASE | `base_knowledge.md` | `base_knowledge` | explore_base_knowledge / generate_and_execute / generate_document | 合并 |
 | DOC | `doc_guide.md` | `doc_guide` | generate_document | 合并，空时不显示标签 |

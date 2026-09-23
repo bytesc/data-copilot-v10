@@ -21,9 +21,18 @@
       <div v-else-if="error" class="error-text">{{ error }}</div>
       <template v-else>
         <div v-if="activeTab === 'functions'">
-          <div v-if="pythonFunctions.length === 0" class="empty-text">No Python functions available</div>
+          <div class="section-title">Built-in Functions</div>
+          <div v-if="pythonFunctions.length === 0" class="empty-text">No built-in functions available</div>
           <div v-else class="tool-grid">
             <div v-for="fn in pythonFunctions" :key="fn.name" class="tool-card">
+              <div class="tool-name">{{ fn.name }}</div>
+              <div class="tool-desc">{{ fn.description }}</div>
+            </div>
+          </div>
+          <div class="section-title" style="margin-top: 20px;">Custom Functions</div>
+          <div v-if="customFunctions.length === 0" class="empty-text">No custom functions available</div>
+          <div v-else class="tool-grid">
+            <div v-for="fn in customFunctions" :key="fn.name" class="tool-card">
               <div class="tool-name">{{ fn.name }}</div>
               <div class="tool-desc">{{ fn.description }}</div>
             </div>
@@ -66,7 +75,7 @@ const activeTab = ref('functions')
 const pythonFunctions = ref([])
 const mcpServers = ref([])
 const loading = ref(true)
-const loadingMcp = ref(true)
+const customFunctions = ref([])
 const error = ref('')
 
 onMounted(async () => {
@@ -98,6 +107,13 @@ onMounted(async () => {
   }).finally(() => {
     loadingMcp.value = false
   })
+
+  try {
+    const custRes = await fetch('/api/tools/custom-functions')
+    if (custRes.ok) {
+      customFunctions.value = await custRes.json()
+    }
+  } catch (_) { /* ignore */ }
 })
 </script>
 
@@ -250,6 +266,15 @@ onMounted(async () => {
   color: var(--accent-red);
   padding: 24px;
   text-align: center;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 8px 0;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .empty-text {

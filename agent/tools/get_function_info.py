@@ -1,6 +1,7 @@
 from .copilot.utils.call_llm_test import call_llm, call_llm_stream
 from .tools_def import draw_graph, query_database, explain_data, exe_sql, draw_compare_graph, load_data, \
     get_save_image_path, search_web, fetch_webpage, exe_mcp
+from .custom_tools_def import get_minimap, predict_hdb_price
 
 FUNCTION_DICT = {
     # "query_database": query_database,
@@ -11,6 +12,8 @@ FUNCTION_DICT = {
     "load_data": load_data,
     "get_save_image_path": get_save_image_path,
     "exe_mcp": exe_mcp,
+    "get_minimap": get_minimap,
+    "predict_hdb_price": predict_hdb_price,
     # "search_web": search_web,
     # "fetch_webpage": fetch_webpage,
 }
@@ -26,12 +29,17 @@ FUNCTION_IMPORT = {
     search_web: "from agent.tools.tools_def import search_web",
     fetch_webpage: "from agent.tools.tools_def import fetch_webpage",
     exe_mcp: "from agent.tools.tools_def import exe_mcp",
+    get_minimap: "from agent.tools.custom_tools_def import get_minimap",
+    predict_hdb_price: "from agent.tools.custom_tools_def import predict_hdb_price",
 }
 
 ASSIST_FUNCTION_DICT = {
     # query_database: [explain_data],
     # exe_sql: [explain_data],
 }
+
+CUSTOM_FUNC_NAMES = {name for name, func in FUNCTION_DICT.items()
+                     if getattr(func, '__module__', '').endswith('.custom_tools_def')}
 
 IMPORTANT_FUNC = [
     "load_data", "get_save_image_path"

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from agent.agent import generate_and_execute_stream
 from agent.document_generator import generate_document_from_context
-from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, TARGET, MCP_BRIEF, FUNCTION_BRIEF, BASE_KNOWLEDGE_BRIEF, get_db_query_guide_db, get_base_knowledge_db, base_knowledge_to_str
+from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, TARGET, MCP_BRIEF, CUSTOM_FUNC_BRIEF, BASE_KNOWLEDGE_BRIEF, get_db_query_guide_db, get_base_knowledge_db, base_knowledge_to_str
 from agent.tools.tools_def import engine, llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.tools.copilot.sql_code import parse_selected_fields_json
@@ -297,7 +297,7 @@ def _act_explore_functions(full_question: str, session_id: str, search_keyword: 
     func_names = ", ".join(FUNCTION_DICT.keys())
     prompt = f"""Analyze the following function catalog and the user's question to select the needed functions.
 
-{FUNCTION_BRIEF}
+{CUSTOM_FUNC_BRIEF}
 
 {full_catalog}
 

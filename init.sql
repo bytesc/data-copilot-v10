@@ -104,4 +104,4 @@ CREATE TABLE IF NOT EXISTS `brief_info` (
 INSERT INTO `brief_info` (`attr`, `value`) VALUES ('db_brief', '');
 INSERT INTO `brief_info` (`attr`, `value`) VALUES ('base_knowledge_brief', '');
 INSERT INTO `brief_info` (`attr`, `value`) VALUES ('mcp_brief', '');
-INSERT INTO `brief_info` (`attr`, `value`) VALUES ('function_brief', '');
+INSERT INTO `brief_info` (`attr`, `value`) VALUES ('custom_func_brief', '');

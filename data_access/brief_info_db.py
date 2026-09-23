@@ -21,7 +21,7 @@ def init_brief_info():
         ("db_brief", ""),
         ("base_knowledge_brief", ""),
         ("mcp_brief", ""),
-        ("function_brief", ""),
+        ("custom_func_brief", ""),
     ]
     try:
         with sys_engine.connect() as conn:

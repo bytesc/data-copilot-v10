@@ -21,7 +21,7 @@
 | `db_query_guide.md` | `_DB_QUERY_GUIDE_MD` |
 | `base_knowledge_brief.md` | `_BASE_KNOWLEDGE_BRIEF_MD` |
 | `mcp_brief.md` | `_MCP_BRIEF_MD` |
-| `function_brief.md` | `_FUNCTION_BRIEF_MD` |
+| `custom_func_brief.md` | `_CUSTOM_FUNC_BRIEF_MD` |
 
 ### 2. 数据库表（实时查询，无需重启）
 
@@ -42,7 +42,7 @@ value LONGTEXT
 | `graph_code_guide` | `get_graph_code_guide_db()` |
 | `think_guide` | `get_think_guide_db()` |
 
-另外，`brief_info` 表（结构为 `attr` / `value`）用于存储 `db_brief`、`base_knowledge_brief`、`mcp_brief`、`function_brief` 的 DB 覆盖值，与对应 MD 文件合并后注入。
+另外，`brief_info` 表（结构为 `attr` / `value`）用于存储 `db_brief`、`base_knowledge_brief`、`mcp_brief`、`custom_func_brief` 的 DB 覆盖值，与对应 MD 文件合并后注入。
 
 ### 3. 动态注入机制：`_DynamicStr`
 
@@ -69,7 +69,7 @@ def _get_brief_value(attr, md_fallback):
 DB_BRIEF = _DynamicStr(lambda: ("\nDataBase Brief:\n" + v) if v.strip() else "")
 MCP_BRIEF = _DynamicStr(lambda: ("\nMCP Brief:\n" + v) if v.strip() else "")
 BASE_KNOWLEDGE_BRIEF = _DynamicStr(lambda: _get_brief_value(...))
-FUNCTION_BRIEF = _DynamicStr(lambda: _get_brief_value(...))
+CUSTOM_FUNC_BRIEF = _DynamicStr(lambda: _get_brief_value(...))
 
 BASE = _DynamicStr(lambda: "\nbase knowledge for reference:\n" + _BASE_MD
        + "\n" + base_knowledge_to_str(get_base_knowledge_db()))
@@ -103,8 +103,9 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 {BRIEF_INFO}              → BRIEF_INFO 聚合
                             ├── DB_BRIEF → MD + brief_info.db_brief
                             ├── Domain Knowledge Brief → MD + brief_info.base_knowledge_brief
-                            ├── MCP Brief → MD + brief_info.mcp_brief
-                            └── Function Brief → MD + brief_info.function_brief + 硬编码
+├── MCP Brief → MD + brief_info.mcp_brief
+├── Function Brief → 代码硬编码
+└── Custom Function Brief → MD + brief_info.custom_func_brief
 ```
 
 **功能：** Think 阶段生成 todo list 分析计划。各 Brief 提供基础概览，详细业务知识通过 `explore_base_knowledge` action 按需获取。
@@ -241,7 +242,7 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 | 功能 | 文件 | 注入变量 | 来源 |
 |------|------|----------|------|
-| **Think** | `think.py` | `TARGET`, `THINK_KNOWLEDGE`, `BRIEF_INFO`（含 DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / FUNCTION_BRIEF） | MD + DB |
+| **Think** | `think.py` | `TARGET`, `THINK_KNOWLEDGE`, `BRIEF_INFO`（含 DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / FUNCTION_BRIEF / CUSTOM_FUNC_BRIEF） | MD + DB + 代码硬编码 |
 | **Action** | `action.py` | `BRIEF_INFO` | MD + DB |
 | **Act - explore_schema** | `act.py` | `DB_BRIEF`, `DB_QUERY_GUIDE` | MD + DB |
 | **Act - explore_functions** | `act.py` | 无 | 动态查询 |
@@ -303,7 +304,7 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 │                                                                     │
 │  BASE / DOC / TARGET / DB_BRIEF / DB_QUERY_GUIDE /                  │
 │  THINK_KNOWLEDGE / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF /               │
-│  FUNCTION_BRIEF                                                       │
+│  CUSTOM_FUNC_BRIEF                                                    │
 └──────────────────────┬──────────────────────────────────────────────┘
                        │
      ┌──────────┬───────┼───────────┬──────────┬─────────────┬─────────┐

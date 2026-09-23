@@ -1,14 +1,25 @@
 from typing import Optional, List
 
-from .get_function_info import FUNCTION_DICT
+from .get_function_info import FUNCTION_DICT, CUSTOM_FUNC_NAMES
 
-
-FUNC_CATEGORIES = {
+_CORE_CATEGORIES = {
     "Database": ["exe_sql"],
     "Data Loading": ["load_data"],
     "Visualization": ["get_save_image_path"],
     "Web Search": ["search_web", "fetch_webpage"],
 }
+
+_ALL_KNOWN = set()
+for names in _CORE_CATEGORIES.values():
+    _ALL_KNOWN.update(names)
+
+
+def _get_func_categories():
+    result = dict(_CORE_CATEGORIES)
+    custom = [n for n in CUSTOM_FUNC_NAMES if n not in _ALL_KNOWN]
+    if custom:
+        result["Custom"] = custom
+    return result
 
 
 def _get_func_desc(func) -> str:
@@ -20,7 +31,7 @@ def get_func_catalog_markdown() -> str:
     lines.append("These functions are available for use in generated code. ")
     lines.append("")
 
-    for category, func_names in FUNC_CATEGORIES.items():
+    for category, func_names in _get_func_categories().items():
         lines.append(f"### {category}")
         lines.append("")
         for fname in func_names:
@@ -41,7 +52,7 @@ def get_func_summary_for_agent() -> str:
     lines.append("| Function | Category | Purpose |")
     lines.append("|----------|----------|---------|")
 
-    for category, func_names in FUNC_CATEGORIES.items():
+    for category, func_names in _get_func_categories().items():
         for fname in func_names:
             func = FUNCTION_DICT.get(fname)
             if not func:
