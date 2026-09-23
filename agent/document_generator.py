@@ -734,7 +734,7 @@ Conversation History:
         if parsed.get("sections"):
             break
 
-        error_hint = "\n\nPrevious attempt failed. Output valid YAML inside ```yaml block with proper structure (title + sections list)."
+        error_hint = "\n\nPrevious attempt failed. Output valid YAML inside ```yaml block with proper structure (title + sections, each section can have optional elements: text/table/image, and optional subsections)."
     else:
         yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'error', 'content': 'Failed to generate valid YAML outline after retries'}, ensure_ascii=False)}\n\n"
         return
