@@ -85,7 +85,28 @@ sections:
             description: "..."
 </pre>
             </details>
-            <textarea ref="yamlTextarea" class="code-editor" v-model="yamlContent" spellcheck="false"></textarea>
+            <div class="editor-mode-bar">
+              <button
+                :class="['mode-tab', { active: editorMode === 'code' }]"
+                @click="switchToCode"
+              >Code</button>
+              <button
+                :class="['mode-tab', { active: editorMode === 'visual' }]"
+                @click="switchToVisual"
+              >Visual</button>
+            </div>
+            <div v-if="parseError" class="parse-error">{{ parseError }}</div>
+            <textarea
+              v-show="editorMode === 'code'"
+              ref="yamlTextarea"
+              class="code-editor"
+              v-model="yamlContent"
+              spellcheck="false"
+            ></textarea>
+            <YamlVisualEditor
+              v-show="editorMode === 'visual'"
+              v-model="yamlContent"
+            />
           </template>
         </div>
         <div class="modal-footer" v-if="!yamlLoading && yamlContent">
@@ -235,6 +256,8 @@ sections:
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
+import * as jsyaml from 'js-yaml'
+import YamlVisualEditor from './YamlVisualEditor.vue'
 
 const props = defineProps({
   serverUrl: { type: String, default: '' },
@@ -254,6 +277,8 @@ const yamlTextarea = ref(null)
 const generatingDraft = ref(false)
 const userPrompt = ref('')
 const generatingYaml = ref(false)
+const editorMode = ref('code')
+const parseError = ref('')
 
 const totalSections = ref(0)
 const currentSectionIndex = ref(0)
@@ -421,7 +446,26 @@ function startFresh() {
 
 function backToPick() {
   step.value = 'pick'
+  editorMode.value = 'code'
   fetchAvailableFiles()
+}
+
+function switchToCode() {
+  editorMode.value = 'code'
+  parseError.value = ''
+  nextTick(() => {
+    if (yamlTextarea.value) yamlTextarea.value.focus()
+  })
+}
+
+function switchToVisual() {
+  parseError.value = ''
+  try {
+    jsyaml.load(yamlContent.value)
+    editorMode.value = 'visual'
+  } catch (e) {
+    parseError.value = `Cannot switch to Visual mode: YAML parse error — ${e.message}`
+  }
 }
 
 async function saveFile(filename, content) {
@@ -806,6 +850,12 @@ onMounted(fetchAvailableFiles)
 .user-prompt-label { font-size: 14px; color: var(--text-secondary); font-weight: 600; }
 .user-prompt-input { width: 100%; max-width: 560px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px; font-family: inherit; font-size: 14px; line-height: 1.5; resize: vertical; outline: none; }
 .user-prompt-input:focus { border-color: var(--accent-blue); }
+.editor-mode-bar { display: flex; gap: 0; flex-shrink: 0; margin-bottom: 8px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; align-self: flex-start; }
+.mode-tab { background: var(--bg-tertiary); color: var(--text-secondary); border: none; padding: 6px 16px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+.mode-tab:not(:last-child) { border-right: 1px solid var(--border-color); }
+.mode-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+.mode-tab.active { background: var(--accent-blue); color: #fff; }
+.parse-error { flex-shrink: 0; padding: 8px 12px; background: rgba(217,83,79,0.1); border: 1px solid var(--accent-red); border-radius: var(--radius-sm); font-size: 12px; color: var(--accent-red); margin-bottom: 8px; }
 .yaml-format-hint { flex-shrink: 0; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); }
 .yaml-format-hint summary { cursor: pointer; user-select: none; padding: 4px 8px; border-radius: var(--radius-sm); background: var(--bg-tertiary); display: inline-block; }
 .yaml-format-hint summary:hover { background: var(--bg-hover); }

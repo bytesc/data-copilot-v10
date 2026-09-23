@@ -133,11 +133,10 @@ You must follow the structural directive below exactly:
 YAML_OUTLINE_SYSTEM = """You are a business document outline generator. Based on the conversation history, generate a YAML outline that defines the document structure.
 
 The YAML must follow this exact structure:
-```yaml
 title: "Document Title"
 sections:
   - heading: "1. Section Heading"
-    description: "Brief description"
+    description: "Brief description of the section content and purpose."
     elements:
       - type: text
         description: "Brief description of the text paragraph(s) to write"
@@ -147,22 +146,27 @@ sections:
         description: "Brief description of the chart/image to include"
     subsections:
       - heading: "1.1 Subsection Heading"
-        description: "Brief description"
+        description: "Brief description of the subsection."
         elements:
           - type: text
             description: "Brief description of the text to write"
           - type: image
             description: "Brief description of the image to show"
+  - heading: "2. Next Section Heading"
+    description: "Brief description."
+    elements: []
+    subsections: []
 
 Rules:
 1. Use numbered headings for clarity (1., 1.1, 2., etc.)
-2. Each section and subsection can have 0 or more elements. The "elements" field lists every piece of content in order: text paragraphs, data tables, and charts/images. Each element has a type (text, table, or image) and a brief description (1 sentence).
-3. Keep descriptions concise (1-2 sentences for section/subsection, 1 sentence per element).
-4. Focus on business insights and data analysis — no technical implementation details.
-5. LANGUAGE IS CRITICAL: Write the title and all headings in the EXACT SAME LANGUAGE as the user's original question.
-6. CRITICAL: Do NOT include code, SQL, or chart syntax in any description. Descriptions are plain text only.
+2. Every section MUST include both "elements" and "subsections" keys. If a section or subsection has no content, use an empty list `[]`.
+3. The "elements" field lists every piece of content in order: text paragraphs, data tables, and charts/images. Each element has a type (text, table, or image) and a brief description (1 sentence).
+4. Keep descriptions concise (1-2 sentences for section/subsection, 1 sentence per element).
+5. Focus on business insights and data analysis — no technical implementation details.
+6. LANGUAGE IS CRITICAL: Write the title and all headings in the EXACT SAME LANGUAGE as the user's original question.
+7. CRITICAL: Do NOT include code, SQL, or chart syntax in any description. Descriptions are plain text only.
 
-Output ONLY valid YAML inside a ```yaml code block. Do not include any other text."""
+Output ONLY the YAML. Do NOT wrap it in a code block or markdown fence. Do NOT include any other text, explanations, or formatting."""
 
 
 YAML_PART_SYSTEM = """You are a professional business document writer. Based on the conversation history and the document outline below, write the content for a specific section of the document.
@@ -734,7 +738,7 @@ Conversation History:
         if parsed.get("sections"):
             break
 
-        error_hint = "\n\nPrevious attempt failed. Output valid YAML inside ```yaml block with proper structure (title + sections, each section can have optional elements: text/table/image, and optional subsections)."
+        error_hint = "\n\nPrevious attempt failed. Output valid YAML with the proper structure (title + sections, each section MUST include elements and subsections keys, use [] when empty). Do NOT wrap in a code block."
     else:
         yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'error', 'content': 'Failed to generate valid YAML outline after retries'}, ensure_ascii=False)}\n\n"
         return
