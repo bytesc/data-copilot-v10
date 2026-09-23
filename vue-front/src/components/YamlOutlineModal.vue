@@ -286,7 +286,7 @@ const yamlTextarea = ref(null)
 const generatingDraft = ref(false)
 const userPrompt = ref('')
 const generatingYaml = ref(false)
-const editorMode = ref('code')
+const editorMode = ref('visual')
 const parseError = ref('')
 
 const totalSections = ref(0)

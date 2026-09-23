@@ -218,8 +218,33 @@ python -m mcpserver.datetime_server
 ### 启动
 
 ```bash
-python ./main.py
+python main.py
 ```
+
+也可通过 `front.py` 部署（替代 nginx，提供前端静态服务 + API 反向代理 + SSE 流式支持）：
+
+```bash
+FRONT_PORT=8010 python front.py
+```
+
+## 文档索引
+
+| 文档 | 内容 |
+|------|------|
+| [`docs/api.md`](docs/api.md) | 全部 77 个 API 端点说明、请求/响应格式、错误码 |
+| [`docs/sse_event_flow.md`](docs/sse_event_flow.md) | SSE 流式事件类型与数据格式 |
+| [`docs/conversation_history_structure.md`](docs/conversation_history_structure.md) | 对话历史结构定义 |
+| [`docs/actions_input_output.md`](docs/actions_input_output.md) | Action 的输入输出规范 |
+| [`docs/document_generation.md`](docs/document_generation.md) | 文档生成流程 |
+| [`docs/upload_csv_and_doc.md`](docs/upload_csv_and_doc.md) | CSV 和文档上传说明 |
+| [`docs/prompt_injection.md`](docs/prompt_injection.md) | 提示注入防护策略 |
+| [`docs/how_to_add_action.md`](docs/how_to_add_action.md) | 新增 Action 开发指南 |
+| [`docs/how_to_add_function.md`](docs/how_to_add_function.md) | 新增 Function 开发指南 |
+| [`docs/how_to_write_brief.md`](docs/how_to_write_brief.md) | 编写 Brief Info 规范 |
+| [`docs/how_to_modify_db_and_knowledge.md`](docs/how_to_modify_db_and_knowledge.md) | 数据库与知识库修改说明 |
+| [`vue-front/README.md`](vue-front/README.md) | Vue 前端开发与构建说明 |
+| [`vue-front/docker.md`](vue-front/docker.md) | 前端 Docker 部署 |
+| [`mcpserver/README.md`](mcpserver/README.md) | MCP 测试服务器说明 |
 
 ## 开源许可
 
