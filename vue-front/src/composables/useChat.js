@@ -22,7 +22,7 @@ export function useChat() {
   const generatedFiles = ref([])
   const statusMsg = ref('')
 
-  const serverUrl = ref(import.meta.env.VITE_SERVER_URL || 'http://127.0.0.1:8009')
+  const serverUrl = ref(import.meta.env.VITE_SERVER_URL || 'http://127.0.0.1:8008')
 
   function generateSessionId() {
     const now = new Date()

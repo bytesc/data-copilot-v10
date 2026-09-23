@@ -40,7 +40,7 @@ def extract_csv_filename_from_url(url):
 
 if __name__ == "__main__":
 
-    url = "http://127.0.0.1:8009/tmp_imgs/givtimqtzywu.csv"
+    url = "http://127.0.0.1:8008/tmp_imgs/givtimqtzywu.csv"
     print(extract_csv_filename_from_url(url))
     df = download_csv_to_dataframe(url)
 

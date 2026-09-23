@@ -9,9 +9,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, Response, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8009")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8008")
 FRONT_HOST = os.getenv("FRONT_HOST", "0.0.0.0")
-FRONT_PORT = int(os.getenv("FRONT_PORT", "8008"))
+FRONT_PORT = int(os.getenv("FRONT_PORT", "8010"))
 DIST_DIR = Path(__file__).parent / "vue-front" / "dist"
 
 app = FastAPI(title="front.py - Lightweight Frontend Proxy")

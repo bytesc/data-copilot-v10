@@ -18,7 +18,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.backend
     ports:
-      - "8009:8009"
+      - "8008:8008"
     depends_on:
       - mysql
     volumes:

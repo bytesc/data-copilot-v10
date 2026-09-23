@@ -1,11 +1,11 @@
 # config
-server_port: 8009
+server_port: 8008
 server_host: "0.0.0.0"
 mysql: "mysql+pymysql://root:123456@localhost:3306/singapore_land_2"
 
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
 
-static_path: "http://127.0.0.1:8009/"
+static_path: "http://127.0.0.1:8008/"
 static_folder: "tmp_imgs"
 
 model_name: "deepseek-v4-flash"

@@ -67,7 +67,7 @@
 import { ref, onMounted } from 'vue'
 
 const props = defineProps({
-  serverUrl: { type: String, default: import.meta.env.VITE_SERVER_URL || 'http://127.0.0.1:8009' },
+  serverUrl: { type: String, default: import.meta.env.VITE_SERVER_URL || 'http://127.0.0.1:8008' },
 })
 
 const tables = ref([])

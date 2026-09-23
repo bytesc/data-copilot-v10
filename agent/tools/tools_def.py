@@ -227,7 +227,7 @@ def load_data(url: str) -> pd.DataFrame:
     Returns the result in a pandas DataFrame.
 
     Args:
-    - url (str): url string(e.g. http://127.0.0.1:8009/tmp_imgs/imqtzywu.csv).
+    - url (str): url string(e.g. http://127.0.0.1:8008/tmp_imgs/imqtzywu.csv).
 
     Returns:
     - pd.DataFrame: A DataFrame containing the data in the CSV file.
@@ -235,7 +235,7 @@ def load_data(url: str) -> pd.DataFrame:
 
     Example:
     ```python
-        ans_df = load_data("http://127.0.0.1:8009/tmp_imgs/xjfsutvp.csv")
+        ans_df = load_data("http://127.0.0.1:8008/tmp_imgs/xjfsutvp.csv")
     ```
     """
     file_name = extract_csv_filename_from_url(url)

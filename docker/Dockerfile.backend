@@ -9,7 +9,7 @@ COPY . .
 
 RUN sed -i 's/localhost/mysql/g' config/config.yaml
 
-EXPOSE 8009
+EXPOSE 8008
 
 COPY docker/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
