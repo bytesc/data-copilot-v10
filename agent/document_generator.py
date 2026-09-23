@@ -41,6 +41,7 @@ class DocumentInput(BaseModel):
 class YamlOutlineInput(BaseModel):
     conversation_history: List[dict]
     session_id: Optional[str] = None
+    user_prompt: Optional[str] = None
 
 
 class SectionContent(BaseModel):
@@ -136,17 +137,30 @@ The YAML must follow this exact structure:
 title: "Document Title"
 sections:
   - heading: "1. Section Heading"
-    description: "Brief description of what this section covers"
+    description: "Brief description"
+    elements:
+      - type: text
+        description: "Brief description of the text paragraph(s) to write"
+      - type: table
+        description: "Brief description of the table to include"
+      - type: image
+        description: "Brief description of the chart/image to include"
     subsections:
       - heading: "1.1 Subsection Heading"
         description: "Brief description"
+        elements:
+          - type: text
+            description: "Brief description of the text to write"
+          - type: image
+            description: "Brief description of the image to show"
 
 Rules:
 1. Use numbered headings for clarity (1., 1.1, 2., etc.)
-2. Each section can have 0 or more subsections
-3. Keep descriptions concise (1-2 sentences)
-4. Focus on business insights and data analysis — no technical implementation details
+2. Each section and subsection can have 0 or more elements. The "elements" field lists every piece of content in order: text paragraphs, data tables, and charts/images. Each element has a type (text, table, or image) and a brief description (1 sentence).
+3. Keep descriptions concise (1-2 sentences for section/subsection, 1 sentence per element).
+4. Focus on business insights and data analysis — no technical implementation details.
 5. LANGUAGE IS CRITICAL: Write the title and all headings in the EXACT SAME LANGUAGE as the user's original question.
+6. CRITICAL: Do NOT include code, SQL, or chart syntax in any description. Descriptions are plain text only.
 
 Output ONLY valid YAML inside a ```yaml code block. Do not include any other text."""
 
@@ -163,6 +177,7 @@ Rules:
 7. Be thorough but concise.
 8. Use proper markdown headings (up to `###`), lists, and tables as needed.
 9. If this section has sub-sections listed in the outline, include each sub-section's heading as `### Subsection Heading` and write its content. The heading text must appear ONLY as the `###` marker — do NOT repeat it in the content body.
+10. The outline below lists "elements" (text/table/image) for each section and subsection in the order they should appear. Follow this order when writing the content. Each [text] element corresponds to one or more paragraphs of analysis, each [table] requires a markdown table, and each [image] requires embedding a chart from the conversation history.
 
 Document Title: {title}
 Section Heading: {heading}
@@ -390,12 +405,14 @@ def _parse_yaml_sections(yaml_str: str) -> dict:
             section = {
                 "heading": s.get("heading", ""),
                 "description": s.get("description", ""),
+                "elements": s.get("elements", []),
                 "subsections": []
             }
             for sub in s.get("subsections", []):
                 section["subsections"].append({
                     "heading": sub.get("heading", ""),
                     "description": sub.get("description", ""),
+                    "elements": sub.get("elements", []),
                 })
             sections.append(section)
         return {"title": title, "sections": sections}
@@ -680,9 +697,14 @@ async def generate_document_unified_stream_api(request: Request, user_input: Doc
 # ── YAML Outline generation ──────────────────────────────────────────────
 
 
-def _event_stream_generate_yaml_outline(conversation_history: List[dict], session_id: str, request_json: str = ""):
+def _event_stream_generate_yaml_outline(conversation_history: List[dict], session_id: str, request_json: str = "", user_prompt: str = ""):
     context = history_to_text(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
+
+    user_instruction = ""
+    if user_prompt and user_prompt.strip():
+        yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'msg', 'content': 'Processing your instructions...'}, ensure_ascii=False)}\n\n"
+        user_instruction = f"\nUser Instructions (MUST follow these requirements):\n{user_prompt.strip()}\n"
 
     yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'msg', 'content': 'Generating YAML outline...'}, ensure_ascii=False)}\n\n"
 
@@ -693,7 +715,7 @@ def _event_stream_generate_yaml_outline(conversation_history: List[dict], sessio
 {DOC}
 
 {_target_section if _ENABLE_TARGET else ""}
-
+{user_instruction}
 Conversation History:
 {context}"""
 
@@ -741,6 +763,7 @@ async def generate_yaml_outline_api(request: Request, user_input: YamlOutlineInp
             user_input.conversation_history,
             user_input.session_id or "",
             user_input.model_dump_json(),
+            user_input.user_prompt or "",
         ),
         media_type="text/event-stream",
         headers={
@@ -787,9 +810,21 @@ def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outl
 
     yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'msg', 'content': f'Generating {len(sections)} sections from YAML outline...'}, ensure_ascii=False)}\n\n"
 
+    def _format_elements(elems: list) -> str:
+        if not elems:
+            return ""
+        return "\n" + "\n".join(
+            f"      [{e['type']}] {e['description']}" for e in elems if isinstance(e, dict)
+        )
+
     outline_overview = "\n".join(
         f"  {s['heading']} — {s['description']}"
-        + ("".join(f"\n    - {sub['heading']}: {sub['description']}" for sub in s["subsections"]))
+        + _format_elements(s.get("elements", []))
+        + ("".join(
+            f"\n    - {sub['heading']}: {sub['description']}"
+            + _format_elements(sub.get("elements", []))
+            for sub in s["subsections"]
+        ))
         for s in parsed["sections"]
     )
 

@@ -50,9 +50,45 @@
         </div>
         <div class="modal-body">
           <div v-if="yamlLoading" class="loading-overlay">Generating YAML outline...</div>
-          <textarea ref="yamlTextarea" class="code-editor" v-model="yamlContent" spellcheck="false"></textarea>
+          <div class="user-prompt-area" v-if="!yamlContent && !yamlLoading">
+            <label class="user-prompt-label">Optional instructions for AI outline generation:</label>
+            <textarea
+              class="user-prompt-input"
+              v-model="userPrompt"
+              placeholder="e.g. Focus on price trends, include a comparison table, emphasize 2023-2024 data..."
+              rows="2"
+              spellcheck="false"
+            ></textarea>
+            <button class="btn btn-primary" :disabled="generatingYaml" @click="generateYamlOutline">
+              {{ generatingYaml ? 'Generating...' : 'Generate with AI' }}
+            </button>
+          </div>
+          <template v-if="yamlContent">
+            <details class="yaml-format-hint">
+              <summary>YAML format reference</summary>
+              <pre class="yaml-format-pre">title: "Document Title"
+sections:
+  - heading: "1. Section"
+    description: "Brief description"
+    elements:                    # optional: text/table/image
+      - type: text
+        description: "Describe the text to write"
+      - type: table
+        description: "Describe the table"
+      - type: image
+        description: "Describe the chart/image"
+    subsections:
+      - heading: "1.1 Subsection"
+        description: "Brief description"
+        elements:
+          - type: text
+            description: "..."
+</pre>
+            </details>
+            <textarea ref="yamlTextarea" class="code-editor" v-model="yamlContent" spellcheck="false"></textarea>
+          </template>
         </div>
-        <div class="modal-footer" v-if="!yamlLoading">
+        <div class="modal-footer" v-if="!yamlLoading && yamlContent">
           <button class="btn btn-secondary" style="margin-right:auto" @click="backToPick">Back</button>
           <button class="btn btn-secondary" @click="saveYaml" :disabled="!yamlBase">Save</button>
           <button class="btn btn-primary" :disabled="generatingDraft" @click="startGeneratingSections">
@@ -216,6 +252,8 @@ const yamlContent = ref('')
 const yamlBase = ref('')
 const yamlTextarea = ref(null)
 const generatingDraft = ref(false)
+const userPrompt = ref('')
+const generatingYaml = ref(false)
 
 const totalSections = ref(0)
 const currentSectionIndex = ref(0)
@@ -243,7 +281,7 @@ const docTitle = computed(() => {
   return m ? m[1] : ''
 })
 
-const isBusy = computed(() => yamlLoading.value || generatingDraft.value || finalizing.value)
+const isBusy = computed(() => yamlLoading.value || generatingDraft.value || finalizing.value || generatingYaml.value)
 watch(isBusy, (v) => emit('running', v))
 
 const sectionCount = computed(() => {
@@ -377,8 +415,8 @@ async function loadFile(file) {
 function startFresh() {
   step.value = 'yaml'
   yamlContent.value = ''
-  yamlLoading.value = true
-  generateYamlOutline()
+  userPrompt.value = ''
+  yamlLoading.value = false
 }
 
 function backToPick() {
@@ -485,10 +523,13 @@ function onOverlayClick() {
 
 // YAML outline generation
 async function generateYamlOutline() {
+  generatingYaml.value = true
+  yamlLoading.value = true
   try {
     const payload = {
       conversation_history: props.conversationHistory,
       session_id: props.sessionId,
+      user_prompt: userPrompt.value.trim() || undefined,
     }
     let rawYaml = ''
     const gen = createSSEStream('/api/generate-document/generate-yaml-outline/', payload)
@@ -506,11 +547,13 @@ async function generateYamlOutline() {
       }
     }
     yamlLoading.value = false
+    generatingYaml.value = false
     await nextTick()
     if (yamlTextarea.value) yamlTextarea.value.focus()
   } catch (e) {
     yamlContent.value = `# Error generating YAML outline:\n# ${e.message}`
     yamlLoading.value = false
+    generatingYaml.value = false
   }
 }
 
@@ -759,4 +802,12 @@ onMounted(fetchAvailableFiles)
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .btn-danger { background: #d34f4f; color: #fff; border-color: #d34f4f; }
 .btn-danger:hover { opacity: 0.9; }
+.user-prompt-area { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 24px; }
+.user-prompt-label { font-size: 14px; color: var(--text-secondary); font-weight: 600; }
+.user-prompt-input { width: 100%; max-width: 560px; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px; font-family: inherit; font-size: 14px; line-height: 1.5; resize: vertical; outline: none; }
+.user-prompt-input:focus { border-color: var(--accent-blue); }
+.yaml-format-hint { flex-shrink: 0; margin-bottom: 8px; font-size: 12px; color: var(--text-muted); }
+.yaml-format-hint summary { cursor: pointer; user-select: none; padding: 4px 8px; border-radius: var(--radius-sm); background: var(--bg-tertiary); display: inline-block; }
+.yaml-format-hint summary:hover { background: var(--bg-hover); }
+.yaml-format-pre { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px; font-family: 'Consolas','Courier New',monospace; font-size: 12px; line-height: 1.4; overflow-x: auto; margin: 6px 0 0; white-space: pre; color: var(--text-secondary); }
 </style>
