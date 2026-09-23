@@ -6,23 +6,23 @@
 
 ```
 成功：
-  {phase:"think", type:"msg",    content:"正在生成分析计划..."}
+  {phase:"think", type:"msg",    content:"Generating analysis plan..."}
   {phase:"think", type:"chunk",  content:"..."}  ×N
   {phase:"think", type:"done",   content:"...", plan_result:{description,todo}}
   {type:"history", history:[...]}
 
 重试后成功：
-  {phase:"think", type:"msg",    content:"正在生成分析计划..."}
+  {phase:"think", type:"msg",    content:"Generating analysis plan..."}
   {phase:"think", type:"chunk",  content:"..."}  ×N
-  {phase:"think", type:"msg",    content:"解析失败，正在重新生成分析计划..."}
+  {phase:"think", type:"msg",    content:"Parsing failed, regenerating analysis plan..."}
   {phase:"think", type:"chunk",  content:"..."}  ×N
   {phase:"think", type:"done",   content:"...", plan_result:{description,todo}}
   {type:"history", history:[...]}
 
 重试耗尽失败：
-  {phase:"think", type:"msg",    content:"正在生成分析计划..."}
+  {phase:"think", type:"msg",    content:"Generating analysis plan..."}
   {phase:"think", type:"chunk",  content:"..."}  ×N
-  {phase:"think", type:"msg",    content:"解析失败，正在重新生成分析计划..."}
+  {phase:"think", type:"msg",    content:"Parsing failed, regenerating analysis plan..."}
   {phase:"think", type:"chunk",  content:"..."}  ×N
   {phase:"think", type:"error",  content:"Failed to generate plan after retries"}
 ```
@@ -33,29 +33,29 @@
 
 ```
 成功：
-  {phase:"action", type:"msg",    content:"正在决策下一步动作..."}
+  {phase:"action", type:"msg",    content:"Deciding next action..."}
   {phase:"action", type:"chunk",  content:"..."}  ×N
   {phase:"action", type:"done",   content:"...", action_result:{action,text,...}}
   {type:"history", history:[...]}
 
 多 action 成功：
-  {phase:"action", type:"msg",    content:"正在决策下一步动作..."}
+  {phase:"action", type:"msg",    content:"Deciding next action..."}
   {phase:"action", type:"chunk",  content:"..."}  ×N
   {phase:"action", type:"done",   content:"...", action_result:{actions:[{action:"explore_schema"},{action:"explore_functions"}]}}
   {type:"history", history:[...]}
 
 重试后成功：
-  {phase:"action", type:"msg",    content:"正在决策下一步动作..."}
+  {phase:"action", type:"msg",    content:"Deciding next action..."}
   {phase:"action", type:"chunk",  content:"..."}  ×N
-  {phase:"action", type:"msg",    content:"解析失败，正在重新决策..."}
+  {phase:"action", type:"msg",    content:"Parsing failed, re-deciding next action..."}
   {phase:"action", type:"chunk",  content:"..."}  ×N
   {phase:"action", type:"done",   content:"...", action_result:{action,text,...}}
   {type:"history", history:[...]}
 
 重试耗尽失败：
-  {phase:"action", type:"msg",    content:"正在决策下一步动作..."}
+  {phase:"action", type:"msg",    content:"Deciding next action..."}
   {phase:"action", type:"chunk",  content:"..."}  ×N
-  {phase:"action", type:"msg",    content:"解析失败，正在重新决策..."}
+  {phase:"action", type:"msg",    content:"Parsing failed, re-deciding next action..."}
   {phase:"action", type:"chunk",  content:"..."}  ×N
   {phase:"action", type:"error",  content:"Action failed: ..."}
 ```
@@ -66,8 +66,8 @@
 
 ```
 成功：
-  {phase:"act", type:"msg",    sub_phase:"explore_schema", content:"正在搜索数据库信息..."}
-  {phase:"act", type:"msg",    sub_phase:"explore_schema", content:"正在分析所需字段..."}
+  {phase:"act", type:"msg",    sub_phase:"explore_schema", content:"Searching database information..."}
+  {phase:"act", type:"msg",    sub_phase:"explore_schema", content:"Analyzing required fields..."}
   {phase:"act", type:"chunk",  sub_phase:"explore_schema", content:"..."}  ×N
   {phase:"act", type:"done",   sub_phase:"explore_schema", content:"...",
    result:{selected_fields:{...}, db_context:"...", explore_plan:"...",
@@ -76,7 +76,7 @@
   {type:"history", history:[...]}
 
 重试后成功：
-  ... → {phase:"act", type:"msg", sub_phase:"explore_schema", content:"解析失败，正在重新分析..."}
+  ... → {phase:"act", type:"msg", sub_phase:"explore_schema", content:"Parsing failed, re-analyzing..."}
   → 重新生成 → {type:"done", ...} → {type:"history", ...}
 
 重试耗尽失败：
@@ -87,8 +87,8 @@
 
 ```
 成功：
-  {phase:"act", type:"msg",    sub_phase:"explore_base_knowledge", content:"正在搜索基础知识..."}
-  {phase:"act", type:"msg",    sub_phase:"explore_base_knowledge", content:"正在分析相关知识..."}
+  {phase:"act", type:"msg",    sub_phase:"explore_base_knowledge", content:"Searching base knowledge..."}
+  {phase:"act", type:"msg",    sub_phase:"explore_base_knowledge", content:"Analyzing relevant knowledge..."}
   {phase:"act", type:"chunk",  sub_phase:"explore_base_knowledge", content:"..."}  ×N
   {phase:"act", type:"done",   sub_phase:"explore_base_knowledge", content:"...",
    result:{selected_knowledge_ids:[1,3,7], knowledge_content:"...", summary:"..."},
@@ -96,7 +96,7 @@
   {type:"history", history:[...]}
 
 重试后成功：
-  ... → {phase:"act", type:"msg", sub_phase:"explore_base_knowledge", content:"解析失败，正在重新分析..."}
+  ... → {phase:"act", type:"msg", sub_phase:"explore_base_knowledge", content:"Parsing failed, re-analyzing..."}
   → 重新生成 → {type:"done", ...} → {type:"history", ...}
 
 重试耗尽失败：
@@ -106,52 +106,51 @@
 ### explore_functions
 
 ```
-成功：
-  {phase:"act", type:"msg",    sub_phase:"explore_functions", content:"正在搜索函数信息..."}
-  {phase:"act", type:"status", sub_phase:"explore_functions", content:"正在分析所需函数..."}
+成功（无重试）：
+  {phase:"act", type:"msg",    sub_phase:"explore_functions", content:"Searching function information..."}
+  {phase:"act", type:"status", sub_phase:"explore_functions", content:"Analyzing required functions..."}
   {phase:"act", type:"chunk",  sub_phase:"explore_functions", content:"..."}  ×N
   {phase:"act", type:"done",   sub_phase:"explore_functions", content:"...",
    result:{selected_functions:[...], func_context:"..."},
    search_keyword:"..."}
-  {type:"history", history:[...]}
 ```
 
 ### web_search
 
 ```
 成功：
-  {phase:"act", type:"msg",   sub_phase:"web_search", content:"正在搜索: {query}..."}
+  {phase:"act", type:"msg",   sub_phase:"web_search", content:"Searching: {query}..."}
   {phase:"act", type:"chunk", sub_phase:"web_search", content:"搜索结果 markdown..."}
   {phase:"act", type:"done",  sub_phase:"web_search", content:"...",
    result:{search_results:{query,count,results:[{title,url,snippet}]}, query:"..."}}
   {type:"history", history:[...]}
 
 失败：
-  {phase:"act", type:"error", sub_phase:"web_search", content:"搜索失败: ..."}
+  {phase:"act", type:"error", sub_phase:"web_search", content:"Search failed: ..."}
 ```
 
 ### fetch_webpage
 
 ```
 成功：
-  {phase:"act", type:"msg",   sub_phase:"fetch_webpage", content:"正在获取页面: {url}..."}
+  {phase:"act", type:"msg",   sub_phase:"fetch_webpage", content:"Fetching page: {url}..."}
   {phase:"act", type:"chunk", sub_phase:"fetch_webpage", content:"页面内容 markdown..."}
   {phase:"act", type:"done",  sub_phase:"fetch_webpage", content:"...",
    result:{url:"...", content:"..."}}
   {type:"history", history:[...]}
 
 失败：
-  {phase:"act", type:"error", sub_phase:"fetch_webpage", content:"获取页面失败: ..."}
+  {phase:"act", type:"error", sub_phase:"fetch_webpage", content:"Fetch page failed: ..."}
 ```
 
 ### explore_mcp
 
 ```
 成功：
-  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"正在连接 MCP 服务器获取工具列表..."}
-  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"正在列出 MCP 服务器工具: calculator..."}
-  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"从 calculator 发现 1 个工具"}
-  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"正在分析所需 MCP 工具..."}
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"Connecting to MCP servers to fetch tool list..."}
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"Listing tools from MCP server: calculator..."}
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"Found 8 tools from calculator"}
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"Analyzing required MCP tools..."}
   {phase:"act", type:"chunk", sub_phase:"explore_mcp", content:"..."}  ×N
   {phase:"act", type:"done",  sub_phase:"explore_mcp", content:"...",
    result:{selected_tools:[{server, name}, ...], catalog:"...", explore_plan:"..."},
@@ -159,34 +158,35 @@
   {type:"history", history:[...]}
 
 失败：
-  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"无法连接 calculator: ..."}
-  {phase:"act", type:"error", sub_phase:"explore_mcp", content:"没有配置任何 MCP 服务器"}
-  {phase:"act", type:"error", sub_phase:"explore_mcp", content:"MCP 服务器均连接失败/无工具"}
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"Failed to connect to calculator: ..."}
+  {phase:"act", type:"msg",   sub_phase:"explore_mcp", content:"No tools available from calculator"}
+  {phase:"act", type:"error", sub_phase:"explore_mcp", content:"No MCP servers configured"}
+  {phase:"act", type:"error", sub_phase:"explore_mcp", content:"All MCP servers failed to connect / No MCP servers provided any tools"}
 ```
 
 ### exe_mcp
 
 ```
 成功（单工具）：
-  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在执行 MCP 工具 [1/1]: calculator/calculate..."}
-  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在调用 calculate..."}
+  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"Executing MCP tool [1/1]: calculator/calculate..."}
+  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"Calling calculate..."}
   {phase:"act", type:"chunk", sub_phase:"exe_mcp", content:"### calculator/calculate\n\n..."}
   {phase:"act", type:"done",  sub_phase:"exe_mcp", content:"## MCP Tool Execution Results\n\n...",
-   result:{results:[{server:"calculator",tool:"calculate",result:{...}}]}}
+   result:{results:[{server:"calculator",tool:"calculate",result:{...}}], combined_display:"..."}}
   {type:"history", history:[...]}
 
 成功（多工具）：
-  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在执行 MCP 工具 [1/2]: calculator/add..."}
+  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"Executing MCP tool [1/2]: calculator/add..."}
   {phase:"act", type:"chunk", sub_phase:"exe_mcp", content:"### calculator/add\n\n..."}
-  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"正在执行 MCP 工具 [2/2]: calculator/multiply..."}
+  {phase:"act", type:"msg",   sub_phase:"exe_mcp", content:"Executing MCP tool [2/2]: calculator/multiply..."}
   {phase:"act", type:"chunk", sub_phase:"exe_mcp", content:"### calculator/multiply\n\n..."}
   {phase:"act", type:"done",  sub_phase:"exe_mcp", content:"## MCP Tool Execution Results\n\n...",
-   result:{results:[{server:"calculator",tool:"add",result:{...}},{server:"calculator",tool:"multiply",result:{...}}]}}
+   result:{results:[{server:"calculator",tool:"add",result:{...}},{server:"calculator",tool:"multiply",result:{...}}], combined_display:"..."}}
   {type:"history", history:[...]}
 
 失败：
-  {phase:"act", type:"error", sub_phase:"exe_mcp", content:"MCP 调用失败: calculator/calculate: ..."}
-  {phase:"act", type:"error", sub_phase:"exe_mcp", content:"未找到 MCP 服务器: {name}"}
+  {phase:"act", type:"error", sub_phase:"exe_mcp", content:"MCP call failed: calculator/calculate: ..."}
+  {phase:"act", type:"error", sub_phase:"exe_mcp", content:"MCP server not found: server_name"}
 ```
 
 ### generate_document
@@ -247,11 +247,12 @@
 
 ```
 成功：
-  {phase:"act", type:"msg",   sub_phase:"code", content:"正在分析问题..."}
-  {phase:"act", type:"msg",   sub_phase:"code", content:"正在生成代码..."}
+  {phase:"act", type:"msg",   sub_phase:"code", content:"Analyzing question..."}
+  {phase:"act", type:"msg",   sub_phase:"code", content:"Generating code..."}
   {phase:"act", type:"chunk", sub_type:"code_chunk",    sub_phase:"code", content:"..."}  ×N
   {phase:"act", type:"chunk", sub_type:"code_complete", sub_phase:"code", content:"def ..."}
-  {phase:"act", type:"msg",   sub_phase:"exec", content:"正在执行代码..."}
+  {phase:"act", type:"chunk", sub_type:"code_gen_error",sub_phase:"code", content:"code generation error"}
+  {phase:"act", type:"msg",   sub_phase:"exec", content:"Executing code..."}
   {phase:"act", type:"chunk", sub_type:"exec_chunk",    sub_phase:"exec", content:"..."}  ×N
   {phase:"act", type:"chunk", sub_type:"exec_complete", sub_phase:"exec", content:"..."}
   {phase:"act", type:"done",  sub_phase:"exec", code:"...", content:"...",
@@ -260,7 +261,7 @@
 
 执行错误后重试成功：
   ... → {sub_type:"code_exe_error", content:"..."}
-  → {phase:"act", type:"msg", content:"执行出错，正在根据错误信息重新生成代码..."}
+  → {phase:"act", type:"msg", content:"Execution failed, regenerating code based on error..."}
   → 重新生成并执行 → {type:"done", ...} → {type:"history", ...}
 
 重试耗尽失败：
@@ -271,14 +272,14 @@
 
 ```
 成功：
-  {phase:"observe", type:"status", sub_phase:"review", content:"正在审查执行结果..."}
-  {phase:"observe", type:"msg",    sub_phase:"review", content:"正在审查执行结果..."}
+  {phase:"observe", type:"status", sub_phase:"review", content:"Reviewing execution results..."}
+  {phase:"observe", type:"msg",    sub_phase:"review", content:"Reviewing execution results..."}
   {phase:"observe", type:"chunk",  content:"..."}  ×N
   {phase:"observe", type:"done",   content:"...", plan_result:{description,todo}}
   {type:"history", history:[...]}
 
 重试后成功：
-  ... → {phase:"observe", type:"msg", content:"解析失败，正在重新审查..."} → 重新生成 → {type:"done", ...} → {type:"history", ...}
+  ... → {phase:"observe", type:"msg", content:"Parsing failed, re-reviewing execution results..."} → 重新生成 → {type:"done", ...} → {type:"history", ...}
 
 重试耗尽失败：
   ... → {phase:"observe", type:"error", content:"Failed to review after retries"}
@@ -288,5 +289,6 @@
 
 - `{type:"history", history:[...]}` 是最后一条事件，包含完整的 `conversation_history`。前端收到后替换本地历史并重建显示。
 - 所有 `chunk` 事件仅用于流式临时显示，最终显示由 `history` 决定。
-- 重试次数为 2（首次 + 1 次重试）。
+- 重试次数为 2（首次 + 1 次重试）。explore_functions 无重试；YAML Outline 生成也有 2 次重试。
+- generate_document_unified 的 done 事件会先发一个仅含 content 的 done，再发一个含完整文件元数据的 done。
 - 重试耗尽后 yield `error` 事件，不 yield `history`。

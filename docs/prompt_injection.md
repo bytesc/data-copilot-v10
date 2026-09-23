@@ -18,6 +18,7 @@
 | `base_knowledge.md` | `_BASE_MD` |
 | `doc_guide.md` | `_DOC_MD` |
 | `target_knowledge.md` | `_TARGET_MD` |
+| `think_guide.md` | `_THINK_KNOWLEDGE_MD` |
 | `db_query_guide.md` | `_DB_QUERY_GUIDE_MD` |
 | `base_knowledge_brief.md` | `_BASE_KNOWLEDGE_BRIEF_MD` |
 | `mcp_brief.md` | `_MCP_BRIEF_MD` |
@@ -46,7 +47,7 @@ value LONGTEXT
 
 ### 3. 动态注入机制：`_DynamicStr`
 
-`get_base_knowledge.py:317-331` 定义了一个代理类，使模块级变量在每次使用时重新计算，而非在导入时固定：
+`get_base_knowledge.py` 定义了一个代理类，使模块级变量在每次使用时重新计算，而非在导入时固定：
 
 ```python
 class _DynamicStr:
@@ -116,11 +117,17 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 
 **文件：** `agent/action.py`
 
-**注入的变量：** 无（不使用知识库变量）
+**注入的变量：** `BRIEF_INFO`
 
-**注入方式：** 通过 `get_db_summary_for_agent()` 和 `get_func_summary_for_agent()` 动态获取数据库摘要和函数目录
+**注入方式：** f-string 直接嵌入
 
-**功能：** Action 阶段决定下一步执行哪个动作，不需要知识库上下文。
+```
+{BRIEF_INFO}              → 聚合：DB_BRIEF + BASE_KNOWLEDGE_BRIEF + MCP_BRIEF + FUNCTION_BRIEF + CUSTOM_FUNC_BRIEF
+```
+
+此外通过 `get_db_summary_for_agent()` 和 `get_func_summary_for_agent()` 动态获取数据库摘要和函数目录。
+
+**功能：** Action 阶段决定下一步执行哪个动作。
 
 ---
 
@@ -243,10 +250,10 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 | 功能 | 文件 | 注入变量 | 来源 |
 |------|------|----------|------|
 | **Think** | `think.py` | `TARGET`, `THINK_KNOWLEDGE`, `BRIEF_INFO`（含 DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / FUNCTION_BRIEF / CUSTOM_FUNC_BRIEF） | MD + DB + 代码硬编码 |
-| **Action** | `action.py` | `BRIEF_INFO` | MD + DB |
+| **Action** | `action.py` | `BRIEF_INFO`（含 DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / FUNCTION_BRIEF / CUSTOM_FUNC_BRIEF） | MD + DB + 代码硬编码 |
 | **Act - explore_schema** | `act.py` | `DB_BRIEF`, `DB_QUERY_GUIDE` | MD + DB |
 | **Act - explore_functions** | `act.py` | 无 | 动态查询 |
-| **Act - explore_base_knowledge** | `act.py` | `BASE_KNOWLEDGE_BRIEF`, `base_knowledge` 表 | MD + DB |
+| **Act - explore_base_knowledge** | `act.py` | `BASE_KNOWLEDGE_BRIEF`, `base_knowledge` 表（仅此一张表） | MD + DB |
 | **Act - generate_and_execute** | `agent.py` | `BASE`, `code_guide`, `graph_code_guide`, `TARGET` | MD + DB |
 | **Act - generate_document** | `document_generator.py` | `BASE`, `DOC`, `TARGET` | MD + DB |
 | **Observe** | `observe.py` | `TARGET` | MD |
@@ -273,7 +280,7 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 | `get_db_query_guide_db_llm(context, key)` | 基于 `db_query_guide` 表生成 SQL 查询方案 |
 | `get_doc_guide_db_llm(context, key)` | 基于 `doc_guide` 表生成文档分析方案 |
 | `get_code_guide_db_llm(context, key)` | 基于 `code_guide` 表生成图表代码方案 |
-| `get_graph_code_guide_db(key)` | 读取 `graph_code_guide` 表全部记录（无 LLM 查询版本） |
+| `get_graph_code_guide_db(key=None, threshold=0.3)` | 读取 `graph_code_guide` 表全部记录（无 LLM 查询版本） |
 | `get_think_guide_db_llm(context, key)` | 基于 `think_guide` 表生成思考分析方案 |
 
 ---

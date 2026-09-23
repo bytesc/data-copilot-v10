@@ -48,7 +48,7 @@ pandas 读取 CSV 后逐列推断：
    - Boolean → 检查值是否在 `true/false/1/0/yes/no` 中
    - VARCHAR → 检查字符串长度是否超过 `max_length`
    - 校验失败返回格式：`{success: false, error: "Validation failed:\nRow {line_no}, column '{col_name}': 具体原因"}`
-2. **执行阶段** — 校验通过后创建表 + `df.to_sql()` 批量插入，全部在一个事务中（原子性）
+2. **执行阶段** — 校验通过后先创建表，再 `df.to_sql()` 批量插入，**分为两个独立操作，非事务性**。如果插入阶段失败，已创建的表不会自动回滚。
    - 执行失败返回格式：`{success: false, error: "Import failed. The DB reports: MySQL错误信息（含行列号）"}`
 3. **成功返回**：
    ```json
@@ -167,6 +167,22 @@ email,邮箱地址
    - `.doc`：尝试 UTF-8 解码（旧版二进制格式**不支持**）
 2. **`get_llm_data_comment()`** — 提取文本 + 目标表结构 → LLM 生成 ALTER TABLE SQL
 3. **`execute_sql_3()`** — 逐条执行生成的 SQL
+
+### 响应
+
+**成功 `200`**
+```json
+{
+  "status": "success",
+  "table_name": "uploaded_data",
+  "extracted_text_length": 2500,
+  "preview": "提取的内容前500字..."
+}
+```
+
+> LLM 生成的注释 SQL 执行结果当前不返回给前端。如需确认可在 Comments 页面查看。
+
+**失败**: 返回 `HTTP 500`，detail 为错误信息。
 
 ### 前置条件
 

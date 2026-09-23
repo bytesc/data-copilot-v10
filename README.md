@@ -125,7 +125,7 @@ mysql -u root -p < init.sql
 `./config/config.yaml`
 
 ```yaml
-server_port: 8009
+server_port: 8008
 server_host: "0.0.0.0"
 
 # 用户数据数据库
@@ -135,7 +135,7 @@ mysql: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10"
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_sys"
 
 # 静态文件服务地址
-static_path: "http://127.0.0.1:8009/"
+static_path: "http://127.0.0.1:8008/"
 # 静态文件存储目录
 static_folder: "tmp_imgs"
 
@@ -155,7 +155,7 @@ enable_fetch_url: true        # 网页内容抓取
 `vue-front/.env`
 
 ```env
-VITE_SERVER_URL=http://127.0.0.1:8009
+VITE_SERVER_URL=http://127.0.0.1:8008
 VITE_API_BASE=/api
 ```
 

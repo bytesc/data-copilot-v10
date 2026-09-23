@@ -178,63 +178,6 @@ def function_name(param1: Type1, param2: Type2 = default) -> ReturnType:
     return result
 ```
 
-## 示例：新增 `merge_data` 函数
-
-### 1. `tools_def.py`
-
-```python
-def merge_data(df1: pd.DataFrame, df2: pd.DataFrame, on: str = "id", how: str = "inner") -> pd.DataFrame:
-    """
-    merge_data(df1: pd.DataFrame, df2: pd.DataFrame, on: str = "id", how: str = "inner") -> pd.DataFrame:
-    将两个 DataFrame 按指定列合并，返回合并后的 DataFrame。
-    返回 None 表示出错。
-
-    Args:
-    - df1 (pd.DataFrame): 第一个 DataFrame。
-    - df2 (pd.DataFrame): 第二个 DataFrame。
-    - on (str, optional): 合并列名，默认 "id"。
-    - how (str, optional): 合并方式，可选 "inner"、"left"、"right"、"outer"，默认 "inner"。
-
-    Returns:
-    - pd.DataFrame: 合并后的数据。
-    returns None in case of error
-
-    Example:
-    ```python
-        result = merge_data(df1, df2, on="user_id", how="left")
-        # Output(pd.DataFrame):
-        #    user_id  name   age
-        # 0  1        Alice  25
-    ```
-    """
-    return pd.merge(df1, df2, on=on, how=how)
-```
-
-### 2. `get_function_info.py`
-
-```python
-from agent.tools.tools_def import merge_data
-
-FUNCTION_DICT = {
-    ...
-    "merge_data": merge_data,
-}
-
-FUNCTION_IMPORT = {
-    ...
-    merge_data: "from agent.tools.tools_def import merge_data",
-}
-```
-
-### 3. `search_func.py`
-
-```python
-FUNC_CATEGORIES = {
-    ...
-    "Data Processing": ["merge_data"],
-}
-```
-
 ## 相关文件索引
 
 | 文件 | 用途 |

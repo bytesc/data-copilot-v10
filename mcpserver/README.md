@@ -17,14 +17,14 @@ mcpserver/
 ### 一键启动所有服务器
 
 ```bash
-python -m mcpserver.run_all
+python3 -m mcpserver.run_all
 ```
 
 ### 分别启动
 
 ```bash
-python -m mcpserver.calculator_server    # 端口 8101
-python -m mcpserver.datetime_server      # 端口 8103
+python3 -m mcpserver.calculator_server    # 端口 8101
+python3 -m mcpserver.datetime_server      # 端口 8103
 ```
 
 ## 新增 MCP 服务器
@@ -70,7 +70,7 @@ mcp_servers:
   - name: "example_stdio"
     description: "Example tools via local process"
     transport: "stdio"
-    command: "python"
+    command: "python3"
     args: ["-m", "mcpserver.example_server"]
 ```
 
