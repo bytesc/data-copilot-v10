@@ -67,7 +67,7 @@ def draw_graph(question: str, data: pd.DataFrame, col_explanation: str = None) -
     - col_explanation (str, optional): Natural language to describe the meanings of columns.
 
     Returns:
-    - str: url path string of the output graph.(e.g. "http://127.0.0.1:8003/tmp_imgs/mlkjcvep.png").
+    - str: url path string of the output graph.(e.g. "./tmp_imgs/mlkjcvep.png").
     returns None in case of error
 
     Example:
@@ -78,7 +78,7 @@ def draw_graph(question: str, data: pd.DataFrame, col_explanation: str = None) -
         })
         graph_url = draw_graph("draw line graph, use red line", data)
         # Output(str):
-        # "http://127.0.0.1:8003/tmp_imgs/ekhidpcl.png"
+        # "./tmp_imgs/ekhidpcl.png"
 
         data = pd.DataFrame({
             'Gender': [1, 2, 3],
@@ -86,7 +86,7 @@ def draw_graph(question: str, data: pd.DataFrame, col_explanation: str = None) -
         })
         graph_url = draw_graph("draw pie chart", data, "Gender: 1 means male, 2 means female, 3 means not known;")
         # Output(str):
-        # "http://127.0.0.1:8003/tmp_imgs/ewcdkdkl.png"
+        # "./tmp_imgs/ewcdkdkl.png"
 
         data = pd.DataFrame({
             'Month': ['January', 'February', 'March', 'April', 'May', 'June'],
@@ -94,7 +94,7 @@ def draw_graph(question: str, data: pd.DataFrame, col_explanation: str = None) -
         })
         graph_url = draw_graph("draw bar chart, use different color for each bar", data)
         # Output(str):
-        # "http://127.0.0.1:8003/tmp_imgs/glddvysc.png"
+        # "./tmp_imgs/glddvysc.png"
     ```
     """
     result = draw_graph_func(question, data, llm, col_explanation)
@@ -114,7 +114,7 @@ def draw_compare_graph(question: str, data_dict: dict, col_explanation: str = No
     - col_explanation (str, optional): Natural language to describe the meanings of columns.
 
     Returns:
-    - str: url path string of the output graph.(e.g. "http://127.0.0.1:8003/tmp_imgs/mlkjcvep.png").
+    - str: url path string of the output graph.(e.g. "./tmp_imgs/mlkjcvep.png").
     returns None in case of error
 
     Example:
@@ -131,7 +131,7 @@ def draw_compare_graph(question: str, data_dict: dict, col_explanation: str = No
         }
         graph_url = draw_compare_graph("draw line graph", data_dict)
         # Output(str):
-        # "http://127.0.0.1:8003/tmp_imgs/ekhidpcl.png"
+        # "./tmp_imgs/ekhidpcl.png"
 
         data_dict = {
             'group A': pd.DataFrame({
@@ -145,7 +145,7 @@ def draw_compare_graph(question: str, data_dict: dict, col_explanation: str = No
         }
         graph_url = draw_compare_graph("draw pie chart", data_dict, "use blend bar layers to compare two groups. Gender: 1 means male, 2 means female, 3 means not known;")
         # Output(str):
-        # "http://127.0.0.1:8003/tmp_imgs/ewcdkdkl.png"
+        # "./tmp_imgs/ewcdkdkl.png"
 
         data_dict = {
             'monthly_sales': pd.DataFrame({
@@ -155,7 +155,7 @@ def draw_compare_graph(question: str, data_dict: dict, col_explanation: str = No
         }
         graph_url = draw_compare_graph("draw bar chart, use different color for each bar", data_dict)
         # Output(str):
-        # "http://127.0.0.1:8003/tmp_imgs/glddvysc.png"
+        # "./tmp_imgs/glddvysc.png"
     ```
     """
     result = draw_compare_graph_func(question, data_dict, llm, col_explanation)
@@ -227,7 +227,7 @@ def load_data(url: str) -> pd.DataFrame:
     Returns the result in a pandas DataFrame.
 
     Args:
-    - url (str): url string(e.g. http://127.0.0.1:8008/tmp_imgs/imqtzywu.csv).
+    - url (str): url string(e.g. "./tmp_imgs/imqtzywu.csv").
 
     Returns:
     - pd.DataFrame: A DataFrame containing the data in the CSV file.
@@ -235,7 +235,7 @@ def load_data(url: str) -> pd.DataFrame:
 
     Example:
     ```python
-        ans_df = load_data("http://127.0.0.1:8008/tmp_imgs/xjfsutvp.csv")
+        ans_df = load_data("./tmp_imgs/xjfsutvp.csv")
     ```
     """
     file_name = extract_csv_filename_from_url(url)

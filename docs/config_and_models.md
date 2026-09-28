@@ -13,7 +13,7 @@ mysql: "mysql+pymysql://root:123456@localhost:3306/singapore_land_2"
 # 系统数据库（会话日志、知识库、操作审计）
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
 
-# 静态文件 URL 前缀（用于 LLM 构造图片/CSV 链接）
+# 静态文件 URL 前缀（部署时改为服务器实际地址，如 http://your-server-ip:8008/）
 static_path: "http://127.0.0.1:8008/"
 # 静态文件存储目录（相对于项目根）
 static_folder: "tmp_imgs"
@@ -38,16 +38,14 @@ enable_llmlog: false           # 记录 LLM 调用日志到 llmlog/*.txt
 ## 2. 前端环境变量 `vue-front/.env`
 
 ```env
-VITE_SERVER_URL=http://127.0.0.1:8008
 VITE_API_BASE=/api
 ```
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `VITE_SERVER_URL` | `http://127.0.0.1:8008` | 后端服务地址，用于文件下载链接和 Vite 开发代理目标 |
 | `VITE_API_BASE` | `/api` | API 路径前缀 |
 
-构建时通过 `import.meta.env.VITE_*` 注入前端代码。未设置时各组件使用硬编码回退值。
+前端不再需要 `VITE_SERVER_URL`。所有下载链接由后端 `static_path` 配置生成，通过 SSE 下发，前端透传渲染。`front.py` 或 nginx 代理 `/api/*`、`/tmp_imgs/*` 到后端即可。
 
 ---
 
@@ -385,7 +383,7 @@ created_at  DATETIME
 
 | 前缀 | 代理目标 |
 |------|----------|
-| `/api` | `VITE_SERVER_URL`（默认 `http://127.0.0.1:8008`）|
+| `/api` | `VITE_SERVER_URL`（默认 `http://localhost:5173` 直接请求）|
 | `/upload-csv` | 同上 |
 | `/upload-txt` | 同上 |
 | `/tmp_imgs` | 同上 |
@@ -400,11 +398,11 @@ created_at  DATETIME
 
 **环境变量**:
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `BACKEND_URL` | `http://127.0.0.1:8008` | 后端服务地址 |
-| `FRONT_HOST` | `0.0.0.0` | 监听地址 |
-| `FRONT_PORT` | `8008` | 监听端口 |
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `BACKEND_URL` | 是 | 后端服务地址，需设置（无默认值）|
+| `FRONT_HOST` | 否 | 监听地址，默认 `0.0.0.0` |
+| `FRONT_PORT` | 否 | 监听端口，默认 `8010` |
 
 **功能**:
 - 从 `vue-front/dist/` 提供静态文件

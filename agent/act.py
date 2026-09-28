@@ -105,7 +105,7 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
         title = act_data.get("title", "")
         file_name = act_data.get("file_name", "")
         full_text = act_data.get("full_text", "")
-        entries.append({"role": "assistant", "type": "act", "action": "generate_document", "title": title, "file_name": file_name, "full_text": full_text})
+        entries.append({"role": "assistant", "type": "act", "action": "generate_document", "title": title, "file_name": file_name, "full_text": full_text, "download_url_md": act_data.get("download_url_md", ""), "download_url_docx": act_data.get("download_url_docx", ""), "download_url_pdf": act_data.get("download_url_pdf", "")})
     elif action == "web_search":
         entry = {"role": "assistant", "type": "act", "action": "web_search"}
         if act_data.get("display_content"):
@@ -482,10 +482,22 @@ def _act_generate_document(conversation_history, session_id, title: str = "", re
                 last_event = json.loads(event[6:].strip())
             except json.JSONDecodeError:
                 pass
+    file_name = last_event.get("file_name", "")
+    if file_name:
+        static_url = config_data["static_path"].rstrip("/")
+        static_folder = config_data.get("static_folder", "tmp_imgs")
+        download_url_md = f"{static_url}/{static_folder}/{file_name}.md"
+        download_url_docx = f"{static_url}/{static_folder}/{file_name}.docx"
+        download_url_pdf = f"{static_url}/{static_folder}/{file_name}.pdf"
+    else:
+        download_url_md = download_url_docx = download_url_pdf = ""
     return {
         "title": last_event.get("title", title),
-        "file_name": last_event.get("file_name", ""),
+        "file_name": file_name,
         "full_text": last_event.get("content", ""),
+        "download_url_md": download_url_md,
+        "download_url_docx": download_url_docx,
+        "download_url_pdf": download_url_pdf,
         "status": "completed",
     }
 

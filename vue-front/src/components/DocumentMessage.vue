@@ -44,13 +44,13 @@
         <div class="collapse-body" v-html="renderMd(message.docContent)"></div>
       </details>
       <div v-if="message.downloadUrlMd || message.downloadUrlDocx || message.downloadUrlPdf" class="download-links">
-        <a v-if="message.downloadUrlMd" :href="message.downloadUrlMd + '?download=1'" class="download-btn md" target="_blank">
+        <a :href="message.downloadUrlMd + '?download=1'" class="download-btn md" target="_blank">
           Download (.md)
         </a>
-        <a v-if="message.downloadUrlDocx" :href="message.downloadUrlDocx + '?download=1'" class="download-btn docx" target="_blank">
+        <a :href="message.downloadUrlDocx + '?download=1'" class="download-btn docx" target="_blank">
           Download (.docx)
         </a>
-        <a v-if="message.downloadUrlPdf" :href="message.downloadUrlPdf + '?download=1'" class="download-btn pdf" target="_blank">
+        <a :href="message.downloadUrlPdf + '?download=1'" class="download-btn pdf" target="_blank">
           Download (.pdf)
         </a>
       </div>

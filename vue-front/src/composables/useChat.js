@@ -22,7 +22,7 @@ export function useChat() {
   const generatedFiles = ref([])
   const statusMsg = ref('')
 
-  const serverUrl = ref(import.meta.env.VITE_SERVER_URL || 'http://127.0.0.1:8008')
+  const serverUrl = ref(import.meta.env.VITE_SERVER_URL || window.location.origin)
 
   function generateSessionId() {
     const now = new Date()
@@ -352,16 +352,21 @@ function historyToText(history) {
         }
         if (sub === 'generate_document' && event.download_url_md) {
           addSubPhaseToMessage(msgId, currentSubPhase, currentSubContent)
-          setTimeout(() => {
-            const idx = messages.value.findIndex(m => m.msgId === msgId)
-            if (idx !== -1) messages.value[idx].streaming = false
-          })
+          const msgIdx = messages.value.findIndex(m => m.msgId === msgId)
+          if (msgIdx !== -1) {
+            messages.value[msgIdx].streaming = false
+            messages.value[msgIdx].downloadUrlMd = event.download_url_md
+            messages.value[msgIdx].downloadUrlDocx = event.download_url_docx
+            messages.value[msgIdx].downloadUrlPdf = event.download_url_pdf
+            messages.value[msgIdx].title = event.title
+            messages.value[msgIdx].file_name = event.file_name
+          }
           generatedFiles.value.push({
             id: msgId,
             title: event.title || 'Document',
-            downloadUrlMd: `${serverUrl.value}/tmp_imgs/${event.file_name}.md`,
-            downloadUrlDocx: `${serverUrl.value}/tmp_imgs/${event.file_name}.docx`,
-            downloadUrlPdf: `${serverUrl.value}/tmp_imgs/${event.file_name}.pdf`,
+            downloadUrlMd: event.download_url_md,
+            downloadUrlDocx: event.download_url_docx,
+            downloadUrlPdf: event.download_url_pdf,
             createdAt: Date.now(),
           })
         }
@@ -625,6 +630,9 @@ function historyToText(history) {
         title: entry.title,
         file_name: entry.file_name,
         full_text: entry.full_text,
+        downloadUrlMd: entry.download_url_md,
+        downloadUrlDocx: entry.download_url_docx,
+        downloadUrlPdf: entry.download_url_pdf,
         search_result: entry.search_result,
         page_content: entry.page_content,
         query: entry.query,
@@ -715,22 +723,22 @@ function historyToText(history) {
           })
         }
       } else if (phase === 'document' && etype === 'done') {
-        updateDocMessage(docMsgId, {
-          streaming: false,
-          docContent: content,
-          downloadUrlMd: `${serverUrl.value}/tmp_imgs/${event.file_name}.md`,
-          downloadUrlDocx: `${serverUrl.value}/tmp_imgs/${event.file_name}.docx`,
-          downloadUrlPdf: `${serverUrl.value}/tmp_imgs/${event.file_name}.pdf`,
-          completedParts: [...completedParts],
-        })
-        generatedFiles.value.push({
-          id: docMsgId,
-          title: outlineData?.title || 'Document',
-          downloadUrlMd: `${serverUrl.value}/tmp_imgs/${event.file_name}.md`,
-          downloadUrlDocx: `${serverUrl.value}/tmp_imgs/${event.file_name}.docx`,
-          downloadUrlPdf: `${serverUrl.value}/tmp_imgs/${event.file_name}.pdf`,
-          createdAt: Date.now(),
-        })
+updateDocMessage(docMsgId, {
+            streaming: false,
+            docContent: content,
+            downloadUrlMd: event.download_url_md,
+            downloadUrlDocx: event.download_url_docx,
+            downloadUrlPdf: event.download_url_pdf,
+            completedParts: [...completedParts],
+          })
+          generatedFiles.value.push({
+            id: docMsgId,
+            title: outlineData?.title || 'Document',
+            downloadUrlMd: event.download_url_md,
+            downloadUrlDocx: event.download_url_docx,
+            downloadUrlPdf: event.download_url_pdf,
+            createdAt: Date.now(),
+          })
       }
     }
   }
@@ -765,16 +773,16 @@ function historyToText(history) {
         updateDocMessage(docMsgId, {
           streaming: false,
           docContent: content,
-          downloadUrlMd: `${serverUrl.value}/tmp_imgs/${event.file_name}.md`,
-          downloadUrlDocx: `${serverUrl.value}/tmp_imgs/${event.file_name}.docx`,
-          downloadUrlPdf: `${serverUrl.value}/tmp_imgs/${event.file_name}.pdf`,
+          downloadUrlMd: event.download_url_md,
+          downloadUrlDocx: event.download_url_docx,
+          downloadUrlPdf: event.download_url_pdf,
         })
         generatedFiles.value.push({
           id: docMsgId,
           title: event.title || 'Document',
-          downloadUrlMd: `${serverUrl.value}/tmp_imgs/${event.file_name}.md`,
-          downloadUrlDocx: `${serverUrl.value}/tmp_imgs/${event.file_name}.docx`,
-          downloadUrlPdf: `${serverUrl.value}/tmp_imgs/${event.file_name}.pdf`,
+          downloadUrlMd: event.download_url_md,
+          downloadUrlDocx: event.download_url_docx,
+          downloadUrlPdf: event.download_url_pdf,
           createdAt: Date.now(),
         })
       }

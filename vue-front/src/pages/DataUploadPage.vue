@@ -63,7 +63,7 @@
 import { ref } from 'vue'
 import DbOverview from '@/components/DbOverview.vue'
 
-const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://127.0.0.1:8008'
+const serverUrl = import.meta.env.VITE_SERVER_URL || window.location.origin
 
 const uploadType = ref('csv')
 const file = ref(null)

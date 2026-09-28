@@ -80,7 +80,7 @@ STATIC_FOLDER = config_data.get("static_folder", "tmp_imgs")
 STATIC_PATH = f"/{STATIC_FOLDER}"
 
 
-# http://127.0.0.1:8003/tmp_imgs/mlkjcvep.png
+
 @app.get(f"/{STATIC_FOLDER}/{{filename}}")
 async def read_static_file(request: Request, filename: str, download: str = None):
     filepath = os.path.join(STATIC_FOLDER, filename)

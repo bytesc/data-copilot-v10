@@ -1,12 +1,18 @@
 import os
 import mimetypes
+
 import httpx
 import uvicorn
+import yaml
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8008")
+with open("./config/config.yaml") as f:
+    _cfg = yaml.safe_load(f)
+_host = _cfg.get("server_host", "127.0.0.1")
+_port = _cfg["server_port"]
+BACKEND_URL = os.getenv("BACKEND_URL", f"http://{_host}:{_port}")
 FRONT_HOST = os.getenv("FRONT_HOST", "0.0.0.0")
 FRONT_PORT = int(os.getenv("FRONT_PORT", "8010"))
 DIST_DIR = Path(__file__).parent / "vue-front" / "dist"
