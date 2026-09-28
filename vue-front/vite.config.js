@@ -18,19 +18,19 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': {
           target: serverTarget,
-          changeOrigin: true
+          changeOrigin: true,
         },
         '/upload-csv': {
           target: serverTarget,
-          changeOrigin: true
+          changeOrigin: true,
         },
         '/upload-txt': {
           target: serverTarget,
-          changeOrigin: true
+          changeOrigin: true,
         },
         '/tmp_imgs': {
           target: serverTarget,
-          changeOrigin: true
+          changeOrigin: true,
         }
       }
     }

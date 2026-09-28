@@ -24,7 +24,11 @@ PROXY_PATHS = ("/api", "/upload-csv", "/upload-txt", "/tmp_imgs")
 STREAM_PATHS = ("/api/generate-and-execute/stream/", "/api/plain-chat/stream/",
                 "/api/filter-db-fields/stream/", "/api/filter-functions/stream/",
                 "/api/think/stream/", "/api/act/stream/", "/api/observe/stream/",
-                "/api/action/stream/", "/api/generate-document/stream/")
+                "/api/action/stream/", "/api/generate-document/stream/",
+                "/api/generate-document/generate-yaml-outline/",
+                "/api/generate-document/stream/from-yaml/",
+                "/api/generate-document/stream/unified/",
+                "/api/generate-document/finalize/")
 STATIC_EXTS = {".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg",
                ".ico", ".webp", ".woff", ".woff2", ".ttf", ".eot", ".json", ".map"}
 

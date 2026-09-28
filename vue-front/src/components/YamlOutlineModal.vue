@@ -49,8 +49,13 @@
           <button class="close-btn" @click="onClose" title="Close">✕</button>
         </div>
         <div class="modal-body">
-          <div v-if="yamlLoading" class="loading-overlay">Generating YAML outline...</div>
-          <div class="user-prompt-area" v-if="!yamlContent && !yamlLoading">
+          <!-- Streaming preview: raw YAML being generated -->
+          <div v-if="generatingYaml" class="streaming-preview-area">
+            <div class="streaming-label">Generating YAML outline...</div>
+            <pre class="streaming-content">{{ streamingYaml }}</pre>
+          </div>
+          <!-- Prompt area: shown when idle and no content -->
+          <div class="user-prompt-area" v-if="!generatingYaml && !yamlContent">
             <label class="user-prompt-label">Optional instructions for AI outline generation:</label>
             <textarea
               class="user-prompt-input"
@@ -59,11 +64,12 @@
               rows="2"
               spellcheck="false"
             ></textarea>
-            <button class="btn btn-primary" :disabled="generatingYaml" @click="generateYamlOutline">
-              {{ generatingYaml ? 'Generating...' : 'Generate with AI' }}
+            <button class="btn btn-primary" @click="generateYamlOutline">
+              Generate with AI
             </button>
           </div>
-          <template v-if="yamlContent">
+          <!-- Editor: shown after streaming completes -->
+          <template v-if="!generatingYaml && yamlContent">
             <details class="yaml-format-hint">
               <summary>YAML format reference</summary>
               <pre class="yaml-format-pre">title: "Document Title"
@@ -109,7 +115,7 @@ sections:
             />
           </template>
         </div>
-        <div class="modal-footer" v-if="!yamlLoading && yamlContent">
+        <div class="modal-footer" v-if="!generatingYaml && yamlContent">
           <button class="btn btn-secondary" style="margin-right:auto" @click="backToPick">Back</button>
           <button class="btn btn-secondary" @click="saveYaml" :disabled="!yamlBase">Save</button>
           <button class="btn btn-primary" :disabled="generatingDraft" @click="startGeneratingSections">
@@ -279,8 +285,8 @@ const step = ref('pick')
 const availableFiles = ref([])
 const loadingFiles = ref(true)
 
-const yamlLoading = ref(false)
 const yamlContent = ref('')
+const streamingYaml = ref('')
 const yamlBase = ref('')
 const yamlTextarea = ref(null)
 const generatingDraft = ref(false)
@@ -315,7 +321,7 @@ const docTitle = computed(() => {
   return m ? m[1] : ''
 })
 
-const isBusy = computed(() => yamlLoading.value || generatingDraft.value || finalizing.value || generatingYaml.value)
+const isBusy = computed(() => generatingDraft.value || finalizing.value || generatingYaml.value)
 watch(isBusy, (v) => emit('running', v))
 
 const sectionCount = computed(() => {
@@ -449,8 +455,8 @@ async function loadFile(file) {
 function startFresh() {
   step.value = 'yaml'
   yamlContent.value = ''
+  streamingYaml.value = ''
   userPrompt.value = ''
-  yamlLoading.value = false
 }
 
 function backToPick() {
@@ -577,35 +583,37 @@ function onOverlayClick() {
 // YAML outline generation
 async function generateYamlOutline() {
   generatingYaml.value = true
-  yamlLoading.value = true
+  yamlContent.value = ''
+  streamingYaml.value = ''
   try {
     const payload = {
       conversation_history: props.conversationHistory,
       session_id: props.sessionId,
       user_prompt: userPrompt.value.trim() || undefined,
     }
-    let rawYaml = ''
     const gen = createSSEStream('/api/generate-document/generate-yaml-outline/', payload)
     for await (const event of gen) {
       if (event.phase === 'yaml_outline') {
         if (event.type === 'chunk') {
-          rawYaml += event.content || ''
-          yamlContent.value = rawYaml
+          streamingYaml.value += event.content || ''
         } else if (event.type === 'done') {
-          yamlContent.value = event.content || rawYaml
+          yamlContent.value = event.content || streamingYaml.value
+          streamingYaml.value = ''
           const base = event.yaml_base || ''
           const sid = props.sessionId
           yamlBase.value = sid ? `${sid}_${base}` : base
+        } else if (event.type === 'error') {
+          yamlContent.value = `# Error: ${event.content || 'Failed to generate YAML outline'}`
+          streamingYaml.value = ''
         }
       }
     }
-    yamlLoading.value = false
     generatingYaml.value = false
     await nextTick()
     if (yamlTextarea.value) yamlTextarea.value.focus()
   } catch (e) {
     yamlContent.value = `# Error generating YAML outline:\n# ${e.message}`
-    yamlLoading.value = false
+    streamingYaml.value = ''
     generatingYaml.value = false
   }
 }
@@ -794,7 +802,10 @@ onMounted(fetchAvailableFiles)
 .btn-primary:hover:not(:disabled) { opacity: 0.9; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .loading-text { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--text-muted); }
-.loading-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 14px; color: var(--text-muted); z-index: 1; pointer-events: none; }
+.streaming-preview-area { flex: 1; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+.streaming-label { font-size: 13px; color: var(--accent-blue); font-weight: 600; flex-shrink: 0; }
+.streaming-content { flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; font-family: 'Consolas','Courier New',monospace; font-size: 13px; line-height: 1.5; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0; }
+.streaming-content:empty::after { content: '|'; animation: blink 0.8s infinite; color: var(--accent-blue); }
 .empty-text { font-size: 14px; color: var(--text-muted); text-align: center; padding: 24px; }
 .markdown-preview { flex: 1; overflow-y: auto; padding: 8px 0; }
 .section-block { margin-bottom: 12px; }
