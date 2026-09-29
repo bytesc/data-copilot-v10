@@ -507,8 +507,16 @@ async function saveFile(filename, content) {
   } catch {}
 }
 
+function ensureYamlBase() {
+  if (!yamlBase.value) {
+    const base = generateRandomString(8)
+    const sid = props.sessionId
+    yamlBase.value = sid ? `${sid}_${base}` : base
+  }
+}
+
 async function saveYaml() {
-  if (!yamlBase.value) return
+  ensureYamlBase()
   saveMsg.value = ''
   try {
     const res = await fetch(`/api/doc-workspace/save/outline_${yamlBase.value}.yaml`, {
@@ -528,7 +536,7 @@ async function saveYaml() {
 }
 
 async function saveDraft() {
-  if (!yamlBase.value) return
+  ensureYamlBase()
   saveMsg.value = ''
   try {
     const res = await fetch(`/api/doc-workspace/save/draft_${yamlBase.value}.md`, {
@@ -561,6 +569,7 @@ async function doEditYaml() {
     const yamlId = base.slice(idx + 1)
     await fetch(`/api/doc-workspace/drafts/${sessionId}/${yamlId}`, { method: 'DELETE' })
     yamlContent.value = data.content
+    yamlBase.value = base
     step.value = 'yaml'
     await nextTick()
     if (yamlTextarea.value) yamlTextarea.value.focus()
