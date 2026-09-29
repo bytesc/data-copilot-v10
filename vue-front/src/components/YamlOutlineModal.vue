@@ -117,7 +117,8 @@ sections:
         </div>
         <div class="modal-footer" v-if="!generatingYaml && yamlContent">
           <button class="btn btn-secondary" style="margin-right:auto" @click="backToPick">Back</button>
-          <button class="btn btn-secondary" @click="saveYaml" :disabled="!yamlBase">Save</button>
+          <button class="btn btn-secondary" @click="saveYaml">Save</button>
+          <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
           <button class="btn btn-primary" :disabled="generatingDraft" @click="startGeneratingSections">
             {{ generatingDraft ? 'Starting...' : 'Generate Sections' }}
           </button>
@@ -209,7 +210,8 @@ sections:
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" style="margin-right:auto" @click="backToSectionEdit">Back</button>
-          <button class="btn btn-secondary" @click="saveDraft" :disabled="!yamlBase">Save Draft</button>
+          <button class="btn btn-secondary" @click="saveDraft">Save Draft</button>
+          <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
           <button class="btn btn-primary" :disabled="finalizing" @click="finalizeDoc">
             {{ finalizing ? 'Finalizing...' : 'Finalize to docx/pdf' }}
           </button>
@@ -274,6 +276,15 @@ import { marked } from 'marked'
 import * as jsyaml from 'js-yaml'
 import YamlVisualEditor from './YamlVisualEditor.vue'
 
+function generateRandomString(length = 8) {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  let result = ''
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
 const props = defineProps({
   serverUrl: { type: String, default: '' },
   conversationHistory: { type: Array, default: () => [] },
@@ -308,13 +319,13 @@ const confirmedSections = ref([])
 const finalizing = ref(false)
 const finalTitle = ref('')
 const finalDownloadMd = ref('')
-const finalDownloadDocx = ref('')
 const finalDownloadPdf = ref('')
 const finalTextarea = ref(null)
 const confirmFile = ref(null)
 const editYamlFile = ref(null)
 const viewYamlFile = ref(null)
 const yamlViewContent = ref('')
+const saveMsg = ref('')
 
 const docTitle = computed(() => {
   const m = yamlContent.value.match(/^title:\s*["'](.+?)["']/m)
@@ -457,6 +468,9 @@ function startFresh() {
   yamlContent.value = ''
   streamingYaml.value = ''
   userPrompt.value = ''
+  const base = generateRandomString(8)
+  const sid = props.sessionId
+  yamlBase.value = sid ? `${sid}_${base}` : base
 }
 
 function backToPick() {
@@ -495,12 +509,42 @@ async function saveFile(filename, content) {
 
 async function saveYaml() {
   if (!yamlBase.value) return
-  await saveFile(`outline_${yamlBase.value}.yaml`, yamlContent.value)
+  saveMsg.value = ''
+  try {
+    const res = await fetch(`/api/doc-workspace/save/outline_${yamlBase.value}.yaml`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: yamlContent.value }),
+    })
+    if (res.ok) {
+      saveMsg.value = 'Saved'
+    } else {
+      saveMsg.value = 'Save failed'
+    }
+  } catch {
+    saveMsg.value = 'Save failed'
+  }
+  setTimeout(() => { saveMsg.value = '' }, 2000)
 }
 
 async function saveDraft() {
   if (!yamlBase.value) return
-  await saveFile(`draft_${yamlBase.value}.md`, mergedContent.value)
+  saveMsg.value = ''
+  try {
+    const res = await fetch(`/api/doc-workspace/save/draft_${yamlBase.value}.md`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: mergedContent.value }),
+    })
+    if (res.ok) {
+      saveMsg.value = 'Draft saved'
+    } else {
+      saveMsg.value = 'Save failed'
+    }
+  } catch {
+    saveMsg.value = 'Save failed'
+  }
+  setTimeout(() => { saveMsg.value = '' }, 2000)
 }
 
 async function doEditYaml() {
@@ -890,6 +934,7 @@ onMounted(fetchAvailableFiles)
 .yaml-format-hint summary { cursor: pointer; user-select: none; padding: 4px 8px; border-radius: var(--radius-sm); background: var(--bg-tertiary); display: inline-block; }
 .yaml-format-hint summary:hover { background: var(--bg-hover); }
 .yaml-format-pre { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px; font-family: 'Consolas','Courier New',monospace; font-size: 12px; line-height: 1.4; overflow-x: auto; margin: 6px 0 0; white-space: pre; color: var(--text-secondary); }
+.save-msg { font-size: 12px; color: var(--accent-green); font-weight: 600; }
 
 @media (max-width: 768px) {
   .modal-container { width: 100vw; height: 100vh; border-radius: 0; }
