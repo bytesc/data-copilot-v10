@@ -362,7 +362,9 @@ async function fetchAvailableFiles() {
     if (res.ok) {
       const data = await res.json()
       const sid = props.sessionId
-      availableFiles.value = (data.files || []).filter(f => f.name.startsWith(`outline_${sid}_`))
+      availableFiles.value = (data.files || [])
+        .filter(f => f.name.startsWith(`outline_${sid}_`))
+        .sort((a, b) => (b.mtime || 0) - (a.mtime || 0))
     }
   } catch {}
   loadingFiles.value = false
