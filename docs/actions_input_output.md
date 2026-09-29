@@ -115,12 +115,14 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 **输出**
 ```json
-{"role":"assistant","type":"act","action":"explore_functions","selected_functions":[...],"func_docs":"..."}
+{"role":"assistant","type":"act","action":"explore_functions","selected_functions":[...],"explore_plan":"...","func_docs":"..."}
 ```
 
 **上下文**
 ```
 [ACT explore_functions] selected_functions: ["func1",...]
+[ACT explore_functions] explore_plan:
+{explore_plan}
 [ACT explore_functions] func_docs:
 {func_docs}
 ```

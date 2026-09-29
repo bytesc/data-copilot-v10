@@ -45,7 +45,7 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 
 ```json
 {"role":"assistant","type":"act","action":"explore_functions",
- "selected_functions":[...],"func_docs":"..."}
+ "selected_functions":[...],"explore_plan":"...","func_docs":"..."}
 ```
 
 ### generate_and_execute — 成功

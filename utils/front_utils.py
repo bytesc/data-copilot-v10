@@ -50,6 +50,8 @@ def history_to_text(history: List[dict]) -> str:
             elif action == "explore_functions":
                 if entry.get("selected_functions") is not None:
                     lines.append(f"[ACT explore_functions] selected_functions: {json.dumps(entry['selected_functions'], ensure_ascii=False)}")
+                if entry.get("explore_plan"):
+                    lines.append(f"[ACT explore_functions] explore_plan:\n{entry['explore_plan']}")
                 if entry.get("func_docs"):
                     lines.append(f"[ACT explore_functions] func_docs:\n{entry['func_docs']}")
             elif action == "generate_and_execute":

@@ -85,6 +85,8 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
         entry = {"role": "assistant", "type": "act", "action": "explore_functions"}
         if act_data.get("selected_functions") is not None:
             entry["selected_functions"] = act_data["selected_functions"]
+        if act_data.get("explore_plan"):
+            entry["explore_plan"] = act_data["explore_plan"]
         if act_data.get("func_docs"):
             entry["func_docs"] = act_data["func_docs"]
         entries.append(entry)
@@ -307,10 +309,13 @@ Context:
 
 Available functions: {func_names}
 
-Output ONLY the function names separated by commas. Return "solved" if no functions are needed.
+Output ONLY a JSON object with the following structure:
+{{"selected_functions": ["func1", "func2"], "plan": "brief plan describing how these functions will be used"}}
+
+If no functions are needed, return {{"selected_functions": [], "plan": "No functions needed."}}
 
 Example:
-exe_sql, get_save_image_path
+{{"selected_functions": ["exe_sql", "get_save_image_path"], "plan": "Execute SQL query then save the resulting image path."}}
 """
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'status', 'content': 'Analyzing required functions...'}, ensure_ascii=False)}\n\n"
 
@@ -319,11 +324,13 @@ exe_sql, get_save_image_path
         raw += chunk
         yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
     raw_text = raw
-    raw = raw.strip()
-    if raw == "solved":
-        selected_functions = []
+    parsed = _parse_function_explore_json(raw)
+    if parsed:
+        selected_functions = parsed.get("selected_functions", [])
+        explore_plan = parsed.get("plan", "")
     else:
-        selected_functions = [f.strip() for f in raw.split(',') if f.strip() in FUNCTION_DICT]
+        selected_functions = []
+        explore_plan = ""
 
     if selected_functions:
         display_content = get_func_docs_for(selected_functions)
@@ -335,9 +342,18 @@ exe_sql, get_save_image_path
                       exec_result=display_content[:10000],
                       token_estimate=len(prompt) // 3)
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'done', 'content': display_content, 'result': {'selected_functions': selected_functions, 'func_context': full_catalog}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'done', 'content': display_content, 'result': {'selected_functions': selected_functions, 'func_context': full_catalog, 'explore_plan': explore_plan}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
-    return {"selected_functions": selected_functions, "func_docs": display_content}
+    return {"selected_functions": selected_functions, "explore_plan": explore_plan, "func_docs": display_content}
+
+
+def _parse_function_explore_json(raw: str) -> dict | None:
+    from utils.context_trim import parse_json
+    result = parse_json(raw)
+    if isinstance(result, dict) and "selected_functions" in result:
+        valid_func_names = [f.strip() for f in result["selected_functions"] if isinstance(f, str) and f.strip() in FUNCTION_DICT]
+        return {"selected_functions": valid_func_names, "plan": result.get("plan", "")}
+    return None
 
 
 def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyword: Optional[str] = None):

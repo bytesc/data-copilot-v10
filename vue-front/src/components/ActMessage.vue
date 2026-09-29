@@ -45,6 +45,10 @@
     </template>
 
     <template v-else-if="message.action === 'explore_functions'">
+      <details v-if="message.explore_plan || message.parsed?.explore_plan" class="msg-collapse">
+        <summary class="collapse-summary">Call Plan</summary>
+        <div class="collapse-body" v-html="renderMd(message.explore_plan || message.parsed?.explore_plan)"></div>
+      </details>
       <details v-if="hasSelectedFunctions" class="msg-collapse">
         <summary class="collapse-summary">Selected Functions</summary>
         <div class="collapse-body">

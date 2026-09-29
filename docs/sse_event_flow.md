@@ -111,7 +111,7 @@
   {phase:"act", type:"status", sub_phase:"explore_functions", content:"Analyzing required functions..."}
   {phase:"act", type:"chunk",  sub_phase:"explore_functions", content:"..."}  ×N
   {phase:"act", type:"done",   sub_phase:"explore_functions", content:"...",
-   result:{selected_functions:[...], func_context:"..."},
+   result:{selected_functions:[...], func_context:"...", explore_plan:"..."},
    search_keyword:"..."}
 ```
 
