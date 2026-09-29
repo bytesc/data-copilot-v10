@@ -60,7 +60,6 @@
             <textarea
               class="user-prompt-input"
               v-model="userPrompt"
-              placeholder="e.g. Focus on price trends, include a comparison table, emphasize 2023-2024 data..."
               rows="2"
               spellcheck="false"
             ></textarea>

@@ -10,6 +10,7 @@ from agent.utils.llm_access.LLM import get_llm
 from .copilot.examples.path_tools import generate_img_path
 
 from .map.get_onemap_minimap import get_minimap_func
+from .map.get_onemap_staticmap import get_static_map_func
 from .llm_analysis.llm_predict_hdb import llm_predict_hdb_func, get_llm_predict_hdb_info
 from .tools_def import engine, STATIC_URL
 
@@ -84,6 +85,82 @@ def get_minimap(
     iframe, url = get_minimap_func(markers)
     output = f"[🔗 Open Map on OneMap.sg]({url})\n\n{iframe}"
     return output
+
+
+def get_static_map(
+    layerchosen: str = "default",
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    postal: Optional[str] = None,
+    zoom: int = 15,
+    width: int = 512,
+    height: int = 512,
+    polygons: Optional[List[List[Tuple[float, float]]]] = None,
+    polygon_color: Optional[str] = None,
+    lines: Optional[List[List[Tuple[float, float]]]] = None,
+    line_color: Optional[str] = None,
+    line_thickness: Optional[int] = None,
+    points: Optional[List[Tuple[float, float]]] = None,
+    points_color: Optional[Tuple[int, int, int]] = None,
+    color: Optional[str] = None,
+    fillColor: Optional[str] = None,
+) -> str:
+    """
+    get_static_map(layerchosen="default", latitude=None, longitude=None, postal=None, zoom=15, width=512, height=512, polygons=None, polygon_color=None, lines=None, line_color=None, line_thickness=None, points=None, points_color=None, color=None, fillColor=None) -> str:
+    Generate a static map image from OneMap.sg PNG API and save it locally. Returns the image URL path.
+    The maximum resolution is 512 x 512 pixels.
+
+    Creates a static map with optional polygons, lines, and points overlay, saves it as a PNG file, and returns the URL path to access the image.
+
+    Args:
+    - layerchosen (str): Base map style: 'night', 'grey', 'original', 'default', 'landlot'. Default 'default'.
+    - latitude (float, optional): Latitude in WGS84 format. Use with longitude.
+    - longitude (float, optional): Longitude in WGS84 format. Use with latitude.
+    - postal (str, optional): Singapore postal code. Alternative to latitude/longitude.
+    - zoom (int): Zoom level 11-19. Default 15.
+    - width (int): Image width 128-512. Default 512.
+    - height (int): Image height 128-512. Default 512.
+    - polygons (List[List[Tuple[float, float]]], optional): List of polygons, each is a list of (lat, lng) tuples.
+    - polygon_color (str, optional): RGB color for polygons, e.g. "255,0,0".
+    - lines (List[List[Tuple[float, float]]], optional): List of lines, each is a list of (lat, lng) tuples.
+    - line_color (str, optional): RGB color for lines, e.g. "177,0,0".
+    - line_thickness (int, optional): Thickness of lines.
+    - points (List[Tuple[float, float]], optional): List of (lat, lng) point coordinates.
+    - points_color (Tuple[int,int,int], optional): RGB tuple for points color, e.g. (255,255,178).
+    - color (str, optional): RGB color for ALL lines, e.g. "255,0,255".
+    - fillColor (str, optional): RGB fill color for ALL polygons, e.g. "0,255,0".
+
+    Returns:
+    - str: URL path to the saved static map PNG image.
+
+    Example usage:
+    ```python
+    path = get_static_map(latitude=1.31955, longitude=103.84223, zoom=17)
+    yield path
+    ```
+    """
+    img_bytes = get_static_map_func(
+        layerchosen=layerchosen,
+        latitude=latitude,
+        longitude=longitude,
+        postal=postal,
+        zoom=zoom,
+        width=width,
+        height=height,
+        polygons=polygons,
+        polygon_color=polygon_color,
+        lines=lines,
+        line_color=line_color,
+        line_thickness=line_thickness,
+        points=points,
+        points_color=points_color,
+        color=color,
+        fillColor=fillColor,
+    )
+    path = generate_img_path()
+    with open(path, "wb") as f:
+        f.write(img_bytes)
+    return STATIC_URL + path[2:]
 
 
 
