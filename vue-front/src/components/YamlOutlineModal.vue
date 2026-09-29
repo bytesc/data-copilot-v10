@@ -146,21 +146,6 @@ sections:
           </div>
           <!-- Editable textarea for current section -->
           <div v-else class="section-edit-area">
-            <div class="confirmed-indicator">
-              <span v-for="(part, i) in confirmedSections" :key="i" class="confirmed-badge" @click="editSection(i)">Section {{ i + 1 }}</span>
-              <span class="current-badge">Section {{ currentSectionIndex + 1 }}</span>
-            </div>
-            <div class="confirmed-preview">
-              <div
-                v-for="(part, i) in confirmedSections"
-                :key="'confirmed-' + i"
-                class="section-block confirmed"
-                @click="editSection(i)"
-              >
-                <div class="section-heading">{{ part.heading }}</div>
-                <div class="section-content truncated" v-html="renderMd(truncate(part.content, 300))"></div>
-              </div>
-            </div>
             <label class="section-edit-label">{{ currentSectionHeading }}</label>
             <textarea
               ref="sectionTextarea"
@@ -194,9 +179,6 @@ sections:
           <button class="close-btn" @click="onClose" title="Close">✕</button>
         </div>
         <div class="modal-body">
-          <div class="confirmed-indicator">
-            <span v-for="(_, i) in confirmedSections" :key="i" class="confirmed-badge" @click="editSection(i)">Section {{ i + 1 }}</span>
-          </div>
           <textarea
             ref="finalTextarea"
             class="code-editor"
@@ -326,6 +308,7 @@ const editYamlFile = ref(null)
 const viewYamlFile = ref(null)
 const yamlViewContent = ref('')
 const saveMsg = ref('')
+const mergedEdit = ref('')
 
 const docTitle = computed(() => {
   const m = yamlContent.value.match(/^title:\s*["'](.+?)["']/m)
@@ -340,17 +323,21 @@ const sectionCount = computed(() => {
   return m ? m.length : 0
 })
 
+function buildMergedContent() {
+  const titleLine = docTitle.value ? `# ${docTitle.value}\n\n` : ''
+  const parts = confirmedSections.value.map((s, i) =>
+    `## ${s.heading}\n\n${s.content}`
+  ).join('\n\n')
+  return titleLine + parts
+}
+
 const mergedContent = computed({
   get: () => {
-    const titleLine = docTitle.value ? `# ${docTitle.value}\n\n` : ''
-    const parts = confirmedSections.value.map((s, i) =>
-      `## ${s.heading}\n\n${s.content}`
-    ).join('\n\n')
-    return titleLine + parts
+    if (mergedEdit.value) return mergedEdit.value
+    return buildMergedContent()
   },
   set: (val) => {
-    // Reset tracking when user edits the merged text directly
-    // Keeps merged content as-is for finalize
+    mergedEdit.value = val
   }
 })
 
@@ -416,6 +403,7 @@ async function loadFile(file) {
         const sections = parseSectionsFromMd(draftData.content)
         if (sections.length > 0) {
           confirmedSections.value = sections
+          mergedEdit.value = ''
           step.value = 'review'
           await nextTick()
           if (finalTextarea.value) finalTextarea.value.focus()
@@ -734,6 +722,7 @@ async function confirmSection() {
     currentSectionIndex.value++
     generateNextSection()
   } else {
+    mergedEdit.value = ''
     await saveDraft()
     step.value = 'review'
     nextTick(() => {
@@ -858,7 +847,6 @@ onMounted(fetchAvailableFiles)
 .streaming-preview-area { flex: 1; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
 .streaming-label { font-size: 13px; color: var(--accent-blue); font-weight: 600; flex-shrink: 0; }
 .streaming-content { flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; font-family: 'Consolas','Courier New',monospace; font-size: 13px; line-height: 1.5; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0; }
-.streaming-content:empty::after { content: '|'; animation: blink 0.8s infinite; color: var(--accent-blue); }
 .empty-text { font-size: 14px; color: var(--text-muted); text-align: center; padding: 24px; }
 .markdown-preview { flex: 1; overflow-y: auto; padding: 8px 0; }
 .section-block { margin-bottom: 12px; }
@@ -866,7 +854,7 @@ onMounted(fetchAvailableFiles)
 .section-heading { font-size: 14px; font-weight: 700; color: var(--accent-blue); margin-bottom: 4px; padding-bottom: 2px; border-bottom: 1px solid var(--border-color); }
 .section-content { font-size: 13px; color: var(--text-primary); line-height: 1.6; }
 .streaming { opacity: 0.8; }
-.streaming-content::after { content: '|'; animation: blink 0.8s infinite; }
+.streaming-content::after { content: '| generating'; animation: blink 0.8s infinite; color: var(--accent-blue); }
 @keyframes blink { 50% { opacity: 0; } }
 .section-edit-area { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .confirmed-preview { max-height: 30%; overflow-y: auto; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 12px; flex-shrink: 0; }
