@@ -255,12 +255,12 @@ def format_yield_item(item, print_rows=5):
         text += wrap_html_url_with_html_a(html_link)
         text += wrap_csv_url_with_html_a(csv_link)
         return text
+    elif is_iframe_tag(str(item)):
+        return "\n" + str(item) + "\n"
     elif isinstance(item, str) and is_png_url(item):
         return "\n" + wrap_png_url_with_markdown_image(item) + "\n"
     elif isinstance(item, str) and is_local_png_path(item):
         return "\n" + wrap_png_url_with_markdown_image(STATIC_URL + item[2:]) + "\n"
-    elif is_iframe_tag(str(item)):
-        return "\n" + str(item) + "\n"
     else:
         return "\n" + str(item) + "\n"
 

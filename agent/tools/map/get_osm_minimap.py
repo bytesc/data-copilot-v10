@@ -32,28 +32,28 @@ _IFRAME_TEMPLATE = """<!DOCTYPE html>
 <div id="map"></div>
 <script>
 var MARKERS = {MARKERS_JSON};
-var COLORS = {{"red":"#e74c3c","blue":"#3498db","green":"#2ecc71","black":"#333333","yellow":"#f1c40f","orange":"#e67e22","purple":"#9b59b6","white":"#ffffff","grey":"#95a5a6"}};
+var COLORS = {"red":"#e74c3c","blue":"#3498db","green":"#2ecc71","black":"#333333","yellow":"#f1c40f","orange":"#e67e22","purple":"#9b59b6","white":"#ffffff","grey":"#95a5a6"};
 var map = L.map('map');
-L.tileLayer('https://tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}}).addTo(map);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
 var bounds = [];
-MARKERS.forEach(function(mk){{
+MARKERS.forEach(function(mk){
   var color = COLORS[mk.color] || '#e74c3c';
-  var icon = L.divIcon({{
+  var icon = L.divIcon({
     html:'<div style="background:'+color+';width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center"><i class="fa '+(mk.icon||'fa-map-marker')+'" style="transform:rotate(45deg);color:#fff;font-size:13px"></i></div>',
     iconSize:[28,28], iconAnchor:[14,28], popupAnchor:[0,-28]
-  }});
-  var marker = L.marker([mk.lat, mk.lng], {{icon:icon}}).addTo(map);
+  });
+  var marker = L.marker([mk.lat, mk.lng], {icon:icon}).addTo(map);
   if (mk.label) marker.bindTooltip(mk.label);
   if (mk.popup) marker.bindPopup(mk.popup);
   bounds.push([mk.lat, mk.lng]);
-}});
-if (bounds.length > 1) {{
-  map.fitBounds(bounds, {{padding:[30,30]}});
-}} else if (bounds.length === 1) {{
+});
+if (bounds.length > 1) {
+  map.fitBounds(bounds, {padding:[30,30]});
+} else if (bounds.length === 1) {
   map.setView(bounds[0], {ZOOM});
-}} else {{
+} else {
   map.setView([20, 0], 3);
-}}
+}
 </script>
 </body>
 </html>"""
