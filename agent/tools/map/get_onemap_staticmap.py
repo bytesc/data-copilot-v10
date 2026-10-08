@@ -2,7 +2,7 @@ import http.client
 from typing import Optional, List, Tuple
 
 
-def get_static_map_func(
+def get_onemap_static_map_func(
     layerchosen: str = "default",
     latitude: Optional[float] = None,
     longitude: Optional[float] = None,

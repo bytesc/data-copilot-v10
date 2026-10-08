@@ -12,8 +12,9 @@ setup_chinese_font()
 from agent.utils.llm_access.LLM import get_llm
 from .copilot.examples.path_tools import generate_img_path
 
-from .map.get_onemap_minimap import get_minimap_func
-from .map.get_onemap_staticmap import get_static_map_func
+from .map.get_onemap_minimap import get_onemap_minimap_func
+from .map.get_onemap_staticmap import get_onemap_static_map_func
+from .map.get_osm_minimap import get_osm_minimap_func
 from .llm_analysis.llm_predict_hdb import llm_predict_hdb_func, get_llm_predict_hdb_info
 from .tools_def import engine, STATIC_URL
 
@@ -21,10 +22,10 @@ llm = get_llm()
 
 
 
-# def get_minimap(lat_lng_list: Optional[List[Tuple[float, float]]] = None,
+# def get_onemap_minimap(lat_lng_list: Optional[List[Tuple[float, float]]] = None,
 #                 postcode_list: Optional[List[str]] = None) -> str:
 #     """
-#     get_minimap(lat_lng_list: Optional[List[Tuple[float, float]]] = None, postcode_list: Optional[List[str]] = None) -> str:
+#     get_onemap_minimap(lat_lng_list: Optional[List[Tuple[float, float]]] = None, postcode_list: Optional[List[str]] = None) -> str:
 #     Generate an HTML iframe for a minimap with optional markers in latitude and longitude pairs or or postal codes.
 #     Returns an HTML iframe string.
 #
@@ -45,20 +46,20 @@ llm = get_llm()
 #
 #     Example usage:
 #     ```python
-#     get_minimap_func(lat_lng_list=[(1.2996492424497, 103.8447478575), (1.29963489170907, 103.845842317726)])
-#     get_minimap_func(postcode_list=["123456"])
+#     get_onemap_minimap_func(lat_lng_list=[(1.2996492424497, 103.8447478575), (1.29963489170907, 103.845842317726)])
+#     get_onemap_minimap_func(postcode_list=["123456"])
 #     ```
 #
 #     """
-#     html = get_minimap_func(lat_lng_list, postcode_list)
+#     html = get_onemap_minimap_func(lat_lng_list, postcode_list)
 #     return html
 
 
-def get_minimap(
+def get_onemap_minimap(
         markers: Optional[List[Dict[str, Union[str, Tuple[float, float]]]]] = None
 ) -> str:
     """
-    get_minimap(markers: Optional[List[Dict[str, Union[str, Tuple[float, float]]]]] = None) -> str:
+    get_onemap_minimap(markers: Optional[List[Dict[str, Union[str, Tuple[float, float]]]]] = None) -> str:
     Generate an HTML iframe for a minimap with customizable markers and routes from OneMap.sg.
     Returns a markdown link followed by the HTML iframe string.
 
@@ -79,13 +80,13 @@ def get_minimap(
 
     Example usage(just example, do not use the data):
     ```python
-    get_minimap([{'location': (1.29203, 103.843), 'color': 'red'}])
+    get_onemap_minimap([{'location': (1.29203, 103.843), 'color': 'red'}])
     dest = (1.33587, 103.854)
-    get_minimap([{'location': "238889", 'color': 'black', 'icon': 'fa-bus', 'route_type': 'WALK', 'route_dest': dest}])
+    get_onemap_minimap([{'location': "238889", 'color': 'black', 'icon': 'fa-bus', 'route_type': 'WALK', 'route_dest': dest}])
     ```
 
     """
-    maps = get_minimap_func(markers)
+    maps = get_onemap_minimap_func(markers)
     parts = []
     for i, (url, iframe) in enumerate(maps, start=1):
         label = f" (Part {i})" if len(maps) > 1 else ""
@@ -94,7 +95,60 @@ def get_minimap(
     return output
 
 
-def get_static_map(
+def get_osm_minimap(
+        markers: Optional[List[Dict[str, Union[str, Tuple[float, float]]]]] = None,
+        zoom: int = 15,
+        width: int = 480,
+        height: int = 480,
+) -> str:
+    """
+    get_osm_minimap(markers=None, zoom=15, width=480, height=480) -> str:
+    Generate an HTML iframe for a minimap with customizable markers from OpenStreetMap.
+    Returns a markdown link followed by the HTML iframe string.
+
+    Unlike OneMap.sg, OpenStreetMap covers the whole world and needs no API key.
+    Markers are rendered on OpenStreetMap tiles inside the iframe, and a shareable
+    OpenStreetMap link covering the markers' bounding box is also returned.
+    When there are too many markers, they are split into multiple maps (Part 1, 2, ...).
+
+    Args:
+    - markers: List of marker dictionaries. Each marker can have:
+        * 'location': A latLng tuple (float, float) (REQUIRED). Postal codes are
+          NOT supported for OpenStreetMap.
+        * 'color': Optional color from: 'red', 'blue', 'green', 'black',
+          'yellow', 'orange', 'purple', 'white', 'grey'. Default 'red'.
+        * 'icon': Optional Font Awesome 4 icon name, e.g. 'fa-user', 'fa-mortar-board',
+          'fa-subway', 'fa-bus', 'fa-music', 'fa-star'. Default 'fa-map-marker'.
+        * 'label': Optional tooltip text shown on hover.
+        * 'popup': Optional HTML popup content shown on click.
+    - zoom (int): Initial zoom level used when there is a single marker. Default 15.
+      When there are multiple markers the map auto-fits their bounding box.
+    - width (int): iframe width in pixels. Default 480.
+    - height (int): iframe height in pixels. Default 480.
+
+    Returns:
+    - str: A markdown link "[🔗 Open Map on OpenStreetMap](url)" followed by a blank
+      line and the HTML iframe.
+
+    Example usage(just example, do not use the data):
+    ```python
+    get_osm_minimap([{'location': (1.29203, 103.843), 'color': 'red'}])
+    get_osm_minimap([
+        {'location': (1.32085, 103.808), 'color': 'red', 'icon': 'fa-mortar-board', 'label': 'NUS'},
+        {'location': (1.36886, 103.834), 'color': 'black'},
+    ], zoom=15)
+    ```
+    """
+    maps = get_osm_minimap_func(markers, zoom=zoom, width=width, height=height)
+    parts = []
+    for i, (url, iframe) in enumerate(maps, start=1):
+        label = f" (Part {i})" if len(maps) > 1 else ""
+        parts.append(f"[🔗 Open Map on OpenStreetMap{label}]({url})\n\n{iframe}")
+    output = "\n\n".join(parts)
+    return output
+
+
+def get_onemap_static_map(
     layerchosen: str = "default",
     latitude: Optional[float] = None,
     longitude: Optional[float] = None,
@@ -113,7 +167,7 @@ def get_static_map(
     fillColor: Optional[str] = None,
 ) -> str:
     """
-    get_static_map(layerchosen="default", latitude=None, longitude=None, postal=None, zoom=15, width=512, height=512, polygons=None, polygon_color=None, lines=None, line_color=None, line_thickness=None, points=None, points_color=None, color=None, fillColor=None) -> str:
+    get_onemap_static_map(layerchosen="default", latitude=None, longitude=None, postal=None, zoom=15, width=512, height=512, polygons=None, polygon_color=None, lines=None, line_color=None, line_thickness=None, points=None, points_color=None, color=None, fillColor=None) -> str:
     Generate a static map image from OneMap.sg PNG API and save it locally. Returns the image URL path.
     The maximum resolution is 512 x 512 pixels.
 
@@ -142,11 +196,11 @@ def get_static_map(
 
     Example usage:
     ```python
-    path = get_static_map(latitude=1.31955, longitude=103.84223, zoom=17)
+    path = get_onemap_static_map(latitude=1.31955, longitude=103.84223, zoom=17)
     yield path
     ```
     """
-    img_bytes = get_static_map_func(
+    img_bytes = get_onemap_static_map_func(
         layerchosen=layerchosen,
         latitude=latitude,
         longitude=longitude,

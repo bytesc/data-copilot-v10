@@ -1,7 +1,7 @@
 from typing import List, Tuple, Optional, Dict, Union
 
 
-# def get_minimap_func(lat_lng_list: Optional[List[Tuple[float, float]]] = None,
+# def get_onemap_minimap_func(lat_lng_list: Optional[List[Tuple[float, float]]] = None,
 #                 postcode_list: Optional[List[str]] = None) -> str:
 #     # lat_lng_list = [
 #     #     (1.2996492424497, 103.8447478575),
@@ -41,7 +41,7 @@ VALID_COLORS = {'red', 'blue', 'green', 'black'}
 VALID_ROUTE_TYPES = {'TRANSIT', 'WALK', 'DRIVE'}
 
 
-def get_minimap_func(
+def get_onemap_minimap_func(
         markers: Optional[List[Dict[str, Union[str, Tuple[float, float]]]]] = None,
 ) -> List[Tuple[str, str]]:
     """Generate OneMap AMM minimap URLs.
