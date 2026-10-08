@@ -12,6 +12,9 @@ from .copilot.python_code import draw_graph_func, draw_compare_graph_func
 from .web_search.web_search import search_web, fetch_webpage
 from .mcp_client import load_mcp_servers, get_mcp_server, MCPClient, MCPError
 
+from .copilot.utils.mpl_chinese_font import setup_chinese_font
+setup_chinese_font()
+
 
 DATABASE_URL = config_data['mysql']
 engine = sqlalchemy.create_engine(DATABASE_URL)
@@ -313,7 +316,8 @@ import pandas as pd
             import matplotlib
             matplotlib.use('Agg')
             import matplotlib.pyplot as plt
-            plt.rcParams['font.family'] = 'SimHei'
+            from agent.tools.copilot.utils.mpl_chinese_font import setup_chinese_font
+            setup_chinese_font()
 
             # Data
             x = data_dict['x']

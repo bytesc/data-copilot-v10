@@ -10,7 +10,9 @@ from .examples.ask_ai_for_graph import get_ask_graph_prompt, get_ask_compare_gra
 import logging
 import pandas as pd
 
-IMPORTANT_MODULE = ["import math"]
+IMPORTANT_MODULE = ["import math",
+                    "from agent.tools.copilot.utils.mpl_chinese_font import setup_chinese_font",
+                    "setup_chinese_font()"]
 THIRD_MODULE = ["import pandas as pd", "import numpy as np"]
 
 

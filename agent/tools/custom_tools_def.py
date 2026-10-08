@@ -6,6 +6,9 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
+from .copilot.utils.mpl_chinese_font import setup_chinese_font
+setup_chinese_font()
+
 from agent.utils.llm_access.LLM import get_llm
 from .copilot.examples.path_tools import generate_img_path
 
@@ -82,8 +85,12 @@ def get_minimap(
     ```
 
     """
-    iframe, url = get_minimap_func(markers)
-    output = f"[🔗 Open Map on OneMap.sg]({url})\n\n{iframe}"
+    maps = get_minimap_func(markers)
+    parts = []
+    for i, (url, iframe) in enumerate(maps, start=1):
+        label = f" (Part {i})" if len(maps) > 1 else ""
+        parts.append(f"[🔗 Open Map on OneMap.sg{label}]({url})\n\n{iframe}")
+    output = "\n\n".join(parts)
     return output
 
 

@@ -23,7 +23,9 @@ from .utils.pd_to_walker import pd_to_walker
 
 STATIC_URL = config_data['static_path']
 
-IMPORTANT_MODULE = ["import math"]
+IMPORTANT_MODULE = ["import math",
+                    "from agent.tools.copilot.utils.mpl_chinese_font import setup_chinese_font",
+                    "setup_chinese_font()"]
 THIRD_MODULE = ["import pandas as pd", "import numpy as np",
                 "import PIL", "import matplotlib",
                 "matplotlib.use('Agg')",

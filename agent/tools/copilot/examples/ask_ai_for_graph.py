@@ -21,7 +21,8 @@ def func(data):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    plt.rcParams['font.family'] = 'SimHei' 
+    from agent.tools.copilot.utils.mpl_chinese_font import setup_chinese_font
+    setup_chinese_font()
     # please keep the code above!
     # generate code to perform operations here
     return path
@@ -58,7 +59,8 @@ def func(data_dict):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    plt.rcParams['font.family'] = 'SimHei'
+    from agent.tools.copilot.utils.mpl_chinese_font import setup_chinese_font
+    setup_chinese_font()
     # please keep the code above!
     # generate code to perform operations here
     
