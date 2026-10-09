@@ -73,6 +73,10 @@
                   → 循环直到任务全部完成
 ```
 
+**聊天模式切换**（输入框上方开关）：
+- **Think 模式** — 完整 T-A-A-O 流程（Think → Action → Act → Observe）
+- **Chat 模式** — 仅 Action → Act，跳过 Think/Observe，响应更快
+
 ### 工具函数
 
 | 函数 | 功能 |
@@ -148,6 +152,8 @@ enable_mcp: true              # MCP 外部工具集成
 enable_base_knowledge: true   # 基础知识库检索
 enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
+enable_target_knowledge: false # 目标文档模板
+enable_edit: true             # 数据/知识管理页（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
 ```
 
 ### 前端配置

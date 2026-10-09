@@ -30,9 +30,12 @@ Base URL: `http://<host>:8008`
   "enable_base_knowledge": true,
   "enable_web_search": true,
   "enable_fetch_url": true,
-  "enable_target_knowledge": false
+  "enable_target_knowledge": false,
+  "enable_edit": true
 }
 ```
+
+> **`enable_edit`**: 设为 `false` 时，数据管理（`/api/db-overview/`、删表、数据/注释导出、注释编辑、上传）与系统知识管理（`/api/sys-knowledge/*`）等接口全部返回 `403`；前端同时隐藏 Data、Knowledge 页面并拦截其路由。
 
 ### GET `/api/tools/functions`
 
@@ -78,6 +81,9 @@ Base URL: `http://<host>:8008`
 
 ## 2. 数据库管理
 
+> 以下接口受 `enable_edit` 控制。设为 `false` 时返回 `403`（`{ "detail": "Editing is disabled by configuration" }`）：
+> `GET /api/db-overview/`、`DELETE /api/table/{table_name}`、`GET /api/table/{table_name}/export-data-csv`，以及"注释管理"一节的全部接口（查看、导入、导出、编辑）。
+
 ### GET `/api/db-overview/`
 
 获取所有数据库表的概览（表名、注释、列、前 5 行样例数据）。
@@ -116,7 +122,7 @@ Base URL: `http://<host>:8008`
 { "deleted": true, "table": "users" }
 ```
 
-**错误** `404`: 表不存在。
+**错误** `404`: 表不存在。`403`: `enable_edit=false`。
 
 ### GET `/api/table/{table_name}/export-data-csv`
 
@@ -125,6 +131,8 @@ Base URL: `http://<host>:8008`
 **参数**: `table_name` (路径)
 
 **响应** `200` — `text/csv` 文件下载。
+
+**错误** `403`: `enable_edit=false`。
 
 ### GET `/{static_folder}/{filename}`
 
@@ -537,6 +545,8 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 
 ## 7. 系统知识管理 (CRUD)
 
+> 该节全部接口受 `enable_edit` 控制，设为 `false` 时返回 `403`（`/api/sys-knowledge/*` 路由级拦截）。
+
 通用 CRUD 模式，适用于以下资源：
 
 | 资源 | 端点前缀 | 说明 |
@@ -635,6 +645,8 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 
 ## 8. 文件上传
 
+> 本节接口受 `enable_edit` 控制，设为 `false` 时返回 `403`。
+
 ### POST `/upload-csv/`
 
 上传 CSV 文件并插入数据库。
@@ -679,6 +691,8 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 ---
 
 ## 注释管理
+
+> 该节全部接口受 `enable_edit` 控制，设为 `false` 时返回 `403`。
 
 ### GET `/api/comment-manage/`
 
@@ -736,6 +750,7 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 | 状态码 | 含义 |
 |--------|------|
 | 400 | 请求参数错误 |
+| 403 | 功能被配置禁用（`enable_edit=false` 时数据/知识管理接口） |
 | 404 | 资源不存在 |
 | 409 | 资源冲突（如键已存在）|
 | 500 | 服务器内部错误 |

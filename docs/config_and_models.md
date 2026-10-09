@@ -28,6 +28,7 @@ enable_base_knowledge: true   # 基础知识库检索
 enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
 enable_target_knowledge: false # 目标模板
+enable_edit: true             # 数据/知识编辑（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
 enable_llmlog: false           # 记录 LLM 调用日志到 llmlog/*.txt
 ```
 
@@ -39,13 +40,15 @@ enable_llmlog: false           # 记录 LLM 调用日志到 llmlog/*.txt
 
 ```env
 VITE_API_BASE=/api
+VITE_SERVER_URL=http://127.0.0.1:8008
 ```
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `VITE_API_BASE` | `/api` | API 路径前缀 |
+| `VITE_SERVER_URL` | `http://127.0.0.1:8008` | Vite 开发代理的后端目标地址 |
 
-前端不再需要 `VITE_SERVER_URL`。所有下载链接由后端 `static_path` 配置生成，通过 SSE 下发，前端透传渲染。`front.py` 或 nginx 代理 `/api/*`、`/tmp_imgs/*` 到后端即可。
+`vite.config.js` 将 `/api`、`/upload-csv`、`/upload-txt`、`/tmp_imgs` 代理到 `VITE_SERVER_URL` 指定的后端。生产环境下由 `front.py` 或 nginx 承担相同代理职责，下载链接由后端 `static_path` 配置生成、经 SSE 下发后由前端透传渲染。
 
 ---
 
