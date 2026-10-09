@@ -16,7 +16,11 @@ from .map.get_onemap_minimap import get_onemap_minimap_func
 from .map.get_onemap_staticmap import get_onemap_static_map_func
 from .map.get_osm_minimap import get_osm_minimap_func
 from .map.get_osm_staticmap import get_osm_static_map_func
-from .map.get_streetdirectory_minimap import get_streetdirectory_minimap_func
+from .map.get_streetdirectory_minimap import (
+    get_streetdirectory_minimap_from_urls,
+    search_streetdirectory_func,
+)
+from .map.search_osm import search_osm_func
 from .llm_analysis.llm_predict_hdb import llm_predict_hdb_func, get_llm_predict_hdb_info
 from .tools_def import engine, STATIC_URL
 
@@ -150,28 +154,92 @@ def get_osm_minimap(
     return output
 
 
+def search_streetdirectory(query: str) -> str:
+    """
+    search_streetdirectory(query) -> str:
+    Search a Singapore postal code or address on StreetDirectory.com.
+
+    Args:
+    - query (str): A Singapore postal code (str) or an address/building name
+      (str) (REQUIRED). Latitude/longitude are NOT supported because
+      StreetDirectory's search API cannot reverse geocode raw coordinates.
+
+    Returns:
+    - str: A JSON string with a "results" list. Each result is an object with
+      'name', 'address' and 'url' keys, where 'url' is the StreetDirectory
+      location page URL that can be passed to get_streetdirectory_minimap.
+      Returns '{"results": []}' when nothing is found.
+
+    Example usage(just example, do not use the data):
+    ```python
+    search_streetdirectory("238889")
+    search_streetdirectory("1 Raffles Place")
+    ```
+    """
+    if not isinstance(query, str):
+        return '{"results": []}'
+    query = query.strip()
+    if not query:
+        return '{"results": []}'
+    results = search_streetdirectory_func(query)
+    return json.dumps({"results": results}, ensure_ascii=False)
+
+
+def search_osm(query: str, limit: int = 5, countrycodes: str = None) -> str:
+    """
+    search_osm(query, limit=5, countrycodes=None) -> str:
+    Search an address, place name or postal code on OpenStreetMap (via Nominatim).
+
+    Unlike search_streetdirectory, OpenStreetMap covers the whole world and needs
+    no API key. Pass countrycodes (e.g. "sg") to restrict results to one or more
+    countries. Postal codes and addresses resolve to coordinates that can be
+    passed to get_osm_minimap or get_osm_static_map.
+
+    Args:
+    - query (str): An address, place name, or postal code (str) (REQUIRED).
+    - limit (int): Maximum number of results to return. Default 5.
+    - countrycodes (str, optional): Comma-separated ISO 3166-1 alpha-2 country
+      codes to restrict the search, e.g. "sg" or "sg,my". Default None (worldwide).
+
+    Returns:
+    - str: A JSON string with a "results" list. Each result is an object with
+      'name', 'address', 'lat', 'lon' and 'url' keys, where 'lat'/'lon' can be
+      passed to get_osm_minimap or get_osm_static_map and 'url' is a permalink
+      to the place on openstreetmap.org. Returns '{"results": []}' when nothing
+      is found.
+
+    Example usage(just example, do not use the data):
+    ```python
+    search_osm("238889", countrycodes="sg")
+    search_osm("1 Raffles Place", countrycodes="sg")
+    ```
+    """
+    if not isinstance(query, str):
+        return '{"results": []}'
+    query = query.strip()
+    if not query:
+        return '{"results": []}'
+    results = search_osm_func(query, limit=limit, countrycodes=countrycodes)
+    return json.dumps({"results": results}, ensure_ascii=False)
+
+
 def get_streetdirectory_minimap(
-        markers: Optional[List[Dict[str, Union[str, Tuple[float, float]]]]] = None,
+        urls: Optional[List[str]] = None,
         width: int = 480,
         height: int = 480,
 ) -> str:
     """
-    get_streetdirectory_minimap(markers=None, width=480, height=480) -> str:
-    Generate an HTML iframe for a minimap with locations from StreetDirectory.com.
-    Returns a markdown link followed by the HTML iframe string.
+    get_streetdirectory_minimap(urls=None, width=480, height=480) -> str:
+    Generate HTML iframes for a minimap from StreetDirectory.com location page URLs.
+    Returns markdown links followed by the HTML iframe strings.
 
-    StreetDirectory.com is a Singapore-focused map service. Unlike OpenStreetMap
-    it has no public tile API, so locations are resolved through StreetDirectory's
-    search API and each resolved location is embedded as an iframe of its official
-    location page. Locations that cannot be resolved are skipped.
+    Use search_streetdirectory() to resolve postal codes or addresses to
+    location page URLs first, then pass the chosen URLs here.
 
     Args:
-    - markers: List of marker dictionaries. Each marker can have:
-        * 'location': A Singapore postal code (str) or an address/building name
-          (str) (REQUIRED). A latLng tuple (float, float) is also accepted but
-          StreetDirectory's search API usually cannot reverse geocode raw
-          coordinates, so prefer postal codes or address strings. For latLng
-          markers use get_osm_minimap instead.
+    - urls: List of StreetDirectory location page URLs (str) to show on maps.
+      Each URL becomes its own iframe (StreetDirectory has no public tile API,
+      so multiple points cannot be overlaid on a single map).
     - width (int): iframe width in pixels. Default 480.
     - height (int): iframe height in pixels. Default 480.
 
@@ -181,14 +249,12 @@ def get_streetdirectory_minimap(
 
     Example usage(just example, do not use the data):
     ```python
-    get_streetdirectory_minimap([{'location': "238889"}])
     get_streetdirectory_minimap([
-        {'location': "238889"},
-        {'location': "1 Raffles Place"},
+        "https://www.streetdirectory.com/location/29884/146276/",
     ])
     ```
     """
-    maps = get_streetdirectory_minimap_func(markers, width=width, height=height)
+    maps = get_streetdirectory_minimap_from_urls(urls, width=width, height=height)
     parts = []
     for i, (url, iframe) in enumerate(maps, start=1):
         label = f" (Part {i})" if len(maps) > 1 else ""

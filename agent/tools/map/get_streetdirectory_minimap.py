@@ -1,4 +1,4 @@
-from typing import List, Tuple, Optional, Dict, Union
+from typing import List, Tuple, Optional, Dict
 
 import requests
 
@@ -8,7 +8,13 @@ DEFAULT_URL = 'https://www.streetdirectory.com/'
 USER_AGENT = "data-copilot-streetdirectory/1.0 (StreetDirectory minimap; contact: local tool)"
 
 
-def _search(query: str) -> Optional[Dict]:
+def search_streetdirectory_func(query: str) -> List[Dict]:
+    """Search a postal code or address on StreetDirectory.com.
+
+    Queries StreetDirectory's search API and returns up to several matching
+    results as a list of dicts, each with 'name', 'address' and 'url' (the
+    official location page URL). Returns an empty list when nothing resolves.
+    """
     params = {
         'mode': 'search',
         'profile': 'sd_auto',
@@ -22,52 +28,48 @@ def _search(query: str) -> Optional[Dict]:
     }
     resp = requests.get(SEARCH_API, params=params, headers={"User-Agent": USER_AGENT}, timeout=30)
     if resp.status_code != 200:
-        return None
+        return []
     data = resp.json()
     if not isinstance(data, list) or len(data) < 2:
-        return None
+        return []
+
+    results = []
     for item in data[1:]:
-        if item.get('pid') and item.get('aid'):
-            return item
-    return None
+        if not (item.get('pid') and item.get('aid')):
+            continue
+        url = BASE_LOCATION_URL.format(pid=item['pid'], aid=item['aid'])
+        results.append({
+            'name': item.get('v'),
+            'address': item.get('i'),
+            'url': url,
+        })
+    return results
 
 
-def get_streetdirectory_minimap_func(
-        markers: Optional[List[Dict[str, Union[str, Tuple[float, float]]]]] = None,
+def get_streetdirectory_minimap_from_urls(
+        urls: Optional[List[str]] = None,
         width: int = 480,
         height: int = 480,
 ) -> List[Tuple[str, str]]:
-    """Generate StreetDirectory.com minimaps.
+    """Build StreetDirectory.com minimaps from already-resolved location URLs.
 
-    Unlike OpenStreetMap, StreetDirectory has no public tile API, so markers are
-    resolved through StreetDirectory's search API and each resolved location is
-    embedded as an iframe of its official location page.
+    Each URL is embedded as an iframe of its official location page.
 
-    Returns a list of (url, iframe) tuples, one per resolved marker. Markers
-    that cannot be resolved to a StreetDirectory location are skipped. When no
-    markers are given or none resolve, a default StreetDirectory Singapore map
-    is returned instead.
+    Returns a list of (url, iframe) tuples, one per URL. Empty or non-string
+    entries are skipped. When no URLs are given, a default StreetDirectory
+    Singapore map is returned instead.
     """
-    if not markers:
-        markers = []
+    if not urls:
+        urls = []
 
     maps = []
-    for marker in markers:
-        location = marker.get('location')
-        if location is None:
+    for url in urls:
+        if not isinstance(url, str):
             continue
-        if isinstance(location, tuple):
-            query = '%.5f,%.5f' % (float(location[0]), float(location[1]))
-        else:
-            query = str(location).strip()
-        if not query:
+        url = url.strip()
+        if not url:
             continue
 
-        item = _search(query)
-        if item is None:
-            continue
-
-        url = BASE_LOCATION_URL.format(pid=item['pid'], aid=item['aid'])
         iframe = (f'<iframe src="{url}" height="{height}" width="{width}" '
                   f'scrolling="no" frameborder="0" allowfullscreen="allowfullscreen"></iframe>')
         maps.append((url, iframe))
