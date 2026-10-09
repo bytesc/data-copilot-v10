@@ -4,6 +4,7 @@ import requests
 
 SEARCH_API = 'https://www.streetdirectory.com/api/'
 BASE_LOCATION_URL = 'https://www.streetdirectory.com/location/{pid}/{aid}/'
+DEFAULT_URL = 'https://www.streetdirectory.com/'
 USER_AGENT = "data-copilot-streetdirectory/1.0 (StreetDirectory minimap; contact: local tool)"
 
 
@@ -43,7 +44,9 @@ def get_streetdirectory_minimap_func(
     embedded as an iframe of its official location page.
 
     Returns a list of (url, iframe) tuples, one per resolved marker. Markers
-    that cannot be resolved to a StreetDirectory location are skipped.
+    that cannot be resolved to a StreetDirectory location are skipped. When no
+    markers are given or none resolve, a default StreetDirectory Singapore map
+    is returned instead.
     """
     if not markers:
         markers = []
@@ -68,5 +71,10 @@ def get_streetdirectory_minimap_func(
         iframe = (f'<iframe src="{url}" height="{height}" width="{width}" '
                   f'scrolling="no" frameborder="0" allowfullscreen="allowfullscreen"></iframe>')
         maps.append((url, iframe))
+
+    if not maps:
+        iframe = (f'<iframe src="{DEFAULT_URL}" height="{height}" width="{width}" '
+                  f'scrolling="no" frameborder="0" allowfullscreen="allowfullscreen"></iframe>')
+        maps.append((DEFAULT_URL, iframe))
 
     return maps
