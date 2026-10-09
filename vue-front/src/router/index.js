@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { configState, loadConfig } from '@/utils/config.js'
 import ChatPage from '@/pages/ChatPage.vue'
 import DataPage from '@/pages/DataPage.vue'
 import DataUploadPage from '@/pages/DataUploadPage.vue'
@@ -37,6 +38,14 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+})
+
+router.beforeEach(async (to) => {
+  await loadConfig()
+  if (!configState.enable_edit && (to.path.startsWith('/data') || to.path.startsWith('/knowledge'))) {
+    return { path: '/' }
+  }
+  return true
 })
 
 export default router

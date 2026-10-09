@@ -8,11 +8,11 @@
         <router-link to="/" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">💬</span> Chat
         </router-link>
-        <router-link to="/data" class="nav-link" active-class="nav-link-active">
-          <span class="nav-icon">📊</span> Data
-        </router-link>
-        <router-link v-if="enableBaseKnowledge" to="/knowledge" class="nav-link" active-class="nav-link-active">
+        <router-link v-if="enableBaseKnowledge && enableEdit" to="/knowledge" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">📖</span> Knowledge
+        </router-link>
+        <router-link v-if="enableEdit" to="/data" class="nav-link" active-class="nav-link-active">
+          <span class="nav-icon">📊</span> Data
         </router-link>
         <router-link v-if="enableMcp" to="/tools" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">🔧</span> Tools
@@ -39,12 +39,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { configState, loadConfig } from '@/utils/config.js'
 import IcpArea from '@/components/IcpArea.vue'
 
 const isDark = ref(true)
-const enableMcp = ref(true)
-const enableBaseKnowledge = ref(true)
+
+const enableMcp = computed(() => configState.enable_mcp)
+const enableBaseKnowledge = computed(() => configState.enable_base_knowledge)
+const enableEdit = computed(() => configState.enable_edit)
 
 function applyTheme() {
   const theme = isDark.value ? 'dark' : 'light'
@@ -62,14 +65,7 @@ onMounted(async () => {
   isDark.value = saved !== 'light'
   applyTheme()
 
-  try {
-    const res = await fetch('/api/config')
-    if (res.ok) {
-      const cfg = await res.json()
-      enableMcp.value = cfg.enable_mcp
-      enableBaseKnowledge.value = cfg.enable_base_knowledge
-    }
-  } catch (_) { /* ignore */ }
+  await loadConfig()
 })
 </script>
 

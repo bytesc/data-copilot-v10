@@ -35,6 +35,12 @@ from data_access.observe_log import (
 )
 from data_access.report_log import create_report_log_table, get_generated_files
 _ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
+_ENABLE_EDIT = config_data.get('enable_edit', True)
+
+
+def _require_edit_enabled():
+    if not _ENABLE_EDIT:
+        raise HTTPException(status_code=403, detail="Editing is disabled by configuration")
 
 from data_access.base_knowledge_db import create_base_knowledge_table
 from data_access.db_query_guide_db import create_db_query_guide_table
@@ -135,6 +141,7 @@ async def get_config():
         "enable_web_search": config_data.get("enable_web_search", True),
         "enable_fetch_url": config_data.get("enable_fetch_url", True),
         "enable_target_knowledge": config_data.get("enable_target_knowledge", False),
+        "enable_edit": _ENABLE_EDIT,
     })
 
 @app.get("/api/sessions/")
@@ -145,6 +152,7 @@ async def get_sessions(request: Request, limit: int = 50):
 
 @app.get("/api/db-overview/")
 async def get_db_overview(request: Request):
+    _require_edit_enabled()
     def _get_overview():
         import pandas as pd
         from sqlalchemy import text, inspect
@@ -192,6 +200,7 @@ class CommentUpdate(BaseModel):
 
 @app.delete("/api/table/{table_name}")
 async def drop_table(table_name: str):
+    _require_edit_enabled()
     def _drop():
         from sqlalchemy import inspect, text
         inspector = inspect(engine)
@@ -218,6 +227,7 @@ async def list_table_names():
 
 @app.get("/api/table/{table_name}/export-data-csv")
 async def export_table_data_csv(table_name: str):
+    _require_edit_enabled()
     def _export():
         from sqlalchemy import inspect, text
         inspector = inspect(engine)
@@ -239,6 +249,7 @@ async def export_table_data_csv(table_name: str):
 
 @app.get("/api/comment-manage/")
 async def get_comment_manage():
+    _require_edit_enabled()
     def _get():
         from sqlalchemy import inspect, text
         from sqlalchemy.exc import SQLAlchemyError
@@ -280,6 +291,7 @@ async def get_comment_manage():
 
 @app.get("/api/comment-manage/{table_name}/export-csv")
 async def export_comments_csv(table_name: str):
+    _require_edit_enabled()
     def _export():
         from sqlalchemy import inspect
         from sqlalchemy.exc import SQLAlchemyError
@@ -309,6 +321,7 @@ async def export_comments_csv(table_name: str):
 
 @app.post("/api/comment-manage/{table_name}/import-csv")
 async def import_comments_csv(table_name: str, file: UploadFile = File(...)):
+    _require_edit_enabled()
     if not file.filename.lower().endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
     content = await file.read()
@@ -369,6 +382,7 @@ async def import_comments_csv(table_name: str, file: UploadFile = File(...)):
 
 @app.put("/api/comment-manage/{table_name}/table-comment")
 async def update_table_comment(table_name: str, entry: CommentUpdate):
+    _require_edit_enabled()
     def _update():
         from sqlalchemy import text
         escaped = entry.comment.replace("'", "''")
@@ -382,6 +396,7 @@ async def update_table_comment(table_name: str, entry: CommentUpdate):
 
 @app.put("/api/comment-manage/{table_name}/column/{column_name}/comment")
 async def update_column_comment(table_name: str, column_name: str, entry: CommentUpdate):
+    _require_edit_enabled()
     def _update():
         from sqlalchemy import inspect, text
         inspector = inspect(engine)
@@ -643,6 +658,7 @@ async def upload_csv(
         file: UploadFile = File(..., description="CSV file"),
         table_name: str = Form("uploaded_data")
 ):
+    _require_edit_enabled()
     if not file.filename.lower().endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
     content = await file.read()
@@ -658,6 +674,7 @@ async def upload_txt(
         file: UploadFile = File(..., description="支持 txt, doc, docx, pdf 文件"),
         table_name: str = Form("uploaded_data")
 ):
+    _require_edit_enabled()
     allowed_extensions = {'.txt', '.doc', '.docx', '.pdf'}
     file_extension = file.filename[file.filename.rfind('.'):].lower()
 

@@ -15,7 +15,7 @@ FUNCTION_DICT = {
     # "get_onemap_minimap": get_onemap_minimap,
     # "get_onemap_static_map": get_onemap_static_map,
     "get_osm_minimap": get_osm_minimap,
-    "get_osm_static_map": get_osm_static_map,
+    # "get_osm_static_map": get_osm_static_map,
     "predict_hdb_price": predict_hdb_price,
     # "search_web": search_web,
     # "fetch_webpage": fetch_webpage,
@@ -35,7 +35,7 @@ FUNCTION_IMPORT = {
     # get_onemap_minimap: "from agent.tools.custom_tools_def import get_onemap_minimap",
     # get_onemap_static_map: "from agent.tools.custom_tools_def import get_onemap_static_map",
     get_osm_minimap: "from agent.tools.custom_tools_def import get_osm_minimap",
-    get_osm_static_map: "from agent.tools.custom_tools_def import get_osm_static_map",
+    # get_osm_static_map: "from agent.tools.custom_tools_def import get_osm_static_map",
     predict_hdb_price: "from agent.tools.custom_tools_def import predict_hdb_price",
 }
 

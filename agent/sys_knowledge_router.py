@@ -1,6 +1,6 @@
 import asyncio
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from sqlalchemy import insert, select, update, delete
 from data_access.sys_db_conn import sys_engine
 from data_access.base_knowledge_db import base_knowledge
@@ -10,8 +10,15 @@ from data_access.graph_code_guide_db import graph_code_guide
 from data_access.think_guide_db import think_guide
 from data_access.doc_guide_db import doc_guide
 from data_access.brief_info_db import brief_info
+from utils.get_config import config_data
 
-router = APIRouter()
+
+def _require_edit_enabled():
+    if not config_data.get('enable_edit', True):
+        raise HTTPException(status_code=403, detail="Editing is disabled by configuration")
+
+
+router = APIRouter(dependencies=[Depends(_require_edit_enabled)])
 
 
 class KnowledgeEntry(BaseModel):

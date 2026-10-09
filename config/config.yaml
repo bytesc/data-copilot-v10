@@ -31,4 +31,7 @@ enable_fetch_url: true
 
 enable_target_knowledge: false
 
+# enable_edit - set false to disable data/comment editing features (upload, delete table, edit comments/import)
+enable_edit: true
+
 enable_llmlog: false
