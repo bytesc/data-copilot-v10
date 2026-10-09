@@ -16,6 +16,7 @@ from .map.get_onemap_minimap import get_onemap_minimap_func
 from .map.get_onemap_staticmap import get_onemap_static_map_func
 from .map.get_osm_minimap import get_osm_minimap_func
 from .map.get_osm_staticmap import get_osm_static_map_func
+from .map.get_streetdirectory_minimap import get_streetdirectory_minimap_func
 from .llm_analysis.llm_predict_hdb import llm_predict_hdb_func, get_llm_predict_hdb_info
 from .tools_def import engine, STATIC_URL
 
@@ -145,6 +146,53 @@ def get_osm_minimap(
     for i, (url, iframe) in enumerate(maps, start=1):
         label = f" (Part {i})" if len(maps) > 1 else ""
         parts.append(f"[🔗 Open Map on OpenStreetMap{label}]({url})\n\n{iframe}")
+    output = "\n\n".join(parts)
+    return output
+
+
+def get_streetdirectory_minimap(
+        markers: Optional[List[Dict[str, Union[str, Tuple[float, float]]]]] = None,
+        width: int = 480,
+        height: int = 480,
+) -> str:
+    """
+    get_streetdirectory_minimap(markers=None, width=480, height=480) -> str:
+    Generate an HTML iframe for a minimap with locations from StreetDirectory.com.
+    Returns a markdown link followed by the HTML iframe string.
+
+    StreetDirectory.com is a Singapore-focused map service. Unlike OpenStreetMap
+    it has no public tile API, so locations are resolved through StreetDirectory's
+    search API and each resolved location is embedded as an iframe of its official
+    location page. Locations that cannot be resolved are skipped.
+
+    Args:
+    - markers: List of marker dictionaries. Each marker can have:
+        * 'location': A Singapore postal code (str) or an address/building name
+          (str) (REQUIRED). A latLng tuple (float, float) is also accepted but
+          StreetDirectory's search API usually cannot reverse geocode raw
+          coordinates, so prefer postal codes or address strings. For latLng
+          markers use get_osm_minimap instead.
+    - width (int): iframe width in pixels. Default 480.
+    - height (int): iframe height in pixels. Default 480.
+
+    Returns:
+    - str: A markdown link "[🔗 Open Map on StreetDirectory.com](url)" followed by
+      a blank line and the HTML iframe.
+
+    Example usage(just example, do not use the data):
+    ```python
+    get_streetdirectory_minimap([{'location': "238889"}])
+    get_streetdirectory_minimap([
+        {'location': "238889"},
+        {'location': "1 Raffles Place"},
+    ])
+    ```
+    """
+    maps = get_streetdirectory_minimap_func(markers, width=width, height=height)
+    parts = []
+    for i, (url, iframe) in enumerate(maps, start=1):
+        label = f" (Part {i})" if len(maps) > 1 else ""
+        parts.append(f"[🔗 Open Map on StreetDirectory.com{label}]({url})\n\n{iframe}")
     output = "\n\n".join(parts)
     return output
 
