@@ -48,7 +48,7 @@ def search_streetdirectory_func(query: str) -> List[Dict]:
 
 def get_streetdirectory_minimap_from_urls(
         urls: Optional[List[str]] = None,
-        width: int = 480,
+        width: int = 800,
         height: int = 480,
 ) -> List[Tuple[str, str]]:
     """Build StreetDirectory.com minimaps from already-resolved location URLs.

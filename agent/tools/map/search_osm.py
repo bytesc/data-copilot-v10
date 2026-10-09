@@ -24,7 +24,10 @@ def search_osm_func(
     }
     if countrycodes:
         params['countrycodes'] = countrycodes
-    resp = requests.get(SEARCH_API, params=params, headers={"User-Agent": USER_AGENT}, timeout=30)
+    try:
+        resp = requests.get(SEARCH_API, params=params, headers={"User-Agent": USER_AGENT}, timeout=30)
+    except requests.RequestException:
+        return []
     if resp.status_code != 200:
         return []
     data = resp.json()

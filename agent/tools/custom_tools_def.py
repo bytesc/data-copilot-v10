@@ -225,11 +225,11 @@ def search_osm(query: str, limit: int = 5, countrycodes: str = None) -> str:
 
 def get_streetdirectory_minimap(
         urls: Optional[List[str]] = None,
-        width: int = 480,
+        width: int = 800,
         height: int = 480,
 ) -> str:
     """
-    get_streetdirectory_minimap(urls=None, width=480, height=480) -> str:
+    get_streetdirectory_minimap(urls=None, width=800, height=480) -> str:
     Generate HTML iframes for a minimap from StreetDirectory.com location page URLs.
     Returns markdown links followed by the HTML iframe strings.
 
@@ -240,7 +240,7 @@ def get_streetdirectory_minimap(
     - urls: List of StreetDirectory location page URLs (str) to show on maps.
       Each URL becomes its own iframe (StreetDirectory has no public tile API,
       so multiple points cannot be overlaid on a single map).
-    - width (int): iframe width in pixels. Default 480.
+    - width (int): iframe width in pixels. Default 800.
     - height (int): iframe height in pixels. Default 480.
 
     Returns:
