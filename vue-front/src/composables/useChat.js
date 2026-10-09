@@ -17,6 +17,7 @@ export function useChat() {
   const isPaused = ref(false)
   const isCompleted = ref(false)
   const interruptRequested = ref(false)
+  const chatMode = ref('think')
 
   const messages = ref([])
   const generatedFiles = ref([])
@@ -133,8 +134,10 @@ function historyToText(history) {
       }
 
       // Think phase
-      await runThinkPhase()
-      if (interruptRequested.value) { await pauseAfterInterrupt(); return }
+      if (chatMode.value === 'think') {
+        await runThinkPhase()
+        if (interruptRequested.value) { await pauseAfterInterrupt(); return }
+      }
 
       const fullQuestion = historyToText(conversationHistory.value)
 
@@ -196,8 +199,10 @@ function historyToText(history) {
       }
 
       // Observe phase
-      await runObservePhase()
-      if (interruptRequested.value) { await pauseAfterInterrupt(); return }
+      if (chatMode.value === 'think') {
+        await runObservePhase()
+        if (interruptRequested.value) { await pauseAfterInterrupt(); return }
+      }
     }
   }
 
@@ -833,6 +838,7 @@ updateDocMessage(docMsgId, {
     isCompleted,
     isPaused,
     awaitingInput,
+    chatMode,
     inputPrompt,
     inputChoices,
     cycleIndex,

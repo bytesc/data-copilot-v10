@@ -25,6 +25,24 @@
     </div>
 
     <div class="input-area">
+      <div class="mode-switch-bar">
+        <span class="mode-switch-label">Mode</span>
+        <div
+          class="mode-switch"
+          :class="chatMode"
+          :aria-checked="chatMode === 'think'"
+          :aria-disabled="isRunning"
+          role="switch"
+          tabindex="0"
+          @click="onToggleMode"
+          @keydown.enter.space.prevent="onToggleMode"
+        >
+          <span class="mode-switch-thumb"></span>
+          <span class="mode-switch-option left" :class="{ active: chatMode === 'think' }">Think</span>
+          <span class="mode-switch-option right" :class="{ active: chatMode === 'chat' }">Chat</span>
+        </div>
+      </div>
+
       <div v-if="awaitingInput" class="user-input-prompt">
         <div v-if="inputChoices.length > 0" class="choices-group">
           <p class="input-prompt-text">{{ inputPrompt }}</p>
@@ -102,6 +120,7 @@ const {
   requestInterrupt,
   interruptRequested,
   statusMsg,
+  chatMode,
 } = props.chat
 
 const currentQuestion = ref('')
@@ -109,6 +128,15 @@ const userInput = ref('')
 const pausedInput = ref('')
 const messagesContainer = ref(null)
 const userInputRef = ref(null)
+
+function setMode(mode) {
+  chatMode.value = mode
+}
+
+function onToggleMode() {
+  if (isRunning.value) return
+  chatMode.value = chatMode.value === 'think' ? 'chat' : 'think'
+}
 
 function setQuestion(text) {
   currentQuestion.value = text
