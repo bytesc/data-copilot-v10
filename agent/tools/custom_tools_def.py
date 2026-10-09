@@ -15,6 +15,7 @@ from .copilot.examples.path_tools import generate_img_path
 from .map.get_onemap_minimap import get_onemap_minimap_func
 from .map.get_onemap_staticmap import get_onemap_static_map_func
 from .map.get_osm_minimap import get_osm_minimap_func
+from .map.get_osm_staticmap import get_osm_static_map_func
 from .llm_analysis.llm_predict_hdb import llm_predict_hdb_func, get_llm_predict_hdb_info
 from .tools_def import engine, STATIC_URL
 
@@ -146,6 +147,85 @@ def get_osm_minimap(
         parts.append(f"[🔗 Open Map on OpenStreetMap{label}]({url})\n\n{iframe}")
     output = "\n\n".join(parts)
     return output
+
+
+def get_osm_static_map(
+    latitude: float,
+    longitude: float,
+    zoom: int = 15,
+    width: int = 512,
+    height: int = 512,
+    markers: Optional[List[Dict[str, Union[str, Tuple[float, float]]]]] = None,
+    polygons: Optional[List[List[Tuple[float, float]]]] = None,
+    polygon_color: Optional[str] = None,
+    lines: Optional[List[List[Tuple[float, float]]]] = None,
+    line_color: Optional[str] = None,
+    line_thickness: Optional[int] = None,
+    points: Optional[List[Tuple[float, float]]] = None,
+    points_color: Optional[Tuple[int, int, int]] = None,
+    color: Optional[str] = None,
+    fillColor: Optional[str] = None,
+) -> str:
+    """
+    get_osm_static_map(latitude, longitude, zoom=15, width=512, height=512, markers=None, polygons=None, polygon_color=None, lines=None, line_color=None, line_thickness=None, points=None, points_color=None, color=None, fillColor=None) -> str:
+    Generate a static map PNG image from OpenStreetMap tiles and save it locally. Returns the image URL path.
+
+    Downloads OpenStreetMap tiles around the given center, stitches them into a
+    single PNG, and optionally draws markers, polygons, lines, and points overlays
+    on top. Unlike OneMap.sg, OpenStreetMap covers the whole world and needs no API key.
+    The returned image includes "© OpenStreetMap contributors" attribution.
+
+    Args:
+    - latitude (float, required): Latitude of the map center in WGS84 format.
+    - longitude (float, required): Longitude of the map center in WGS84 format.
+    - zoom (int): Zoom level 0-19. Default 15.
+    - width (int): Image width in pixels, max 2048. Default 512.
+    - height (int): Image height in pixels, max 2048. Default 512.
+    - markers (List[Dict], optional): List of marker dicts, each with:
+        * 'location': A latLng tuple (float, float) (REQUIRED). Postal codes are
+          NOT supported for OpenStreetMap.
+        * 'color': Optional color from: 'red', 'blue', 'green', 'black',
+          'yellow', 'orange', 'purple', 'white', 'grey'. Default 'red'.
+    - polygons (List[List[Tuple[float,float]]], optional): List of polygons, each a list of (lat, lng) tuples.
+    - polygon_color (str, optional): RGB color for polygon outlines, e.g. "255,0,0" or "#ff0000".
+    - lines (List[List[Tuple[float,float]]], optional): List of lines, each a list of (lat, lng) tuples.
+    - line_color (str, optional): RGB color for lines, e.g. "177,0,0".
+    - line_thickness (int, optional): Thickness of lines in pixels. Default 3.
+    - points (List[Tuple[float,float]], optional): List of (lat, lng) point coordinates.
+    - points_color (Tuple[int,int,int], optional): RGB tuple for points color, e.g. (255,255,178).
+    - color (str, optional): RGB color for ALL lines, e.g. "255,0,255".
+    - fillColor (str, optional): RGB fill color for ALL polygons, e.g. "0,255,0".
+
+    Returns:
+    - str: URL path to the saved static map PNG image.
+
+    Example usage:
+    ```python
+    path = get_osm_static_map(latitude=1.31955, longitude=103.84223, zoom=17)
+    yield path
+    ```
+    """
+    img_bytes = get_osm_static_map_func(
+        latitude=latitude,
+        longitude=longitude,
+        zoom=zoom,
+        width=width,
+        height=height,
+        markers=markers,
+        polygons=polygons,
+        polygon_color=polygon_color,
+        lines=lines,
+        line_color=line_color,
+        line_thickness=line_thickness,
+        points=points,
+        points_color=points_color,
+        color=color,
+        fillColor=fillColor,
+    )
+    path = generate_img_path()
+    with open(path, "wb") as f:
+        f.write(img_bytes)
+    return STATIC_URL + path[2:]
 
 
 def get_onemap_static_map(
