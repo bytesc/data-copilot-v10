@@ -10,7 +10,7 @@ from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.tools_def import llm
 from agent.tools.copilot.utils.call_llm_test import call_llm_stream
-from data_access.observe_log import log_observe_cycle
+from data_access.observe_log import log_observe_cycle, log_observe_session
 from data_access.session_log import record_session_operation
 from agent.tools.tools_def import engine
 from utils.front_utils import history_to_text
@@ -187,6 +187,8 @@ def _event_stream_action(
     prompt = _build_action_prompt(
         question, conversation_history, session_id,
     )
+
+    log_observe_session(session_id, question=question, status="active")
 
     error_msg = ""
     for i in range(2):

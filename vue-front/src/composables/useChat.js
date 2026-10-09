@@ -106,7 +106,7 @@ function historyToText(history) {
     cycleIndex.value = 0
 
     addMessage('user', 'question', { content: questionText })
-    conversationHistory.value = [{ role: 'user', type: 'question', content: questionText }]
+    conversationHistory.value.push({ role: 'user', type: 'question', content: questionText })
 
     try {
       await runMainLoop()
