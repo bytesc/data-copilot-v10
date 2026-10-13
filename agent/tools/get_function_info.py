@@ -48,6 +48,7 @@ FUNCTION_IMPORT = {
 ASSIST_FUNCTION_DICT = {
     # query_database: [explain_data],
     # exe_sql: [explain_data],
+    get_streetdirectory_minimap: [search_streetdirectory],
 }
 
 CUSTOM_FUNC_NAMES = {name for name, func in FUNCTION_DICT.items()

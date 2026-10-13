@@ -28,39 +28,6 @@ llm = get_llm()
 
 
 
-# def get_onemap_minimap(lat_lng_list: Optional[List[Tuple[float, float]]] = None,
-#                 postcode_list: Optional[List[str]] = None) -> str:
-#     """
-#     get_onemap_minimap(lat_lng_list: Optional[List[Tuple[float, float]]] = None, postcode_list: Optional[List[str]] = None) -> str:
-#     Generate an HTML iframe for a minimap with optional markers in latitude and longitude pairs or or postal codes.
-#     Returns an HTML iframe string.
-#
-#     The function creates an HTML iframe that embeds a minimap from OneMap.sg.
-#     Users can specify a list of latitude and longitude pairs or postal codes
-#     to be marked on the map.
-#
-#     Args:
-#     - lat_lng_list (Optional[List[Tuple[float, float]]]): A list of tuples,
-#       where each tuple contains a latitude and longitude pair for a marker.
-#       Default is None.
-#     - postcode_list (Optional[List[str]]): A list of postal codes to be marked
-#       on the map. Default is None.
-#
-#     Returns:
-#     - str: An HTML iframe string that can be embedded in a webpage to display
-#       the minimap with the specified markers.
-#
-#     Example usage:
-#     ```python
-#     get_onemap_minimap_func(lat_lng_list=[(1.2996492424497, 103.8447478575), (1.29963489170907, 103.845842317726)])
-#     get_onemap_minimap_func(postcode_list=["123456"])
-#     ```
-#
-#     """
-#     html = get_onemap_minimap_func(lat_lng_list, postcode_list)
-#     return html
-
-
 def get_onemap_minimap(
         markers: Optional[List[Dict[str, Union[str, Tuple[float, float]]]]] = None
 ) -> str:
@@ -175,6 +142,17 @@ def search_streetdirectory(query: str) -> str:
     search_streetdirectory("238889")
     search_streetdirectory("1 Raffles Place")
     ```
+
+    Example result(just example, do not use the data):
+    ```json
+    {"results": [
+        {"name": "The Atrium @ Orchard", "address": "60 Orchard Road. (S)238889", "url": "https://www.streetdirectory.com/location/9090/22994/"},
+        {"name": "Dhoby Ghaut MRT Station (NE6)", "address": "60 Orchard Road. (S)238889", "url": "https://www.streetdirectory.com/location/49035/22994/"},
+        {"name": "SCDF Bomb Shelter @ Orchard@Atrium", "address": "60 Orchard Road. (S)238889", "url": "https://www.streetdirectory.com/location/49775/22994/"},
+        {"name": "AXS, The Atrium @ Orchard", "address": "60 Orchard Road. (S)238889", "url": "https://www.streetdirectory.com/location/53495/22994/"},
+        {"name": "Car Park Atrium @ Orchard", "address": "60 Orchard Road. (S)238889", "url": "https://www.streetdirectory.com/location/53948/22994/"}
+    ]}
+    ```
     """
     if not isinstance(query, str):
         return '{"results": []}'
@@ -212,6 +190,26 @@ def search_osm(query: str, limit: int = 5, countrycodes: str = None) -> str:
     ```python
     search_osm("238889", countrycodes="sg")
     search_osm("1 Raffles Place", countrycodes="sg")
+    ```
+
+    Example result(just example, do not use the data):
+    ```json
+    {"results": [
+        {
+            "name": "Marina Bay Sands",
+            "address": "Marina Bay Sands, 10 Bayfront Ave, Singapore",
+            "lat": 1.283459,
+            "lon": 103.858742,
+            "url": "https://www.openstreetmap.org/?mlat=1.28346&mlon=103.85874#map=17/1.28346/103.85874"
+        },
+        {
+            "name": "Marina Bay Sands Hotel",
+            "address": "Marina Bay Sands Hotel, 10 Bayfront Ave, Singapore",
+            "lat": 1.284607,
+            "lon": 103.860370,
+            "url": "https://www.openstreetmap.org/?mlat=1.28461&mlon=103.86037#map=17/1.28461/103.86037"
+        }
+    ]}
     ```
     """
     if not isinstance(query, str):
