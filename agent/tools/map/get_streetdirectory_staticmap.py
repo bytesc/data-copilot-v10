@@ -1,3 +1,16 @@
+# Dependency: playwright + a browser. Manual install:
+#
+#   pip install playwright
+#   # Windows, install bundled Chromium:
+#   python -m playwright install chromium
+#   # Linux (Ubuntu/Debian), install bundled Chromium + system libs:
+#   python3 -m playwright install --with-deps chromium
+#   # Linux, optional: install system Google Chrome instead (auto-detected):
+#   wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+#   sudo apt install -y /tmp/chrome.deb
+#
+#
+# In Docker this is handled by docker/Dockerfile.backend automatically.
 import io
 from typing import List, Optional
 

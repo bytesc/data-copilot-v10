@@ -297,7 +297,8 @@ def get_streetdirectory_static_map(
     try:
         img_list = get_streetdirectory_static_map_func(urls, width=width, height=height)
     except Exception as e:
-        return f"Error: failed to generate static map image: {e}"
+            print(f"Error: failed to generate static map image: {e}", flush=True)
+            return "Error: failed to generate static map image."
     paths = []
     for img_bytes in img_list:
         path = generate_img_path()
@@ -382,7 +383,8 @@ def get_osm_static_map(
             fillColor=fillColor,
         )
     except Exception as e:
-        return f"Error: failed to generate static map image: {e}"
+            print(f"Error: failed to generate static map image: {e}", flush=True)
+            return "Error: failed to generate static map image."
     path = generate_img_path()
     with open(path, "wb") as f:
         f.write(img_bytes)
@@ -461,7 +463,8 @@ def get_onemap_static_map(
             fillColor=fillColor,
         )
     except Exception as e:
-        return f"Error: failed to generate static map image: {e}"
+            print(f"Error: failed to generate static map image: {e}", flush=True)
+            return "Error: failed to generate static map image."
     path = generate_img_path()
     with open(path, "wb") as f:
         f.write(img_bytes)
