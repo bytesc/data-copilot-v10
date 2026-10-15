@@ -22,6 +22,8 @@ temp.html
 
 agent_log.txt
 
+agent/tools/ura/*.txt
+
 llmlog/*.txt
 
 agent/tools/base_knowledge/knowledge_docs/*.md

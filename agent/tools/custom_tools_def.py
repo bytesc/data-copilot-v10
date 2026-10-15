@@ -22,6 +22,7 @@ from .map.get_streetdirectory_minimap import (
 )
 from .map.get_streetdirectory_staticmap import get_streetdirectory_static_map_func
 from .map.search_osm import search_osm_func
+from .ura.get_ura_rental import get_ura_rental_func
 from .llm_analysis.llm_predict_hdb import llm_predict_hdb_func, get_llm_predict_hdb_info
 from .tools_def import engine, STATIC_URL
 
@@ -389,6 +390,37 @@ def get_osm_static_map(
     with open(path, "wb") as f:
         f.write(img_bytes)
     return STATIC_URL + path[2:]
+
+
+def get_ura_rental(project: str, ref_period: str = "26q3") -> pd.DataFrame:
+    """
+get_ura_rental(project, ref_period="26q3") -> pd.DataFrame:
+Download residential rental contracts for a condo project from the URA data service and return them as a DataFrame.
+Returns all rental contracts matching the project name (case-insensitive partial match) for the given reference period.
+
+Args:
+- project (str): Condo project name to search, e.g. "TANGLIN VIEW" (REQUIRED).
+- ref_period (str, optional): URA reference period in "yyqs" format, e.g. "26q3" means 2026 Q3. Default "26q3".
+
+Returns:
+- pd.DataFrame: Rental contracts with columns:
+    * 'project': Project name
+    * 'street': Street name
+    * 'leaseDate': Lease commencement date
+    * 'propertyType': Property type (e.g. Condominium)
+    * 'noOfBedRoom': Number of bedrooms
+    * 'areaSqft': Floor area in square feet
+    * 'rent': Monthly rent in SGD
+    * 'district': District number
+  Sorted by leaseDate (newest first) and rent (highest first).
+
+Example usage:
+```python
+df = get_ura_rental(project="TANGLIN VIEW", ref_period="26q3")
+yield df
+```
+    """
+    return get_ura_rental_func(project, ref_period)
 
 
 def get_onemap_static_map(
