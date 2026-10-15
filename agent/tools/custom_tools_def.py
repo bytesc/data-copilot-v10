@@ -20,6 +20,7 @@ from .map.get_streetdirectory_minimap import (
     get_streetdirectory_minimap_from_urls,
     search_streetdirectory_func,
 )
+from .map.get_streetdirectory_staticmap import get_streetdirectory_static_map_func
 from .map.search_osm import search_osm_func
 from .llm_analysis.llm_predict_hdb import llm_predict_hdb_func, get_llm_predict_hdb_info
 from .tools_def import engine, STATIC_URL
@@ -261,6 +262,51 @@ def get_streetdirectory_minimap(
     return output
 
 
+def get_streetdirectory_static_map(
+        urls: Optional[List[str]] = None,
+        width: int = 800,
+        height: int = 600,
+) -> str:
+    """
+    get_streetdirectory_static_map(urls=None, width=800, height=600) -> str:
+    Generate a static map PNG image from StreetDirectory.com location pages and save it locally. Returns the image URL path.
+    Requires Google Chrome to be installed (used via Playwright in headless mode).
+
+    Renders each location page in a headless browser, screenshots the map area,
+    and saves it as a PNG file. Use search_streetdirectory() to resolve postal
+    codes or addresses to location page URLs first, then pass the chosen URLs here.
+
+    Args:
+    - urls: List of StreetDirectory location page URLs (str) to capture. Each URL
+      becomes its own PNG image.
+    - width (int): image width in pixels. Default 800.
+    - height (int): image height in pixels. Default 600.
+
+    Returns:
+    - str: URL path(s) to the saved static map PNG image(s). When multiple URLs
+      are given, returns markdown image links joined by blank lines.
+
+    Example usage:
+    ```python
+    path = get_streetdirectory_static_map([
+        "https://www.streetdirectory.com/location/29884/146276/",
+    ])
+    yield path
+    ```
+    """
+    try:
+        img_list = get_streetdirectory_static_map_func(urls, width=width, height=height)
+    except Exception as e:
+        return f"Error: failed to generate static map image: {e}"
+    paths = []
+    for img_bytes in img_list:
+        path = generate_img_path()
+        with open(path, "wb") as f:
+            f.write(img_bytes)
+        paths.append(STATIC_URL + path[2:])
+    if len(paths) == 1:
+        return paths[0]
+    return "\n\n".join(f"![Static Map {i}]({p})" for i, p in enumerate(paths, start=1))
 def get_osm_static_map(
     latitude: float,
     longitude: float,
@@ -317,23 +363,26 @@ def get_osm_static_map(
     yield path
     ```
     """
-    img_bytes = get_osm_static_map_func(
-        latitude=latitude,
-        longitude=longitude,
-        zoom=zoom,
-        width=width,
-        height=height,
-        markers=markers,
-        polygons=polygons,
-        polygon_color=polygon_color,
-        lines=lines,
-        line_color=line_color,
-        line_thickness=line_thickness,
-        points=points,
-        points_color=points_color,
-        color=color,
-        fillColor=fillColor,
-    )
+    try:
+        img_bytes = get_osm_static_map_func(
+            latitude=latitude,
+            longitude=longitude,
+            zoom=zoom,
+            width=width,
+            height=height,
+            markers=markers,
+            polygons=polygons,
+            polygon_color=polygon_color,
+            lines=lines,
+            line_color=line_color,
+            line_thickness=line_thickness,
+            points=points,
+            points_color=points_color,
+            color=color,
+            fillColor=fillColor,
+        )
+    except Exception as e:
+        return f"Error: failed to generate static map image: {e}"
     path = generate_img_path()
     with open(path, "wb") as f:
         f.write(img_bytes)
@@ -392,24 +441,27 @@ def get_onemap_static_map(
     yield path
     ```
     """
-    img_bytes = get_onemap_static_map_func(
-        layerchosen=layerchosen,
-        latitude=latitude,
-        longitude=longitude,
-        postal=postal,
-        zoom=zoom,
-        width=width,
-        height=height,
-        polygons=polygons,
-        polygon_color=polygon_color,
-        lines=lines,
-        line_color=line_color,
-        line_thickness=line_thickness,
-        points=points,
-        points_color=points_color,
-        color=color,
-        fillColor=fillColor,
-    )
+    try:
+        img_bytes = get_onemap_static_map_func(
+            layerchosen=layerchosen,
+            latitude=latitude,
+            longitude=longitude,
+            postal=postal,
+            zoom=zoom,
+            width=width,
+            height=height,
+            polygons=polygons,
+            polygon_color=polygon_color,
+            lines=lines,
+            line_color=line_color,
+            line_thickness=line_thickness,
+            points=points,
+            points_color=points_color,
+            color=color,
+            fillColor=fillColor,
+        )
+    except Exception as e:
+        return f"Error: failed to generate static map image: {e}"
     path = generate_img_path()
     with open(path, "wb") as f:
         f.write(img_bytes)

@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY requirement.txt .
 RUN pip install --no-cache-dir -r requirement.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN timeout 60 playwright install --with-deps chromium || echo "WARNING: playwright chromium install failed or timed out, skipping" || true
 
 COPY . .
 
