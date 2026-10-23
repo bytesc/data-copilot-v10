@@ -64,30 +64,9 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 
 ---
 
-## 3. MCP 服务器配置 `config/mcp_servers.yaml`
+## 3. MCP 服务器
 
-```yaml
-mcp_servers:
-  - name: "calculator"            # 唯一标识，explore_mcp / exe_mcp 通过此名称引用
-    description: "数学计算工具"    # 可选，展示给 LLM 的服务器描述
-    transport: "sse"              # "sse"（远程 HTTP）或 "stdio"（本地子进程）
-    url: "http://localhost:8101/sse"  # SSE 传输必填
-
-  - name: "filesystem"
-    description: "文件系统访问"
-    transport: "stdio"
-    command: "npx"                           # stdio 传输必填
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]  # 可选参数
-```
-
-| 字段 | 必填 | 说明 |
-|------|------|------|
-| `name` | 是 | 服务器唯一标识 |
-| `description` | 否 | 展示给 LLM 的描述文本 |
-| `transport` | 是 | `"sse"`（HTTP 端点）或 `"stdio"`（子进程管道）|
-| `url` | 仅 `sse` | SSE 端点地址 |
-| `command` | 仅 `stdio` | 启动命令 |
-| `args` | 否 | 命令参数列表 |
+配置与启动详见独立文档 [MCP 服务器指南](mcp_servers.md)（`config/mcp_servers.yaml`、`mcpserver/` 下的启动方式与新增步骤）。
 
 ---
 

@@ -2,6 +2,8 @@
 
 本目录包含基于 [mcp](https://github.com/modelcontextprotocol/python-sdk) 官方库的 MCP 测试服务器，用于开发和测试 `explore_mcp` / `exe_mcp` 功能。
 
+> 完整的 MCP 配置与启动指南见 [docs/mcp_servers.md](../docs/mcp_servers.md)，本文件只介绍 `mcpserver/` 目录内的测试服务器。
+
 ## 目录结构
 
 ```

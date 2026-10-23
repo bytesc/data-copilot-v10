@@ -183,51 +183,9 @@ VITE_API_BASE=/api
 - [智谱 GLM](https://open.bigmodel.cn/)
 - [OpenAI](https://platform.openai.com/)
 
-### MCP 服务器配置
+### MCP 服务器配置与启动
 
-MCP（Model Context Protocol）服务器通过 `config/mcp_servers.yaml` 定义，LLM 可通过 `explore_mcp` 发现工具、`exe_mcp` 调用工具。
-
-支持两种传输方式：
-- **`sse`** — 远程 HTTP 服务，需配置 `url`
-- **`stdio`** — 本地子进程，需配置 `command` + `args`
-
-```yaml
-mcp_servers:
-  # SSE 示例：远程 HTTP 服务
-  - name: "calculator"
-    description: "Math calculation tools"
-    transport: "sse"
-    url: "http://localhost:8101/sse"
-
-  # stdio 示例：本地子进程（如 npx 启动的官方 MCP 服务器）
-  - name: "filesystem"
-    description: "File system access tools"
-    transport: "stdio"
-    command: "npx"
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
-```
-
-### MCP 测试服务器
-
-项目提供了两个基于官方 `mcp` 库的测试服务器，位于 `mcpserver/` 目录下：
-
-| 服务器 | 端口 | 工具 |
-|--------|------|------|
-| `calculator_server.py` | 8101 | add, subtract, multiply, divide, power, sqrt, sin, cos, average |
-| `datetime_server.py` | 8103 | get_current_time (with timestamp), weekday, add_days |
-
-启动所有测试服务器：
-
-```bash
-python -m mcpserver.run_all
-```
-
-或分别启动：
-
-```bash
-python -m mcpserver.calculator_server
-python -m mcpserver.datetime_server
-```
+MCP 服务器通过 `config/mcp_servers.yaml` 定义，详见独立文档 [MCP 服务器指南](docs/mcp_servers.md)（含传输方式、测试服务器启动、新增服务器步骤）。
 
 ### 启动
 
@@ -246,7 +204,8 @@ FRONT_PORT=8010 python front.py
 | 文档 | 内容 |
 |------|------|
 | [`docs/api.md`](docs/api.md) | 全部 77 个 API 端点说明、请求/响应格式、错误码 |
-| [`docs/config_and_models.md`](docs/config_and_models.md) | 配置格式（config.yaml / .env / mcp_servers.yaml）、Pydantic 请求模型、日志表结构、依赖说明、前端构建配置 |
+| [`docs/config_and_models.md`](docs/config_and_models.md) | 配置格式（config.yaml / .env）、Pydantic 请求模型、日志表结构、依赖说明、前端构建配置 |
+| [`docs/mcp_servers.md`](docs/mcp_servers.md) | MCP 服务器配置与启动指南（mcp_servers.yaml、测试服务器、新增步骤） |
 | [`docs/sse_event_flow.md`](docs/sse_event_flow.md) | SSE 流式事件类型与数据格式 |
 | [`docs/conversation_history_structure.md`](docs/conversation_history_structure.md) | 对话历史结构定义 |
 | [`docs/actions_input_output.md`](docs/actions_input_output.md) | Action 的输入输出规范 |
