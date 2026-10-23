@@ -33,6 +33,7 @@ from data_access.observe_log import (
     create_observe_log_tables, log_observe_cycle, log_observe_session,
     list_sessions, reconstruct_conversation_history
 )
+from utils.perf_log import perf_api, perf_context
 from data_access.report_log import create_report_log_table, get_generated_files
 _ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
 _ENABLE_EDIT = config_data.get('enable_edit', True)
@@ -580,9 +581,14 @@ async def table_comments(request: Request):
 @app.post("/api/filter-db-fields/")
 async def filter_db_fields_api(request: Request, user_input: AgentInput):
     loop = asyncio.get_event_loop()
+
+    def _timed_filter_db_fields(question, engine_, llm_, tables):
+        with perf_context("/api/filter-db-fields/"):
+            return filter_db_fields(question, engine_, llm_, tables)
+
     selected_fields = await loop.run_in_executor(
         executor,
-        filter_db_fields,
+        _timed_filter_db_fields,
         user_input.question,
         engine,
         llm,
@@ -603,6 +609,7 @@ async def filter_db_fields_api(request: Request, user_input: AgentInput):
     return JSONResponse(content=processed_data)
 
 
+@perf_api("/api/filter-db-fields/stream/")
 def _event_stream_filter_db_fields(question: str, tables: Optional[List[str]], session_id: str = "", request_url: str = "", request_json: str = ""):
     full_content = ""
     prompt_length = 0
@@ -628,6 +635,7 @@ async def filter_db_fields_stream_api(request: Request, user_input: AgentInput):
     )
 
 
+@perf_api("/api/filter-functions/stream/")
 def _event_stream_filter_functions(question: str, session_id: str = "", request_url: str = "", request_json: str = ""):
     full_content = ""
     prompt_length = 0
@@ -691,7 +699,12 @@ async def upload_txt(
 
         loop = asyncio.get_event_loop()
         extracted_text = await loop.run_in_executor(executor, process_file_content, content, file_extension)
-        result = await loop.run_in_executor(executor, get_llm_data_comment, extracted_text, table_name)
+
+        def _timed_data_comment(text, table):
+            with perf_context("/upload-txt/"):
+                return get_llm_data_comment(text, table)
+
+        result = await loop.run_in_executor(executor, _timed_data_comment, extracted_text, table_name)
 
         result = {
             "status": "success",
@@ -707,6 +720,7 @@ async def upload_txt(
 
 
 
+@perf_api("/api/generate-and-execute/stream/")
 def _event_stream_generate_and_execute(question: str, tables: Optional[List[str]], selected_fields: Optional[Dict[str, Any]] = None, selected_functions: Optional[List[str]] = None, session_id: str = "", request_url: str = "", request_json: str = ""):
     full_code = ""
     full_ans = ""
@@ -745,6 +759,7 @@ async def generate_and_execute_stream_api(request: Request, user_input: AgentInp
 
 
 
+@perf_api("/api/plain-chat/stream/")
 def _event_stream_plain_chat(question: str, tables=None, selected_fields=None, session_id: str = "", request_url: str = "", request_json: str = ""):
     full_content = ""
     prompt_length = 0

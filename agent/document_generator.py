@@ -28,6 +28,7 @@ _ENABLE_TARGET = config_data.get('enable_target_knowledge', False)
 from data_access.observe_log import log_observe_cycle
 from data_access.report_log import record_report_generation
 from utils.front_utils import history_to_text
+from utils.perf_log import perf_api
 
 DOC_WORKSPACE = "doc_workspace"
 os.makedirs(DOC_WORKSPACE, exist_ok=True)
@@ -449,6 +450,7 @@ def _save_intermediate_markdown(markdown_text: str, base_name: str, session_id: 
     return file_name
 
 
+@perf_api("/api/generate-document/stream/")
 def _event_stream_generate_document(conversation_history: List[dict], session_id: str, request_json: str = ""):
     context = history_to_text(conversation_history)
 
@@ -607,6 +609,7 @@ def generate_document_from_context(conversation_history: List[dict], session_id:
     yield from _event_stream_generate_document_unified(conversation_history, session_id, title, request_json)
 
 
+@perf_api("/api/generate-document/stream/unified/")
 def _event_stream_generate_document_unified(conversation_history: List[dict], session_id: str, title: str = "", request_json: str = ""):
     context = history_to_text(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
@@ -708,6 +711,7 @@ async def generate_document_unified_stream_api(request: Request, user_input: Doc
 # ── YAML Outline generation ──────────────────────────────────────────────
 
 
+@perf_api("/api/generate-document/generate-yaml-outline/")
 def _event_stream_generate_yaml_outline(conversation_history: List[dict], session_id: str, request_json: str = "", user_prompt: str = ""):
     context = history_to_text(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
@@ -798,6 +802,7 @@ async def yaml_to_prompt_api(request: Request):
 # ── Section-by-section Markdown generation from YAML ─────────────────────
 
 
+@perf_api("/api/generate-document/stream/from-yaml/")
 def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outline: str, session_id: str, request_json: str = "", section_index: Optional[int] = None, confirmed_sections: Optional[List[dict]] = None, yaml_base: str = ""):
     context = history_to_text(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
@@ -978,6 +983,7 @@ def _cleanup_workspace_files(base_name: str):
                 pass
 
 
+@perf_api("/api/generate-document/finalize/")
 def _event_stream_finalize(markdown_content: str, session_id: str, request_json: str = "", yaml_base: str = "", conversation_history: Optional[List[dict]] = None):
     full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', markdown_content, flags=re.DOTALL)
 

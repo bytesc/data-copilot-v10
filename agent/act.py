@@ -21,6 +21,7 @@ from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context, save_session_step
 from utils.get_config import config_data
+from utils.perf_log import perf_api
 
 # Feature toggles — mirror flags in agent/action.py so act.py rejects disabled actions
 _ENABLE_MCP = config_data.get('enable_mcp', True)
@@ -147,6 +148,7 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
     return entries
 
 
+@perf_api(lambda args, kwargs: f"/api/act/stream/:{args[1] if len(args) > 1 else kwargs.get('action', 'unknown')}")
 def _event_stream_act(
     question: str,
     action: str,

@@ -4,6 +4,7 @@ from data_access.sys_db_conn import sys_engine
 from data_access.think_guide_db import think_guide
 from agent.tools.copilot.utils.call_llm_test import call_llm
 from agent.tools.tools_def import llm
+from utils.perf_log import perf_context
 
 
 def set_think_guide(text=""):
@@ -34,7 +35,8 @@ Example:
 """
 
     try:
-        response = call_llm(prompt, llm)
+        with perf_context("sys-knowledge/set_think_guide"):
+            response = call_llm(prompt, llm)
         raw = response.content.strip()
     except Exception as e:
         print(f"[WARNING] Failed to call LLM for set_think_guide: {e}")

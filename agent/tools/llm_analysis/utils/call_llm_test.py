@@ -1,4 +1,5 @@
 from utils.get_config import config_data
+from utils.perf_log import record_llm_complete, record_llm_input
 
 from datetime import datetime
 import os
@@ -6,6 +7,7 @@ import os
 log_path = "./agent_log.txt"
 
 def call_llm(question, llm):
+    record_llm_input(len(question))
     response = llm.chat.completions.create(
         model=config_data["model_name"],
         messages=[
@@ -14,6 +16,8 @@ def call_llm(question, llm):
         ],
         stream=False
     )
+
+    record_llm_complete()
 
     answer = response.choices[0].message
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

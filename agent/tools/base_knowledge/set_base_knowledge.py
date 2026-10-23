@@ -5,6 +5,7 @@ from data_access.base_knowledge_db import base_knowledge
 from agent.tools.copilot.utils.call_llm_test import call_llm
 from agent.tools.tools_def import llm, engine
 from agent.tools.search_db import get_db_structure_markdown
+from utils.perf_log import perf_context
 
 
 def set_base_knowledge(text=""):
@@ -42,7 +43,8 @@ Example:
 """
 
     try:
-        response = call_llm(prompt, llm)
+        with perf_context("sys-knowledge/set_base_knowledge"):
+            response = call_llm(prompt, llm)
         raw = response.content.strip()
     except Exception as e:
         print(f"[WARNING] Failed to call LLM for set_base_knowledge: {e}")

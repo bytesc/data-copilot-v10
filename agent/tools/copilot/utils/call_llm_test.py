@@ -1,4 +1,5 @@
 from utils.get_config import config_data
+from utils.perf_log import record_first_chunk, record_llm_complete, record_llm_input
 
 from datetime import datetime
 import os
@@ -27,6 +28,7 @@ def _write_llmlog(question, answer):
 
 def call_llm(question, llm):
     print("question len : ", len(question))
+    record_llm_input(len(question))
     response = llm.chat.completions.create(
         model=config_data["model_name"],
         messages=[
@@ -34,6 +36,7 @@ def call_llm(question, llm):
         ],
         stream=False
     )
+    record_llm_complete()
 
     answer = response.choices[0].message
     if config_data.get("enable_llmlog", False):
@@ -43,6 +46,7 @@ def call_llm(question, llm):
 
 def call_llm_stream(question, llm):
     print("question len (stream): ", len(question))
+    record_llm_input(len(question))
     response = llm.chat.completions.create(
         model=config_data["model_name"],
         messages=[
@@ -56,8 +60,10 @@ def call_llm_stream(question, llm):
         if chunk.choices and chunk.choices[0].delta.content is not None:
             delta = chunk.choices[0].delta.content
             full_content += delta
+            record_first_chunk()
             print(delta, end="", flush=True)
             yield delta
+    record_llm_complete()
     print()
 
     if config_data.get("enable_llmlog", False):

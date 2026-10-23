@@ -16,6 +16,7 @@ from agent.tools.tools_def import engine
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
 from utils.get_config import config_data
+from utils.perf_log import perf_api
 
 router = APIRouter()
 
@@ -177,6 +178,7 @@ Decision Rules:
 """
 
 
+@perf_api("/api/action/stream/")
 def _event_stream_action(
         question: str,
         session_id: str,

@@ -35,3 +35,6 @@ enable_target_knowledge: false
 enable_edit: true
 
 enable_llmlog: false
+
+# enable_perf_log - write API performance metrics to perf_log.csv (time, api_name, total_response_time, llm_first_chunk_time, llm_complete_time, code_exec_time, llm_input_chars)
+enable_perf_log: true

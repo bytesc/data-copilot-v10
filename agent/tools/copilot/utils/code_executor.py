@@ -2,6 +2,10 @@ from .parse_output import assert_skip
 
 from agent.tools.tools_def import * #保留这一行，没错
 
+from utils.perf_log import record_code_exec
+
+import time as _time
+
 
 def execute_py_code_with_data(code, data, assert_func=assert_skip):
     """
@@ -12,6 +16,7 @@ def execute_py_code_with_data(code, data, assert_func=assert_skip):
     :param assert_func: 断言函数，用于验证结果
     :return: 执行结果，如果执行成功且通过断言则返回结果，否则返回None
     """
+    _start = _time.monotonic()
     try:
         local_namespace = {'data': data, 'result': None}
         exec(code, globals(), local_namespace)
@@ -23,6 +28,8 @@ def execute_py_code_with_data(code, data, assert_func=assert_skip):
     except Exception as e:
         print(f"An error occurred while executing the code: {type(e).__name__}: {str(e)}")
         raise e
+    finally:
+        record_code_exec(_time.monotonic() - _start)
 
 
 def execute_py_code(code, assert_func=assert_skip):
@@ -33,6 +40,7 @@ def execute_py_code(code, assert_func=assert_skip):
     :param assert_func: 断言函数，用于验证结果
     :return: 执行结果，如果执行成功且通过断言则返回结果，否则返回None
     """
+    _start = _time.monotonic()
     try:
         local_namespace = {'result': None}
         exec(code, globals(), local_namespace)
@@ -44,3 +52,5 @@ def execute_py_code(code, assert_func=assert_skip):
     except Exception as e:
         print(f"An error occurred while executing the code: {type(e).__name__}: {str(e)}")
         raise e
+    finally:
+        record_code_exec(_time.monotonic() - _start)
