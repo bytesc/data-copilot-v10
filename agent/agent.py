@@ -1,4 +1,5 @@
 import logging
+import time as _time
 
 import pandas as pd
 
@@ -11,6 +12,7 @@ from .tools.copilot.utils.code_executor import execute_py_code
 from .tools.copilot.sql_code import get_db_info_prompt, filter_db_fields
 from .tools.copilot.utils.call_llm_test import call_llm_stream
 from .tools.copilot.utils.parse_output import parse_generated_python_code
+from utils.perf_log import record_code_exec
 
 from .tools.get_function_info import get_function_info, FUNCTION_DICT, FUNCTION_IMPORT, ASSIST_FUNCTION_DICT, IMPORTANT_FUNC
 
@@ -315,6 +317,7 @@ def generate_and_execute_stream(question, tables=None, retries=2,
 
         error_msg = ""
         formatted_result = ""
+        _exec_start = _time.monotonic()
         try:
             result = execute_py_code(code)
             for item in result:
@@ -327,6 +330,8 @@ def generate_and_execute_stream(question, tables=None, retries=2,
             print(f"Execution error: {e}")
             yield {"type": "chunk", "sub_type": "code_exe_error", "content": error_msg, "phase": "act", "sub_phase": "exec"}
             continue
+        finally:
+            record_code_exec(_time.monotonic() - _exec_start)
 
         yield {"type": "chunk", "sub_type": "exec_complete", "content": formatted_result, "phase": "act", "sub_phase": "exec"}
         yield {"type": "done", "code": code, "content": formatted_result, "phase": "act", "sub_phase": "exec"}

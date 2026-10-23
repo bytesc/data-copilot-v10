@@ -34,7 +34,8 @@ def call_llm(question, llm):
         messages=[
             {"role": "user", "content": question},
         ],
-        stream=False
+        stream=False,
+        extra_body=config_data.get("llm_extra_params") or {}
     )
     record_llm_complete()
 
@@ -52,7 +53,8 @@ def call_llm_stream(question, llm):
         messages=[
             {"role": "user", "content": question},
         ],
-        stream=True
+        stream=True,
+        extra_body=config_data.get("llm_extra_params") or {}
     )
 
     full_content = ""

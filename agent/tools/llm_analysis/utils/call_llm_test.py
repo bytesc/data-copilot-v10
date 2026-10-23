@@ -14,7 +14,8 @@ def call_llm(question, llm):
             {"role": "system", "content": "You are a helpful assistant"},
             {"role": "user", "content": question},
         ],
-        stream=False
+        stream=False,
+        extra_body=config_data.get("llm_extra_params") or {}
     )
 
     record_llm_complete()

@@ -38,3 +38,14 @@ enable_llmlog: false
 
 # enable_perf_log - write API performance metrics to perf_log.csv (time, api_name, total_response_time, llm_first_chunk_time, llm_complete_time, code_exec_time, llm_input_chars)
 enable_perf_log: true
+
+# Extra body params passed to every LLM request.
+# DeepSeek official docs (api-docs.deepseek.com/zh-cn/guides/thinking_mode):
+#   disable thinking  -> {"thinking": {"type": "disabled"}}
+#   effort control    -> reasoning_effort: "low" / "high" / "max" (default high)
+# Other providers (may differ, tokenhub may normalize):
+#   Qwen3 / GLM old   -> {"enable_thinking": false}
+#   GLM-4.5/4.6       -> {"thinking": {"type": "disabled"}}
+#   OpenAI gpt-5/o    -> cannot disable, use {"reasoning_effort": "low"}
+# Set to {} / remove to keep model default behavior.
+llm_extra_params: {"thinking": {"type": "disabled"}}

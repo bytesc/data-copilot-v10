@@ -24,6 +24,7 @@ FIELDS = [
 
 _lock = threading.Lock()
 _current = contextvars.ContextVar("perf_state", default=None)
+_warned = False
 
 
 class _PerfState:
@@ -51,7 +52,7 @@ def _ensure_header():
 
 def _write_row(state):
     row = {
-        "time": state.start_wall.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
         "api_name": state.name,
         "total_response_time": round((time.monotonic() - state.start_mono) * 1000, 1),
         "llm_first_chunk_time": round((state.first_chunk - state.start_mono) * 1000, 1) if state.first_chunk else "",
@@ -59,10 +60,14 @@ def _write_row(state):
         "code_exec_time": round(state.code_exec_ms, 1) if state.code_exec_ms else "",
         "llm_input_chars": state.llm_input_chars if state.llm_input_chars else "",
     }
-    _ensure_header()
-    with _lock:
-        with open(PERF_LOG_PATH, "a", newline="", encoding="utf-8") as f:
-            csv.DictWriter(f, fieldnames=FIELDS).writerow(row)
+    try:
+        _ensure_header()
+        with _lock:
+            with open(PERF_LOG_PATH, "a", newline="", encoding="utf-8") as f:
+                csv.DictWriter(f, fieldnames=FIELDS).writerow(row)
+    except OSError as e:
+        print(f"[perf_log] WARNING: failed to write row to {PERF_LOG_PATH}: {e} "
+              f"(row skipped: {row.get('api_name')} @ {row.get('time')})")
 
 
 def record_first_chunk():
