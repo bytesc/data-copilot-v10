@@ -147,6 +147,12 @@ static_folder: "tmp_imgs"
 model_name: "deepseek-v4-flash"
 model_url: "https://tokenhub.tencentmaas.com/v1"
 
+# LLM 额外请求参数（extra_body 透传扩展字段）
+# DeepSeek 关闭思考: {"thinking": {"type": "disabled"}}；调强度用 reasoning_effort: low/high/max
+# Qwen3/旧版GLM 用 {"enable_thinking": false}；GLM-4.5/4.6 用 {"thinking": {"type": "disabled"}}
+# OpenAI gpt-5/o 系无法完全关闭，用 {"reasoning_effort": "low"}；设 {} 恢复默认
+llm_extra_params: {"thinking": {"type": "disabled"}}
+
 # 功能开关（设为 false 关闭对应能力）
 enable_mcp: true              # MCP 外部工具集成
 enable_base_knowledge: true   # 基础知识库检索
@@ -154,6 +160,8 @@ enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
 enable_target_knowledge: false # 目标文档模板
 enable_edit: true             # 数据/知识管理页（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
+enable_llmlog: false          # 记录 LLM 调用日志到 llmlog/*.txt
+enable_perf_log: true         # 写接口性能指标到 perf_log.csv
 ```
 
 ### 前端配置

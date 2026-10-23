@@ -22,6 +22,17 @@ static_folder: "tmp_imgs"
 model_name: "deepseek-v4-flash"            # 模型名称，LLM 调用时使用
 model_url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
 
+# LLM 额外请求参数（extra_body，透传给 OpenAI 兼容接口的扩展字段）
+# DeepSeek 官方文档（api-docs.deepseek.com/zh-cn/guides/thinking_mode）：
+#   关闭思考  -> {"thinking": {"type": "disabled"}}
+#   思考强度  -> reasoning_effort: "low" / "high" / "max"（默认 high）
+# 其他厂商（参数各不相同，网关可能透传/忽略/报错）：
+#   Qwen3 / 旧版 GLM -> {"enable_thinking": false}
+#   GLM-4.5/4.6      -> {"thinking": {"type": "disabled"}}
+#   OpenAI gpt-5/o 系-> 无法完全关闭，用 {"reasoning_effort": "low"}
+# 设 {} 或删除该项则保持模型默认行为
+llm_extra_params: {"thinking": {"type": "disabled"}}
+
 # 功能开关
 enable_mcp: true              # MCP 外部工具
 enable_base_knowledge: true   # 基础知识库检索
@@ -30,6 +41,7 @@ enable_fetch_url: true        # 网页内容抓取
 enable_target_knowledge: false # 目标模板
 enable_edit: true             # 数据/知识编辑（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
 enable_llmlog: false           # 记录 LLM 调用日志到 llmlog/*.txt
+enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 ```
 
 **DSN 格式**: `mysql+pymysql://用户名:密码@主机:端口/数据库名`
