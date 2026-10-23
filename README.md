@@ -183,9 +183,6 @@ VITE_API_BASE=/api
 - [智谱 GLM](https://open.bigmodel.cn/)
 - [OpenAI](https://platform.openai.com/)
 
-### MCP 服务器配置与启动
-
-MCP 服务器通过 `config/mcp_servers.yaml` 定义，详见独立文档 [MCP 服务器指南](docs/mcp_servers.md)（含传输方式、测试服务器启动、新增服务器步骤）。
 
 ### 启动
 
