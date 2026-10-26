@@ -12,7 +12,7 @@ from agent.tools.copilot.utils.call_llm_test import call_llm_stream
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
-from utils.context_trim import prepare_trimmed_context, save_session_step
+from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
 from utils.get_config import config_data
 from utils.perf_log import perf_api
 
