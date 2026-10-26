@@ -44,7 +44,17 @@ def parse_generated_python_code(txt):
         ast.parse(code)
         return code
     except Exception:
-        return None
+        pass
+
+    for drop_count in (1, 2):
+        candidate = "\n".join(code.splitlines()[:-drop_count])
+        try:
+            ast.parse(candidate)
+            return candidate
+        except Exception:
+            continue
+
+    return None
 
 
 def parse_generated_sql_code(txt):
