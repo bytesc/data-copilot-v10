@@ -46,6 +46,16 @@ def call_llm(question, llm):
 
 
 def call_llm_stream(question, llm):
+    for content, _ in _call_llm_stream_events(question, llm):
+        if content:
+            yield content
+
+
+def call_llm_stream_with_reasoning(question, llm):
+    yield from _call_llm_stream_events(question, llm)
+
+
+def _call_llm_stream_events(question, llm):
     print("question len (stream): ", len(question))
     record_llm_input(len(question))
     response = llm.chat.completions.create(
@@ -59,12 +69,17 @@ def call_llm_stream(question, llm):
 
     full_content = ""
     for chunk in response:
-        if chunk.choices and chunk.choices[0].delta.content is not None:
-            delta = chunk.choices[0].delta.content
-            full_content += delta
-            record_first_chunk()
-            print(delta, end="", flush=True)
-            yield delta
+        if chunk.choices:
+            delta = chunk.choices[0].delta
+            if getattr(delta, 'content', None) is not None:
+                content_delta = delta.content
+                full_content += content_delta
+                record_first_chunk()
+                print(content_delta, end="", flush=True)
+                yield content_delta, None
+            if getattr(delta, 'reasoning_content', None) is not None:
+                reasoning_delta = delta.reasoning_content
+                yield None, reasoning_delta
     record_llm_complete()
     print()
 

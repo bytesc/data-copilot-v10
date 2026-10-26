@@ -218,6 +218,7 @@ function historyToText(history) {
     addMessage('stream', 'think', { label: 'THINK - Planning', content: '', streaming: true, msgId })
 
     let rawPlan = ''
+    let thinking = ''
     const gen = thinkStream({
       question: question.value,
       conversation_history: conversationHistory.value,
@@ -227,6 +228,9 @@ function historyToText(history) {
       if (event.type === 'chunk') {
         rawPlan += event.content
         updateStreamingMessage(msgId, rawPlan)
+      } else if (event.type === 'reasoning_chunk') {
+        thinking += event.content
+        updateStreamingThinking(msgId, thinking)
       } else if (event.type === 'done') {
         const doneContent = event.content || ''
         if (doneContent && !rawPlan) rawPlan = doneContent
@@ -245,6 +249,7 @@ function historyToText(history) {
     addMessage('stream', 'action_decision', { label: 'ACTION - Decide', content: '', streaming: true, msgId })
 
     let rawDecision = ''
+    let thinking = ''
     const gen = actionStream({
       question: question.value,
       conversation_history: conversationHistory.value,
@@ -255,6 +260,9 @@ function historyToText(history) {
       if (event.type === 'chunk') {
         rawDecision += event.content
         updateStreamingMessage(msgId, rawDecision)
+      } else if (event.type === 'reasoning_chunk') {
+        thinking += event.content
+        updateStreamingThinking(msgId, thinking)
       } else if (event.type === 'done') {
         updateStreamingMessage(msgId, rawDecision, false)
       } else if (event.type === 'error') {
@@ -281,6 +289,7 @@ function historyToText(history) {
 
     let currentSubPhase = null
     let currentSubContent = ''
+    let currentReasoning = ''
     const gen = actStream({
       action,
       question: fullQuestion,
@@ -312,6 +321,12 @@ function historyToText(history) {
 
       if (event.type === 'history') {
         handleHistoryEvent(event.history)
+        continue
+      }
+
+      if (event.type === 'reasoning_chunk') {
+        currentReasoning += content
+        updateStreamingThinking(msgId, currentReasoning)
         continue
       }
 
@@ -432,6 +447,7 @@ function historyToText(history) {
     addMessage('stream', 'observe', { label: 'OBSERVE - Review', content: '', streaming: true, msgId })
 
     let rawReview = ''
+    let thinking = ''
     const gen = observeStream({
       question: question.value,
       conversation_history: conversationHistory.value,
@@ -442,6 +458,9 @@ function historyToText(history) {
       if (event.type === 'chunk') {
         rawReview += event.content
         updateStreamingMessage(msgId, rawReview)
+      } else if (event.type === 'reasoning_chunk') {
+        thinking += event.content
+        updateStreamingThinking(msgId, thinking)
       } else if (event.type === 'done') {
         updateStreamingMessage(msgId, rawReview, false)
       } else if (event.type === 'error') {
@@ -458,6 +477,14 @@ function historyToText(history) {
       messages.value[idx].content = content
       messages.value[idx].streaming = streaming
       messages.value[idx].isError = isError
+    }
+  }
+
+  function updateStreamingThinking(msgId, thinking, streaming = true) {
+    const idx = messages.value.findIndex(m => m.msgId === msgId)
+    if (idx !== -1) {
+      messages.value[idx].thinking = thinking
+      messages.value[idx].thinkingStreaming = streaming
     }
   }
 

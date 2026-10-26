@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from agent.action import ACTIONS, ACTIONS_BODY
 from agent.tools.base_knowledge.get_base_knowledge import TARGET
 from agent.tools.tools_def import llm
-from agent.tools.copilot.utils.call_llm_test import call_llm_stream
+from agent.tools.copilot.utils.call_llm_test import call_llm_stream_with_reasoning
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
@@ -95,9 +95,12 @@ If todo is empty, the plan is complete. Keep descriptions concise.
             yield f"data: {json.dumps({'phase': 'observe', 'sub_phase': 'review', 'type': 'msg', 'content': 'Reviewing execution results...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk in call_llm_stream(observe_prompt + error_msg, llm):
-            raw += chunk
-            yield f"data: {json.dumps({'phase': 'observe', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        for chunk, reasoning in call_llm_stream_with_reasoning(observe_prompt + error_msg, llm):
+            if chunk:
+                raw += chunk
+                yield f"data: {json.dumps({'phase': 'observe', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+            if reasoning:
+                yield f"data: {json.dumps({'phase': 'observe', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
 
         plan_result = _parse_plan_json(raw)
         if plan_result is not None:

@@ -9,7 +9,7 @@ from agent.agent import generate_and_execute_stream
 from agent.document_generator import generate_document_from_context
 from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, TARGET, MCP_BRIEF, CUSTOM_FUNC_BRIEF, BASE_KNOWLEDGE_BRIEF, get_db_query_guide_db, get_base_knowledge_db, base_knowledge_to_str
 from agent.tools.tools_def import engine, llm
-from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
+from agent.tools.copilot.utils.call_llm_test import call_llm, call_llm_stream_with_reasoning
 from agent.tools.copilot.sql_code import parse_selected_fields_json
 from agent.tools.search_db import get_db_overview_markdown, search_db_markdown, get_db_summary_for_agent
 from agent.tools.search_func import get_func_catalog_markdown, search_func_by_keyword, get_func_summary_for_agent, get_func_docs_for
@@ -252,9 +252,12 @@ Example:
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': 'Parsing failed, re-analyzing...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk in call_llm_stream(prompt + error_msg, llm):
-            raw += chunk
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        for chunk, reasoning in call_llm_stream_with_reasoning(prompt + error_msg, llm):
+            if chunk:
+                raw += chunk
+                yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+            if reasoning:
+                yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
 
         selected_fields = parse_selected_fields_json(raw) or {}
         if selected_fields is not None and isinstance(selected_fields, dict):
@@ -322,9 +325,12 @@ Example:
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'status', 'content': 'Analyzing required functions...'}, ensure_ascii=False)}\n\n"
 
     raw = ""
-    for chunk in call_llm_stream(prompt, llm):
-        raw += chunk
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+    for chunk, reasoning in call_llm_stream_with_reasoning(prompt, llm):
+        if chunk:
+            raw += chunk
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        if reasoning:
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
     raw_text = raw
     parsed = _parse_function_explore_json(raw)
     if parsed:
@@ -400,9 +406,12 @@ Example:
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': 'Parsing failed, re-analyzing...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk in call_llm_stream(prompt + error_msg, llm):
-            raw += chunk
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        for chunk, reasoning in call_llm_stream_with_reasoning(prompt + error_msg, llm):
+            if chunk:
+                raw += chunk
+                yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+            if reasoning:
+                yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
 
         parsed = _parse_base_knowledge_json(raw)
         if parsed is not None:
@@ -685,9 +694,12 @@ If no tools are needed, return {{"selected_tools": [], "plan": "No MCP tools nee
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': 'Analyzing required MCP tools...'}, ensure_ascii=False)}\n\n"
 
     raw = ""
-    for chunk in call_llm_stream(prompt, llm):
-        raw += chunk
-        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+    for chunk, reasoning in call_llm_stream_with_reasoning(prompt, llm):
+        if chunk:
+            raw += chunk
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        if reasoning:
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
 
     parsed = _parse_mcp_explore_json(raw)
     selected_tools = parsed.get("selected_tools", []) if parsed else []

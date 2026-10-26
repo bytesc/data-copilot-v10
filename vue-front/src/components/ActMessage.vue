@@ -1,5 +1,6 @@
 <template>
   <div class="act-message">
+    <ThinkingBlock :message="message" />
     <template v-if="message.action === 'explore_schema'">
       <details v-if="message.explore_plan || message.parsed?.explore_plan" class="msg-collapse">
         <summary class="collapse-summary">Query Plan</summary>
@@ -218,6 +219,7 @@
 <script setup>
 import { computed } from 'vue'
 import { renderMarkdown } from '@/utils/markdown.js'
+import ThinkingBlock from '@/components/ThinkingBlock.vue'
 
 const props = defineProps({
   message: { type: Object, required: true },

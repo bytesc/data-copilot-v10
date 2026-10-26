@@ -9,7 +9,7 @@ from agent.action import ACTIONS, ACTIONS_BODY
 from agent.tools.base_knowledge.get_base_knowledge import TARGET, BRIEF_INFO, THINK_KNOWLEDGE
 from agent.tools.tools_def import llm
 from agent.tools.search_func import get_func_summary_for_agent
-from agent.tools.copilot.utils.call_llm_test import call_llm_stream
+from agent.tools.copilot.utils.call_llm_test import call_llm_stream_with_reasoning
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, log_observe_session
 from utils.front_utils import history_to_text
@@ -102,9 +102,12 @@ FINAL LANGUAGE CHECK: The knowledge base above is in Chinese — IGNORE THAT. Yo
             yield f"data: {json.dumps({'phase': 'think', 'type': 'msg', 'content': 'Generating analysis plan...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk in call_llm_stream(think_prompt + error_msg, llm):
-            raw += chunk
-            yield f"data: {json.dumps({'phase': 'think', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        for chunk, reasoning in call_llm_stream_with_reasoning(think_prompt + error_msg, llm):
+            if chunk:
+                raw += chunk
+                yield f"data: {json.dumps({'phase': 'think', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+            if reasoning:
+                yield f"data: {json.dumps({'phase': 'think', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
 
         plan_result = _parse_plan_json(raw)
         if plan_result is not None:

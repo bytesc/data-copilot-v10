@@ -9,7 +9,7 @@ from agent.tools.base_knowledge.get_base_knowledge import BRIEF_INFO
 from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.tools_def import llm
-from agent.tools.copilot.utils.call_llm_test import call_llm_stream
+from agent.tools.copilot.utils.call_llm_test import call_llm_stream_with_reasoning
 from data_access.observe_log import log_observe_cycle, log_observe_session
 from data_access.session_log import record_session_operation
 from agent.tools.tools_def import engine
@@ -200,9 +200,12 @@ def _event_stream_action(
             yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': 'Deciding next action...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk in call_llm_stream(prompt + error_msg, llm):
-            raw += chunk
-            yield f"data: {json.dumps({'phase': 'action', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+        for chunk, reasoning in call_llm_stream_with_reasoning(prompt + error_msg, llm):
+            if chunk:
+                raw += chunk
+                yield f"data: {json.dumps({'phase': 'action', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+            if reasoning:
+                yield f"data: {json.dumps({'phase': 'action', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
 
         action_result = _parse_action_json(raw)
         action = action_result.get("action")

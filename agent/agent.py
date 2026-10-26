@@ -10,7 +10,7 @@ from .tools.tools_def import engine, llm, query_database, exe_sql
 from .tools.copilot.python_code import get_py_code
 from .tools.copilot.utils.code_executor import execute_py_code
 from .tools.copilot.sql_code import get_db_info_prompt, filter_db_fields
-from .tools.copilot.utils.call_llm_test import call_llm_stream
+from .tools.copilot.utils.call_llm_test import call_llm_stream_with_reasoning
 from .tools.copilot.utils.parse_output import parse_generated_python_code
 from utils.perf_log import record_code_exec
 
@@ -281,9 +281,12 @@ def generate_and_execute_stream(question, tables=None, retries=2,
 
         full_prompt = cot_prompt + error_msg
         raw_content = ""
-        for chunk in call_llm_stream(full_prompt, llm):
-            raw_content += chunk
-            yield {"type": "chunk", "sub_type": "code_chunk", "content": chunk, "phase": "act", "sub_phase": "code"}
+        for chunk, reasoning in call_llm_stream_with_reasoning(full_prompt, llm):
+            if chunk:
+                raw_content += chunk
+                yield {"type": "chunk", "sub_type": "code_chunk", "content": chunk, "phase": "act", "sub_phase": "code"}
+            if reasoning:
+                yield {"type": "chunk", "sub_type": "reasoning_chunk", "content": reasoning, "phase": "act", "sub_phase": "code"}
 
         code = parse_generated_python_code(raw_content)
         if code is None:

@@ -14,6 +14,7 @@
         <details class="msg-collapse">
           <summary class="collapse-summary">Plan</summary>
           <div class="collapse-body">
+            <ThinkingBlock :message="message" />
             <div v-if="message.planResult" class="plan-display" v-html="formattedPlan"></div>
             <div v-else class="streaming-content" v-html="renderedContent"></div>
             <span v-if="message.streaming" class="blink-cursor">|</span>
@@ -24,7 +25,10 @@
       <template v-else-if="message.type === 'stream' && message.phase === 'action_decision'">
         <details class="msg-collapse" :open="false">
           <summary class="collapse-summary">Decision</summary>
-          <div class="collapse-body" v-html="renderedContent"></div>
+          <div class="collapse-body">
+            <ThinkingBlock :message="message" />
+            <div v-html="renderedContent"></div>
+          </div>
         </details>
       </template>
 
@@ -32,6 +36,7 @@
         <details class="msg-collapse" :open="false">
           <summary class="collapse-summary">Updated Plan</summary>
           <div class="collapse-body">
+            <ThinkingBlock :message="message" />
             <div v-if="message.planResult" class="plan-display" v-html="formattedPlan"></div>
             <div v-else v-html="renderedContent"></div>
           </div>
@@ -54,6 +59,7 @@
           <details v-if="message.collapsed" class="msg-collapse" :open="!message.collapsed">
             <summary class="collapse-summary">{{ assistantSummary }}</summary>
             <div class="collapse-body">
+              <ThinkingBlock :message="message" />
               <div v-if="message.phase === 'think' || message.phase === 'observe'">
                 <div v-if="message.planResult" class="plan-display" v-html="formattedPlan"></div>
                 <div v-else v-html="renderedContent"></div>
@@ -62,7 +68,10 @@
               <div v-else v-html="renderedContent"></div>
             </div>
           </details>
-          <div v-else class="message-body" v-html="renderedContent"></div>
+          <div v-else class="message-body">
+            <ThinkingBlock :message="message" />
+            <div v-html="renderedContent"></div>
+          </div>
         </template>
       </template>
 
@@ -90,6 +99,7 @@ import { computed } from 'vue'
 import { renderMarkdown, renderMarkdownInline } from '@/utils/markdown.js'
 import ActMessage from '@/components/ActMessage.vue'
 import DocumentMessage from '@/components/DocumentMessage.vue'
+import ThinkingBlock from '@/components/ThinkingBlock.vue'
 
 const props = defineProps({
   message: { type: Object, required: true },
