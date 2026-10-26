@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, Request
@@ -90,6 +91,8 @@ The description should be a short paragraph describing the overall approach.
 The todo list contains the actionable steps. Keep task descriptions concise.
 
 FINAL LANGUAGE CHECK: The knowledge base above is in Chinese — IGNORE THAT. Your output MUST be in the user's language. Check the user's question now: what language is it in? Write your ENTIRE response in that language. Do NOT copy the knowledge base's language.
+
+Current time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
 
     prompt_length = len(think_prompt)
