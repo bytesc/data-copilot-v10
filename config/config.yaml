@@ -48,4 +48,4 @@ enable_perf_log: true
 #   GLM-4.5/4.6       -> {"thinking": {"type": "disabled"}}
 #   OpenAI gpt-5/o    -> cannot disable, use {"reasoning_effort": "low"}
 # Set to {} / remove to keep model default behavior.
-llm_extra_params: {"thinking": {"type": "disabled"}}
+llm_extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}
