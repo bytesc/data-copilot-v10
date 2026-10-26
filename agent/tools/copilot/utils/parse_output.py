@@ -46,7 +46,7 @@ def parse_generated_python_code(txt):
     except Exception:
         pass
 
-    for drop_count in (1, 2):
+    for drop_count in (1, 2, 10, 20, 50):
         candidate = "\n".join(code.splitlines()[:-drop_count])
         try:
             ast.parse(candidate)
