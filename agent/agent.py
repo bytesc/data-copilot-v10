@@ -31,7 +31,10 @@ IMPORTANT_MODULE = ["import math",
 THIRD_MODULE = ["import pandas as pd", "import numpy as np",
                 "import PIL", "import matplotlib",
                 "matplotlib.use('Agg')",
-                "import matplotlib.pyplot as plt", "import seaborn as sns"]
+                "import matplotlib.pyplot as plt", "import seaborn as sns",
+                "import json", "import re", "import datetime",
+                "import textwrap", "import os", "import random",
+                "import collections", "import io", "import functools"]
 
 # print(get_db_info_prompt(engine, simple=True, example=False))
 
@@ -105,16 +108,6 @@ Here is the functions you can import and use:
     Here is an example: 
     ```python
     def func():
-        import math
-        import pandas as pd
-        import numpy as np
-        import PIL
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        # generate code to perform operations from here
-
         yield "A01 class's grades are as follows:"  # yield some information and explanation
         yield "use table: stu_info ,stu_grade"  # yield tables names before query database function
         df = exe_sql(\"\"\"
@@ -160,7 +153,7 @@ Here is the functions you can import and use:
     ⚠️ CRITICAL OUTPUT FORMAT — VIOLATION WILL CAUSE EXECUTION FAILURE:
     - Your ENTIRE response MUST be wrapped in a SINGLE ```python ... ``` markdown code block. Nothing outside the code block is allowed.
     - Your code MUST contain `def func():` (i.e. define a function named `func`). Do NOT write any code, text, or explanation outside the function.
-    - ALL import statements MUST be placed INSIDE the function, right after `def func():`. NEVER write any import at the top level or outside the function.
+    - DO NOT write ANY import statement in your code (e.g. do NOT write `import pandas as pd`, `from agent.tools.tools_def import ...`, `from agent.tools.custom_tools_def import ...`, etc.). All necessary imports — including the provided functions (exe_sql, load_data, explain_data, get_save_image_path, exe_mcp, predict_hdb_price, etc.) and third-party modules (pandas, numpy, matplotlib, PIL, etc.) — are ALREADY available and will be injected automatically after your code is generated. Just call them directly.
     - Even if the question can be answered with plain text only (no function calls, no data queries), you MUST still generate code in the ```python``` block format. Use `yield "your answer text"` to output the answer.
     - NEVER output plain text outside the code block. NEVER output markdown, explanations, or conversational text before or after the code block.
     - NEVER write any python code outside the code block. NEVER output the code twice — only the single code block content.
@@ -295,12 +288,11 @@ def generate_and_execute_stream(question, tables=None, retries=2,
         code should only be in a md code block: 
         ```python
         def func(data_dict):
-            import pandas as pd
-            import math
             # some python code
             # access dataframes like: df1 = data_dict['key1']
         ```
         without any additional comments, explanations or cmds !!!
+        DO NOT write any import statement in your code, all imports will be injected automatically.
         """
             continue
 
