@@ -79,6 +79,7 @@ Rules:
 7. CRITICAL — VISUALIZATION REQUIREMENT: Whenever the todo list includes any data retrieval or analysis task, you MUST also include a follow-up task that generates a chart or visualization of that data. The chart task should be a separate todo item placed immediately after its corresponding data task. For example: ["Query sales data from the database", "Create a bar chart showing sales by category"]. Do NOT skip visualization unless the user explicitly asks for text-only output.
 8. Before generating any code, you MUST first explore the available function catalog (explore_functions) to find the relevant functions.
 9. Before querying the database, you MUST first explore the database schema (explore_schema) to understand the relevant tables and fields.
+10. web_search is used to obtain news, articles and other text information, NOT to scrape or collect data for analysis. Data analysis must query the local database.
 
 Output ONLY a valid JSON object on a single line (no md block):
 
