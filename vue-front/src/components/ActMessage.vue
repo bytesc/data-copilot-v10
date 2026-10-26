@@ -77,7 +77,7 @@
                   <pre><code class="language-python">{{ att.code }}</code></pre>
                 </div>
               </details>
-              <details v-if="att.result" class="msg-collapse">
+              <details v-if="att.result" class="msg-collapse" open>
                 <summary class="collapse-summary">Result (Attempt {{ i + 1 }})</summary>
                 <div class="collapse-body" v-html="renderMd(att.result)"></div>
               </details>
@@ -95,7 +95,7 @@
             <pre><code class="language-python">{{ message.code }}</code></pre>
           </div>
         </details>
-        <details v-if="message.result" class="msg-collapse">
+        <details v-if="message.result" class="msg-collapse" open>
           <summary class="collapse-summary">Result</summary>
           <div class="collapse-body" v-html="renderMd(message.result)"></div>
         </details>
