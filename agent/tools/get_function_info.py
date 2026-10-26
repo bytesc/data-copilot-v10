@@ -1,7 +1,7 @@
 from .copilot.utils.call_llm_test import call_llm, call_llm_stream
 from .tools_def import draw_graph, query_database, explain_data, exe_sql, draw_compare_graph, load_data, \
     get_save_image_path, search_web, fetch_webpage, exe_mcp
-from .custom_tools_def import get_onemap_minimap, get_onemap_static_map, predict_hdb_price, get_osm_minimap, get_osm_static_map, get_streetdirectory_minimap, get_streetdirectory_static_map, search_streetdirectory, search_osm, get_ura_rental
+from .custom_tools_def import get_onemap_minimap, get_onemap_static_map, predict_hdb_price, get_osm_minimap, get_osm_static_map, get_streetdirectory_minimap, get_streetdirectory_static_map, search_streetdirectory, search_osm
 
 FUNCTION_DICT = {
     # "query_database": query_database,
@@ -21,7 +21,6 @@ FUNCTION_DICT = {
     # "search_osm": search_osm,
     # "get_osm_static_map": get_osm_static_map,
     "predict_hdb_price": predict_hdb_price,
-    "get_ura_rental": get_ura_rental,
     # "search_web": search_web,
     # "fetch_webpage": fetch_webpage,
 }
@@ -46,7 +45,6 @@ FUNCTION_IMPORT = {
     # search_osm: "from agent.tools.custom_tools_def import search_osm",
     # get_osm_static_map: "from agent.tools.custom_tools_def import get_osm_static_map",
     predict_hdb_price: "from agent.tools.custom_tools_def import predict_hdb_price",
-    get_ura_rental: "from agent.tools.custom_tools_def import get_ura_rental",
 }
 
 ASSIST_FUNCTION_DICT = {
