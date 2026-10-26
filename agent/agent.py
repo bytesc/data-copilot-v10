@@ -94,7 +94,7 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
             database = "\nThe database content: \n" + data_prompt + "\n"
 
     pre_prompt = """ 
-Please use the following functions to solve the problem.
+Please use the following functions to write Python code to solve the problem.
 """
     function_prompt = """ 
 Here is the functions you can import and use:
@@ -163,11 +163,6 @@ Here is the functions you can import and use:
     - Even if the question can be answered with plain text only (no function calls, no data queries), you MUST still generate code in the ```python``` block format. Use `yield "your answer text"` to output the answer.
     - NEVER output plain text outside the code block. NEVER output markdown, explanations, or conversational text before or after the code block.
     
-    Wrong format (will be rejected):
-    - Outputting: "The answer is 42" (plain text, no code block)
-    - Outputting: ```python\ndef func():\n    yield "hello"\n```\nHere is some extra text... (text outside code block)
-    - Outputting: Let me think...\n```python\ndef func():\n    ...\n``` (text before code block)
-    
     Correct format for text-only answers:
     ```python
     def func():
@@ -221,16 +216,14 @@ Here is the functions you can import and use:
         5. If uncertain about the exact format, query for distinct values first and show them to the user for confirmation
         6. Yield a message explaining any standardization decisions made (e.g., "Searching for 'China' matched database values: 'CHN', 'PRC'")
     
-    **Todo List Execution Rule (Strictly Enforced)**:
+    **Todo List Execution Rule**:
     - If a todo list exists in the context, you MUST execute ONLY the **first incomplete task** on the list.
-    - Stop immediately after completing that task, waiting for the next call.
     - **DO NOT** execute multiple todo items at once, even if they seem simple.
     - **DO NOT** skip or pre-execute later tasks.
     - If the current todo item requires user confirmation or additional information, yield the request and stop. Do NOT proceed to other items.
     """
 
     final_language_check = """
-⚠️ FINAL LANGUAGE CHECK: The knowledge base above is in Chinese — IGNORE THAT. All your output text MUST be in the user's language. Check the user's question now: what language is it in? Write ALL text (yield messages, chart titles, labels) in that language. Do NOT copy the knowledge base's language.
 """
 
     research_section = ""
