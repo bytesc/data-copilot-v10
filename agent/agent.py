@@ -159,10 +159,11 @@ Here is the functions you can import and use:
 
     ⚠️ CRITICAL OUTPUT FORMAT — VIOLATION WILL CAUSE EXECUTION FAILURE:
     - Your ENTIRE response MUST be wrapped in a SINGLE ```python ... ``` markdown code block. Nothing outside the code block is allowed.
-    - The first line of your code MUST be `def func():`. Do NOT write any code, text, or explanation outside the function.
+    - Your code MUST contain `def func():` (i.e. define a function named `func`). Do NOT write any code, text, or explanation outside the function.
     - ALL import statements MUST be placed INSIDE the function, right after `def func():`. NEVER write any import at the top level or outside the function.
     - Even if the question can be answered with plain text only (no function calls, no data queries), you MUST still generate code in the ```python``` block format. Use `yield "your answer text"` to output the answer.
     - NEVER output plain text outside the code block. NEVER output markdown, explanations, or conversational text before or after the code block.
+    - NEVER write any python code outside the code block. NEVER output the code twice — only the single code block content.
     
     Correct format for text-only answers:
     ```python
@@ -303,7 +304,7 @@ def generate_and_execute_stream(question, tables=None, retries=2,
         if 'def func(' not in code:
             yield {"type": "chunk", "sub_type": "code_gen_error", "content": "def func not found", "phase": "act", "sub_phase": "code"}
             error_msg = """
-        The code must define a function named `func`, and the first line of the code must be `def func():`. 
+        The code must define a function named `func`, i.e. contain `def func():`. 
         Do NOT write any code, text, or explanation outside the function.
         ```python
         def func():
