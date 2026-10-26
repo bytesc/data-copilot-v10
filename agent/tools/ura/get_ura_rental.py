@@ -3,6 +3,10 @@ from pathlib import Path
 
 import pandas as pd
 import requests
+from sqlalchemy import text
+from sqlalchemy.types import VARCHAR, Float
+
+from data_access.db_conn import engine
 
 URA_ACCESS_KEY_PATH = Path(__file__).resolve().parent / "ura_access_key.txt"
 
@@ -20,6 +24,45 @@ _KEYS = [
     "rent",
     "district",
 ]
+
+RENTAL_TABLE_NAME = "ura_resi_rental"
+
+_RENTAL_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS `ura_resi_rental` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `project` VARCHAR(255) NULL COMMENT 'Condo project name',
+  `street` VARCHAR(255) NULL COMMENT 'Street name',
+  `lease_date` VARCHAR(50) NULL COMMENT 'Lease commencement date (YYYY-MM-DD)',
+  `property_type` VARCHAR(100) NULL COMMENT 'Property type, e.g. Condominium',
+  `no_of_bedroom` VARCHAR(50) NULL COMMENT 'Number of bedrooms',
+  `area_sqft` VARCHAR(50) NULL COMMENT 'Floor area in square feet',
+  `rent` FLOAT NULL COMMENT 'Monthly rent in SGD',
+  `district` VARCHAR(50) NULL COMMENT 'District number',
+  `ref_period` VARCHAR(20) NULL COMMENT 'URA reference period, e.g. 26q3',
+  PRIMARY KEY (`id`),
+  INDEX `idx_ref_period` (`ref_period`),
+  INDEX `idx_project` (`project`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='URA residential rental contracts downloaded from the URA data service.'
+"""
+
+_RENTAL_COLUMN_TYPES = {
+    "project": VARCHAR(255),
+    "street": VARCHAR(255),
+    "lease_date": VARCHAR(50),
+    "property_type": VARCHAR(100),
+    "no_of_bedroom": VARCHAR(50),
+    "area_sqft": VARCHAR(50),
+    "rent": Float(),
+    "district": VARCHAR(50),
+    "ref_period": VARCHAR(20),
+}
+
+_RENTAL_COLUMN_RENAME = {
+    "leaseDate": "lease_date",
+    "propertyType": "property_type",
+    "noOfBedRoom": "no_of_bedroom",
+    "areaSqft": "area_sqft",
+}
 
 
 def _get_access_key() -> str:
@@ -76,16 +119,10 @@ def _download_rental(access_key: str, token: str, ref_period: str) -> list:
     return data.get("Result", [])
 
 
-def get_ura_rental_func(project: str, ref_period: str = "26q3") -> pd.DataFrame:
-    access_key = _get_access_key()
-    token = _get_token(access_key)
-    projects = _download_rental(access_key, token, ref_period)
-
+def _flatten_rental_records(projects: list) -> list:
     records = []
     for project_data in projects:
         project_name = project_data.get("project", "")
-        if project.upper() not in project_name.upper():
-            continue
         for rental in project_data.get("rental", []):
             records.append({
                 "project": project_name,
@@ -97,9 +134,47 @@ def get_ura_rental_func(project: str, ref_period: str = "26q3") -> pd.DataFrame:
                 "rent": rental.get("rent"),
                 "district": rental.get("district"),
             })
+    return records
 
+
+def import_rental_to_db(records: list, ref_period: str) -> int:
     df = pd.DataFrame(records, columns=_KEYS)
+    if df.empty:
+        return 0
+    df["rent"] = pd.to_numeric(df["rent"], errors="coerce")
+    df = df.rename(columns=_RENTAL_COLUMN_RENAME)
+    df["ref_period"] = ref_period
+    with engine.begin() as conn:
+        conn.execute(text(_RENTAL_TABLE_SQL))
+        conn.execute(
+            text(f"DELETE FROM `{RENTAL_TABLE_NAME}` WHERE `ref_period` = :rp"),
+            {"rp": ref_period},
+        )
+    df.to_sql(
+        name=RENTAL_TABLE_NAME,
+        con=engine,
+        if_exists="append",
+        index=False,
+        dtype=_RENTAL_COLUMN_TYPES,
+    )
+    return len(df)
+
+
+def get_ura_rental_func(project: str, ref_period: str = "26q3") -> pd.DataFrame:
+    access_key = _get_access_key()
+    token = _get_token(access_key)
+    projects = _download_rental(access_key, token, ref_period)
+
+    all_records = _flatten_rental_records(projects)
+    imported = import_rental_to_db(all_records, ref_period)
+    print(
+        f"Imported {imported} URA rental records for ref period {ref_period} "
+        f"into table '{RENTAL_TABLE_NAME}' in the singapore_land_2 database."
+    )
+
+    df = pd.DataFrame(all_records, columns=_KEYS)
     df["rent"] = pd.to_numeric(df["rent"], errors="coerce")
     if not df.empty:
+        df = df[df["project"].str.upper().str.contains(project.upper())]
         df = df.sort_values(by=["leaseDate", "rent"], ascending=[False, False])
     return df

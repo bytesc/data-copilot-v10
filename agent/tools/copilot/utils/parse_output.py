@@ -1,3 +1,4 @@
+import ast
 import re
 
 import pandas
@@ -34,17 +35,16 @@ def parse_output_html(txt):
 
 
 def parse_generated_python_code(txt):
-    try:
-        matches = re.findall(r'```python(.*?)```', txt, re.DOTALL)
-        if matches:
-            return matches[0]
-    except Exception as e:
-        print("parsing err", e)
+    matches = re.findall(r'```python(.*?)```', txt, re.DOTALL)
+    if not matches:
+        matches = re.findall(r'```python(.*)', txt, re.DOTALL)
+    code = matches[0] if matches else txt.strip()
 
-    stripped = txt.strip()
-    if 'def func(' in stripped:
-        return stripped
-    return None
+    try:
+        ast.parse(code)
+        return code
+    except Exception:
+        return None
 
 
 def parse_generated_sql_code(txt):

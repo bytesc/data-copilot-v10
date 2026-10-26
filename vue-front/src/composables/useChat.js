@@ -17,7 +17,7 @@ export function useChat() {
   const isPaused = ref(false)
   const isCompleted = ref(false)
   const interruptRequested = ref(false)
-  const chatMode = ref('chat')
+  const chatMode = ref('think')
 
   const messages = ref([])
   const generatedFiles = ref([])

@@ -395,15 +395,15 @@ def get_osm_static_map(
 def get_ura_rental(project: str, ref_period: str = "26q3") -> pd.DataFrame:
     """
 get_ura_rental(project, ref_period="26q3") -> pd.DataFrame:
-Download residential rental contracts for a condo project from the URA data service and return them as a DataFrame.
-Returns all rental contracts matching the project name (case-insensitive partial match) for the given reference period.
+Download residential rental contracts from the URA data service, import ALL downloaded records into the singapore_land_2 database table 'ura_resi_rental', and return the contracts matching the project name as a DataFrame.
+The full downloaded dataset for the reference period (all projects, not only the matching one) is saved into the database with a 'ref_period' column; re-downloading the same ref_period replaces that period's rows.
 
 Args:
 - project (str): Condo project name to search, e.g. "TANGLIN VIEW" (REQUIRED).
 - ref_period (str, optional): URA reference period in "yyqs" format, e.g. "26q3" means 2026 Q3. Default "26q3".
 
 Returns:
-- pd.DataFrame: Rental contracts with columns:
+- pd.DataFrame: Rental contracts matching the project name (case-insensitive partial match) with columns:
     * 'project': Project name
     * 'street': Street name
     * 'leaseDate': Lease commencement date

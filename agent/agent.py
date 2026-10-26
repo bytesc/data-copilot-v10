@@ -301,6 +301,20 @@ def generate_and_execute_stream(question, tables=None, retries=2,
             import math
             # some python code
             # access dataframes like: df1 = data_dict['key1']
+        ```
+        without any additional comments, explanations or cmds !!!
+        """
+            continue
+
+        if 'def func(' not in code:
+            yield {"type": "chunk", "sub_type": "code_gen_error", "content": "def func not found", "phase": "act", "sub_phase": "code"}
+            error_msg = """
+        The code must define a function named `func`, and the first line of the code must be `def func():`. 
+        Do NOT write any code, text, or explanation outside the function.
+        ```python
+        def func():
+            # some python code
+        ```
         without any additional comments, explanations or cmds !!!
         """
             continue
