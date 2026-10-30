@@ -371,6 +371,12 @@ def _add_hyperlink(paragraph, url: str, text: str) -> bool:
         r_style = OxmlElement('w:rStyle')
         r_style.set(qn('w:val'), 'Hyperlink')
         r_pr.append(r_style)
+        color = OxmlElement('w:color')
+        color.set(qn('w:val'), '0563C1')
+        r_pr.append(color)
+        underline = OxmlElement('w:u')
+        underline.set(qn('w:val'), 'single')
+        r_pr.append(underline)
         run.append(r_pr)
         t = OxmlElement('w:t')
         t.text = text
