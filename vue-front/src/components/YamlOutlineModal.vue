@@ -252,7 +252,7 @@ sections:
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { marked } from 'marked'
 import * as jsyaml from 'js-yaml'
 import YamlVisualEditor from './YamlVisualEditor.vue'
@@ -824,16 +824,30 @@ async function* createSSEStream(url, payload) {
   }
 }
 
-onMounted(fetchAvailableFiles)
+function onKeydown(e) {
+  if (e.key !== 'Escape') return
+  const el = e.target
+  if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.isContentEditable)) return
+  onClose()
+}
+
+onMounted(() => {
+  fetchAvailableFiles()
+  window.addEventListener('keydown', onKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <style scoped>
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-container { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius); width: 90vw; height: 85vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+.modal-container { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius); width: 90vw; height: 85vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.3); position: relative; overflow: hidden; }
 .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; position: relative; }
 .modal-header h3 { margin: 0 0 4px; font-size: 16px; color: var(--text-primary); }
 .modal-subtitle { margin: 0; font-size: 12px; color: var(--text-muted); }
-.close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1; border-radius: var(--radius-sm); }
+.close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1; border-radius: var(--radius-sm); min-width: 32px; min-height: 32px; display: flex; align-items: center; justify-content: center; }
 .close-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .modal-body { flex: 1; padding: 12px 20px; overflow-y: auto; display: flex; flex-direction: column; }
 .code-editor { flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; font-family: 'Consolas','Courier New',monospace; font-size: 13px; line-height: 1.5; resize: none; outline: none; tab-size: 2; }
@@ -936,7 +950,7 @@ onMounted(fetchAvailableFiles)
 .save-msg { font-size: 12px; color: var(--accent-green); font-weight: 600; }
 
 @media (max-width: 768px) {
-  .modal-container { width: 100vw; height: 100vh; border-radius: 0; }
+  .modal-container { width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; }
   .pick-item { flex-wrap: wrap; gap: 8px; }
   .pick-actions { margin-left: 0; width: 100%; flex-wrap: wrap; justify-content: flex-end; }
   .modal-header { padding: 12px 14px; }
@@ -945,5 +959,6 @@ onMounted(fetchAvailableFiles)
   .modal-footer { padding: 10px 14px; }
   .code-editor { font-size: 12px; padding: 8px; }
   .user-prompt-input { max-width: 100%; }
+  .close-btn { top: 6px; right: 4px; font-size: 20px; min-width: 44px; min-height: 44px; }
 }
 </style>

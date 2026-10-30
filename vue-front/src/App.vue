@@ -79,6 +79,12 @@ onMounted(async () => {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.top-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .nav-brand {
@@ -97,6 +103,14 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav-links::-webkit-scrollbar {
+  display: none;
 }
 
 .nav-link {
@@ -109,6 +123,8 @@ onMounted(async () => {
   text-decoration: none;
   font-size: 13px;
   transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .nav-link:hover {
@@ -141,6 +157,7 @@ onMounted(async () => {
 
   .nav-logo {
     font-size: 14px;
+    flex-shrink: 0;
   }
 
   .nav-link {

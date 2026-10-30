@@ -52,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useChat } from '@/composables/useChat.js'
 import LeftPanel from '@/components/LeftPanel.vue'
 import RightPanel from '@/components/RightPanel.vue'
@@ -62,11 +62,34 @@ import YamlOutlineModal from '@/components/YamlOutlineModal.vue'
 
 const chatAreaRef = ref(null)
 const chat = useChat()
-const isPanelCollapsed = ref(false)
-const isRightPanelCollapsed = ref(false)
+
+function isMobileViewport() {
+  return window.innerWidth <= 768
+}
+
+let lastMobile = isMobileViewport()
+const isPanelCollapsed = ref(lastMobile)
+const isRightPanelCollapsed = ref(lastMobile)
 const showResume = ref(false)
 const showYamlOutline = ref(false)
 const yamlBusy = ref(false)
+
+function syncPanelsWithViewport() {
+  const mobile = isMobileViewport()
+  if (mobile === lastMobile) return
+  lastMobile = mobile
+  if (mobile) {
+    isPanelCollapsed.value = true
+    isRightPanelCollapsed.value = true
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('resize', syncPanelsWithViewport)
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', syncPanelsWithViewport)
+})
 
 function onResume(sessionData) {
   showResume.value = false
