@@ -16,6 +16,9 @@ from markdown_pdf import MarkdownPdf, Section
 from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 
 from agent.tools.base_knowledge.get_base_knowledge import DOC, TARGET, BASE
 from agent.tools.tools_def import llm
@@ -358,6 +361,27 @@ def _markdown_to_pdf(markdown_text: str, output_path: str):
     pdf.save(output_path)
 
 
+def _add_hyperlink(paragraph, url: str, text: str) -> bool:
+    try:
+        r_id = paragraph.part.relate_to(url, RT.HYPERLINK, is_external=True)
+        hyperlink = OxmlElement('w:hyperlink')
+        hyperlink.set(qn('r:id'), r_id)
+        run = OxmlElement('w:r')
+        r_pr = OxmlElement('w:rPr')
+        r_style = OxmlElement('w:rStyle')
+        r_style.set(qn('w:val'), 'Hyperlink')
+        r_pr.append(r_style)
+        run.append(r_pr)
+        t = OxmlElement('w:t')
+        t.text = text
+        run.append(t)
+        hyperlink.append(run)
+        paragraph._p.append(hyperlink)
+        return True
+    except Exception:
+        return False
+
+
 def _add_inline_runs(paragraph, text: str):
     pattern = re.compile(r'(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|!\[([^\]]*)\]\(([^)]+)\)|\[([^\]]+)\]\(([^)]+)\))')
     last_end = 0
@@ -379,8 +403,9 @@ def _add_inline_runs(paragraph, text: str):
             run.italic = True
             run.font.size = Pt(9)
         elif m.group(7):
-            run = paragraph.add_run(m.group(7))
-            run.underline = True
+            if not _add_hyperlink(paragraph, m.group(8), m.group(7)):
+                run = paragraph.add_run(f'{m.group(7)} ({m.group(8)})')
+                run.underline = True
         last_end = m.end()
     if last_end < len(text):
         paragraph.add_run(text[last_end:])
