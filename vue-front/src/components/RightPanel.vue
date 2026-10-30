@@ -2,8 +2,8 @@
   <div class="right-panel-inner">
     <div class="doc-section">
       <span class="section-label">Document</span>
-      <button class="ctrl-btn" @click="$emit('generate-doc')" :disabled="isRunning">
-        <span class="btn-icon">📄</span> Generate Report
+      <button class="ctrl-btn" @click="$emit('generate-doc')" :disabled="isRunning || isDocGenerating">
+        <span class="btn-icon">📄</span> {{ isDocGenerating ? 'Generating Document...' : 'Generate Report' }}
       </button>
       <!-- <button class="ctrl-btn" @click="$emit('generate-doc-unified')" :disabled="isRunning">
         <span class="btn-icon">📋</span> Generate Document
@@ -34,6 +34,7 @@
 defineProps({
   files: { type: Array, required: true },
   isRunning: { type: Boolean, default: false },
+  isDocGenerating: { type: Boolean, default: false },
 })
 
 defineEmits(['generate-doc', 'generate-doc-unified', 'generate-yaml-doc'])

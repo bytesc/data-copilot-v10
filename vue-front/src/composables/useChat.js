@@ -22,6 +22,7 @@ export function useChat() {
   const messages = ref([])
   const generatedFiles = ref([])
   const statusMsg = ref('')
+  const docGenerating = ref(false)
 
   const serverUrl = ref(import.meta.env.VITE_SERVER_URL || window.location.origin)
 
@@ -690,74 +691,76 @@ function historyToText(history) {
   }
 
   async function generateDocument() {
-    const docMsgId = Date.now()
-    addMessage('stream', 'document', {
-      label: 'Generating Document (Step-by-step)...',
-      content: '',
-      streaming: true,
-      msgId: docMsgId,
-      docParts: [],
-      docOutline: null,
-    })
+    docGenerating.value = true
+    try {
+      const docMsgId = Date.now()
+      addMessage('stream', 'document', {
+        label: 'Generating Document (Step-by-step)...',
+        content: '',
+        streaming: true,
+        msgId: docMsgId,
+        docParts: [],
+        docOutline: null,
+      })
 
-    const events = []
-    let outlineRaw = ''
-    let outlineData = null
-    let partAccumulator = ''
-    let currentPartIdx = -1
-    const completedParts = []
+      const events = []
+      let outlineRaw = ''
+      let outlineData = null
+      let partAccumulator = ''
+      let currentPartIdx = -1
+      const completedParts = []
 
-    const gen = generateDocumentStream({
-      conversation_history: conversationHistory.value,
-      session_id: sessionId.value,
-    })
+      const gen = generateDocumentStream({
+        conversation_history: conversationHistory.value,
+        session_id: sessionId.value,
+      })
 
-    for await (const event of gen) {
-      events.push(event)
-      const phase = event.phase || ''
-      const etype = event.type || ''
-      const content = event.content || ''
+      for await (const event of gen) {
+        events.push(event)
+        const phase = event.phase || ''
+        const etype = event.type || ''
+        const content = event.content || ''
 
-      if (phase === 'outline') {
-        if (etype === 'chunk') {
-          outlineRaw += content
-          updateDocMessage(docMsgId, { outlineGenerating: outlineRaw })
-        } else if (etype === 'done') {
-          outlineData = event.outline || {}
-          updateDocMessage(docMsgId, { docOutline: outlineData, outlineGenerating: null })
-        } else if (etype === 'error') {
-          updateDocMessage(docMsgId, { outlineError: content })
-        }
-      } else if (phase === 'part') {
-        const partIdx = event.part_index ?? -1
-        if (etype === 'msg') {
-          currentPartIdx = partIdx
-          partAccumulator = ''
+        if (phase === 'outline') {
+          if (etype === 'chunk') {
+            outlineRaw += content
+            updateDocMessage(docMsgId, { outlineGenerating: outlineRaw })
+          } else if (etype === 'done') {
+            outlineData = event.outline || {}
+            updateDocMessage(docMsgId, { docOutline: outlineData, outlineGenerating: null })
+          } else if (etype === 'error') {
+            updateDocMessage(docMsgId, { outlineError: content })
+          }
+        } else if (phase === 'part') {
+          const partIdx = event.part_index ?? -1
+          if (etype === 'msg') {
+            currentPartIdx = partIdx
+            partAccumulator = ''
+            updateDocMessage(docMsgId, {
+              currentPartIdx,
+              currentPartHeading: event.heading || `Part ${partIdx + 1}`,
+              completedParts: [...completedParts],
+            })
+          } else if (etype === 'chunk') {
+            partAccumulator += content
+            updateDocMessage(docMsgId, {
+              currentPartIdx,
+              currentPartContent: partAccumulator,
+              completedParts: [...completedParts],
+            })
+          } else if (etype === 'done') {
+            completedParts.push({
+              heading: event.heading || `Part ${partIdx + 1}`,
+              content: partAccumulator,
+            })
+            updateDocMessage(docMsgId, {
+              completedParts: [...completedParts],
+              currentPartIdx: null,
+              currentPartContent: null,
+            })
+          }
+        } else if (phase === 'document' && etype === 'done') {
           updateDocMessage(docMsgId, {
-            currentPartIdx,
-            currentPartHeading: event.heading || `Part ${partIdx + 1}`,
-            completedParts: [...completedParts],
-          })
-        } else if (etype === 'chunk') {
-          partAccumulator += content
-          updateDocMessage(docMsgId, {
-            currentPartIdx,
-            currentPartContent: partAccumulator,
-            completedParts: [...completedParts],
-          })
-        } else if (etype === 'done') {
-          completedParts.push({
-            heading: event.heading || `Part ${partIdx + 1}`,
-            content: partAccumulator,
-          })
-          updateDocMessage(docMsgId, {
-            completedParts: [...completedParts],
-            currentPartIdx: null,
-            currentPartContent: null,
-          })
-        }
-      } else if (phase === 'document' && etype === 'done') {
-updateDocMessage(docMsgId, {
             streaming: false,
             docContent: content,
             downloadUrlMd: event.download_url_md,
@@ -773,53 +776,61 @@ updateDocMessage(docMsgId, {
             downloadUrlPdf: event.download_url_pdf,
             createdAt: Date.now(),
           })
+        }
       }
+    } finally {
+      docGenerating.value = false
     }
   }
 
   async function generateDocumentUnified() {
-    const docMsgId = Date.now()
-    addMessage('stream', 'document', {
-      label: 'Generating Document...',
-      content: '',
-      streaming: true,
-      msgId: docMsgId,
-      docParts: [],
-      docOutline: null,
-    })
+    docGenerating.value = true
+    try {
+      const docMsgId = Date.now()
+      addMessage('stream', 'document', {
+        label: 'Generating Document...',
+        content: '',
+        streaming: true,
+        msgId: docMsgId,
+        docParts: [],
+        docOutline: null,
+      })
 
-    let fullContent = ''
+      let fullContent = ''
 
-    const gen = generateDocumentUnifiedStream({
-      conversation_history: conversationHistory.value,
-      session_id: sessionId.value,
-    })
+      const gen = generateDocumentUnifiedStream({
+        conversation_history: conversationHistory.value,
+        session_id: sessionId.value,
+      })
 
-    for await (const event of gen) {
-      const phase = event.phase || ''
-      const etype = event.type || ''
-      const content = event.content || ''
+      for await (const event of gen) {
+        const phase = event.phase || ''
+        const etype = event.type || ''
+        const content = event.content || ''
 
-      if (phase === 'act' && etype === 'chunk') {
-        fullContent += content
-        updateDocMessage(docMsgId, { outlineGenerating: fullContent })
-      } else if (phase === 'act' && etype === 'done' && event.file_name) {
-        updateDocMessage(docMsgId, {
-          streaming: false,
-          docContent: content,
-          downloadUrlMd: event.download_url_md,
-          downloadUrlDocx: event.download_url_docx,
-          downloadUrlPdf: event.download_url_pdf,
-        })
-        generatedFiles.value.push({
-          id: docMsgId,
-          title: event.title || 'Document',
-          downloadUrlMd: event.download_url_md,
-          downloadUrlDocx: event.download_url_docx,
-          downloadUrlPdf: event.download_url_pdf,
-          createdAt: Date.now(),
-        })
+        if (phase === 'act' && etype === 'chunk') {
+          fullContent += content
+          updateDocMessage(docMsgId, { outlineGenerating: fullContent })
+        } else if (phase === 'act' && etype === 'done' && event.file_name) {
+          updateDocMessage(docMsgId, {
+            streaming: false,
+            docContent: content,
+            downloadUrlMd: event.download_url_md,
+            downloadUrlDocx: event.download_url_docx,
+            downloadUrlPdf: event.download_url_pdf,
+          })
+          generatedFiles.value.push({
+            id: docMsgId,
+            title: event.title || 'Document',
+            downloadUrlMd: event.download_url_md,
+            downloadUrlDocx: event.download_url_docx,
+            downloadUrlPdf: event.download_url_pdf,
+            createdAt: Date.now(),
+          })
+        }
       }
+    } finally {
+      docGenerating.value = false
     }
   }
 
@@ -861,6 +872,7 @@ updateDocMessage(docMsgId, {
     messages,
     generatedFiles,
     statusMsg,
+    docGenerating,
     isRunning,
     isCompleted,
     isPaused,

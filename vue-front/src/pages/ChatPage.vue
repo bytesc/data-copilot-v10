@@ -26,6 +26,7 @@
         v-if="!isRightPanelCollapsed"
         :files="chat.generatedFiles.value"
         :is-running="chat.isRunning.value || yamlBusy"
+        :is-doc-generating="chat.docGenerating.value"
         @generate-doc="chat.generateDocumentUnified()"
         @generate-doc-unified="chat.generateDocument()"
         @generate-yaml-doc="onYamlDoc"
