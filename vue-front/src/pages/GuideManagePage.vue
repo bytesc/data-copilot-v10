@@ -283,6 +283,12 @@ onMounted(fetchItems)
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.guide-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .guide-tab {
@@ -295,6 +301,7 @@ onMounted(fetchItems)
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .guide-tab:hover {

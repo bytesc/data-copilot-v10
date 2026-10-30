@@ -11,7 +11,7 @@
         :key="tab.path"
         :to="tab.path"
         class="sub-nav-link"
-        active-class="sub-nav-link-active"
+        exact-active-class="sub-nav-link-active"
       >
         <span class="sub-nav-icon">{{ tab.icon }}</span>
         {{ tab.label }}
@@ -73,6 +73,12 @@ const tabs = [
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sub-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .sub-nav-link {
@@ -86,6 +92,7 @@ const tabs = [
   border-bottom: 2px solid transparent;
   transition: all 0.2s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .sub-nav-link:hover {
