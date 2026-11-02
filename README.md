@@ -143,15 +143,25 @@ static_path: "http://127.0.0.1:8008/"
 # 静态文件存储目录
 static_folder: "tmp_imgs"
 
-# 大模型配置
-model_name: "deepseek-v4-flash"
-model_url: "https://tokenhub.tencentmaas.com/v1"
+# 大模型配置（多模型，前端可切换，列表第一个为默认）
+llm_models:
+  - id: "deepseek-v4-flash"
+    name: "DeepSeek V4 Flash"          # 自定义模型名称（前端下拉框显示）
+    model: "deepseek-v4-flash"         # 实际调用的模型名称
+    url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
+    key_file: "api_key_openai.txt"     # key 文件名（位于 agent/utils/llm_access/），不填用默认 api_key_openai.txt
+    extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}  # 该模型专属额外请求参数
+  - id: "qwen-max"
+    name: "Qwen Max"
+    model: "qwen-max"
+    url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    key_file: "api_key_qwen.txt"
+    extra_params: {}                   # {} 或删除表示使用模型默认行为
 
-# LLM 额外请求参数（extra_body 透传扩展字段）
+# extra_params 参考（各模型单独配置）：
 # DeepSeek 关闭思考: {"thinking": {"type": "disabled"}}；调强度用 reasoning_effort: low/high/max
 # Qwen3/旧版GLM 用 {"enable_thinking": false}；GLM-4.5/4.6 用 {"thinking": {"type": "disabled"}}
 # OpenAI gpt-5/o 系无法完全关闭，用 {"reasoning_effort": "low"}；设 {} 恢复默认
-llm_extra_params: {"thinking": {"type": "disabled"}}
 
 # 功能开关（设为 false 关闭对应能力）
 enable_mcp: true              # MCP 外部工具集成
@@ -175,7 +185,7 @@ VITE_API_BASE=/api
 
 ### API Key 配置
 
-新建文件 `agent/utils/llm_access/api_key_openai.txt`，填入 API Key。
+每个模型通过 `key_file` 字段指定 key 文件（位于 `agent/utils/llm_access/` 目录，如 `api_key_openai.txt`、`api_key_qwen.txt`），未配置时默认使用 `api_key_openai.txt`。把对应 API Key 填入文件即可。
 
 获取方式：
 - [阿里云百炼](https://bailian.console.aliyun.com/)
@@ -200,7 +210,7 @@ FRONT_PORT=8010 python front.py
 
 | 文档 | 内容 |
 |------|------|
-| [`docs/api.md`](docs/api.md) | 全部 77 个 API 端点说明、请求/响应格式、错误码 |
+| [`docs/api.md`](docs/api.md) | 全部 79 个 API 端点说明、请求/响应格式、错误码 |
 | [`docs/config_and_models.md`](docs/config_and_models.md) | 配置格式（config.yaml / .env）、Pydantic 请求模型、日志表结构、依赖说明、前端构建配置 |
 | [`docs/mcp_servers.md`](docs/mcp_servers.md) | MCP 服务器配置与启动指南（mcp_servers.yaml、测试服务器、新增步骤） |
 | [`docs/sse_event_flow.md`](docs/sse_event_flow.md) | SSE 流式事件类型与数据格式 |

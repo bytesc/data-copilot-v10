@@ -21,7 +21,7 @@ Base URL: `http://<host>:8008`
 
 ### GET `/api/config`
 
-返回功能开关配置。
+返回功能开关配置与模型列表。
 
 **响应** `200`
 ```json
@@ -31,11 +31,54 @@ Base URL: `http://<host>:8008`
   "enable_web_search": true,
   "enable_fetch_url": true,
   "enable_target_knowledge": false,
-  "enable_edit": true
+  "enable_edit": true,
+  "models": [
+    { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "model": "deepseek-v4-flash", "url": "https://tokenhub.tencentmaas.com/v1" },
+    { "id": "qwen-max", "name": "Qwen Max", "model": "qwen-max", "url": "https://dashscope.aliyuncs.com/compatible-mode/v1" }
+  ],
+  "current_model": "deepseek-v4-flash"
 }
 ```
 
 > **`enable_edit`**: 设为 `false` 时，数据管理（`/api/db-overview/`、删表、数据/注释导出、注释编辑、上传）与系统知识管理（`/api/sys-knowledge/*`）等接口全部返回 `403`；前端同时隐藏 Data、Knowledge 页面并拦截其路由。
+
+> **`models` / `current_model`**: 配置的 LLM 模型列表与当前选中的模型 id（默认列表第一个），前端据此渲染模型切换下拉框。
+
+### GET `/api/models/`
+
+返回配置的模型列表与当前选中模型。
+
+**响应** `200`
+```json
+{
+  "models": [
+    { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "model": "deepseek-v4-flash", "url": "https://tokenhub.tencentmaas.com/v1" }
+  ],
+  "current_model": "deepseek-v4-flash"
+}
+```
+
+### POST `/api/models/select/`
+
+切换当前使用的 LLM 模型（全局生效，后续请求使用新模型）。
+
+**请求体** `application/json`
+```json
+{ "id": "qwen-max" }
+```
+
+**响应** `200`
+```json
+{
+  "models": [
+    { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "model": "deepseek-v4-flash", "url": "https://tokenhub.tencentmaas.com/v1" },
+    { "id": "qwen-max", "name": "Qwen Max", "model": "qwen-max", "url": "https://dashscope.aliyuncs.com/compatible-mode/v1" }
+  ],
+  "current_model": "qwen-max"
+}
+```
+
+> **错误**: 模型 id 不存在时返回 `404 {"detail": "Model '<id>' not found"}`。
 
 ### GET `/api/tools/functions`
 

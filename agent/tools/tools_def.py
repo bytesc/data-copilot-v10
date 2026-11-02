@@ -2,7 +2,7 @@ import pandas as pd
 import sqlalchemy
 
 from agent.utils.get_config import config_data
-from agent.utils.llm_access.LLM import get_llm
+from agent.utils.llm_access.LLM import get_llm_dynamic
 from .copilot.data_explanation import get_llm_data_explanation_func
 from .copilot.examples.path_tools import generate_img_path
 from .copilot.utils.read_db import execute_select
@@ -22,7 +22,7 @@ engine = sqlalchemy.create_engine(DATABASE_URL)
 STATIC_URL = config_data['static_path']
 STATIC_FOLDER = config_data.get('static_folder', 'tmp_imgs')
 
-llm = get_llm()
+llm = get_llm_dynamic()
 
 
 

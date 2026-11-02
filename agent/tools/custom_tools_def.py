@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from .copilot.utils.mpl_chinese_font import setup_chinese_font
 setup_chinese_font()
 
-from agent.utils.llm_access.LLM import get_llm
+from agent.utils.llm_access.LLM import get_llm_dynamic
 from .copilot.examples.path_tools import generate_img_path
 
 from .map.get_onemap_minimap import get_onemap_minimap_func
@@ -25,7 +25,7 @@ from .map.search_osm import search_osm_func
 from .llm_analysis.llm_predict_hdb import llm_predict_hdb_func, get_llm_predict_hdb_info
 from .tools_def import engine, STATIC_URL
 
-llm = get_llm()
+llm = get_llm_dynamic()
 
 
 

@@ -1,7 +1,7 @@
 <template>
   <details v-if="message.thinking" class="msg-collapse thinking-block">
     <summary class="collapse-summary">
-      <span class="thinking-summary-label">思考过程</span>
+      <span class="thinking-summary-label">Thinking Process</span>
       <span v-if="message.thinkingStreaming" class="blink-cursor">|</span>
     </summary>
     <div class="collapse-body thinking-content" v-html="renderMd(message.thinking)"></div>

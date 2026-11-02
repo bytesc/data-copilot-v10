@@ -1,5 +1,6 @@
 from utils.get_config import config_data
 from utils.perf_log import record_first_chunk, record_llm_complete, record_llm_input
+from agent.utils.llm_access.LLM import get_model_config
 
 from datetime import datetime
 import os
@@ -29,13 +30,14 @@ def _write_llmlog(question, answer):
 def call_llm(question, llm):
     print("question len : ", len(question))
     record_llm_input(len(question))
+    model_cfg = get_model_config()
     response = llm.chat.completions.create(
-        model=config_data["model_name"],
+        model=model_cfg["model"],
         messages=[
             {"role": "user", "content": question},
         ],
         stream=False,
-        extra_body=config_data.get("llm_extra_params") or {}
+        extra_body=model_cfg.get("extra_params") or {}
     )
     record_llm_complete()
 
@@ -58,13 +60,14 @@ def call_llm_stream_with_reasoning(question, llm):
 def _call_llm_stream_events(question, llm):
     print("question len (stream): ", len(question))
     record_llm_input(len(question))
+    model_cfg = get_model_config()
     response = llm.chat.completions.create(
-        model=config_data["model_name"],
+        model=model_cfg["model"],
         messages=[
             {"role": "user", "content": question},
         ],
         stream=True,
-        extra_body=config_data.get("llm_extra_params") or {}
+        extra_body=model_cfg.get("extra_params") or {}
     )
 
     full_content = ""

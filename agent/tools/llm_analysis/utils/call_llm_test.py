@@ -1,5 +1,6 @@
 from utils.get_config import config_data
 from utils.perf_log import record_llm_complete, record_llm_input
+from agent.utils.llm_access.LLM import get_model_config
 
 from datetime import datetime
 import os
@@ -8,14 +9,15 @@ log_path = "./agent_log.txt"
 
 def call_llm(question, llm):
     record_llm_input(len(question))
+    model_cfg = get_model_config()
     response = llm.chat.completions.create(
-        model=config_data["model_name"],
+        model=model_cfg["model"],
         messages=[
             {"role": "system", "content": "You are a helpful assistant"},
             {"role": "user", "content": question},
         ],
         stream=False,
-        extra_body=config_data.get("llm_extra_params") or {}
+        extra_body=model_cfg.get("extra_params") or {}
     )
 
     record_llm_complete()

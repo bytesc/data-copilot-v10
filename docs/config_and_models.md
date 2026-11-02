@@ -18,11 +18,22 @@ static_path: "http://127.0.0.1:8008/"
 # 静态文件存储目录（相对于项目根）
 static_folder: "tmp_imgs"
 
-# 大模型
-model_name: "deepseek-v4-flash"            # 模型名称，LLM 调用时使用
-model_url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
+# 大模型（多模型配置，前端可选择切换，列表第一个为默认）
+llm_models:
+  - id: "deepseek-v4-flash"              # 唯一标识（默认取 name），供前端切换接口引用
+    name: "DeepSeek V4 Flash"            # 自定义模型名称（前端下拉框显示）
+    model: "deepseek-v4-flash"           # 实际调用的模型名称
+    url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
+    key_file: "api_key_openai.txt"       # key 文件名（agent/utils/llm_access/ 目录下），不填用默认 api_key_openai.txt
+    extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}  # 该模型专属额外请求参数
+  - id: "qwen-max"
+    name: "Qwen Max"
+    model: "qwen-max"
+    url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    key_file: "api_key_qwen.txt"
+    extra_params: {}                     # {} 或删除表示使用模型默认行为
 
-# LLM 额外请求参数（extra_body，透传给 OpenAI 兼容接口的扩展字段）
+# extra_params 说明（各模型单独配置，透传给 OpenAI 兼容接口的扩展字段）：
 # DeepSeek 官方文档（api-docs.deepseek.com/zh-cn/guides/thinking_mode）：
 #   关闭思考  -> {"thinking": {"type": "disabled"}}
 #   思考强度  -> reasoning_effort: "low" / "high" / "max"（默认 high）
@@ -31,7 +42,6 @@ model_url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
 #   GLM-4.5/4.6      -> {"thinking": {"type": "disabled"}}
 #   OpenAI gpt-5/o 系-> 无法完全关闭，用 {"reasoning_effort": "low"}
 # 设 {} 或删除该项则保持模型默认行为
-llm_extra_params: {"thinking": {"type": "disabled"}}
 
 # 功能开关
 enable_mcp: true              # MCP 外部工具

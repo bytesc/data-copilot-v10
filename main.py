@@ -28,6 +28,7 @@ from utils.get_config import config_data
 
 from agent.agent import  generate_and_execute_stream, get_db
 from utils.process_file import process_file_content
+from agent.utils.llm_access.LLM import list_model_configs, set_current_model, get_current_model_id
 from data_access.session_log import record_session_operation, create_session_log_table
 from data_access.observe_log import (
     create_observe_log_tables, log_observe_cycle, log_observe_session,
@@ -143,6 +144,31 @@ async def get_config():
         "enable_fetch_url": config_data.get("enable_fetch_url", True),
         "enable_target_knowledge": config_data.get("enable_target_knowledge", False),
         "enable_edit": _ENABLE_EDIT,
+        "models": list_model_configs(),
+        "current_model": get_current_model_id(),
+    })
+
+
+@app.get("/api/models/")
+async def get_models():
+    return JSONResponse(content={
+        "models": list_model_configs(),
+        "current_model": get_current_model_id(),
+    })
+
+
+class ModelSelectInput(BaseModel):
+    id: str
+
+
+@app.post("/api/models/select/")
+async def select_model(entry: ModelSelectInput):
+    cfg = set_current_model(entry.id)
+    if cfg is None:
+        raise HTTPException(status_code=404, detail=f"Model '{entry.id}' not found")
+    return JSONResponse(content={
+        "models": list_model_configs(),
+        "current_model": cfg["id"],
     })
 
 @app.get("/api/sessions/")

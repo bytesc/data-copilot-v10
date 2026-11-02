@@ -8,15 +8,41 @@ mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys
 static_path: "http://127.0.0.1:8008/"
 static_folder: "tmp_imgs"
 
-model_name: "deepseek-v4-flash"
-# qwen3.7-flash qwen3.8-max
-# glm-4
-# deepseek-chat deepseek-v4-flash deepseek-v4-pro
-# qwen-max
-# gpt-4o-mini
+# Multiple LLM configs: selectable from the frontend; the first model in the list is the default.
+# Fields per model:
+#   name         - custom model display name (shown in the frontend dropdown)
+#   model        - actual model name used in API calls
+#   url          - API base url
+#   key_file     - key file name (located under agent/utils/llm_access/); when omitted, defaults to api_key_openai.txt
+#   id           - unique id (defaults to name; recommended to set explicitly for frontend reference)
+#   extra_params - per-model extra body params (each model configures its own); omit or use {} to keep model default behavior
+# Note: extra body params are now configured per model via the extra_params field in llm_models.
+# DeepSeek official docs (api-docs.deepseek.com/zh-cn/guides/thinking_mode):
+#   disable thinking  -> {"thinking": {"type": "disabled"}}
+#   effort control    -> reasoning_effort: "low" / "high" / "max" (default high)
+# Other providers (may differ, tokenhub may normalize):
+#   Qwen3 / GLM old   -> {"enable_thinking": false}
+#   GLM-4.5/4.6       -> {"thinking": {"type": "disabled"}}
+#   OpenAI gpt-5/o    -> cannot disable, use {"reasoning_effort": "low"}
+# Set to {} / remove to keep model default behavior.
+llm_models:
+  - id: "deepseek-v4-flash"
+    name: "DeepSeek V4 Flash"          # custom model display name
+    model: "deepseek-v4-flash"         # actual model name used in API calls
+    url: "https://tokenhub.tencentmaas.com/v1"
+    key_file: "api_key_openai.txt"     # key file name; defaults if omitted
+    extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}
+  - id: "glm-5.3-flash"
+    name: "glm5.3 flash"                   # custom model display name
+    model: "glm-5.3-flash"
+    url: "https://tokenhub.tencentmaas.com/v1"
+    key_file: "api_key_openai.txt"       # create the corresponding key file in that directory if needed
+    extra_params: {}
 
+# Example model names (qwen3.7-flash qwen3.8-max / glm-4 / deepseek-chat deepseek-v4-flash deepseek-v4-pro / qwen-max / gpt-4o-mini)
+
+# Example urls:
 # model_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-model_url: "https://tokenhub.tencentmaas.com/v1"
 # model_url: "https://llm-giu1hmeshaf2grh0.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
 # https://open.bigmodel.cn/api/paas/v4/
 # https://api.deepseek.com/v1/
@@ -38,14 +64,3 @@ enable_llmlog: false
 
 # enable_perf_log - write API performance metrics to perf_log.csv (time, api_name, total_response_time, llm_first_chunk_time, llm_complete_time, code_exec_time, llm_input_chars)
 enable_perf_log: true
-
-# Extra body params passed to every LLM request.
-# DeepSeek official docs (api-docs.deepseek.com/zh-cn/guides/thinking_mode):
-#   disable thinking  -> {"thinking": {"type": "disabled"}}
-#   effort control    -> reasoning_effort: "low" / "high" / "max" (default high)
-# Other providers (may differ, tokenhub may normalize):
-#   Qwen3 / GLM old   -> {"enable_thinking": false}
-#   GLM-4.5/4.6       -> {"thinking": {"type": "disabled"}}
-#   OpenAI gpt-5/o    -> cannot disable, use {"reasoning_effort": "low"}
-# Set to {} / remove to keep model default behavior.
-llm_extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}

@@ -55,11 +55,15 @@
     <div class="options-section">
       <div class="option-item">
         <label class="option-label">Model</label>
-        <select class="option-select">
-          <option>GPT-4o</option>
-          <option>Claude 3.5</option>
-          <option selected>deepseek-v4-pro</option>
-          <option>deepseek-v4-flash</option>
+        <select
+          class="option-select"
+          v-model="configState.current_model"
+          :disabled="isRunning"
+          @change="onModelChange"
+        >
+          <option v-for="m in configState.models" :key="m.id" :value="m.id">
+            {{ m.name }}
+          </option>
         </select>
       </div>
       <div class="option-item">
@@ -83,7 +87,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { configState, selectModel, restoreSavedModel } from '@/utils/config.js'
 
 defineProps({
   sessionId: { type: String, required: true },
@@ -96,6 +101,14 @@ defineEmits(['resume-session', 'new-session'])
 const pinnedOpen = ref(false)
 const projectsOpen = ref(false)
 const recentsOpen = ref(false)
+
+function onModelChange() {
+  selectModel(configState.current_model)
+}
+
+onMounted(async () => {
+  await restoreSavedModel()
+})
 </script>
 
 <style scoped>
