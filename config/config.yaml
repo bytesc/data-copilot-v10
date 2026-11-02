@@ -30,7 +30,13 @@ llm_models:
     model: "deepseek-v4-flash"         # actual model name used in API calls
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"     # key file name; defaults if omitted
-    extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}
+    extra_params: {"reasoning_effort": "none", "max_tokens": 393216}
+  - id: "deepseek-v4.1-flash"
+    name: "DeepSeek V4.1 Flash"          # custom model display name
+    model: "deepseek-v4.1-flash"         # actual model name used in API calls
+    url: "https://tokenhub.tencentmaas.com/v1"
+    key_file: "api_key_openai.txt"     # key file name; defaults if omitted
+    extra_params: {"reasoning_effort": "none", "max_tokens": 393216}
   - id: "glm-5.3-flash"
     name: "glm5.3 flash"                   # custom model display name
     model: "glm-5.3-flash"

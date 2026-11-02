@@ -28,9 +28,9 @@ def _write_llmlog(question, answer):
 
 
 def call_llm(question, llm):
-    print("question len : ", len(question))
-    record_llm_input(len(question))
     model_cfg = get_model_config()
+    print("question len : ", len(question), " model:", model_cfg["id"])
+    record_llm_input(len(question))
     response = llm.chat.completions.create(
         model=model_cfg["model"],
         messages=[
@@ -58,9 +58,9 @@ def call_llm_stream_with_reasoning(question, llm):
 
 
 def _call_llm_stream_events(question, llm):
-    print("question len (stream): ", len(question))
-    record_llm_input(len(question))
     model_cfg = get_model_config()
+    print("question len (stream): ", len(question), " model:", model_cfg["id"])
+    record_llm_input(len(question))
     response = llm.chat.completions.create(
         model=model_cfg["model"],
         messages=[
