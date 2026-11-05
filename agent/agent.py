@@ -285,7 +285,7 @@ def generate_and_execute_stream(question, tables=None, retries=2,
                 raw_content += chunk
                 yield {"type": "chunk", "sub_type": "code_chunk", "content": chunk, "phase": "act", "sub_phase": "code"}
             if reasoning:
-                yield {"type": "chunk", "sub_type": "reasoning_chunk", "content": reasoning, "phase": "act", "sub_phase": "code"}
+                yield {"type": "reasoning_chunk", "content": reasoning, "phase": "act", "sub_phase": "code"}
 
         code = parse_generated_python_code(raw_content)
         if code is None:

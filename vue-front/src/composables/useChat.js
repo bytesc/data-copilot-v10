@@ -325,7 +325,7 @@ function historyToText(history) {
         continue
       }
 
-      if (event.type === 'reasoning_chunk') {
+      if (event.type === 'reasoning_chunk' || event.sub_type === 'reasoning_chunk') {
         currentReasoning += content
         updateStreamingThinking(msgId, currentReasoning)
         continue
@@ -343,14 +343,16 @@ function historyToText(history) {
         currentSubContent = ''
       }
 
-      if ((etype === 'chunk' || etype === 'code_chunk') && event.sub_type !== 'exec_complete') {
+      if ((etype === 'chunk' || etype === 'code_chunk') && event.sub_type !== 'exec_complete' && event.sub_type !== 'code_complete') {
         currentSubContent += content
         updateStreamingSubPhase(msgId, currentSubPhase, currentSubContent)
       } else if (etype === 'done') {
         updateStreamingSubPhase(msgId, currentSubPhase, currentSubContent, false)
+        updateStreamingThinking(msgId, currentReasoning, false)
         if (event.result) {
           const idx = messages.value.findIndex(m => m.msgId === msgId)
           if (idx !== -1) {
+            messages.value[idx].streaming = false
             Object.assign(messages.value[idx], {
               selected_fields: event.result.selected_fields,
               explore_plan: event.result.explore_plan,
@@ -361,6 +363,9 @@ function historyToText(history) {
               schema_detail: event.content,
               query: event.result.query,
               url: event.result.url,
+              code: event.result.code,
+              result: event.result.exec_result,
+              error: event.result.error,
               search_result: currentSubContent,
               page_content: currentSubContent,
               selected_knowledge_ids: event.result.selected_knowledge_ids,
