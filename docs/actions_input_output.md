@@ -55,6 +55,29 @@
 {"action": "...", ...}
 ```
 
+**可选参数、对应 action 与生效条件**
+
+| 参数 | 可用 action | 必填条件 | 省略/为空时的行为 |
+| --- | --- | --- | --- |
+| `action` | 全部 | 单动作格式必填，与 `actions` 二选一 | 缺少 `actions` 时决策无效 |
+| `actions` | 全部 | 多动作格式必填，与 `action` 二选一 | 与 `action` 同时出现时优先使用 `actions` |
+| `keyword` | explore_schema / explore_functions / explore_base_knowledge / explore_mcp | 可选 | 不附加关注提示，不用于过滤数据 |
+| `funcs` | generate_and_execute | 可选 | 自动选择函数（前端映射为 `selected_functions`） |
+| `research_guide` | generate_and_execute | 可选 | 为空，不提供额外研究提示 |
+| `text` | output_text / ask_question / ask_choice / summary_and_pause / attempt_completion | 前端交互必填 | 缺少时前端无可展示/提问的内容 |
+| `choices` | ask_choice | ask_choice 必填（至少一项） | 其他 action 中无效 |
+| `title` | generate_document | 可选 | 由文档生成器自动生成标题 |
+| `query` | web_search | 建议必填 | 为空时回退使用当前完整上下文作为查询词 |
+| `max_results` | web_search | 可选 | 默认 10，超过 50 按 50 处理 |
+| `url` | fetch_webpage | 建议必填 | 为空时回退使用当前完整上下文作为地址 |
+| `max_length` | fetch_webpage | 可选 | 默认 10000，超过 50000 按 50000 处理 |
+| `server` | exe_mcp | 单工具格式必填，与 `tool` 搭配 | 使用 `tools` 批量格式时忽略 |
+| `tool` | exe_mcp | 单工具格式必填，与 `server` 搭配 | 使用 `tools` 批量格式时忽略 |
+| `params` | exe_mcp | 可选 | 默认 `{}` |
+| `tools` | exe_mcp | 批量格式必填 | 为空时回退到 `server` / `tool` 单工具格式 |
+
+后端只保留上述字段（`agent/action.py` 的 `_parse_action_json`），未列出的字段会被丢弃。
+
 ---
 
 ## 3. explore_schema
