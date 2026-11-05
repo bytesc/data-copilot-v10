@@ -81,14 +81,55 @@ if _ENABLE_BASE_KNOWLEDGE:
 app = FastAPI()
 
 
-@app.middleware("http")
-async def llm_selection_middleware(request: Request, call_next):
-    """从每个请求的头中读取前端当前选择，按请求隔离，不做后端持久化。"""
+def _apply_meta(meta):
+    if not isinstance(meta, dict):
+        return
     apply_request_selection(
-        request.headers.get("x-llm-model"),
-        request.headers.get("x-llm-reasoning-effort"),
-        request.headers.get("x-llm-style"),
+        meta.get("model"),
+        meta.get("reasoning_effort"),
+        meta.get("style"),
     )
+
+
+def _apply_meta_json(raw):
+    if not raw:
+        return
+    try:
+        _apply_meta(json.loads(raw))
+    except (TypeError, ValueError):
+        pass
+
+
+@app.middleware("http")
+async def unified_request_envelope(request: Request, call_next):
+    """解析 {meta, data} 信封：meta 用于本次 LLM 调用，data 原样交给原有接口。"""
+    content_type = request.headers.get("content-type", "").lower()
+    if request.method in ("POST", "PUT", "PATCH") and content_type.startswith("application/json"):
+        body = await request.body()
+        try:
+            payload = json.loads(body) if body else None
+        except (TypeError, ValueError):
+            payload = None
+        if not (
+            isinstance(payload, dict)
+            and isinstance(payload.get("meta"), dict)
+            and "data" in payload
+        ):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": 'Request body must be JSON: {"meta": {...}, "data": {...}}'
+                },
+            )
+        _apply_meta(payload["meta"])
+        inner = json.dumps(payload["data"], ensure_ascii=False).encode("utf-8")
+        request._body = inner
+        headers = [
+            (k, v) for k, v in request.scope["headers"]
+            if k.lower() != b"content-length"
+        ]
+        headers.append((b"content-length", str(len(inner)).encode()))
+        request.scope["headers"] = headers
     return await call_next(request)
 
 
@@ -787,9 +828,11 @@ async def upload_csv(
 @app.post("/upload-txt/")
 async def upload_txt(
         file: UploadFile = File(..., description="支持 txt, doc, docx, pdf 文件"),
-        table_name: str = Form("uploaded_data")
+        table_name: str = Form("uploaded_data"),
+        meta: Optional[str] = Form(None)
 ):
     _require_edit_enabled()
+    _apply_meta_json(meta)
     allowed_extensions = {'.txt', '.doc', '.docx', '.pdf'}
     file_extension = file.filename[file.filename.rfind('.'):].lower()
 

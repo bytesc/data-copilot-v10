@@ -165,10 +165,9 @@ def set_current_model(model_id):
     cfg = get_model_config(model_id)
     if cfg is None:
         return None
-    if cfg["id"] != get_current_model_id():
-        _current_reasoning_effort_var.set(_default_reasoning_effort(cfg))
-        _current_style_var.set(_default_style(cfg))
     _current_model_id_var.set(cfg["id"])
+    _current_reasoning_effort_var.set(_default_reasoning_effort(cfg))
+    _current_style_var.set(_default_style(cfg))
     with _lock:
         _clients.pop(cfg["id"], None)
     return cfg
