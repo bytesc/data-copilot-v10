@@ -2,13 +2,23 @@
 
 `conversation_history` 是一个 JSON 数组，按发生顺序记录用户输入与 Agent 各阶段输出。数组元素统一为对象，基础字段为 `role`、`type`，其余字段随类型不同而不同。
 
-- `conversation_history`：完整历史，保存全部条目。
-- `trimmed_context`：按保留策略裁剪后的历史，实际送给 LLM 的上下文；结构与本文件完全一致，只是条目数量更少（见文末「裁剪规则」）。
+逻辑上分为两部分：
+
+- **blackboard 条目**：完整搜索结果，固定在数组第一个位置，包含 DB schema、函数文档、业务知识、MCP 工具详情。
+- **普通条目**：用户输入、`think`、`action_decision`、`act` 元数据、`observe` 等。
+
+数据库中的两份数据：
+
+- `conversation_history`：完整历史，包含 blackboard。
+- `trimmed_context`：按保留策略裁剪后的普通条目，**不包含 blackboard**；实际送给 LLM 的上下文文本由它经 `history_to_text` 生成。
+
+blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独提取成 `## Blackboard` 段，注入所有 LLM 阶段。
 
 基础形态：
 
 ```json
 [
+  {"role": "system", "type": "blackboard", "regions": {"schema": {}, "functions": {}, "knowledge": {}, "mcp": {}}},
   {"role": "user", "type": "question", "content": "..."},
   {"role": "assistant", "type": "think", "content": {"description": "...", "todo": ["..."]}},
   {"role": "assistant", "type": "action_decision", "content": {"action": "..."}},
@@ -27,6 +37,35 @@
 
 ```json
 [
+  {
+    "role": "system",
+    "type": "blackboard",
+    "regions": {
+      "schema": {
+        "selected_fields": {},
+        "explore_plan": "探索计划",
+        "selected_guides": [],
+        "query_guide_content": "查询指南",
+        "schema_detail": "数据库结构"
+      },
+      "functions": {
+        "selected_functions": ["exe_sql"],
+        "explore_plan": "探索计划",
+        "func_docs": "函数文档"
+      },
+      "knowledge": {
+        "selected_knowledge_ids": [1, 2],
+        "knowledge_content": "知识内容",
+        "summary": "摘要"
+      },
+      "mcp": {
+        "selected_tools": [],
+        "explore_plan": "探索计划",
+        "tool_detail": "工具详情",
+        "catalog": "工具目录"
+      }
+    }
+  },
   {
     "role": "user",
     "type": "question",
@@ -67,24 +106,20 @@
     "action": "explore_schema",
     "selected_fields": {},
     "explore_plan": "探索计划",
-    "schema_detail": "数据库结构",
-    "selected_guides": [],
-    "query_guide_content": "查询指南"
+    "selected_guides": []
   },
   {
     "role": "assistant",
     "type": "act",
     "action": "explore_functions",
     "selected_functions": ["exe_sql"],
-    "explore_plan": "探索计划",
-    "func_docs": "函数文档"
+    "explore_plan": "探索计划"
   },
   {
     "role": "assistant",
     "type": "act",
     "action": "explore_base_knowledge",
     "selected_knowledge_ids": [1, 2],
-    "knowledge_content": "知识内容",
     "summary": "摘要"
   },
   {
@@ -132,8 +167,7 @@
     "type": "act",
     "action": "explore_mcp",
     "selected_tools": [],
-    "explore_plan": "探索计划",
-    "tool_detail": "工具详情"
+    "explore_plan": "探索计划"
   },
   {
     "role": "assistant",
@@ -211,13 +245,64 @@
 ]
 ```
 
+## blackboard
+
+blackboard 是完整 history 的第一个元素，保存 explore 类动作选中的完整搜索结果。各 explore action 只把参数/计划/选中项写入对应的 `act` 条目，完整内容统一写入 blackboard 的四个区域。
+
+```json
+{
+  "role": "system",
+  "type": "blackboard",
+  "regions": {
+    "schema": {
+      "selected_fields": {"table": ["col1"]},
+      "explore_plan": "...",
+      "selected_guides": [1, 3],
+      "query_guide_content": "...",
+      "schema_detail": "..."
+    },
+    "functions": {
+      "selected_functions": ["exe_sql"],
+      "explore_plan": "...",
+      "func_docs": "..."
+    },
+    "knowledge": {
+      "selected_knowledge_ids": [1, 2],
+      "knowledge_content": "...",
+      "summary": "..."
+    },
+    "mcp": {
+      "selected_tools": [{"server": "calculator", "name": "calculate"}],
+      "explore_plan": "...",
+      "tool_detail": "...",
+      "catalog": "..."
+    }
+  }
+}
+```
+
+| 区域 | 写入 action | 字段 |
+| --- | --- | --- |
+| `schema` | `explore_schema` | `selected_fields`, `explore_plan`, `selected_guides`, `query_guide_content`, `schema_detail` |
+| `functions` | `explore_functions` | `selected_functions`, `explore_plan`, `func_docs` |
+| `knowledge` | `explore_base_knowledge` | `selected_knowledge_ids`, `knowledge_content`, `summary` |
+| `mcp` | `explore_mcp` | `selected_tools`, `explore_plan`, `tool_detail`, `catalog` |
+
+blackboard 由 `utils/blackboard.py` 维护：
+
+- `update_blackboard()`：explore 动作完成后写入对应区域
+- `replace_blackboard()`：保证 history 中只有一个 blackboard 条目，并固定在第一个位置
+- `get_blackboard()`：从完整 history 读取
+- `blackboard_section()`：渲染为 `## Blackboard` 提示词段
+
 ## 通用字段
 
 | 字段 | 说明 |
 | --- | --- |
-| `role` | `user` 或 `assistant` |
-| `type` | 条目类型：`question` / `choice` / `response` / `input` / `think` / `action_decision` / `act` / `observe` / `document` |
+| `role` | `user`、`assistant` 或 `system`（仅 blackboard） |
+| `type` | 条目类型：`question` / `choice` / `response` / `input` / `think` / `action_decision` / `act` / `observe` / `document` / `blackboard` |
 | `content` | `think`、`action_decision`、`observe`、用户输入和 `document` 的载荷 |
+| `regions` | 仅 `type:"blackboard"` 使用，包含 `schema` / `functions` / `knowledge` / `mcp` 四个区域 |
 | `action` | 仅 `type:"act"` 使用，表示具体动作名 |
 | `text` | 前端交互类动作的展示文本 |
 
@@ -284,31 +369,37 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 
 ## act
 
-`type:"act"` 是动作执行结果。除 `explore_schema` 等带详细字段的条目外，都可能带有 `action` 字段。
+`type:"act"` 是动作执行结果。explore_* 条目只保存参数、计划和选中项；完整搜索结果保存在 blackboard，不写入 act 条目。
 
 ### explore_schema
 
 ```json
 {"role":"assistant","type":"act","action":"explore_schema",
  "selected_fields":{"table1":["col1","col2"],"table2":[]},
- "explore_plan":"...","schema_detail":"...",
- "selected_guides":[1,3,7],"query_guide_content":"### Rule: Find companies by topic\n..."}
+ "explore_plan":"...",
+ "selected_guides":[1,3,7]}
 ```
+
+完整 `schema_detail` 与 `query_guide_content` 保存在 `blackboard.regions.schema`，不写入 act 条目。
 
 ### explore_base_knowledge
 
 ```json
 {"role":"assistant","type":"act","action":"explore_base_knowledge",
- "selected_knowledge_ids":[1,3,7],"knowledge_content":"### Rule: ...\n...",
+ "selected_knowledge_ids":[1,3,7],
  "summary":"The user's question relates to..."}
 ```
+
+完整 `knowledge_content` 保存在 `blackboard.regions.knowledge`。
 
 ### explore_functions
 
 ```json
 {"role":"assistant","type":"act","action":"explore_functions",
- "selected_functions":["exe_sql","load_data"],"explore_plan":"...","func_docs":"..."}
+ "selected_functions":["exe_sql","load_data"],"explore_plan":"..."}
 ```
+
+完整 `func_docs` 保存在 `blackboard.regions.functions`。
 
 ### generate_and_execute — 成功
 
@@ -358,9 +449,10 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 ```json
 {"role":"assistant","type":"act","action":"explore_mcp",
  "selected_tools":[{"server":"calculator","name":"calculate"},...],
- "tool_detail":"格式化后的 markdown 选中工具展示",
  "explore_plan":"..."}
 ```
+
+完整 `tool_detail` / `catalog` 保存在 `blackboard.regions.mcp`。
 
 上下文格式：
 
@@ -368,8 +460,6 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 [ACT explore_mcp] selected_tools: [{"server":"calculator","name":"calculate"},...]
 [ACT explore_mcp] explore_plan:
 {plan}
-[ACT explore_mcp] tool_detail:
-{tool_detail}
 ```
 
 ### exe_mcp
@@ -443,7 +533,7 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 
 ## 上下文渲染
 
-送给 LLM 前，由 `utils/front_utils.py` 的 `history_to_text` 将数组转成纯文本：
+送给 LLM 前，由 `utils/front_utils.py` 的 `history_to_text` 将裁剪后的普通条目转成纯文本。遇到 `type:"blackboard"` 时直接跳过，不进入上下文文本。
 
 | 条目 | 渲染结果 |
 | --- | --- |
@@ -455,12 +545,64 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 | `action_decision` | `[ACTION] content:\n{content}` |
 | `act` | `[ACT {action}] ...` 各字段按行输出 |
 | `observe` | `[OBSERVE] content:\n{content}` |
+| `blackboard` | 跳过，由 blackboard_section 单独渲染 |
 
 `content` 为对象时使用 `json.dumps(..., ensure_ascii=False)` 序列化。
 
+## blackboard 渲染
+
+`utils/blackboard.py` 的 `blackboard_section(conversation_history)` 从完整 history 中读取 blackboard，渲染成独立的 `## Blackboard` 段：
+
+```text
+## Blackboard
+
+### DB
+selected_fields:
+{"table": ["col1"]}
+explore_plan:
+...
+selected_guides:
+[1, 3]
+query_guide_content:
+...
+schema_detail:
+...
+
+### FUNC
+selected_functions:
+["exe_sql"]
+explore_plan:
+...
+func_docs:
+...
+
+### KNOWLEDGE
+selected_knowledge_ids:
+[1, 2]
+knowledge_content:
+...
+summary:
+...
+
+### MCP
+selected_tools:
+[{"server": "calculator", "name": "calculate"}]
+explore_plan:
+...
+tool_detail:
+...
+catalog:
+...
+```
+
+该段会注入到所有 LLM 阶段：Think、Action、Observe、Act explore_*、generate_and_execute、文档生成。
+
 ## 裁剪规则
 
-`utils/context_trim.py` 的 `trim_conversation_history` 从数组末尾向前按类别计数保留，`user` 条目始终保留。`trimmed_context` 即裁剪结果。
+`utils/context_trim.py` 的 `trim_conversation_history` 从数组末尾向前按类别计数保留，`user` 条目始终保留。`trimmed_context` 即普通条目的裁剪结果。
+
+- `blackboard` 条目**直接跳过**，不进入 `trimmed_context`；它始终从完整 `conversation_history` 单独读取。
+- 所有 LLM 阶段使用 `prepare_trimmed_context` 重新裁剪，而不是直接读取数据库里的 `trimmed_context` 列。
 
 | 类别 | 保留条数 |
 | --- | --- |
@@ -469,19 +611,38 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 | generate_and_execute 代码 | 1 |
 | generate_and_execute 失败 | 1 |
 | generate_and_execute 结果 | 999（永久） |
-| explore_schema / explore_functions / explore_base_knowledge / explore_mcp | 999（永久） |
+| explore_schema | 3 |
+| explore_functions | 3 |
+| explore_base_knowledge | 3 |
+| explore_mcp | 3 |
 | web_search / fetch_webpage | 3 |
 | exe_mcp | 999（永久） |
 | output_text / ask_question / ask_choice / summary_and_pause / attempt_completion | 999（永久） |
 | generate_document | 1 |
-| observe | 3 |
+| observe（默认） | 5 |
 | 未匹配类别 | 999（永久） |
+| blackboard | 不参与裁剪（不进入 trimmed_context） |
+
+## 各阶段使用方式
+
+每个 LLM 阶段同时接收两部分：`## Context`（裁剪后的普通条目）和 `## Blackboard`（完整搜索内容）。
+
+| 阶段 | 上下文 | blackboard |
+| --- | --- | --- |
+| Think | `history_to_text(prepare_trimmed_context(...))` | `blackboard_section(conversation_history)` |
+| Action | 同上 | 同上 |
+| Observe | 同上 | 同上 |
+| Act explore_schema / explore_functions / explore_base_knowledge / explore_mcp | 同上 | 同上 |
+| Act generate_and_execute | 同上 | 同上 |
+| 文档生成 / YAML 生成 | 同上（先裁剪） | 同上 |
+
+文档生成虽然使用完整 `conversation_history` 作为输入，但在拼接 prompt 前会先调用 `prepare_trimmed_context`，因此同样只使用裁剪后的上下文。
 
 ## 存储
 
 完整历史与裁剪后上下文保存在 `observe_session_log` 表：
 
 ```sql
-conversation_history LONGTEXT  -- 完整上下文（JSON 数组）
-trimmed_context      LONGTEXT  -- 裁剪后的上下文（JSON 数组）
+conversation_history LONGTEXT  -- 完整历史（JSON 数组，含 blackboard）
+trimmed_context      LONGTEXT  -- 裁剪后的普通上下文（JSON 数组，不含 blackboard）
 ```

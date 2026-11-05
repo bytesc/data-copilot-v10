@@ -127,6 +127,8 @@ elif action == "my_new_action":
         lines.append(f"[ACT my_new_action] Result:\n{entry['result']}")
 ```
 
+> 如果新 action 属于探索类并会产生大段搜索结果，不要写入 act 条目，应按照 `explore_schema` / `explore_functions` / `explore_base_knowledge` / `explore_mcp` 的方式写入 blackboard，并在 `blackboard_section` 中渲染。否则搜索结果会进入上下文并造成重复。
+
 ### 6. 前端 `useChat.js` — 参数传递
 
 在 `runActPhase` 的 `params` 对象中传递新参数：

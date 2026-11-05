@@ -341,8 +341,8 @@ question             LONGTEXT         -- 用户初始问题
 status               VARCHAR(50)      -- 会话状态
 total_cycles         INT              -- 总循环次数
 total_tokens         INT              -- 总 token 消耗
-conversation_history LONGTEXT         -- 完整上下文（JSON 数组）
-trimmed_context      LONGTEXT         -- 裁剪后的上下文（JSON 数组）
+conversation_history LONGTEXT         -- 完整历史（JSON 数组，含 blackboard）
+trimmed_context      LONGTEXT         -- 裁剪后的普通上下文（JSON 数组，不含 blackboard）
 created_at           DATETIME
 updated_at           DATETIME
 ```

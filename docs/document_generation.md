@@ -18,6 +18,37 @@
 
 ---
 
+## 上下文与 Blackboard
+
+所有文档生成入口在拼接 prompt 前都会：
+
+1. 调用 `prepare_trimmed_context(session_id, conversation_history)` 裁剪普通历史
+2. 调用 `history_to_text(trimmed)` 生成 `Conversation History` 文本
+3. 调用 `blackboard_section(conversation_history)` 生成 `## Blackboard` 段
+
+因此文档生成 prompt 中同时包含：
+
+```text
+Conversation History:
+<裁剪后的普通历史>
+
+## Blackboard
+
+### DB
+...
+### FUNC
+...
+### KNOWLEDGE
+...
+### MCP
+...
+```
+
+- blackboard 不进入 `trimmed_context`，由 `blackboard_section` 独立注入。
+- 覆盖：Generate Report（outline / part）、Generate Document（unified）、YAML Outline、YAML 分段生成。
+
+---
+
 ## YAML Outline 模式 — 接口流程
 
 ### 1. 弹窗打开（恢复面板）

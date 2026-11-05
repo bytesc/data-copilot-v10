@@ -2,7 +2,56 @@
 
 ## 概述
 
-系统通过两类知识源向 LLM prompt 注入上下文：**MD 文件**（启动时加载，重启更新）和 **数据库表**（每次实时查询，无需重启）。注入点分布在 `Think → Action → Act → Observe` 的各个阶段。
+系统通过三类来源向 LLM prompt 注入上下文：**MD 文件**（启动时加载，重启更新）、**数据库表**（每次实时查询，无需重启）和 **blackboard**（完整 history 中的探索结果）。注入点分布在 `Think → Action → Act → Observe` 的各个阶段。
+
+---
+
+## Blackboard 注入（所有阶段）
+
+`conversation_history` 的第一个元素是 blackboard 条目，保存 `explore_schema` / `explore_functions` / `explore_base_knowledge` / `explore_mcp` 的完整搜索结果。`utils/blackboard.py::blackboard_section()` 会将它渲染成独立段落：
+
+```text
+## Blackboard
+
+### DB
+selected_fields:
+...
+query_guide_content:
+...
+schema_detail:
+...
+
+### FUNC
+selected_functions:
+...
+func_docs:
+...
+
+### KNOWLEDGE
+selected_knowledge_ids:
+...
+knowledge_content:
+...
+
+### MCP
+selected_tools:
+...
+tool_detail:
+...
+catalog:
+...
+```
+
+该段会追加到以下所有阶段：
+
+- Think
+- Action
+- Observe
+- Act explore_schema / explore_functions / explore_base_knowledge / explore_mcp
+- Act generate_and_execute
+- 文档生成（outline / part / unified / YAML outline / YAML section）
+
+普通历史条目由 `prepare_trimmed_context` 裁剪后经 `history_to_text` 渲染成 `## Context`，其中 **不包含 blackboard**，因此两部分不会重复注入。
 
 ---
 
@@ -94,7 +143,7 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 
 **文件：** `agent/think.py`
 
-**注入的变量：** `TARGET`, `THINK_KNOWLEDGE`, `BRIEF_INFO`
+**注入的变量：** `TARGET`, `THINK_KNOWLEDGE`, `BRIEF_INFO`, `Blackboard`
 
 **注入方式：** f-string 直接嵌入
 
@@ -107,6 +156,7 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 ├── MCP Brief → MD + brief_info.mcp_brief
 ├── Function Brief → 代码硬编码
 └── Custom Function Brief → MD + brief_info.custom_func_brief
+{Blackboard}              → blackboard_section(conversation_history)
 ```
 
 **功能：** Think 阶段生成 todo list 分析计划。各 Brief 提供基础概览，详细业务知识通过 `explore_base_knowledge` action 按需获取。
@@ -117,12 +167,13 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 
 **文件：** `agent/action.py`
 
-**注入的变量：** `BRIEF_INFO`
+**注入的变量：** `BRIEF_INFO`, `Blackboard`
 
 **注入方式：** f-string 直接嵌入
 
 ```
 {BRIEF_INFO}              → 聚合：DB_BRIEF + BASE_KNOWLEDGE_BRIEF + MCP_BRIEF + FUNCTION_BRIEF + CUSTOM_FUNC_BRIEF
+{Blackboard}              → blackboard_section(conversation_history)
 ```
 
 此外通过 `get_db_summary_for_agent()` 和 `get_func_summary_for_agent()` 动态获取数据库摘要和函数目录。
@@ -135,7 +186,7 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 
 **文件：** `agent/act.py` → `_act_explore_schema()`
 
-**注入的变量：** `DB_BRIEF`, `DB_QUERY_GUIDE`
+**注入的变量：** `DB_BRIEF`, `DB_QUERY_GUIDE`, `Blackboard`
 
 **注入方式：** f-string 直接嵌入
 
@@ -143,6 +194,7 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 {DB_BRIEF}                → MD db_brief.md + DB brief_info 表
 {DB_QUERY_GUIDE}          → MD db_query_guide.md + DB db_query_guide 表（内容为空时不显示标签）
 + full_schema             → 动态查询的数据库结构
+{Blackboard}              → blackboard_section(conversation_history)
 ```
 
 **功能：** 分析用户问题，筛选出所需的数据库表和字段。
@@ -153,9 +205,9 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 
 **文件：** `agent/act.py` → `_act_explore_functions()`
 
-**注入的变量：** 无（不使用知识库变量）
+**注入的变量：** `Blackboard`
 
-**注入方式：** 通过 `search_func_by_keyword()` 或 `get_func_catalog_markdown()` 获取函数目录
+**注入方式：** 通过 `search_func_by_keyword()` 或 `get_func_catalog_markdown()` 获取函数目录，并追加 `blackboard_section(conversation_history)`
 
 **功能：** 搜索和筛选可用函数。
 
@@ -165,13 +217,14 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 
 **文件：** `agent/act.py` → `_act_explore_base_knowledge()`
 
-**注入的变量：** `BASE_KNOWLEDGE_BRIEF`
+**注入的变量：** `BASE_KNOWLEDGE_BRIEF`, `Blackboard`
 
 **注入方式：** f-string 直接嵌入
 
 ```
 {BASE_KNOWLEDGE_BRIEF}    → MD + brief_info.base_knowledge_brief
 + knowledge_text          → get_base_knowledge_db()  ← 仅 base_knowledge 表
+{Blackboard}              → blackboard_section(conversation_history)
 ```
 
 **功能：** 查询业务知识并筛选出相关的条目。doc_guide、think_guide、code_guide 不再由此阶段注入。
@@ -182,14 +235,15 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 
 **文件：** `agent/agent.py` → `get_cot_code_prompt()`
 
-**注入的变量：** `BASE`, `TARGET`
+**注入的变量：** `BASE`, `TARGET`, `Blackboard`
 
 **注入方式：** 字符串拼接
 
 ```python
 cot_prompt = pre_prompt + function_prompt + function_info +
              module_prompt + example_code + remind_prompt +
-             database + knowledge + target_section + research_section + question
+             database + knowledge + blackboard_section +
+             target_section + research_section + question
 ```
 
 各部分说明：
@@ -198,7 +252,8 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 |----------|------|------|
 | `knowledge` | `BASE` + `code_guide` + `graph_code_guide` | MD base_knowledge.md + DB base_knowledge 表 + DB code_guide 表 + DB graph_code_guide 表 |
 | `target_section` | `TARGET` | MD target_knowledge.md（有内容时注入） |
-| `database` | `get_db_info_prompt()` | 数据库表结构（仅当选择了查询函数时注入） |
+| `database` | `get_db_info_prompt()` | 数据库表结构；若 blackboard 已有 `schema_detail` 则跳过，避免重复 |
+| `blackboard_section` | `blackboard_section(conversation_history)` | 完整探索结果（DB / FUNC / KNOWLEDGE / MCP） |
 | `function_info` | `FUNCTION_DICT` | 选中函数的完整 docstring |
 | `research_guide` | Action 阶段传入 | 自然语言描述需要生成的图表和数据 |
 
@@ -215,7 +270,7 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 - **分步生成** (`_event_stream_generate_document`): 先由 LLM 生成大纲，再逐部分生成
 - **统一生成** (`_event_stream_generate_document_unified`): 一次完整生成
 
-**两个路径均注入变量：** `BASE`, `DOC`, `TARGET`
+**两个路径均注入变量：** `BASE`, `DOC`, `TARGET`, `Blackboard`
 
 **注入方式：** f-string 直接嵌入
 
@@ -223,7 +278,10 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 {BASE}                    → MD base_knowledge.md + DB base_knowledge 表
 {DOC}                     → MD doc_guide.md + DB doc_guide 表
 {TARGET}                  → MD target_knowledge.md（有内容时注入）
+{Blackboard}              → blackboard_section(conversation_history)
 ```
+
+上下文部分先经 `prepare_trimmed_context` 裁剪，再由 `history_to_text` 渲染；blackboard 单独注入。
 
 **功能：** 生成业务摘要文档（MD + DOCX + PDF）。`DOC` 提供文档格式参考，`BASE` 提供数据背景，`TARGET` 提供目标模板。
 
@@ -233,12 +291,13 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 **文件：** `agent/observe.py`
 
-**注入的变量：** `TARGET`
+**注入的变量：** `TARGET`, `Blackboard`
 
 **注入方式：** f-string 直接嵌入
 
 ```
 {TARGET}                  → MD target_knowledge.md（有内容时注入）
+{Blackboard}              → blackboard_section(conversation_history)
 ```
 
 **功能：** 审查执行结果，判断是否达到目标模板要求，更新 todo list。
@@ -247,16 +306,17 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 ## 总结：各功能注入的变量
 
-| 功能 | 文件 | 注入变量 | 来源 |
-|------|------|----------|------|
-| **Think** | `think.py` | `TARGET`, `THINK_KNOWLEDGE`, `BRIEF_INFO`（含 DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / FUNCTION_BRIEF / CUSTOM_FUNC_BRIEF） | MD + DB + 代码硬编码 |
-| **Action** | `action.py` | `BRIEF_INFO`（含 DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / FUNCTION_BRIEF / CUSTOM_FUNC_BRIEF） | MD + DB + 代码硬编码 |
-| **Act - explore_schema** | `act.py` | `DB_BRIEF`, `DB_QUERY_GUIDE` | MD + DB |
-| **Act - explore_functions** | `act.py` | 无 | 动态查询 |
-| **Act - explore_base_knowledge** | `act.py` | `BASE_KNOWLEDGE_BRIEF`, `base_knowledge` 表（仅此一张表） | MD + DB |
-| **Act - generate_and_execute** | `agent.py` | `BASE`, `code_guide`, `graph_code_guide`, `TARGET` | MD + DB |
-| **Act - generate_document** | `document_generator.py` | `BASE`, `DOC`, `TARGET` | MD + DB |
-| **Observe** | `observe.py` | `TARGET` | MD |
+| 功能 | 文件 | 注入变量 | Blackboard | 来源 |
+|------|------|----------|-----------|------|
+| **Think** | `think.py` | `TARGET`, `THINK_KNOWLEDGE`, `BRIEF_INFO`（含 DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / FUNCTION_BRIEF / CUSTOM_FUNC_BRIEF） | ✅ | MD + DB + 代码硬编码 + blackboard |
+| **Action** | `action.py` | `BRIEF_INFO`（含 DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / FUNCTION_BRIEF / CUSTOM_FUNC_BRIEF） | ✅ | MD + DB + 代码硬编码 + blackboard |
+| **Act - explore_schema** | `act.py` | `DB_BRIEF`, `DB_QUERY_GUIDE` | ✅ | MD + DB + blackboard |
+| **Act - explore_functions** | `act.py` | 无 | ✅ | 动态查询 + blackboard |
+| **Act - explore_base_knowledge** | `act.py` | `BASE_KNOWLEDGE_BRIEF`, `base_knowledge` 表（仅此一张表） | ✅ | MD + DB + blackboard |
+| **Act - explore_mcp** | `act.py` | `MCP_BRIEF`, MCP 工具目录 | ✅ | MD + DB + blackboard |
+| **Act - generate_and_execute** | `agent.py` | `BASE`, `code_guide`, `graph_code_guide`, `TARGET` | ✅ | MD + DB + blackboard |
+| **Act - generate_document** | `document_generator.py` | `BASE`, `DOC`, `TARGET` | ✅ | MD + DB + blackboard |
+| **Observe** | `observe.py` | `TARGET` | ✅ | MD + blackboard |
 
 ---
 
@@ -328,6 +388,8 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
                        一张表）  {TARGET}
 ```
 
+> 上图为 MD/DB 知识源。blackboard 是独立的第三类来源：从完整 `conversation_history` 读取，经 `blackboard_section` 注入所有阶段，不经过 `trimmed_context`。
+
 ---
 
 ## 相关文件索引
@@ -345,6 +407,9 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 | `agent/agent.py` | 代码生成阶段 prompt 构建（generate_and_execute） |
 | `agent/document_generator.py` | 文档生成阶段 prompt 构建（分步 + 统一两种模式） |
 | `agent/observe.py` | Observe 阶段 prompt 构建 |
+| `utils/blackboard.py` | blackboard 存储、读取与 `## Blackboard` prompt 渲染 |
+| `utils/context_trim.py` | 裁剪普通历史（跳过 blackboard） |
+| `utils/front_utils.py` | `history_to_text`：普通条目渲染（跳过 blackboard） |
 | `data_access/brief_info_db.py` | `brief_info` 表定义 |
 | `data_access/code_guide_db.py` | `code_guide` 表定义 |
 | `data_access/graph_code_guide_db.py` | `graph_code_guide` 表定义 |

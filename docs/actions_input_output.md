@@ -5,6 +5,8 @@
 
 每个环节记录三项：**输入**（LLM 决策输出的 JSON / API 入参）、**输出**（写入 `conversation_history` 的条目）、**上下文**（`history_to_text` 转换后喂给 LLM 的文本）。
 
+> 除下文列出的上下文外，每个 LLM 阶段还会额外注入独立的 `## Blackboard` 段（`blackboard_section(conversation_history)`），用于提供完整的 DB schema、函数文档、业务知识和 MCP 工具详情。blackboard 不进入 `history_to_text`，详见 `docs/conversation_history_structure.md`。
+
 ---
 
 ## 1. Think
@@ -90,7 +92,12 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 **输出**
 ```json
-{"role":"assistant","type":"act","action":"explore_schema","selected_fields":{...},"explore_plan":"...","schema_detail":"...","selected_guides":[...],"query_guide_content":"..."}
+{"role":"assistant","type":"act","action":"explore_schema","selected_fields":{...},"explore_plan":"...","selected_guides":[...]}
+```
+
+**Blackboard 写入**
+```json
+{"regions":{"schema":{"selected_fields":{...},"explore_plan":"...","selected_guides":[...],"query_guide_content":"...","schema_detail":"..."}}}
 ```
 
 **上下文**
@@ -99,11 +106,9 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 [ACT explore_schema] explore_plan:
 {plan}
 [ACT explore_schema] selected_guides: [1, 3, 7]
-[ACT explore_schema] query_guide_content:
-{query_guide_content}
-[ACT explore_schema] schema_detail:
-{schema_detail}
 ```
+
+完整 `schema_detail` / `query_guide_content` 只保存在 blackboard，并通过 `## Blackboard` 段注入所有 LLM 阶段。
 
 ---
 
@@ -117,17 +122,22 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 **输出**
 ```json
-{"role":"assistant","type":"act","action":"explore_base_knowledge","selected_knowledge_ids":[...],"knowledge_content":"...","summary":"..."}
+{"role":"assistant","type":"act","action":"explore_base_knowledge","selected_knowledge_ids":[...],"summary":"..."}
+```
+
+**Blackboard 写入**
+```json
+{"regions":{"knowledge":{"selected_knowledge_ids":[...],"knowledge_content":"...","summary":"..."}}}
 ```
 
 **上下文**
 ```
 [ACT explore_base_knowledge] selected_knowledge_ids: [1, 3, 7]
-[ACT explore_base_knowledge] knowledge_content:
-{knowledge_content}
 [ACT explore_base_knowledge] summary:
 {summary}
 ```
+
+完整 `knowledge_content` 只保存在 blackboard。
 
 ---
 
@@ -141,7 +151,12 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 **输出**
 ```json
-{"role":"assistant","type":"act","action":"explore_functions","selected_functions":[...],"explore_plan":"...","func_docs":"..."}
+{"role":"assistant","type":"act","action":"explore_functions","selected_functions":[...],"explore_plan":"..."}
+```
+
+**Blackboard 写入**
+```json
+{"regions":{"functions":{"selected_functions":[...],"explore_plan":"...","func_docs":"..."}}}
 ```
 
 **上下文**
@@ -149,9 +164,9 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 [ACT explore_functions] selected_functions: ["func1",...]
 [ACT explore_functions] explore_plan:
 {explore_plan}
-[ACT explore_functions] func_docs:
-{func_docs}
 ```
+
+完整 `func_docs` 只保存在 blackboard。
 
 ---
 
@@ -369,8 +384,12 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 ```json
 {"role":"assistant","type":"act","action":"explore_mcp",
  "selected_tools":[{"server":"calculator","name":"calculate"},...],
- "tool_detail":"格式化后的 markdown 展示",
  "explore_plan":"..."}
+```
+
+**Blackboard 写入**
+```json
+{"regions":{"mcp":{"selected_tools":[...],"explore_plan":"...","tool_detail":"...","catalog":"..."}}}
 ```
 
 **上下文（成功）**
@@ -378,9 +397,9 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 [ACT explore_mcp] selected_tools: [{"server":"calculator","name":"calculate"},...]
 [ACT explore_mcp] explore_plan:
 {plan}
-[ACT explore_mcp] tool_detail:
-{tool_detail}
 ```
+
+完整 `tool_detail` / `catalog` 只保存在 blackboard。
 
 ---
 
