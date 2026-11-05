@@ -9,6 +9,7 @@ parameters, plans and selected identifiers.  Code generation reads the regions
 back when needed.
 """
 
+import json
 from typing import Any, Dict, List, Optional
 
 BLACKBOARD_TYPE = "blackboard"
@@ -110,3 +111,63 @@ def blackboard_selected_fields(board: Dict[str, Dict[str, Any]]) -> Optional[dic
 def blackboard_selected_functions(board: Dict[str, Dict[str, Any]]) -> Optional[List[str]]:
     funcs = (board.get(FUNCTIONS) or {}).get("selected_functions")
     return funcs if isinstance(funcs, list) else None
+
+
+_REGION_LABELS = {
+    SCHEMA: "DB",
+    FUNCTIONS: "FUNC",
+    KNOWLEDGE: "KNOWLEDGE",
+    MCP: "MCP",
+}
+
+_REGION_FIELDS = {
+    SCHEMA: [
+        ("selected_fields", True),
+        ("explore_plan", False),
+        ("selected_guides", True),
+        ("query_guide_content", False),
+        ("schema_detail", False),
+    ],
+    FUNCTIONS: [
+        ("selected_functions", True),
+        ("explore_plan", False),
+        ("func_docs", False),
+    ],
+    KNOWLEDGE: [
+        ("selected_knowledge_ids", True),
+        ("summary", False),
+        ("knowledge_content", False),
+    ],
+    MCP: [
+        ("selected_tools", True),
+        ("explore_plan", False),
+        ("tool_detail", False),
+        ("catalog", False),
+    ],
+}
+
+
+def blackboard_to_text(board: Dict[str, Dict[str, Any]]) -> str:
+    """Render all blackboard regions as a prompt-friendly text block."""
+    sections = []
+    for region in REGIONS:
+        data = board.get(region) or {}
+        lines = []
+        for field, is_json in _REGION_FIELDS[region]:
+            value = data.get(field)
+            if value is None or value == "" or value == []:
+                continue
+            if is_json:
+                value = json.dumps(value, ensure_ascii=False)
+            lines.append(f"{field}:\n{value}")
+        if lines:
+            sections.append(f"### {_REGION_LABELS[region]}\n" + "\n".join(lines))
+    return "\n\n".join(sections)
+
+
+def blackboard_section(history: Optional[List[dict]]) -> str:
+    """Return a standalone blackboard prompt section from conversation history."""
+    text = blackboard_to_text(get_blackboard(history))
+    if not text:
+        return ""
+    return "\n\n## Blackboard\n\n" + text + "\n"

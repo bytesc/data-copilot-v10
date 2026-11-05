@@ -12,20 +12,6 @@
           <pre><code>{{ formatJson(selectedFields) }}</code></pre>
         </div>
       </details>
-      <details v-if="hasSchemaDetail" class="msg-collapse">
-        <summary class="collapse-summary">Search Results: explore_schema</summary>
-        <div class="collapse-body" v-html="renderMd(schemaDetail)"></div>
-      </details>
-      <details v-if="hasSelectedGuides" class="msg-collapse">
-        <summary class="collapse-summary">Selected Guides</summary>
-        <div class="collapse-body">
-          <pre><code>{{ formatJson(selectedGuides) }}</code></pre>
-        </div>
-      </details>
-      <details v-if="hasQueryGuideContent" class="msg-collapse">
-        <summary class="collapse-summary">Query Guide</summary>
-        <div class="collapse-body" v-html="renderMd(queryGuideContent)"></div>
-      </details>
     </template>
 
     <template v-else-if="message.action === 'explore_base_knowledge'">
@@ -34,10 +20,6 @@
         <div class="collapse-body">
           <pre><code>{{ formatJson(selectedKnowledgeIds) }}</code></pre>
         </div>
-      </details>
-      <details v-if="hasKnowledgeContent" class="msg-collapse">
-        <summary class="collapse-summary">Search Results: explore_base_knowledge</summary>
-        <div class="collapse-body" v-html="renderMd(knowledgeContent)"></div>
       </details>
       <details v-if="hasSummary" class="msg-collapse">
         <summary class="collapse-summary">Summary</summary>
@@ -55,10 +37,6 @@
         <div class="collapse-body">
           <pre><code>{{ formatJson(selectedFunctions) }}</code></pre>
         </div>
-      </details>
-      <details v-if="hasFuncDocs" class="msg-collapse">
-        <summary class="collapse-summary">Search Results: explore_functions</summary>
-        <div class="collapse-body" v-html="renderMd(funcDocs)"></div>
       </details>
     </template>
 
@@ -140,10 +118,6 @@
           <pre><code>{{ formatJson(mcpSelectedTools) }}</code></pre>
         </div>
       </details>
-      <details v-if="hasMcpToolDetail" class="msg-collapse">
-        <summary class="collapse-summary">Search Results: explore_mcp</summary>
-        <div class="collapse-body" v-html="renderMd(mcpToolDetail)"></div>
-      </details>
     </template>
 
     <template v-else-if="message.action === 'exe_mcp'">
@@ -200,7 +174,7 @@
     </template>
 
     <template v-if="message.subPhases?.length">
-      <div v-for="sub in message.subPhases" :key="sub.name" class="sub-phase">
+      <div v-for="sub in message.subPhases" v-show="!isExploreSubPhase(sub.name)" :key="sub.name" class="sub-phase">
         <details class="msg-collapse" :open="sub.name === 'generate_document' || sub.name === 'completion'">
           <summary class="collapse-summary">{{ subPhaseLabel(sub.name) }}</summary>
           <div class="collapse-body">
@@ -255,12 +229,6 @@ const selectedKnowledgeIds = computed(() => {
 
 const hasSelectedKnowledgeIds = computed(() => selectedKnowledgeIds.value != null)
 
-const knowledgeContent = computed(() => {
-  return props.message.knowledge_content || props.message.parsed?.knowledge_content
-})
-
-const hasKnowledgeContent = computed(() => !!knowledgeContent.value)
-
 const summary = computed(() => {
   return props.message.summary || props.message.parsed?.summary
 })
@@ -272,30 +240,6 @@ const selectedFunctions = computed(() => {
 })
 
 const hasSelectedFunctions = computed(() => selectedFunctions.value != null)
-
-const funcDocs = computed(() => {
-  return props.message.func_docs || props.message.parsed?.func_docs
-})
-
-const hasFuncDocs = computed(() => !!funcDocs.value)
-
-const schemaDetail = computed(() => {
-  return props.message.schema_detail || props.message.parsed?.schema_detail
-})
-
-const hasSchemaDetail = computed(() => !!schemaDetail.value)
-
-const selectedGuides = computed(() => {
-  return props.message.selected_guides || props.message.parsed?.selected_guides || []
-})
-
-const hasSelectedGuides = computed(() => selectedGuides.value.length > 0)
-
-const queryGuideContent = computed(() => {
-  return props.message.query_guide_content || props.message.parsed?.query_guide_content || ''
-})
-
-const hasQueryGuideContent = computed(() => !!queryGuideContent.value)
 
 const searchResult = computed(() => {
   const sub = props.message.subPhases?.find(s => s.name === 'web_search')
@@ -316,13 +260,6 @@ const mcpExplorePlan = computed(() => {
 })
 
 const hasMcpExplorePlan = computed(() => !!mcpExplorePlan.value)
-
-const mcpToolDetail = computed(() => {
-  const sub = props.message.subPhases?.find(s => s.name === 'explore_mcp')
-  return props.message.tool_detail || props.message.parsed?.tool_detail || sub?.content || ''
-})
-
-const hasMcpToolDetail = computed(() => !!mcpToolDetail.value)
 
 const mcpSelectedTools = computed(() => {
   return props.message.selected_tools || props.message.parsed?.selected_tools || []
@@ -385,6 +322,12 @@ function formatJson(obj) {
   } catch {
     return String(obj)
   }
+}
+
+const EXPLORE_SUB_PHASES = new Set(['explore_schema', 'explore_functions', 'explore_base_knowledge', 'explore_mcp'])
+
+function isExploreSubPhase(name) {
+  return EXPLORE_SUB_PHASES.has(name)
 }
 
 function subPhaseLabel(name) {

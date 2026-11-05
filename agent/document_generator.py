@@ -31,6 +31,8 @@ _ENABLE_TARGET = config_data.get('enable_target_knowledge', False)
 from data_access.observe_log import log_observe_cycle
 from data_access.report_log import record_report_generation
 from utils.front_utils import history_to_text
+from utils.blackboard import blackboard_section
+from utils.context_trim import prepare_trimmed_context
 from utils.perf_log import perf_api
 
 DOC_WORKSPACE = "doc_workspace"
@@ -483,7 +485,9 @@ def _save_intermediate_markdown(markdown_text: str, base_name: str, session_id: 
 
 @perf_api("/api/generate-document/stream/")
 def _event_stream_generate_document(conversation_history: List[dict], session_id: str, request_json: str = ""):
-    context = history_to_text(conversation_history)
+    trimmed = prepare_trimmed_context(session_id, conversation_history)
+    context = history_to_text(trimmed)
+    blackboard_text = blackboard_section(conversation_history)
 
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
@@ -498,7 +502,8 @@ def _event_stream_generate_document(conversation_history: List[dict], session_id
 {_target_section if _ENABLE_TARGET else ""}
 
 Conversation History:
-{context}"""
+{context}
+{blackboard_text}"""
 
     outline_raw = ""
     for chunk in call_llm_stream(outline_prompt, llm):
@@ -549,6 +554,7 @@ Full Document Outline (all sections):
 
 Conversation History:
 {context}
+{blackboard_text}
 
 Write the content for the section "{heading}" in markdown format. ⚠️ CRITICAL: Do NOT repeat the section heading "{heading}" in your output. The heading will be added automatically. Start directly with the body content — no heading, no title line."""
 
@@ -642,7 +648,9 @@ def generate_document_from_context(conversation_history: List[dict], session_id:
 
 @perf_api("/api/generate-document/stream/unified/")
 def _event_stream_generate_document_unified(conversation_history: List[dict], session_id: str, title: str = "", request_json: str = ""):
-    context = history_to_text(conversation_history)
+    trimmed = prepare_trimmed_context(session_id, conversation_history)
+    context = history_to_text(trimmed)
+    blackboard_text = blackboard_section(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': 'Generating document...'}, ensure_ascii=False)}\n\n"
@@ -657,6 +665,7 @@ def _event_stream_generate_document_unified(conversation_history: List[dict], se
 
 Conversation History:
 {context}
+{blackboard_text}
 
 Write the complete business summary document in markdown format. Start with `# Title` as the top-level heading. Do NOT wrap the output in any code blocks or fences — output raw markdown only. Do NOT include any introductory or explanatory text outside the markdown document."""
 
@@ -744,7 +753,9 @@ async def generate_document_unified_stream_api(request: Request, user_input: Doc
 
 @perf_api("/api/generate-document/generate-yaml-outline/")
 def _event_stream_generate_yaml_outline(conversation_history: List[dict], session_id: str, request_json: str = "", user_prompt: str = ""):
-    context = history_to_text(conversation_history)
+    trimmed = prepare_trimmed_context(session_id, conversation_history)
+    context = history_to_text(trimmed)
+    blackboard_text = blackboard_section(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
     user_instruction = ""
@@ -763,7 +774,8 @@ def _event_stream_generate_yaml_outline(conversation_history: List[dict], sessio
 {_target_section if _ENABLE_TARGET else ""}
 {user_instruction}
 Conversation History:
-{context}"""
+{context}
+{blackboard_text}"""
 
     error_hint = ""
     for attempt in range(2):
@@ -835,7 +847,9 @@ async def yaml_to_prompt_api(request: Request):
 
 @perf_api("/api/generate-document/stream/from-yaml/")
 def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outline: str, session_id: str, request_json: str = "", section_index: Optional[int] = None, confirmed_sections: Optional[List[dict]] = None, yaml_base: str = ""):
-    context = history_to_text(conversation_history)
+    trimmed = prepare_trimmed_context(session_id, conversation_history)
+    context = history_to_text(trimmed)
+    blackboard_text = blackboard_section(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
     yaml_outline = _parse_yaml_outline(yaml_outline)
     parsed = _parse_yaml_sections(yaml_outline)
@@ -919,6 +933,7 @@ def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outl
 
 Conversation History:
 {context}
+{blackboard_text}
 
 Write the content for the section "{heading}" in markdown format."""
 

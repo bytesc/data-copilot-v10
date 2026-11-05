@@ -25,6 +25,7 @@ from utils.blackboard import (
     update_blackboard,
     blackboard_selected_fields,
     blackboard_selected_functions,
+    blackboard_section,
 )
 from utils.get_config import config_data
 from utils.perf_log import perf_api
@@ -163,6 +164,7 @@ def _event_stream_act(
     research_guide = params.get("research_guide")
 
     blackboard = get_blackboard(conversation_history)
+    blackboard_text = blackboard_section(conversation_history)
     if not selected_fields or (
         isinstance(selected_fields, dict) and selected_fields.get("__no_db__")
     ):
@@ -181,13 +183,13 @@ def _event_stream_act(
 
     act_data = {}
     if action == "explore_schema":
-        act_data = yield from _act_explore_schema(full_question, session_id, tables, search_keyword)
+        act_data = yield from _act_explore_schema(full_question, session_id, tables, search_keyword, blackboard_text)
 
     elif action == "explore_base_knowledge":
-        act_data = yield from _act_explore_base_knowledge(full_question, session_id, search_keyword)
+        act_data = yield from _act_explore_base_knowledge(full_question, session_id, search_keyword, blackboard_text)
 
     elif action == "explore_functions":
-        act_data = yield from _act_explore_functions(full_question, session_id, search_keyword)
+        act_data = yield from _act_explore_functions(full_question, session_id, search_keyword, blackboard_text)
 
     elif action == "generate_and_execute":
         act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions, request_json, research_guide, blackboard)
@@ -203,7 +205,7 @@ def _event_stream_act(
         act_data = yield from _act_fetch_webpage(full_question, session_id, params, request_json)
 
     elif action == "explore_mcp":
-        act_data = yield from _act_explore_mcp(full_question, session_id, params, request_json)
+        act_data = yield from _act_explore_mcp(full_question, session_id, params, request_json, blackboard_text)
 
     elif action == "exe_mcp":
         act_data = yield from _act_exe_mcp(full_question, session_id, params, request_json)
@@ -220,7 +222,7 @@ def _event_stream_act(
         yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
 
 
-def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None):
+def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None, blackboard_text: str = ""):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': 'Searching database information...'}, ensure_ascii=False)}\n\n"
 
     full_schema = get_db_overview_markdown(engine, tables, include_samples=True)
@@ -237,6 +239,7 @@ def _act_explore_schema(full_question: str, session_id: str, tables, search_keyw
 
 Context:
 {full_question}
+{blackboard_text}
 {keyword_hint}
 
 LANGUAGE IS CRITICAL: The "plan" field text MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, write the plan in Chinese. If the user asked in English, write the plan in English.
@@ -304,7 +307,7 @@ Example:
     return {"selected_fields": {}, "explore_plan": "", "schema_detail": full_schema}
 
 
-def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None):
+def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None, blackboard_text: str = ""):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'msg', 'content': 'Searching function information...'}, ensure_ascii=False)}\n\n"
 
     full_catalog = get_func_catalog_markdown()
@@ -319,6 +322,7 @@ def _act_explore_functions(full_question: str, session_id: str, search_keyword: 
 
 Context:
 {full_question}
+{blackboard_text}
 {keyword_hint}
 
 Available functions: {func_names}
@@ -373,7 +377,7 @@ def _parse_function_explore_json(raw: str) -> dict | None:
     return None
 
 
-def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyword: Optional[str] = None):
+def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyword: Optional[str] = None, blackboard_text: str = ""):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': 'Searching base knowledge...'}, ensure_ascii=False)}\n\n"
 
     base_knowledge = get_base_knowledge_db()
@@ -397,6 +401,7 @@ def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyw
 
 Context:
 {full_question}
+{blackboard_text}
 {keyword_hint}
 
 Output ONLY a JSON object with the following structure:
@@ -630,7 +635,7 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
     return {"url": url, "content": content, "display_content": display_content}
 
 
-def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_json: str = ""):
+def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_json: str = "", blackboard_text: str = ""):
     search_keyword = (params.get("search_keyword") or "").strip()
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': 'Connecting to MCP servers to fetch tool list...'}, ensure_ascii=False)}\n\n"
@@ -690,6 +695,7 @@ def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_
 
 Context:
 {full_question}
+{blackboard_text}
 {keyword_hint}
 
 Output ONLY a JSON object with the following structure:

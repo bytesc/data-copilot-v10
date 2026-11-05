@@ -2,6 +2,7 @@ from typing import List, Optional
 
 from data_access.observe_log import save_session_context
 from utils.json_parse import parse_json
+from utils.blackboard import is_blackboard_entry
 
 
 FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
@@ -103,6 +104,8 @@ def trim_conversation_history(history: List[dict]) -> List[dict]:
     from_end_counts = {}
 
     for i in range(len(history) - 1, -1, -1):
+        if is_blackboard_entry(history[i]):
+            continue
         cat = _get_entry_category(history[i])
         if cat is None:
             keep_indices.add(i)

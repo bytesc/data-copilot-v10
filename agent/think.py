@@ -15,6 +15,7 @@ from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, log_observe_session
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
+from utils.blackboard import blackboard_section
 from utils.get_config import config_data
 from utils.perf_log import perf_api
 
@@ -44,6 +45,7 @@ def _event_stream_think(
         context = history_to_text(trimmed)
     else:
         context = question
+    blackboard_text = blackboard_section(conversation_history)
 
     func_catalog = get_func_summary_for_agent()
 
@@ -59,6 +61,7 @@ def _event_stream_think(
 
 ## Context
 {context if context else '(no context)'}
+{blackboard_text}
 
 ## System Info
 {BRIEF_INFO}

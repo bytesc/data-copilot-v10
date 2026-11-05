@@ -22,6 +22,7 @@ from .utils.final_output_parse import wrap_png_url_with_markdown_image, is_png_u
 from .utils.get_config import config_data
 from .utils.pd_to_csv import pd_to_csv
 from .utils.pd_to_walker import pd_to_walker
+from utils.blackboard import blackboard_to_text
 
 STATIC_URL = config_data['static_path']
 
@@ -48,7 +49,6 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
     blackboard = blackboard or {}
     board_schema = blackboard.get("schema") or {}
     board_functions = blackboard.get("functions") or {}
-    board_knowledge = blackboard.get("knowledge") or {}
 
     if selected_functions is None:
         board_selected_functions = board_functions.get("selected_functions")
@@ -64,10 +64,11 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
     graph_code_guide_data = get_graph_code_guide_db()
     if graph_code_guide_data:
         knowledge += "\nGraph Code Guide:\n" + base_knowledge_to_str(graph_code_guide_data) + "\n"
-    if board_schema.get("query_guide_content"):
-        knowledge += "\nSQL Query Guide (blackboard):\n" + board_schema["query_guide_content"] + "\n"
-    if board_knowledge.get("knowledge_content"):
-        knowledge += "\nBusiness Knowledge (blackboard):\n" + board_knowledge["knowledge_content"] + "\n"
+    blackboard_text = ""
+    if blackboard:
+        bb = blackboard_to_text(blackboard)
+        if bb:
+            blackboard_text = "\n\n## Blackboard\n\n" + bb + "\n"
 
     target_section = ""
     if config_data.get('enable_target_knowledge', False) and TARGET.strip() != "":
@@ -113,7 +114,7 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
         if selected_fields and selected_fields.get("__no_db__"):
             database = ""
         elif board_schema.get("schema_detail"):
-            database = "\nThe database content (from blackboard): \n" + board_schema["schema_detail"] + "\n"
+            database = ""
         else:
             data_prompt = get_db_info_prompt(engine, tables=tables, simple=True, example=False, selected_fields=selected_fields)
             database = "\nThe database content: \n" + data_prompt + "\n"
@@ -255,7 +256,7 @@ Your generated code MUST NOT write any import statement, MUST NOT re-import any 
 
     cot_prompt = pre_prompt + function_prompt + str(function_info) + \
                  module_prompt + example_code + remind_prompt + \
-                 database + knowledge + target_section + research_section + " \nContext:\n" + question + \
+                 database + knowledge + blackboard_text + target_section + research_section + " \nContext:\n" + question + \
                  final_language_check
     return cot_prompt, rag_ans, function_import
 
