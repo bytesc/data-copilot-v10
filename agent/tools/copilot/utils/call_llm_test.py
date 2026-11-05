@@ -37,7 +37,7 @@ def call_llm(question, llm):
             {"role": "user", "content": question},
         ],
         stream=False,
-        extra_body=get_extra_body()
+        extra_body=get_extra_body(model_cfg["id"])
     )
     record_llm_complete()
 
@@ -67,7 +67,7 @@ def _call_llm_stream_events(question, llm):
             {"role": "user", "content": question},
         ],
         stream=True,
-        extra_body=get_extra_body()
+        extra_body=get_extra_body(model_cfg["id"])
     )
 
     full_content = ""

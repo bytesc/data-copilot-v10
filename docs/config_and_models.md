@@ -25,13 +25,16 @@ llm_models:
     model: "deepseek-v4-flash"           # 实际调用的模型名称
     url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
     key_file: "api_key_openai.txt"       # key 文件名（agent/utils/llm_access/ 目录下），不填用默认 api_key_openai.txt
+    reasoning_effort: ["low", "high", "max"]  # 前端 Depth 下拉选项，默认选中第一个；不填/[] 则该项不可用
     extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}  # 该模型专属额外请求参数
   - id: "qwen-max"
     name: "Qwen Max"
     model: "qwen-max"
     url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
     key_file: "api_key_qwen.txt"
-    extra_params: {}                     # {} 或删除表示使用模型默认行为
+    extra_params: {}                     # {} 或删除表示使用模型默认行为；无 reasoning_effort 时 Depth 下拉禁用
+
+# Depth 下拉固定追加 Default（不上传该参数）；extra_params 若也含 reasoning_effort，最终合并时以 extra_params 为准。
 
 # extra_params 说明（各模型单独配置，透传给 OpenAI 兼容接口的扩展字段）：
 # DeepSeek 官方文档（api-docs.deepseek.com/zh-cn/guides/thinking_mode）：
