@@ -14,8 +14,13 @@ static_folder: "tmp_imgs"
 #   model        - actual model name used in API calls
 #   url          - API base url
 #   key_file     - key file name (located under agent/utils/llm_access/); when omitted, defaults to api_key_openai.txt
-#   id           - unique id (defaults to name; recommended to set explicitly for frontend reference)
-#   extra_params - per-model extra body params (each model configures its own); omit or use {} to keep model default behavior
+#   id               - unique id (defaults to name; recommended to set explicitly for frontend reference)
+#   extra_params     - per-model extra body params (each model configures its own); omit or use {} to keep model default behavior
+#   reasoning_effort - list of selectable values for the frontend Depth dropdown (e.g. ["low", "high", "max"]);
+#                      the first value is selected by default. Omit or use [] to disable the dropdown for that model.
+#                      The frontend always appends a "Default" option (send no reasoning_effort parameter).
+#                      When extra_params also contains reasoning_effort, the dropdown is still available,
+#                      but extra_params wins when the final request body is merged.
 # Note: extra body params are now configured per model via the extra_params field in llm_models.
 # DeepSeek official docs (api-docs.deepseek.com/zh-cn/guides/thinking_mode):
 #   disable thinking  -> {"thinking": {"type": "disabled"}}
@@ -30,25 +35,28 @@ llm_models:
     model: "deepseek-v4-flash"         # actual model name used in API calls
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"     # key file name; defaults if omitted
-    extra_params: {"reasoning_effort": "none", "max_tokens": 393216}
+    reasoning_effort: ["none", "low", "high", "max"]
+    extra_params: {"reasoning_effort": "none", "max_tokens": 393216}  # fixed value -> wins over the dropdown
   - id: "deepseek-v4.1-flash"
     name: "DeepSeek V4.1 Flash"          # custom model display name
     model: "deepseek-v4.1-flash"         # actual model name used in API calls
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"     # key file name; defaults if omitted
-    extra_params: {"reasoning_effort": "none", "max_tokens": 393216}
+    reasoning_effort: ["none", "low", "high", "max"]
+    extra_params: {"max_tokens": 393216}
   - id: "glm-5.3-flash"
     name: "glm5.3 flash"                   # custom model display name
     model: "glm-5.3-flash"
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"       # create the corresponding key file in that directory if needed
-    extra_params: { "reasoning_effort": "low"}
+    reasoning_effort: ["low", "high", "max"]
+    extra_params: {}
   - id: "glm-5.3-flashx"
     name: "glm5.3 flashx"                   # custom model display name
     model: "glm-5.3-flashx"
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"       # create the corresponding key file in that directory if needed
-    extra_params: {}
+    extra_params: {}                     # no reasoning_effort list -> Depth dropdown disabled
 
 
 # Example model names (qwen3.7-flash qwen3.8-max / glm-4 / deepseek-chat deepseek-v4-flash deepseek-v4-pro / qwen-max / gpt-4o-mini)

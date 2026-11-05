@@ -9,6 +9,7 @@ export const configState = reactive({
   enable_edit: true,
   models: [],
   current_model: '',
+  current_reasoning_effort: '',
   _loaded: false,
 })
 
@@ -53,7 +54,26 @@ export async function selectModel(modelId) {
     const data = await res.json()
     configState.models = data.models || configState.models
     configState.current_model = data.current_model
+    configState.current_reasoning_effort = data.current_reasoning_effort ?? ''
     localStorage.setItem(MODEL_STORAGE_KEY, data.current_model)
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
+export async function selectReasoningEffort(value) {
+  try {
+    const res = await fetch('/api/models/reasoning-effort/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: value || '' }),
+    })
+    if (!res.ok) return false
+    const data = await res.json()
+    configState.models = data.models || configState.models
+    configState.current_model = data.current_model || configState.current_model
+    configState.current_reasoning_effort = data.current_reasoning_effort ?? ''
     return true
   } catch (_) {
     return false

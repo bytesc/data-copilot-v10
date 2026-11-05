@@ -1,6 +1,6 @@
 from utils.get_config import config_data
 from utils.perf_log import record_first_chunk, record_llm_complete, record_llm_input
-from agent.utils.llm_access.LLM import get_model_config
+from agent.utils.llm_access.LLM import get_model_config, get_extra_body
 
 from datetime import datetime
 import os
@@ -37,7 +37,7 @@ def call_llm(question, llm):
             {"role": "user", "content": question},
         ],
         stream=False,
-        extra_body=model_cfg.get("extra_params") or {}
+        extra_body=get_extra_body()
     )
     record_llm_complete()
 
@@ -67,7 +67,7 @@ def _call_llm_stream_events(question, llm):
             {"role": "user", "content": question},
         ],
         stream=True,
-        extra_body=model_cfg.get("extra_params") or {}
+        extra_body=get_extra_body()
     )
 
     full_content = ""

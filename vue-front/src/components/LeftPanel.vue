@@ -76,10 +76,16 @@
       </div>
       <div class="option-item">
         <label class="option-label">Depth</label>
-        <select class="option-select">
-          <option>Standard</option>
-          <option>Deep</option>
-          <option>Maximum</option>
+        <select
+          class="option-select"
+          v-model="configState.current_reasoning_effort"
+          :disabled="isRunning || reasoningEffortOptions.length === 0"
+          @change="onReasoningEffortChange"
+        >
+          <option v-for="opt in reasoningEffortOptions" :key="opt" :value="opt">
+            {{ opt }}
+          </option>
+          <option value="">Default</option>
         </select>
       </div>
     </div>
@@ -87,8 +93,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { configState, selectModel, restoreSavedModel } from '@/utils/config.js'
+import { ref, computed, onMounted } from 'vue'
+import { configState, selectModel, selectReasoningEffort, restoreSavedModel } from '@/utils/config.js'
 
 defineProps({
   sessionId: { type: String, required: true },
@@ -102,8 +108,17 @@ const pinnedOpen = ref(false)
 const projectsOpen = ref(false)
 const recentsOpen = ref(false)
 
+const reasoningEffortOptions = computed(() => {
+  const model = configState.models.find(m => m.id === configState.current_model)
+  return Array.isArray(model?.reasoning_effort_options) ? model.reasoning_effort_options : []
+})
+
 function onModelChange() {
   selectModel(configState.current_model)
+}
+
+function onReasoningEffortChange() {
+  selectReasoningEffort(configState.current_reasoning_effort)
 }
 
 onMounted(async () => {

@@ -28,7 +28,13 @@ from utils.get_config import config_data
 
 from agent.agent import  generate_and_execute_stream, get_db
 from utils.process_file import process_file_content
-from agent.utils.llm_access.LLM import list_model_configs, set_current_model, get_current_model_id
+from agent.utils.llm_access.LLM import (
+    list_model_configs,
+    set_current_model,
+    get_current_model_id,
+    get_current_reasoning_effort,
+    set_current_reasoning_effort,
+)
 from data_access.session_log import record_session_operation, create_session_log_table
 from data_access.observe_log import (
     create_observe_log_tables, log_observe_cycle, log_observe_session,
@@ -146,6 +152,7 @@ async def get_config():
         "enable_edit": _ENABLE_EDIT,
         "models": list_model_configs(),
         "current_model": get_current_model_id(),
+        "current_reasoning_effort": get_current_reasoning_effort(),
     })
 
 
@@ -154,6 +161,7 @@ async def get_models():
     return JSONResponse(content={
         "models": list_model_configs(),
         "current_model": get_current_model_id(),
+        "current_reasoning_effort": get_current_reasoning_effort(),
     })
 
 
@@ -169,7 +177,31 @@ async def select_model(entry: ModelSelectInput):
     return JSONResponse(content={
         "models": list_model_configs(),
         "current_model": cfg["id"],
+        "current_reasoning_effort": get_current_reasoning_effort(),
     })
+
+
+class ReasoningEffortInput(BaseModel):
+    value: str = ""
+
+
+@app.post("/api/models/reasoning-effort/")
+async def select_reasoning_effort(entry: ReasoningEffortInput):
+    try:
+        effort = set_current_reasoning_effort(entry.value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if effort is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{get_current_model_id()}' does not support reasoning_effort",
+        )
+    return JSONResponse(content={
+        "models": list_model_configs(),
+        "current_model": get_current_model_id(),
+        "current_reasoning_effort": effort,
+    })
+
 
 @app.get("/api/sessions/")
 async def get_sessions(request: Request, limit: int = 50):

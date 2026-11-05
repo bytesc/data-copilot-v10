@@ -11,6 +11,20 @@ DEFAULT_KEY_FILE = "api_key_openai.txt"
 KEY_FILE_DIR = os.path.join("agent", "utils", "llm_access")
 
 
+def _normalize_reasoning_effort(value):
+    """把配置中的 reasoning_effort 统一成去重后的字符串列表。"""
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return []
+    options = []
+    for item in value:
+        text = str(item).strip()
+        if text and text not in options:
+            options.append(text)
+    return options
+
+
 def _build_model_configs():
     models = config_data.get("llm_models") or []
     built = []
@@ -21,6 +35,7 @@ def _build_model_configs():
             "model": m.get("model") or "",
             "url": m.get("url") or "",
             "key_file": m.get("key_file") or DEFAULT_KEY_FILE,
+            "reasoning_effort": _normalize_reasoning_effort(m.get("reasoning_effort")),
             "extra_params": m.get("extra_params") or {},
         })
     return built
@@ -30,13 +45,33 @@ MODEL_CONFIGS = _build_model_configs()
 
 _lock = threading.Lock()
 _current_model_id = MODEL_CONFIGS[0]["id"] if MODEL_CONFIGS else None
+# 当前 Depth 选择；空字符串表示 Default（不额外上传该参数）
+_current_reasoning_effort = (
+    MODEL_CONFIGS[0]["reasoning_effort"][0]
+    if MODEL_CONFIGS and MODEL_CONFIGS[0]["reasoning_effort"]
+    else ""
+)
 _clients = {}
+
+
+def _default_reasoning_effort(cfg):
+    options = cfg.get("reasoning_effort") or []
+    return options[0] if options else ""
 
 
 def list_model_configs():
     """供前端展示的模型列表（不暴露 key 文件等敏感信息）"""
+    current_id = _current_model_id
+    current_effort = _current_reasoning_effort
     return [
-        {"id": m["id"], "name": m["name"], "model": m["model"], "url": m["url"]}
+        {
+            "id": m["id"],
+            "name": m["name"],
+            "model": m["model"],
+            "url": m["url"],
+            "reasoning_effort_options": list(m["reasoning_effort"]),
+            "reasoning_effort_selected": current_effort if m["id"] == current_id else "",
+        }
         for m in MODEL_CONFIGS
     ]
 
@@ -65,10 +100,53 @@ def set_current_model(model_id):
     if cfg is None:
         return None
     with _lock:
-        global _current_model_id
+        global _current_model_id, _current_reasoning_effort
         _current_model_id = cfg["id"]
+        _current_reasoning_effort = _default_reasoning_effort(cfg)
         _clients.pop(cfg["id"], None)
     return cfg
+
+
+def get_current_reasoning_effort():
+    """当前 Depth 值；空字符串表示 Default（不上传该参数）"""
+    return _current_reasoning_effort
+
+
+def set_current_reasoning_effort(value):
+    """设置当前模型的 Depth；空值表示 Default。
+
+    返回新的值；当前模型不支持 reasoning_effort 时返回 None；
+    值不在配置列表内时抛出 ValueError。
+    """
+    cfg = get_model_config()
+    if cfg is None or not cfg["reasoning_effort"]:
+        return None
+    effort = "" if value is None else str(value).strip()
+    if effort and effort not in cfg["reasoning_effort"]:
+        raise ValueError(
+            f"reasoning_effort '{effort}' is not configured for model '{cfg['id']}'"
+        )
+    global _current_reasoning_effort
+    with _lock:
+        _current_reasoning_effort = effort
+    return effort
+
+
+def get_extra_body(model_id=None):
+    """合并本次请求的 extra_body：先放页面选择的 reasoning_effort，再用 extra_params 覆盖。
+
+    Default（空字符串）不会写入 reasoning_effort。extra_params 中同名字段优先级更高。
+    """
+    cfg = get_model_config(model_id)
+    if cfg is None:
+        return {}
+    body = {}
+    is_current = model_id is None or str(model_id) == get_current_model_id()
+    effort = get_current_reasoning_effort() if is_current else ""
+    if effort and effort in cfg["reasoning_effort"]:
+        body["reasoning_effort"] = effort
+    body.update(cfg.get("extra_params") or {})
+    return body
 
 
 def _get_client(model_id=None):
