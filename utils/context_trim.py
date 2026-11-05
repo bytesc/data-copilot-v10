@@ -17,10 +17,10 @@ HISTORY_RETENTION = {
     "act_code": 1,                     # generate_and_execute 生成的代码（仅保留最近1条）
     "act_result": 999,                 # generate_and_execute 的执行结果（永久保留）
     "act_error": 1,                    # generate_and_execute 的执行错误（仅保留最近1条）
-    "act_explore_db": 999,             # explore_schema 的数据库结构搜索结果（永久保留）
-    "act_explore_func": 999,           # explore_functions 的函数目录搜索结果（永久保留）
-    "act_explore_base_knowledge": 999, # explore_base_knowledge 的基础知识搜索结果（永久保留）
-    "act_explore_mcp": 999,  # explore_mcp 的 MCP 工具列表（永久保留）
+    "act_explore_db": 3,             # explore_schema 的数据库结构搜索结果
+    "act_explore_func": 3,           # explore_functions 的函数目录搜索结果
+    "act_explore_base_knowledge": 3, # explore_base_knowledge 的基础知识搜索结果
+    "act_explore_mcp": 3,  # explore_mcp 的 MCP 工具列表
     "act_web_search": 3,               # web_search 的搜索结果
     "act_fetch_webpage": 3,            # fetch_webpage 的页面内容
     "act_exe_mcp": 999,                  # exe_mcp 的执行结果
@@ -40,7 +40,7 @@ HISTORY_RETENTION = {
     "observe_ask_choice": 3,           # ask_choice 后的 observe 结果
     "observe_summary_and_pause": 3,    # summary_and_pause 后的 observe 结果
     "observe_attempt_completion": 3,   # attempt_completion 后的 observe 结果
-    "observe_default": 999,             # 未匹配 action 的 observe 默认保留轮数
+    "observe_default": 5,             # 未匹配 action 的 observe 默认保留轮数
 }
 
 

@@ -7,6 +7,10 @@ import json
 
 from data_access.sys_db_conn import sys_engine
 from data_access.session_log import session_operation_log
+from utils.blackboard import (
+    SCHEMA, FUNCTIONS, KNOWLEDGE, MCP, REGIONS,
+    empty_blackboard, replace_blackboard,
+)
 
 
 def _parse_json_raw(raw: str) -> dict:
@@ -358,6 +362,7 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
     all_entries.sort(key=lambda x: x[0] if x[0] else datetime.min)
 
     history = []
+    board = empty_blackboard()
     if question:
         history.append({"role": "user", "type": "question", "content": question})
 
@@ -399,15 +404,8 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
             elif phase == "observe" and sub_phase == "review":
                 if response:
                     history.append({"role": "assistant", "type": "observe", "content": _parse_json_raw(response)})
-            elif phase == "act" and sub_phase == "explore_schema":
-                if exec_result:
-                    history.append({"role": "assistant", "type": "act", "action": "explore_schema", "schema_detail": exec_result})
-            elif phase == "act" and sub_phase == "explore_base_knowledge":
-                if exec_result:
-                    history.append({"role": "assistant", "type": "act", "action": "explore_base_knowledge", "knowledge_content": exec_result})
-            elif phase == "act" and sub_phase == "explore_functions":
-                if exec_result:
-                    history.append({"role": "assistant", "type": "act", "action": "explore_functions", "func_docs": exec_result})
+            elif phase == "act" and sub_phase in ("explore_schema", "explore_functions", "explore_base_knowledge", "explore_mcp"):
+                _rebuild_blackboard_region(board, sub_phase, response, exec_result, history)
             elif phase == "act" and sub_phase == "generate_and_execute":
                 act_entry = {"role": "assistant", "type": "act", "action": "generate_and_execute"}
                 if exec_code:
@@ -429,4 +427,71 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
                     else:
                         history.append({"role": "user", "type": "input", "content": user_decision})
 
+    if any(board.get(region) for region in REGIONS):
+        history = replace_blackboard(history, board)
     return history
+
+
+def _rebuild_blackboard_region(board, sub_phase, response, exec_result, history):
+    """Rebuild a blackboard region from cycle logs instead of the LLM context."""
+    parsed = _parse_json_raw(response) if response else {}
+
+    if sub_phase == "explore_schema":
+        selected_fields = parsed.get("tables", parsed) if "tables" in parsed else parsed
+        if not isinstance(selected_fields, dict):
+            selected_fields = {}
+        explore_plan = parsed.get("plan", "")
+        selected_guides = parsed.get("selected_guides", []) or []
+        board[SCHEMA] = {
+            "selected_fields": selected_fields,
+            "explore_plan": explore_plan,
+            "selected_guides": selected_guides,
+            "query_guide_content": "",
+            "schema_detail": exec_result,
+        }
+        history.append({
+            "role": "assistant", "type": "act", "action": "explore_schema",
+            "selected_fields": selected_fields,
+            "explore_plan": explore_plan,
+            "selected_guides": selected_guides,
+        })
+    elif sub_phase == "explore_functions":
+        selected_functions = parsed.get("selected_functions", []) or []
+        explore_plan = parsed.get("plan", "")
+        board[FUNCTIONS] = {
+            "selected_functions": selected_functions,
+            "explore_plan": explore_plan,
+            "func_docs": exec_result,
+        }
+        history.append({
+            "role": "assistant", "type": "act", "action": "explore_functions",
+            "selected_functions": selected_functions,
+            "explore_plan": explore_plan,
+        })
+    elif sub_phase == "explore_base_knowledge":
+        selected_ids = parsed.get("selected_ids", []) or []
+        summary = parsed.get("summary", "")
+        board[KNOWLEDGE] = {
+            "selected_knowledge_ids": selected_ids,
+            "knowledge_content": exec_result,
+            "summary": summary,
+        }
+        history.append({
+            "role": "assistant", "type": "act", "action": "explore_base_knowledge",
+            "selected_knowledge_ids": selected_ids,
+            "summary": summary,
+        })
+    elif sub_phase == "explore_mcp":
+        selected_tools = parsed.get("selected_tools", []) or []
+        explore_plan = parsed.get("plan", "")
+        board[MCP] = {
+            "selected_tools": selected_tools,
+            "explore_plan": explore_plan,
+            "tool_detail": exec_result,
+            "catalog": "",
+        }
+        history.append({
+            "role": "assistant", "type": "act", "action": "explore_mcp",
+            "selected_tools": selected_tools,
+            "explore_plan": explore_plan,
+        })

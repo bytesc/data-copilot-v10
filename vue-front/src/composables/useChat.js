@@ -24,6 +24,8 @@ export function useChat() {
   const statusMsg = ref('')
   const docGenerating = ref(false)
 
+  const blackboard = computed(() => getBlackboard(conversationHistory.value))
+
   const serverUrl = ref(import.meta.env.VITE_SERVER_URL || window.location.origin)
 
   function generateSessionId() {
@@ -86,11 +88,12 @@ function historyToText(history) {
       const role = entry.role || ''
       const type = entry.type || ''
       const content = entry.content || ''
+      if (type === 'blackboard') return null
       if (role === 'user') {
         return `User: ${content}`
       }
       return `Assistant (${type}): ${content}`
-    }).join('\n')
+    }).filter(line => line !== null).join('\n')
   }
 
   const FRONTEND_ACTIONS = new Set(['output_text', 'ask_question', 'ask_choice', 'summary_and_pause', 'attempt_completion'])
@@ -299,7 +302,7 @@ function historyToText(history) {
       params: {
         tables: [],
         search_keyword: actionResult.keyword || undefined,
-        selected_fields: action === 'generate_and_execute' ? { __no_db__: true } : undefined,
+        selected_fields: undefined,
         selected_functions: actionResult.funcs || undefined,
         research_guide: actionResult.research_guide || undefined,
         title: actionResult.title || undefined,
@@ -609,10 +612,17 @@ function historyToText(history) {
     }
   }
 
+  function getBlackboard(history) {
+    const entry = (history || []).find(e => e.type === 'blackboard')
+    return entry?.regions || {}
+  }
+
   function rebuildMessagesFromHistory(history) {
     messages.value = []
+    const board = getBlackboard(history)
     for (const entry of history) {
-      renderHistoryEntry(entry)
+      if (entry.type === 'blackboard') continue
+      renderHistoryEntry(entry, board)
     }
   }
 
@@ -623,7 +633,7 @@ function historyToText(history) {
     rebuildMessagesFromHistory(history)
   }
 
-  function renderHistoryEntry(entry) {
+  function renderHistoryEntry(entry, board = {}) {
     const role = entry.role || ''
     const entryType = entry.type || ''
 
@@ -661,10 +671,10 @@ function historyToText(history) {
         solved_ans: entry.solved_ans,
         selected_fields: entry.selected_fields,
         selected_functions: entry.selected_functions,
-        func_docs: entry.func_docs,
+        func_docs: entry.func_docs || board.functions?.func_docs,
         selected_guides: entry.selected_guides,
-        query_guide_content: entry.query_guide_content,
-        schema_detail: entry.schema_detail,
+        query_guide_content: entry.query_guide_content || board.schema?.query_guide_content,
+        schema_detail: entry.schema_detail || board.schema?.schema_detail,
         explore_plan: entry.explore_plan,
         attempts: entry.attempts,
         title: entry.title,
@@ -678,11 +688,12 @@ function historyToText(history) {
         query: entry.query,
         url: entry.url,
         selected_knowledge_ids: entry.selected_knowledge_ids,
-        knowledge_content: entry.knowledge_content,
+        knowledge_content: entry.knowledge_content || board.knowledge?.knowledge_content,
         summary: entry.summary,
         selected_tools: entry.selected_tools,
         explore_plan: entry.explore_plan,
-        tool_detail: entry.tool_detail,
+        tool_detail: entry.tool_detail || board.mcp?.tool_detail,
+        catalog: entry.catalog || board.mcp?.catalog,
         server: entry.server,
         tool: entry.tool,
         result: entry.result,
@@ -874,6 +885,7 @@ function historyToText(history) {
     sessionId,
     question,
     conversationHistory,
+    blackboard,
     messages,
     generatedFiles,
     statusMsg,

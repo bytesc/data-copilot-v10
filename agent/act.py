@@ -20,6 +20,12 @@ from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context, save_session_step
+from utils.blackboard import (
+    get_blackboard,
+    update_blackboard,
+    blackboard_selected_fields,
+    blackboard_selected_functions,
+)
 from utils.get_config import config_data
 from utils.perf_log import perf_api
 
@@ -66,19 +72,13 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             entry["selected_fields"] = act_data["selected_fields"]
         if act_data.get("explore_plan"):
             entry["explore_plan"] = act_data["explore_plan"]
-        if act_data.get("schema_detail"):
-            entry["schema_detail"] = act_data["schema_detail"]
         if act_data.get("selected_guides"):
             entry["selected_guides"] = act_data["selected_guides"]
-        if act_data.get("query_guide_content"):
-            entry["query_guide_content"] = act_data["query_guide_content"]
         entries.append(entry)
     elif action == "explore_base_knowledge":
         entry = {"role": "assistant", "type": "act", "action": "explore_base_knowledge"}
         if act_data.get("selected_knowledge_ids") is not None:
             entry["selected_knowledge_ids"] = act_data["selected_knowledge_ids"]
-        if act_data.get("knowledge_content"):
-            entry["knowledge_content"] = act_data["knowledge_content"]
         if act_data.get("summary"):
             entry["summary"] = act_data["summary"]
         entries.append(entry)
@@ -88,8 +88,6 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             entry["selected_functions"] = act_data["selected_functions"]
         if act_data.get("explore_plan"):
             entry["explore_plan"] = act_data["explore_plan"]
-        if act_data.get("func_docs"):
-            entry["func_docs"] = act_data["func_docs"]
         entries.append(entry)
     elif action == "generate_and_execute":
         full_code = act_data.get("full_code", "")
@@ -133,8 +131,6 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             entry["selected_tools"] = act_data["selected_tools"]
         if act_data.get("explore_plan"):
             entry["explore_plan"] = act_data["explore_plan"]
-        if act_data.get("tool_detail"):
-            entry["tool_detail"] = act_data["tool_detail"]
         entries.append(entry)
     elif action == "exe_mcp":
         entry = {"role": "assistant", "type": "act", "action": "exe_mcp"}
@@ -166,6 +162,18 @@ def _event_stream_act(
     selected_functions = params.get("selected_functions")
     research_guide = params.get("research_guide")
 
+    blackboard = get_blackboard(conversation_history)
+    if not selected_fields or (
+        isinstance(selected_fields, dict) and selected_fields.get("__no_db__")
+    ):
+        board_fields = blackboard_selected_fields(blackboard)
+        if board_fields is not None:
+            selected_fields = board_fields
+    if not selected_functions:
+        board_functions = blackboard_selected_functions(blackboard)
+        if board_functions is not None:
+            selected_functions = board_functions
+
     if action in _DISABLED_ACTIONS:
         reason = _DISABLED_ACTIONS[action]
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Action `{action}` is not available: {reason}'}, ensure_ascii=False)}\n\n"
@@ -182,7 +190,7 @@ def _event_stream_act(
         act_data = yield from _act_explore_functions(full_question, session_id, search_keyword)
 
     elif action == "generate_and_execute":
-        act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions, request_json, research_guide)
+        act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions, request_json, research_guide, blackboard)
 
     elif action == "generate_document":
         title = params.get("title")
@@ -204,9 +212,10 @@ def _event_stream_act(
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
 
     new_entries = _build_act_entries(action, act_data)
+    base_history = update_blackboard(conversation_history, action, act_data)
     history = None
-    if new_entries:
-        history = save_session_step(session_id, conversation_history, new_entries)
+    if new_entries or base_history is not conversation_history:
+        history = save_session_step(session_id, base_history, new_entries)
     if history:
         yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
 
@@ -448,7 +457,7 @@ def _parse_base_knowledge_json(raw: str) -> dict | None:
     return None
 
 
-def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions, request_json: str = "", research_guide: str = ""):
+def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions, request_json: str = "", research_guide: str = "", blackboard=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': 'Generating and executing code...'}, ensure_ascii=False)}\n\n"
     full_code = ""
     full_ans = ""
@@ -458,6 +467,7 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
         selected_fields=selected_fields,
         selected_functions=selected_functions,
         research_guide=research_guide,
+        blackboard=blackboard,
     ):
         if event.get("sub_type") == "code_chunk":
             if exec_error:

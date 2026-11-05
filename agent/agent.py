@@ -43,7 +43,18 @@ def get_db():
     return get_db_info_prompt(engine, example=True, simple=True)
 
 
-def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_functions=None, research_guide=None):
+def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_functions=None, research_guide=None,
+                        blackboard=None):
+    blackboard = blackboard or {}
+    board_schema = blackboard.get("schema") or {}
+    board_functions = blackboard.get("functions") or {}
+    board_knowledge = blackboard.get("knowledge") or {}
+
+    if selected_functions is None:
+        board_selected_functions = board_functions.get("selected_functions")
+        if isinstance(board_selected_functions, list):
+            selected_functions = board_selected_functions
+
     rag_ans = ""
     knowledge = ""
     knowledge = BASE + "\n"
@@ -53,6 +64,10 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
     graph_code_guide_data = get_graph_code_guide_db()
     if graph_code_guide_data:
         knowledge += "\nGraph Code Guide:\n" + base_knowledge_to_str(graph_code_guide_data) + "\n"
+    if board_schema.get("query_guide_content"):
+        knowledge += "\nSQL Query Guide (blackboard):\n" + board_schema["query_guide_content"] + "\n"
+    if board_knowledge.get("knowledge_content"):
+        knowledge += "\nBusiness Knowledge (blackboard):\n" + board_knowledge["knowledge_content"] + "\n"
 
     target_section = ""
     if config_data.get('enable_target_knowledge', False) and TARGET.strip() != "":
@@ -88,10 +103,17 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
     else:
         function_set, function_info, function_import = get_function_info(question, llm, use_all_functions=True)
 
+    if selected_fields is None:
+        board_selected_fields = board_schema.get("selected_fields")
+        if isinstance(board_selected_fields, dict):
+            selected_fields = board_selected_fields
+
     database = ""
     if query_database in function_set or exe_sql in function_set:
         if selected_fields and selected_fields.get("__no_db__"):
             database = ""
+        elif board_schema.get("schema_detail"):
+            database = "\nThe database content (from blackboard): \n" + board_schema["schema_detail"] + "\n"
         else:
             data_prompt = get_db_info_prompt(engine, tables=tables, simple=True, example=False, selected_fields=selected_fields)
             database = "\nThe database content: \n" + data_prompt + "\n"
@@ -263,11 +285,12 @@ def format_yield_item(item, print_rows=5):
 
 def generate_and_execute_stream(question, tables=None, retries=2,
                                  selected_fields=None, selected_functions=None, print_rows=5,
-                                 research_guide=None,
+                                 research_guide=None, blackboard=None,
                                  ):
     yield {"type": "msg", "content": "Analyzing question...", "phase": "act", "sub_phase": "code"}
 
-    cot_prompt, rag_ans, function_import = get_cot_code_prompt(question, tables, selected_fields, selected_functions, research_guide)
+    cot_prompt, rag_ans, function_import = get_cot_code_prompt(
+        question, tables, selected_fields, selected_functions, research_guide, blackboard)
     prompt_length = len(cot_prompt)
 
     error_msg = ""

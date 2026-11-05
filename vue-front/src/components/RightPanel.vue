@@ -27,6 +27,14 @@
         </div>
       </div>
     </div>
+
+    <div class="right-panel-divider"></div>
+
+    <div class="doc-section">
+      <button class="ctrl-btn" @click="$emit('open-blackboard')">
+        <span class="btn-icon">🧠</span> Blackboard
+      </button>
+    </div>
   </div>
 </template>
 
@@ -37,7 +45,7 @@ defineProps({
   isDocGenerating: { type: Boolean, default: false },
 })
 
-defineEmits(['generate-doc', 'generate-doc-unified', 'generate-yaml-doc'])
+defineEmits(['generate-doc', 'generate-doc-unified', 'generate-yaml-doc', 'open-blackboard'])
 </script>
 
 <style scoped>

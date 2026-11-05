@@ -10,6 +10,8 @@ def history_to_text(history: List[dict]) -> str:
     for entry in history:
         role = entry.get("role", "")
         entry_type = entry.get("type", "")
+        if entry_type == "blackboard":
+            continue
         if role == "user":
             utype = entry.get("type", "question")
             content = entry.get("content", "")
@@ -36,15 +38,9 @@ def history_to_text(history: List[dict]) -> str:
                     lines.append(f"[ACT explore_schema] explore_plan:\n{entry['explore_plan']}")
                 if entry.get("selected_guides"):
                     lines.append(f"[ACT explore_schema] selected_guides: {json.dumps(entry['selected_guides'])}")
-                if entry.get("query_guide_content"):
-                    lines.append(f"[ACT explore_schema] query_guide_content:\n{entry['query_guide_content']}")
-                if entry.get("schema_detail"):
-                    lines.append(f"[ACT explore_schema] schema_detail:\n{entry['schema_detail']}")
             elif action == "explore_base_knowledge":
                 if entry.get("selected_knowledge_ids") is not None:
                     lines.append(f"[ACT explore_base_knowledge] selected_knowledge_ids: {json.dumps(entry['selected_knowledge_ids'], ensure_ascii=False)}")
-                if entry.get("knowledge_content"):
-                    lines.append(f"[ACT explore_base_knowledge] knowledge_content:\n{entry['knowledge_content']}")
                 if entry.get("summary"):
                     lines.append(f"[ACT explore_base_knowledge] summary:\n{entry['summary']}")
             elif action == "explore_functions":
@@ -52,8 +48,6 @@ def history_to_text(history: List[dict]) -> str:
                     lines.append(f"[ACT explore_functions] selected_functions: {json.dumps(entry['selected_functions'], ensure_ascii=False)}")
                 if entry.get("explore_plan"):
                     lines.append(f"[ACT explore_functions] explore_plan:\n{entry['explore_plan']}")
-                if entry.get("func_docs"):
-                    lines.append(f"[ACT explore_functions] func_docs:\n{entry['func_docs']}")
             elif action == "generate_and_execute":
                 if entry.get("code"):
                     lines.append(f"[ACT generate_and_execute] code:\n{entry['code']}")
@@ -87,8 +81,6 @@ def history_to_text(history: List[dict]) -> str:
                     lines.append(f"[ACT explore_mcp] selected_tools: {json.dumps(entry['selected_tools'], ensure_ascii=False)}")
                 if entry.get("explore_plan"):
                     lines.append(f"[ACT explore_mcp] explore_plan:\n{entry['explore_plan']}")
-                if entry.get("tool_detail"):
-                    lines.append(f"[ACT explore_mcp] tool_detail:\n{entry['tool_detail']}")
             elif action == "exe_mcp":
                 if entry.get("results"):
                     for r in entry["results"]:

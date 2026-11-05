@@ -30,9 +30,15 @@
         @generate-doc="chat.generateDocumentUnified()"
         @generate-doc-unified="chat.generateDocument()"
         @generate-yaml-doc="onYamlDoc"
+        @open-blackboard="showBlackboard = true"
       />
     </aside>
 
+    <BlackboardModal
+      v-if="showBlackboard"
+      :board="chat.blackboard.value"
+      @close="showBlackboard = false"
+    />
     <ResumeModal
       v-if="showResume"
       :server-url="chat.serverUrl.value"
@@ -58,6 +64,7 @@ import { useChat } from '@/composables/useChat.js'
 import LeftPanel from '@/components/LeftPanel.vue'
 import RightPanel from '@/components/RightPanel.vue'
 import ChatArea from '@/components/ChatArea.vue'
+import BlackboardModal from '@/components/BlackboardModal.vue'
 import ResumeModal from '@/components/ResumeModal.vue'
 import YamlOutlineModal from '@/components/YamlOutlineModal.vue'
 
@@ -73,6 +80,7 @@ const isPanelCollapsed = ref(lastMobile)
 const isRightPanelCollapsed = ref(lastMobile)
 const showResume = ref(false)
 const showYamlOutline = ref(false)
+const showBlackboard = ref(false)
 const yamlBusy = ref(false)
 
 function syncPanelsWithViewport() {
