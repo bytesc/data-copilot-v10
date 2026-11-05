@@ -52,7 +52,11 @@
 
     <div class="spacer"></div>
 
-    <div class="options-section">
+    <div class="options-section" :class="{ 'options-locked': isRunning }">
+      <div v-if="isRunning" class="options-locked-hint">
+        <span class="locked-dot"></span>
+        Running — settings locked
+      </div>
       <div class="option-item">
         <label class="option-label">Model</label>
         <select
@@ -82,10 +86,16 @@
       </div>
       <div class="option-item">
         <label class="option-label">Style</label>
-        <select class="option-select">
-          <option>Formal</option>
-          <option>Casual</option>
-          <option>Technical</option>
+        <select
+          class="option-select"
+          v-model="configState.current_style"
+          :disabled="isRunning || styleOptions.length === 0"
+          @change="onStyleChange"
+        >
+          <option v-for="opt in styleOptions" :key="opt" :value="opt">
+            {{ opt }}
+          </option>
+          <option value="">Default</option>
         </select>
       </div>
     </div>
@@ -94,7 +104,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { configState, selectModel, selectReasoningEffort, restoreSavedModel } from '@/utils/config.js'
+import { configState, selectModel, selectReasoningEffort, selectStyle, restoreSavedModel } from '@/utils/config.js'
 
 defineProps({
   sessionId: { type: String, required: true },
@@ -113,12 +123,21 @@ const reasoningEffortOptions = computed(() => {
   return Array.isArray(model?.reasoning_effort_options) ? model.reasoning_effort_options : []
 })
 
+const styleOptions = computed(() => {
+  const model = configState.models.find(m => m.id === configState.current_model)
+  return Array.isArray(model?.style_options) ? model.style_options : []
+})
+
 function onModelChange() {
   selectModel(configState.current_model)
 }
 
 function onReasoningEffortChange() {
   selectReasoningEffort(configState.current_reasoning_effort)
+}
+
+function onStyleChange() {
+  selectStyle(configState.current_style)
 }
 
 onMounted(async () => {
@@ -169,6 +188,51 @@ onMounted(async () => {
 .option-select:hover,
 .option-select:focus {
   border-color: var(--accent-blue);
+}
+
+.option-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+.option-select:disabled:hover {
+  border-color: var(--border-color);
+}
+
+.options-locked .option-label {
+  opacity: 0.55;
+}
+
+.options-locked-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #f0b429;
+}
+
+.locked-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f0b429;
+  flex-shrink: 0;
+  animation: locked-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes locked-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
 }
 
 .collapsible-section {

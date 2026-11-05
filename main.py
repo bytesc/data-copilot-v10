@@ -2,6 +2,7 @@ import os
 os.environ['MPLBACKEND'] = 'Agg'
 
 import asyncio
+import contextvars
 import io
 import json
 import mimetypes
@@ -34,6 +35,9 @@ from agent.utils.llm_access.LLM import (
     get_current_model_id,
     get_current_reasoning_effort,
     set_current_reasoning_effort,
+    get_current_style,
+    set_current_style,
+    apply_request_selection,
 )
 from data_access.session_log import record_session_operation, create_session_log_table
 from data_access.observe_log import (
@@ -76,6 +80,18 @@ if _ENABLE_BASE_KNOWLEDGE:
 
 app = FastAPI()
 
+
+@app.middleware("http")
+async def llm_selection_middleware(request: Request, call_next):
+    """从每个请求的头中读取前端当前选择，按请求隔离，不做后端持久化。"""
+    apply_request_selection(
+        request.headers.get("x-llm-model"),
+        request.headers.get("x-llm-reasoning-effort"),
+        request.headers.get("x-llm-style"),
+    )
+    return await call_next(request)
+
+
 import logging
 import traceback
 
@@ -89,6 +105,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # 创建线程池，处理同步任务
 executor = ThreadPoolExecutor(max_workers=10)
+
+
+def _run_in_llm_context(func, *args):
+    """把请求上下文（模型/Depth/Style）带入线程池中的 LLM 调用。"""
+    return contextvars.copy_context().run(func, *args)
 
 STATIC_FOLDER = config_data.get("static_folder", "tmp_imgs")
 STATIC_PATH = f"/{STATIC_FOLDER}"
@@ -153,6 +174,7 @@ async def get_config():
         "models": list_model_configs(),
         "current_model": get_current_model_id(),
         "current_reasoning_effort": get_current_reasoning_effort(),
+        "current_style": get_current_style(),
     })
 
 
@@ -162,6 +184,7 @@ async def get_models():
         "models": list_model_configs(),
         "current_model": get_current_model_id(),
         "current_reasoning_effort": get_current_reasoning_effort(),
+        "current_style": get_current_style(),
     })
 
 
@@ -178,6 +201,7 @@ async def select_model(entry: ModelSelectInput):
         "models": list_model_configs(),
         "current_model": cfg["id"],
         "current_reasoning_effort": get_current_reasoning_effort(),
+        "current_style": get_current_style(),
     })
 
 
@@ -200,6 +224,30 @@ async def select_reasoning_effort(entry: ReasoningEffortInput):
         "models": list_model_configs(),
         "current_model": get_current_model_id(),
         "current_reasoning_effort": effort,
+        "current_style": get_current_style(),
+    })
+
+
+class StyleInput(BaseModel):
+    value: str = ""
+
+
+@app.post("/api/models/style/")
+async def select_style(entry: StyleInput):
+    try:
+        style = set_current_style(entry.value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if style is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Model '{get_current_model_id()}' does not support style_temperature",
+        )
+    return JSONResponse(content={
+        "models": list_model_configs(),
+        "current_model": get_current_model_id(),
+        "current_reasoning_effort": get_current_reasoning_effort(),
+        "current_style": style,
     })
 
 
@@ -538,7 +586,7 @@ async def exe_sql(request: Request, user_input: AgentInput):
 async def get_graph_api(request: Request, user_input: AgentInputDict):
     df = pd.DataFrame.from_dict(user_input.data)
     loop = asyncio.get_event_loop()
-    ans = await loop.run_in_executor(executor, draw_graph, user_input.question, df)
+    ans = await loop.run_in_executor(executor, _run_in_llm_context, draw_graph, user_input.question, df)
     if ans:
         processed_data = {
             "question": user_input.question,
@@ -646,6 +694,7 @@ async def filter_db_fields_api(request: Request, user_input: AgentInput):
 
     selected_fields = await loop.run_in_executor(
         executor,
+        _run_in_llm_context,
         _timed_filter_db_fields,
         user_input.question,
         engine,
@@ -762,7 +811,7 @@ async def upload_txt(
             with perf_context("/upload-txt/"):
                 return get_llm_data_comment(text, table)
 
-        result = await loop.run_in_executor(executor, _timed_data_comment, extracted_text, table_name)
+        result = await loop.run_in_executor(executor, _run_in_llm_context, _timed_data_comment, extracted_text, table_name)
 
         result = {
             "status": "success",

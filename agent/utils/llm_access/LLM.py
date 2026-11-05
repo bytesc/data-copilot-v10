@@ -1,3 +1,4 @@
+import contextvars
 import os
 import threading
 
@@ -25,6 +26,22 @@ def _normalize_reasoning_effort(value):
     return options
 
 
+def _normalize_style_temperature(value):
+    """把 {样式名: 温度} 字典标准化为按配置顺序排列的字典。"""
+    if not isinstance(value, dict):
+        return {}
+    styles = {}
+    for name, temp in value.items():
+        label = str(name).strip()
+        if not label:
+            continue
+        try:
+            styles[label] = float(temp)
+        except (TypeError, ValueError):
+            continue
+    return styles
+
+
 def _build_model_configs():
     models = config_data.get("llm_models") or []
     built = []
@@ -36,6 +53,7 @@ def _build_model_configs():
             "url": m.get("url") or "",
             "key_file": m.get("key_file") or DEFAULT_KEY_FILE,
             "reasoning_effort": _normalize_reasoning_effort(m.get("reasoning_effort")),
+            "style_temperature": _normalize_style_temperature(m.get("style_temperature")),
             "extra_params": m.get("extra_params") or {},
         })
     return built
@@ -44,14 +62,54 @@ def _build_model_configs():
 MODEL_CONFIGS = _build_model_configs()
 
 _lock = threading.Lock()
-_current_model_id = MODEL_CONFIGS[0]["id"] if MODEL_CONFIGS else None
-# 当前 Depth 选择；空字符串表示 Default（不额外上传该参数）
-_current_reasoning_effort = (
+_DEFAULT_MODEL_ID = MODEL_CONFIGS[0]["id"] if MODEL_CONFIGS else None
+_DEFAULT_REASONING_EFFORT = (
     MODEL_CONFIGS[0]["reasoning_effort"][0]
     if MODEL_CONFIGS and MODEL_CONFIGS[0]["reasoning_effort"]
     else ""
 )
+
+# 选择状态按请求隔离（来自前端每次请求携带的参数），后端不做持久化，
+# 避免多个用户选择不同模型时互相覆盖。
+_current_model_id_var = contextvars.ContextVar(
+    "llm_current_model_id", default=_DEFAULT_MODEL_ID
+)
+_current_reasoning_effort_var = contextvars.ContextVar(
+    "llm_current_reasoning_effort", default=_DEFAULT_REASONING_EFFORT
+)
+# Style 默认 Default（空字符串，不额外上传 temperature）
+_current_style_var = contextvars.ContextVar("llm_current_style", default="")
 _clients = {}
+
+
+def apply_request_selection(model_id=None, reasoning_effort=None, style=None):
+    """按前端本次请求携带的值设置上下文，不写入全局共享状态。
+
+    None 表示请求未携带该字段，此时使用模型默认值；空字符串表示 Default。
+    """
+    cfg = get_model_config(model_id) if model_id else None
+    if cfg is None:
+        cfg = MODEL_CONFIGS[0] if MODEL_CONFIGS else None
+    if cfg is None:
+        _current_model_id_var.set(None)
+        _current_reasoning_effort_var.set("")
+        _current_style_var.set("")
+        return
+    _current_model_id_var.set(cfg["id"])
+
+    if reasoning_effort is None:
+        effort = _default_reasoning_effort(cfg)
+    elif reasoning_effort == "" or reasoning_effort in cfg["reasoning_effort"]:
+        effort = reasoning_effort
+    else:
+        effort = _default_reasoning_effort(cfg)
+    _current_reasoning_effort_var.set(effort)
+
+    if style is None or style == "" or style in cfg["style_temperature"]:
+        current_style = style or ""
+    else:
+        current_style = ""
+    _current_style_var.set(current_style)
 
 
 def _default_reasoning_effort(cfg):
@@ -59,10 +117,16 @@ def _default_reasoning_effort(cfg):
     return options[0] if options else ""
 
 
+def _default_style(cfg):
+    """Style 默认使用 Default（不上传 temperature）。"""
+    return ""
+
+
 def list_model_configs():
     """供前端展示的模型列表（不暴露 key 文件等敏感信息）"""
-    current_id = _current_model_id
-    current_effort = _current_reasoning_effort
+    current_id = get_current_model_id()
+    current_effort = get_current_reasoning_effort()
+    current_style = get_current_style()
     return [
         {
             "id": m["id"],
@@ -71,6 +135,8 @@ def list_model_configs():
             "url": m["url"],
             "reasoning_effort_options": list(m["reasoning_effort"]),
             "reasoning_effort_selected": current_effort if m["id"] == current_id else "",
+            "style_options": list(m["style_temperature"].keys()),
+            "style_selected": current_style if m["id"] == current_id else "",
         }
         for m in MODEL_CONFIGS
     ]
@@ -79,7 +145,7 @@ def list_model_configs():
 def get_model_config(model_id=None):
     """获取指定 id（默认当前）模型的完整配置；未指定或指定第一个模型时返回默认（第一个）模型"""
     if model_id is None:
-        target = _current_model_id
+        target = get_current_model_id()
     else:
         target = str(model_id)
         if target == "":
@@ -91,27 +157,26 @@ def get_model_config(model_id=None):
 
 
 def get_current_model_id():
-    return _current_model_id
+    return _current_model_id_var.get()
 
 
 def set_current_model(model_id):
-    """切换当前使用的模型，返回新配置；无效 id 返回 None"""
+    """为本次请求切换模型，返回新配置；无效 id 返回 None。"""
     cfg = get_model_config(model_id)
     if cfg is None:
         return None
+    if cfg["id"] != get_current_model_id():
+        _current_reasoning_effort_var.set(_default_reasoning_effort(cfg))
+        _current_style_var.set(_default_style(cfg))
+    _current_model_id_var.set(cfg["id"])
     with _lock:
-        global _current_model_id, _current_reasoning_effort
-        # 重复选中当前模型时不要重置 Depth，避免页面恢复选中时把用户选择打回第一个值
-        if cfg["id"] != _current_model_id:
-            _current_reasoning_effort = _default_reasoning_effort(cfg)
-        _current_model_id = cfg["id"]
         _clients.pop(cfg["id"], None)
     return cfg
 
 
 def get_current_reasoning_effort():
     """当前 Depth 值；空字符串表示 Default（不上传该参数）"""
-    return _current_reasoning_effort
+    return _current_reasoning_effort_var.get()
 
 
 def set_current_reasoning_effort(value):
@@ -128,16 +193,39 @@ def set_current_reasoning_effort(value):
         raise ValueError(
             f"reasoning_effort '{effort}' is not configured for model '{cfg['id']}'"
         )
-    global _current_reasoning_effort
-    with _lock:
-        _current_reasoning_effort = effort
+    _current_reasoning_effort_var.set(effort)
     return effort
 
 
-def get_extra_body(model_id=None):
-    """合并本次请求的 extra_body：先放页面选择的 reasoning_effort，再用 extra_params 覆盖。
+def get_current_style():
+    """当前 Style 名称；空字符串表示 Default（不上传 temperature）"""
+    return _current_style_var.get()
 
-    Default（空字符串）不会写入 reasoning_effort。extra_params 中同名字段优先级更高。
+
+def set_current_style(value):
+    """设置当前模型的 Style；空值表示 Default。
+
+    返回新的值；当前模型不支持 style_temperature 时返回 None；
+    样式不在配置字典内时抛出 ValueError。
+    """
+    cfg = get_model_config()
+    styles = (cfg or {}).get("style_temperature") or {}
+    if not styles:
+        return None
+    style = "" if value is None else str(value).strip()
+    if style and style not in styles:
+        raise ValueError(
+            f"style '{style}' is not configured for model '{cfg['id']}'"
+        )
+    _current_style_var.set(style)
+    return style
+
+
+def get_extra_body(model_id=None):
+    """合并本次请求的 extra_body：先放页面选择，再用 extra_params 覆盖。
+
+    Depth -> reasoning_effort；Style -> temperature。
+    Default（空字符串）不会写入对应字段。extra_params 中同名字段优先级更高。
     """
     cfg = get_model_config(model_id)
     if cfg is None:
@@ -147,6 +235,9 @@ def get_extra_body(model_id=None):
     effort = get_current_reasoning_effort() if is_current else ""
     if effort and effort in cfg["reasoning_effort"]:
         body["reasoning_effort"] = effort
+    style = get_current_style() if is_current else ""
+    if style and style in cfg["style_temperature"]:
+        body["temperature"] = cfg["style_temperature"][style]
     body.update(cfg.get("extra_params") or {})
     return body
 

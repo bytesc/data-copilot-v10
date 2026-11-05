@@ -10,6 +10,7 @@ export const configState = reactive({
   models: [],
   current_model: '',
   current_reasoning_effort: '',
+  current_style: '',
   _loaded: false,
 })
 
@@ -42,16 +43,26 @@ export const enableEdit = () => configState.enable_edit
 
 const MODEL_STORAGE_KEY = 'data-copilot-selected-model'
 const EFFORT_STORAGE_PREFIX = 'data-copilot-reasoning-effort:'
+const STYLE_STORAGE_PREFIX = 'data-copilot-style:'
 
 function effortStorageKey(modelId) {
   return `${EFFORT_STORAGE_PREFIX}${modelId}`
+}
+
+function styleStorageKey(modelId) {
+  return `${STYLE_STORAGE_PREFIX}${modelId}`
 }
 
 function getSavedReasoningEffort(modelId) {
   return localStorage.getItem(effortStorageKey(modelId))
 }
 
+function getSavedStyle(modelId) {
+  return localStorage.getItem(styleStorageKey(modelId))
+}
+
 let _effortTouched = false
+let _styleTouched = false
 
 export async function selectModel(modelId) {
   if (!modelId) return false
@@ -66,10 +77,15 @@ export async function selectModel(modelId) {
     configState.models = data.models || configState.models
     configState.current_model = data.current_model
     configState.current_reasoning_effort = data.current_reasoning_effort ?? ''
+    configState.current_style = data.current_style ?? ''
     localStorage.setItem(MODEL_STORAGE_KEY, data.current_model)
     localStorage.setItem(
       effortStorageKey(data.current_model),
       configState.current_reasoning_effort,
+    )
+    localStorage.setItem(
+      styleStorageKey(data.current_model),
+      configState.current_style,
     )
     return true
   } catch (_) {
@@ -100,6 +116,29 @@ export async function selectReasoningEffort(value) {
   }
 }
 
+export async function selectStyle(value) {
+  _styleTouched = true
+  try {
+    const res = await fetch('/api/models/style/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: value || '' }),
+    })
+    if (!res.ok) return false
+    const data = await res.json()
+    configState.models = data.models || configState.models
+    configState.current_model = data.current_model || configState.current_model
+    configState.current_style = data.current_style ?? ''
+    localStorage.setItem(
+      styleStorageKey(configState.current_model),
+      configState.current_style,
+    )
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
 export function getSavedModelId() {
   return localStorage.getItem(MODEL_STORAGE_KEY) || ''
 }
@@ -112,9 +151,16 @@ export async function restoreSavedModel() {
   if (configState.current_model !== saved) {
     await selectModel(saved)
   }
-  if (_effortTouched) return
-  const savedEffort = getSavedReasoningEffort(saved)
-  if (savedEffort !== null && savedEffort !== configState.current_reasoning_effort) {
-    await selectReasoningEffort(savedEffort)
+  if (!_effortTouched) {
+    const savedEffort = getSavedReasoningEffort(saved)
+    if (savedEffort !== null && savedEffort !== configState.current_reasoning_effort) {
+      await selectReasoningEffort(savedEffort)
+    }
+  }
+  if (!_styleTouched) {
+    const savedStyle = getSavedStyle(saved)
+    if (savedStyle !== null && savedStyle !== configState.current_style) {
+      await selectStyle(savedStyle)
+    }
   }
 }
