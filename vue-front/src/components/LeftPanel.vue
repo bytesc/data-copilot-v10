@@ -67,14 +67,6 @@
         </select>
       </div>
       <div class="option-item">
-        <label class="option-label">Style</label>
-        <select class="option-select">
-          <option>Formal</option>
-          <option>Casual</option>
-          <option>Technical</option>
-        </select>
-      </div>
-      <div class="option-item">
         <label class="option-label">Depth</label>
         <select
           class="option-select"
@@ -86,6 +78,14 @@
             {{ opt }}
           </option>
           <option value="">Default</option>
+        </select>
+      </div>
+      <div class="option-item">
+        <label class="option-label">Style</label>
+        <select class="option-select">
+          <option>Formal</option>
+          <option>Casual</option>
+          <option>Technical</option>
         </select>
       </div>
     </div>

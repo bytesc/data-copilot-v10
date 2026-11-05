@@ -37,6 +37,7 @@ llm_models:
     key_file: "api_key_openai.txt"     # key file name; defaults if omitted
     reasoning_effort: ["none", "low", "high", "max"]
     extra_params: {"max_tokens": 393216} 
+  - id: "deepseek-v4.1-flash"
     name: "DeepSeek V4.1 Flash"          # custom model display name
     model: "deepseek-v4.1-flash"         # actual model name used in API calls
     url: "https://tokenhub.tencentmaas.com/v1"

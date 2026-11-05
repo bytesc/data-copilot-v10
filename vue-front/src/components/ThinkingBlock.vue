@@ -1,5 +1,5 @@
 <template>
-  <details v-if="message.thinking" class="msg-collapse thinking-block">
+  <details v-if="message.thinking" class="msg-collapse thinking-block" open>
     <summary class="collapse-summary">
       <span class="thinking-summary-label">Thinking Process</span>
       <span v-if="message.thinkingStreaming" class="blink-cursor">|</span>

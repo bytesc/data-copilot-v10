@@ -101,8 +101,10 @@ def set_current_model(model_id):
         return None
     with _lock:
         global _current_model_id, _current_reasoning_effort
+        # 重复选中当前模型时不要重置 Depth，避免页面恢复选中时把用户选择打回第一个值
+        if cfg["id"] != _current_model_id:
+            _current_reasoning_effort = _default_reasoning_effort(cfg)
         _current_model_id = cfg["id"]
-        _current_reasoning_effort = _default_reasoning_effort(cfg)
         _clients.pop(cfg["id"], None)
     return cfg
 

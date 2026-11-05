@@ -41,6 +41,17 @@ export async function loadConfig() {
 export const enableEdit = () => configState.enable_edit
 
 const MODEL_STORAGE_KEY = 'data-copilot-selected-model'
+const EFFORT_STORAGE_PREFIX = 'data-copilot-reasoning-effort:'
+
+function effortStorageKey(modelId) {
+  return `${EFFORT_STORAGE_PREFIX}${modelId}`
+}
+
+function getSavedReasoningEffort(modelId) {
+  return localStorage.getItem(effortStorageKey(modelId))
+}
+
+let _effortTouched = false
 
 export async function selectModel(modelId) {
   if (!modelId) return false
@@ -56,6 +67,10 @@ export async function selectModel(modelId) {
     configState.current_model = data.current_model
     configState.current_reasoning_effort = data.current_reasoning_effort ?? ''
     localStorage.setItem(MODEL_STORAGE_KEY, data.current_model)
+    localStorage.setItem(
+      effortStorageKey(data.current_model),
+      configState.current_reasoning_effort,
+    )
     return true
   } catch (_) {
     return false
@@ -63,6 +78,7 @@ export async function selectModel(modelId) {
 }
 
 export async function selectReasoningEffort(value) {
+  _effortTouched = true
   try {
     const res = await fetch('/api/models/reasoning-effort/', {
       method: 'POST',
@@ -74,6 +90,10 @@ export async function selectReasoningEffort(value) {
     configState.models = data.models || configState.models
     configState.current_model = data.current_model || configState.current_model
     configState.current_reasoning_effort = data.current_reasoning_effort ?? ''
+    localStorage.setItem(
+      effortStorageKey(configState.current_model),
+      configState.current_reasoning_effort,
+    )
     return true
   } catch (_) {
     return false
@@ -88,7 +108,13 @@ export async function restoreSavedModel() {
   await loadConfig()
   const saved = getSavedModelId()
   if (!saved) return
-  if (configState.models.some(m => m.id === saved)) {
+  if (!configState.models.some(m => m.id === saved)) return
+  if (configState.current_model !== saved) {
     await selectModel(saved)
+  }
+  if (_effortTouched) return
+  const savedEffort = getSavedReasoningEffort(saved)
+  if (savedEffort !== null && savedEffort !== configState.current_reasoning_effort) {
+    await selectReasoningEffort(savedEffort)
   }
 }
