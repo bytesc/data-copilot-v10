@@ -1,5 +1,8 @@
 # Action 输入输出文档
 
+> 文中 API 入参示例展示的是统一请求信封中的 `data` 内容；实际发送到后端的 JSON `POST/PUT/PATCH`
+> 请求体必须为 `{"meta": {"model": "...", "reasoning_effort": "...", "style": "..."}, "data": {...}}`。
+
 每个环节记录三项：**输入**（LLM 决策输出的 JSON / API 入参）、**输出**（写入 `conversation_history` 的条目）、**上下文**（`history_to_text` 转换后喂给 LLM 的文本）。
 
 ---

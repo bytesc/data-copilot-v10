@@ -26,15 +26,18 @@ llm_models:
     url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
     key_file: "api_key_openai.txt"       # key 文件名（agent/utils/llm_access/ 目录下），不填用默认 api_key_openai.txt
     reasoning_effort: ["low", "high", "max"]  # 前端 Depth 下拉选项，默认选中第一个；不填/[] 则该项不可用
+    style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}  # 前端 Style 下拉，默认 Default；不填/{} 则该项不可用
     extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}  # 该模型专属额外请求参数
   - id: "qwen-max"
     name: "Qwen Max"
     model: "qwen-max"
     url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
     key_file: "api_key_qwen.txt"
-    extra_params: {}                     # {} 或删除表示使用模型默认行为；无 reasoning_effort 时 Depth 下拉禁用
+    style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
+    extra_params: {}                     # {} 或删除表示使用模型默认行为；无对应选项时下拉禁用
 
-# Depth 下拉固定追加 Default（不上传该参数）；extra_params 若也含 reasoning_effort，最终合并时以 extra_params 为准。
+# Depth 默认选中列表第一个，Style 默认选中 Default（不额外上传 reasoning_effort/temperature）。
+# extra_params 若也含 reasoning_effort 或 temperature，最终合并时以 extra_params 为准。
 
 # extra_params 说明（各模型单独配置，透传给 OpenAI 兼容接口的扩展字段）：
 # DeepSeek 官方文档（api-docs.deepseek.com/zh-cn/guides/thinking_mode）：
@@ -84,6 +87,31 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 ---
 
 ## 4. 请求模型（Pydantic Schemas）
+
+### 统一请求信封
+
+所有 JSON `POST/PUT/PATCH` 的 HTTP 请求体必须为：
+
+```json
+{
+  "meta": {
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "max",
+    "style": "Casual"
+  },
+  "data": {
+    "question": "分析上个月销售趋势",
+    "session_id": "xxx"
+  }
+}
+```
+
+- `meta` 只包含模型调用选择：`model`、`reasoning_effort`、`style`；为空字符串表示 `Default`。
+- 后端中间件读取 `meta` 后只把 `data` 交给原 Pydantic 接口，因此下文各请求模型的示例均表示 `data` 内容。
+- 未使用信封的 JSON 请求返回 `400`；不再支持 header 回退。
+- 后端不保存用户选择；前端用 localStorage 记忆并在每次请求中发送。
+- GET/DELETE 没有请求体，不使用信封。
+- Multipart 上传使用 `meta` 表单字段，目前仅 `/upload-txt/` 读取并用于 LLM 注释生成。
 
 ### AgentInput — 通用 Agent 请求
 

@@ -151,15 +151,18 @@ llm_models:
     url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
     key_file: "api_key_openai.txt"     # key 文件名（位于 agent/utils/llm_access/），不填用默认 api_key_openai.txt
     reasoning_effort: ["low", "high", "max"]  # 前端 Depth 下拉选项，默认选中第一个；不填则该项不可用
+    style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}  # 前端 Style 下拉，默认 Default；不填则该项不可用
     extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}  # 该模型专属额外请求参数
   - id: "qwen-max"
     name: "Qwen Max"
     model: "qwen-max"
     url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
     key_file: "api_key_qwen.txt"
-    extra_params: {}                   # {} 或删除表示使用模型默认行为；无 reasoning_effort 时 Depth 下拉禁用
+    style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
+    extra_params: {}                   # {} 或删除表示使用模型默认行为；无 reasoning_effort/style_temperature 时对应下拉禁用
 
-# Depth 下拉固定追加 Default（不上传该参数）；extra_params 若也含 reasoning_effort，最终合并时以 extra_params 为准。
+# Depth 默认选中列表第一个，Style 默认选中 Default（不额外上传 reasoning_effort/temperature）。
+# extra_params 若也含 reasoning_effort 或 temperature，最终合并时以 extra_params 为准。
 
 # extra_params 参考（各模型单独配置）：
 # DeepSeek 关闭思考: {"thinking": {"type": "disabled"}}；调强度用 reasoning_effort: low/high/max
@@ -176,6 +179,29 @@ enable_edit: true             # 数据/知识管理页（设为 false 时前端�
 enable_llmlog: false          # 记录 LLM 调用日志到 llmlog/*.txt
 enable_perf_log: true         # 写接口性能指标到 perf_log.csv
 ```
+
+### 请求格式（统一信封）
+
+所有 JSON `POST/PUT/PATCH` 请求必须使用 `{meta, data}` 信封；`meta` 放模型调用选项，`data` 放原接口参数：
+
+```json
+{
+  "meta": {
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "max",
+    "style": "Casual"
+  },
+  "data": {
+    "question": "分析上个月销售趋势",
+    "session_id": "xxx"
+  }
+}
+```
+
+- `reasoning_effort` / `style` 为空字符串表示 `Default`。
+- 后端不记忆选择，前端用 localStorage 记忆并在每次请求中发送。
+- GET/DELETE 无请求体，不使用信封。
+- Multipart 上传无法使用 JSON 信封，前端在 `FormData` 中附加 `meta` 字段（目前 `/upload-txt/` 会读取）。
 
 ### 前端配置
 
@@ -213,7 +239,7 @@ FRONT_PORT=8010 python front.py
 
 | 文档 | 内容 |
 |------|------|
-| [`docs/api.md`](docs/api.md) | 全部 79 个 API 端点说明、请求/响应格式、错误码 |
+| [`docs/api.md`](docs/api.md) | 全部 API 端点说明、统一请求信封、请求/响应格式、错误码 |
 | [`docs/config_and_models.md`](docs/config_and_models.md) | 配置格式（config.yaml / .env）、Pydantic 请求模型、日志表结构、依赖说明、前端构建配置 |
 | [`docs/mcp_servers.md`](docs/mcp_servers.md) | MCP 服务器配置与启动指南（mcp_servers.yaml、测试服务器、新增步骤） |
 | [`docs/sse_event_flow.md`](docs/sse_event_flow.md) | SSE 流式事件类型与数据格式 |

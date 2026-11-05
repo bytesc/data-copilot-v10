@@ -1,5 +1,8 @@
 # CSV 上传、导出与文档导入注释
 
+> Multipart 接口无法使用 JSON 的 `{meta, data}` 信封。前端会在 `FormData` 中附加 `meta` 文本字段
+> （JSON 字符串），目前只有 `POST /upload-txt/` 会读取并用于后续 LLM 调用；其余上传接口会忽略它。
+
 ## 1. 数据 CSV 导入 (`POST /upload-csv/`)
 
 ### 功能
@@ -152,7 +155,7 @@ email,邮箱地址
 |------|------|
 | **URL** | `POST /upload-txt/` |
 | **请求格式** | `multipart/form-data` |
-| **字段** | `file`（文档文件），`table_name`（目标表名，默认 `uploaded_data`） |
+| **字段** | `file`（文档文件），`table_name`（目标表名，默认 `uploaded_data`），`meta`（模型选择 JSON，可选） |
 
 ### 处理流程
 

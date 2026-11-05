@@ -2,6 +2,12 @@
 
 Base URL: `http://<host>:8008`
 
+> **统一请求信封**：所有 JSON `POST/PUT/PATCH` 必须发送
+> `{"meta": {"model": "...", "reasoning_effort": "...", "style": "..."}, "data": {...}}`。
+> 下文请求体示例若无特别说明，展示的是 `data` 内容；未使用信封会返回 `400`。
+> `reasoning_effort` / `style` 为空字符串表示 `Default`。后端不保存选择，GET/DELETE 不使用信封。
+> Multipart 上传使用 `meta` 表单字段，目前仅 `/upload-txt/` 会读取。
+
 ---
 
 ## 目录
@@ -33,52 +39,119 @@ Base URL: `http://<host>:8008`
   "enable_target_knowledge": false,
   "enable_edit": true,
   "models": [
-    { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "model": "deepseek-v4-flash", "url": "https://tokenhub.tencentmaas.com/v1" },
-    { "id": "qwen-max", "name": "Qwen Max", "model": "qwen-max", "url": "https://dashscope.aliyuncs.com/compatible-mode/v1" }
+    {
+      "id": "deepseek-v4-flash",
+      "name": "DeepSeek V4 Flash",
+      "model": "deepseek-v4-flash",
+      "url": "https://tokenhub.tencentmaas.com/v1",
+      "reasoning_effort_options": ["none", "low", "high", "max"],
+      "reasoning_effort_selected": "none",
+      "style_options": ["Formal", "Casual", "Technical"],
+      "style_selected": ""
+    },
+    {
+      "id": "qwen-max",
+      "name": "Qwen Max",
+      "model": "qwen-max",
+      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "reasoning_effort_options": [],
+      "reasoning_effort_selected": "",
+      "style_options": ["Formal", "Casual", "Technical"],
+      "style_selected": ""
+    }
   ],
-  "current_model": "deepseek-v4-flash"
+  "current_model": "deepseek-v4-flash",
+  "current_reasoning_effort": "none",
+  "current_style": ""
 }
 ```
 
 > **`enable_edit`**: 设为 `false` 时，数据管理（`/api/db-overview/`、删表、数据/注释导出、注释编辑、上传）与系统知识管理（`/api/sys-knowledge/*`）等接口全部返回 `403`；前端同时隐藏 Data、Knowledge 页面并拦截其路由。
 
-> **`models` / `current_model`**: 配置的 LLM 模型列表与当前选中的模型 id（默认列表第一个），前端据此渲染模型切换下拉框。
+> GET 请求没有 `meta`，因此 `current_*` 返回默认值（第一个模型、Depth 第一个值、Style `Default`）。前端使用 localStorage 记忆并恢复用户选择。
+
+> **`models`**: 配置的模型列表及 Depth/Style 可选值，前端据此渲染下拉框；对应配置缺失时下拉禁用。
 
 ### GET `/api/models/`
 
-返回配置的模型列表与当前选中模型。
+返回配置的模型列表与默认选择。
 
-**响应** `200`
-```json
-{
-  "models": [
-    { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "model": "deepseek-v4-flash", "url": "https://tokenhub.tencentmaas.com/v1" }
-  ],
-  "current_model": "deepseek-v4-flash"
-}
-```
+**响应** `200` — 结构同 `/api/config` 中的 `models`、`current_model`、`current_reasoning_effort`、`current_style`。
 
 ### POST `/api/models/select/`
 
-切换当前使用的 LLM 模型（全局生效，后续请求使用新模型）。
+返回目标模型的配置和默认 Depth/Style。后端不做全局切换，选择由前端保存并在后续请求的 `meta` 中发送。
 
 **请求体** `application/json`
 ```json
-{ "id": "qwen-max" }
+{
+  "meta": {
+    "model": "deepseek-v4-flash",
+    "reasoning_effort": "low",
+    "style": ""
+  },
+  "data": { "id": "qwen-max" }
+}
 ```
 
 **响应** `200`
 ```json
 {
   "models": [
-    { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "model": "deepseek-v4-flash", "url": "https://tokenhub.tencentmaas.com/v1" },
-    { "id": "qwen-max", "name": "Qwen Max", "model": "qwen-max", "url": "https://dashscope.aliyuncs.com/compatible-mode/v1" }
+    {
+      "id": "qwen-max",
+      "name": "Qwen Max",
+      "model": "qwen-max",
+      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "reasoning_effort_options": [],
+      "reasoning_effort_selected": "",
+      "style_options": [],
+      "style_selected": ""
+    }
   ],
-  "current_model": "qwen-max"
+  "current_model": "qwen-max",
+  "current_reasoning_effort": "",
+  "current_style": ""
 }
 ```
 
 > **错误**: 模型 id 不存在时返回 `404 {"detail": "Model '<id>' not found"}`。
+
+### POST `/api/models/reasoning-effort/`
+
+设置本次请求的 Depth 值；空字符串表示 `Default`。模型未配置 `reasoning_effort` 或值不在列表中时返回 `400`。
+
+**请求体** `application/json`
+```json
+{
+  "meta": {
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "max",
+    "style": ""
+  },
+  "data": { "value": "max" }
+}
+```
+
+**响应** `200` — 返回模型列表及更新后的 `current_model`、`current_reasoning_effort`、`current_style`。
+
+### POST `/api/models/style/`
+
+设置本次请求的 Style 名称；空字符串表示 `Default`。模型未配置 `style_temperature` 或样式不存在时返回 `400`。
+
+**请求体** `application/json`
+```json
+{
+  "meta": {
+    "model": "glm-5.3-flash",
+    "reasoning_effort": "low",
+    "style": "Casual"
+  },
+  "data": { "value": "Casual" }
+}
+```
+
+**响应** `200` — 结构同上。最终调用会把 Style 映射为 `temperature`，但 `extra_params.temperature` 优先。
 
 ### GET `/api/tools/functions`
 
@@ -720,6 +793,7 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 |------|------|--------|------|
 | `file` | File | — | 支持 `.txt`, `.doc`, `.docx`, `.pdf` |
 | `table_name` | Form | `"uploaded_data"` | 目标表名 |
+| `meta` | Form(string) | `null` | 模型调用选择 JSON，如 `{"model":"glm-5.3-flash","reasoning_effort":"max","style":"Casual"}` |
 
 **响应** `200`
 ```json
@@ -792,7 +866,7 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 
 | 状态码 | 含义 |
 |--------|------|
-| 400 | 请求参数错误 |
+| 400 | 请求参数错误；JSON POST/PUT/PATCH 未使用 `{meta, data}` 信封 |
 | 403 | 功能被配置禁用（`enable_edit=false` 时数据/知识管理接口） |
 | 404 | 资源不存在 |
 | 409 | 资源冲突（如键已存在）|
