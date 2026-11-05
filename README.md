@@ -199,7 +199,8 @@ enable_perf_log: true         # 写接口性能指标到 perf_log.csv
 ```
 
 - `reasoning_effort` / `style` 为空字符串表示 `Default`。
-- 后端不记忆选择，前端用 localStorage 记忆并在每次请求中发送。
+- 后端不记忆选择；浏览器用 localStorage 的 `data-copilot-llm-config` 保存模型配置列表和当前选择。
+- 启动时从后端动态获取配置列表；若与浏览器缓存不一致，或选择项已无效，则回退默认值（第一个模型、第一个 Depth、`Default` Style）。
 - GET/DELETE 无请求体，不使用信封。
 - Multipart 上传无法使用 JSON 信封，前端在 `FormData` 中附加 `meta` 字段（目前 `/upload-txt/` 会读取）。
 

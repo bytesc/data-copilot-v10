@@ -1,4 +1,4 @@
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 
 export const configState = reactive({
   enable_mcp: true,
@@ -14,6 +14,163 @@ export const configState = reactive({
   _loaded: false,
 })
 
+const STORAGE_KEY = 'data-copilot-llm-config'
+const LEGACY_SELECTION_KEY = 'data-copilot-llm-selection'
+const LEGACY_MODEL_KEY = 'data-copilot-selected-model'
+const LEGACY_EFFORT_PREFIX = 'data-copilot-reasoning-effort:'
+const LEGACY_STYLE_PREFIX = 'data-copilot-style:'
+
+function storageGet(key) {
+  try {
+    return localStorage.getItem(key)
+  } catch (_) {
+    return null
+  }
+}
+
+function storageSet(key, value) {
+  try {
+    localStorage.setItem(key, String(value))
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+function normalizeModels(models) {
+  if (!Array.isArray(models)) return []
+  return models.map(m => ({
+    id: m?.id || '',
+    name: m?.name || '',
+    model: m?.model || '',
+    url: m?.url || '',
+    reasoning_effort_options: Array.isArray(m?.reasoning_effort_options)
+      ? [...m.reasoning_effort_options]
+      : [],
+    style_options: Array.isArray(m?.style_options) ? [...m.style_options] : [],
+  }))
+}
+
+function normalizeSelection(selection) {
+  if (!selection || typeof selection !== 'object') return null
+  const model = typeof selection.model === 'string' ? selection.model : ''
+  if (!model) return null
+  return {
+    model,
+    reasoning_effort:
+      typeof selection.reasoning_effort === 'string' ? selection.reasoning_effort : '',
+    style: typeof selection.style === 'string' ? selection.style : '',
+  }
+}
+
+function readLegacySelection() {
+  try {
+    const raw = storageGet(LEGACY_SELECTION_KEY)
+    if (raw) {
+      const saved = normalizeSelection(JSON.parse(raw))
+      if (saved) return saved
+    }
+  } catch (_) {
+    /* ignore */
+  }
+
+  const model = storageGet(LEGACY_MODEL_KEY) || ''
+  if (!model) return null
+  return {
+    model,
+    reasoning_effort: storageGet(`${LEGACY_EFFORT_PREFIX}${model}`) ?? '',
+    style: storageGet(`${LEGACY_STYLE_PREFIX}${model}`) ?? '',
+  }
+}
+
+function readStored() {
+  try {
+    const raw = storageGet(STORAGE_KEY)
+    if (raw) {
+      const data = JSON.parse(raw)
+      if (data && typeof data === 'object') {
+        return {
+          models: normalizeModels(data.models),
+          selected: normalizeSelection(data.selected),
+        }
+      }
+    }
+  } catch (_) {
+    /* ignore */
+  }
+  return { models: [], selected: readLegacySelection() }
+}
+
+function findModel(models, modelId) {
+  return models.find(m => m.id === modelId)
+}
+
+function defaultSelection(models) {
+  const model = models[0]
+  return {
+    model: model?.id || '',
+    reasoning_effort: model?.reasoning_effort_options?.[0] || '',
+    style: '',
+  }
+}
+
+function isSelectionValid(selection, models) {
+  if (!selection) return false
+  const model = findModel(models, selection.model)
+  if (!model) return false
+  if (
+    selection.reasoning_effort !== '' &&
+    !model.reasoning_effort_options.includes(selection.reasoning_effort)
+  ) {
+    return false
+  }
+  if (selection.style !== '' && !model.style_options.includes(selection.style)) {
+    return false
+  }
+  return true
+}
+
+function resolveSelection(selection, models) {
+  return isSelectionValid(selection, models) ? selection : defaultSelection(models)
+}
+
+function applySelection(selection) {
+  configState.current_model = selection.model
+  configState.current_reasoning_effort = selection.reasoning_effort
+  configState.current_style = selection.style
+}
+
+function saveStore() {
+  storageSet(
+    STORAGE_KEY,
+    JSON.stringify({
+      models: normalizeModels(configState.models),
+      selected: {
+        model: configState.current_model,
+        reasoning_effort: configState.current_reasoning_effort || '',
+        style: configState.current_style || '',
+      },
+    }),
+  )
+}
+
+const initialStore = readStored()
+configState.models = initialStore.models
+applySelection(resolveSelection(initialStore.selected, initialStore.models))
+
+let _persistEnabled = true
+
+watch(
+  () => [
+    configState.current_model,
+    configState.current_reasoning_effort,
+    configState.current_style,
+  ],
+  () => {
+    if (_persistEnabled) saveStore()
+  },
+  { flush: 'sync' },
+)
+
 let _loadPromise = null
 
 export async function loadConfig() {
@@ -25,7 +182,24 @@ export async function loadConfig() {
       const res = await fetch('/api/config')
       if (res.ok) {
         const cfg = await res.json()
-        Object.assign(configState, cfg)
+        const backendModels = normalizeModels(cfg.models)
+        const stored = readStored()
+        const listChanged =
+          stored.models.length > 0 &&
+          JSON.stringify(stored.models) !== JSON.stringify(backendModels)
+        const selection = listChanged
+          ? defaultSelection(backendModels)
+          : resolveSelection(stored.selected, backendModels)
+
+        _persistEnabled = false
+        try {
+          Object.assign(configState, cfg)
+          configState.models = backendModels
+          applySelection(selection)
+        } finally {
+          _persistEnabled = true
+        }
+        saveStore()
       }
     } catch (_) {
       /* ignore */
@@ -41,126 +215,43 @@ export async function loadConfig() {
 
 export const enableEdit = () => configState.enable_edit
 
-const MODEL_STORAGE_KEY = 'data-copilot-selected-model'
-const EFFORT_STORAGE_PREFIX = 'data-copilot-reasoning-effort:'
-const STYLE_STORAGE_PREFIX = 'data-copilot-style:'
-
-function effortStorageKey(modelId) {
-  return `${EFFORT_STORAGE_PREFIX}${modelId}`
+function currentModelConfig() {
+  return findModel(configState.models, configState.current_model)
 }
-
-function styleStorageKey(modelId) {
-  return `${STYLE_STORAGE_PREFIX}${modelId}`
-}
-
-function getSavedReasoningEffort(modelId) {
-  return localStorage.getItem(effortStorageKey(modelId))
-}
-
-function getSavedStyle(modelId) {
-  return localStorage.getItem(styleStorageKey(modelId))
-}
-
-let _effortTouched = false
-let _styleTouched = false
 
 export async function selectModel(modelId) {
-  if (!modelId) return false
-  try {
-    const res = await fetch('/api/models/select/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: modelId }),
-    })
-    if (!res.ok) return false
-    const data = await res.json()
-    configState.models = data.models || configState.models
-    configState.current_model = data.current_model
-    configState.current_reasoning_effort = data.current_reasoning_effort ?? ''
-    configState.current_style = data.current_style ?? ''
-    localStorage.setItem(MODEL_STORAGE_KEY, data.current_model)
-    localStorage.setItem(
-      effortStorageKey(data.current_model),
-      configState.current_reasoning_effort,
-    )
-    localStorage.setItem(
-      styleStorageKey(data.current_model),
-      configState.current_style,
-    )
-    return true
-  } catch (_) {
-    return false
-  }
+  const model = findModel(configState.models, modelId)
+  if (!model) return false
+  applySelection({
+    model: model.id,
+    reasoning_effort: model.reasoning_effort_options[0] || '',
+    style: '',
+  })
+  return true
 }
 
 export async function selectReasoningEffort(value) {
-  _effortTouched = true
-  try {
-    const res = await fetch('/api/models/reasoning-effort/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: value || '' }),
-    })
-    if (!res.ok) return false
-    const data = await res.json()
-    configState.models = data.models || configState.models
-    configState.current_model = data.current_model || configState.current_model
-    configState.current_reasoning_effort = data.current_reasoning_effort ?? ''
-    localStorage.setItem(
-      effortStorageKey(configState.current_model),
-      configState.current_reasoning_effort,
-    )
-    return true
-  } catch (_) {
-    return false
-  }
+  const model = currentModelConfig()
+  if (!model) return false
+  const effort = value || ''
+  if (effort && !model.reasoning_effort_options.includes(effort)) return false
+  configState.current_reasoning_effort = effort
+  return true
 }
 
 export async function selectStyle(value) {
-  _styleTouched = true
-  try {
-    const res = await fetch('/api/models/style/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: value || '' }),
-    })
-    if (!res.ok) return false
-    const data = await res.json()
-    configState.models = data.models || configState.models
-    configState.current_model = data.current_model || configState.current_model
-    configState.current_style = data.current_style ?? ''
-    localStorage.setItem(
-      styleStorageKey(configState.current_model),
-      configState.current_style,
-    )
-    return true
-  } catch (_) {
-    return false
-  }
+  const model = currentModelConfig()
+  if (!model) return false
+  const style = value || ''
+  if (style && !model.style_options.includes(style)) return false
+  configState.current_style = style
+  return true
 }
 
 export function getSavedModelId() {
-  return localStorage.getItem(MODEL_STORAGE_KEY) || ''
+  return readStored().selected?.model || ''
 }
 
 export async function restoreSavedModel() {
   await loadConfig()
-  const saved = getSavedModelId()
-  if (!saved) return
-  if (!configState.models.some(m => m.id === saved)) return
-  if (configState.current_model !== saved) {
-    await selectModel(saved)
-  }
-  if (!_effortTouched) {
-    const savedEffort = getSavedReasoningEffort(saved)
-    if (savedEffort !== null && savedEffort !== configState.current_reasoning_effort) {
-      await selectReasoningEffort(savedEffort)
-    }
-  }
-  if (!_styleTouched) {
-    const savedStyle = getSavedStyle(saved)
-    if (savedStyle !== null && savedStyle !== configState.current_style) {
-      await selectStyle(savedStyle)
-    }
-  }
 }

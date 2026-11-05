@@ -109,7 +109,8 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 - `meta` 只包含模型调用选择：`model`、`reasoning_effort`、`style`；为空字符串表示 `Default`。
 - 后端中间件读取 `meta` 后只把 `data` 交给原 Pydantic 接口，因此下文各请求模型的示例均表示 `data` 内容。
 - 未使用信封的 JSON 请求返回 `400`；不再支持 header 回退。
-- 后端不保存用户选择；前端用 localStorage 记忆并在每次请求中发送。
+- 后端不保存用户选择；浏览器用 localStorage 的 `data-copilot-llm-config` 缓存模型配置列表和当前选择，并在每次请求中发送。
+- 启动时从后端动态获取配置列表；若与浏览器缓存不一致，或选择的模型/Depth/Style 已无效，则回退默认值（第一个模型、第一个 Depth、`Default` Style）。
 - GET/DELETE 没有请求体，不使用信封。
 - Multipart 上传使用 `meta` 表单字段，目前仅 `/upload-txt/` 读取并用于 LLM 注释生成。
 

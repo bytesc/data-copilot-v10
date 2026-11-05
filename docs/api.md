@@ -68,7 +68,7 @@ Base URL: `http://<host>:8008`
 
 > **`enable_edit`**: 设为 `false` 时，数据管理（`/api/db-overview/`、删表、数据/注释导出、注释编辑、上传）与系统知识管理（`/api/sys-knowledge/*`）等接口全部返回 `403`；前端同时隐藏 Data、Knowledge 页面并拦截其路由。
 
-> GET 请求没有 `meta`，因此 `current_*` 返回默认值（第一个模型、Depth 第一个值、Style `Default`）。前端使用 localStorage 记忆并恢复用户选择。
+> GET 请求没有 `meta`，因此 `current_*` 返回默认值（第一个模型、Depth 第一个值、Style `Default`）。前端用 localStorage 的 `data-copilot-llm-config` 缓存模型配置列表和选择；启动时从后端获取并校验，不一致或选择失效时回退默认值。
 
 > **`models`**: 配置的模型列表及 Depth/Style 可选值，前端据此渲染下拉框；对应配置缺失时下拉禁用。
 
