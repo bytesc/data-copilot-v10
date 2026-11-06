@@ -37,13 +37,12 @@ Base URL: `http://<host>:8008`
   "enable_base_knowledge": true,
   "enable_web_search": true,
   "enable_fetch_url": true,
-  "enable_target_knowledge": false,
   "enable_edit": true,
   "models": [
     {
-      "id": "deepseek-v4-flash",
-      "name": "DeepSeek V4 Flash",
-      "model": "deepseek-v4-flash",
+      "id": "deepseek-v4.1-flash",
+      "name": "DeepSeek V4.1 Flash",
+      "model": "deepseek-v4.1-flash",
       "url": "https://tokenhub.tencentmaas.com/v1",
       "reasoning_effort_options": ["none", "low", "high", "max"],
       "reasoning_effort_selected": "none",
@@ -52,22 +51,24 @@ Base URL: `http://<host>:8008`
       "supports_images": true
     },
     {
-      "id": "qwen-max",
-      "name": "Qwen Max",
-      "model": "qwen-max",
-      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      "reasoning_effort_options": [],
+      "id": "deepseek-v4-flash",
+      "name": "DeepSeek V4 Flash",
+      "model": "deepseek-v4-flash",
+      "url": "https://tokenhub.tencentmaas.com/v1",
+      "reasoning_effort_options": ["none", "low", "high", "max"],
       "reasoning_effort_selected": "",
       "style_options": ["Formal", "Casual", "Technical"],
       "style_selected": "",
       "supports_images": false
     }
   ],
-  "current_model": "deepseek-v4-flash",
+  "current_model": "deepseek-v4.1-flash",
   "current_reasoning_effort": "none",
   "current_style": ""
 }
 ```
+
+> **`models`** 按 `config/config.yaml` 的 `llm_models` 全量返回（上例仅列出前两个，实际还包含 `glm-5.3-flash`、`glm-5.3-flashx`）；默认（第一个）模型为 `deepseek-v4.1-flash`。
 
 > **`enable_edit`**: 设为 `false` 时，数据管理（`/api/db-overview/`、删表、数据/注释导出、注释编辑、上传）与系统知识管理（`/api/sys-knowledge/*`）等接口全部返回 `403`；前端同时隐藏 Data、Knowledge 页面并拦截其路由。
 
@@ -90,11 +91,11 @@ Base URL: `http://<host>:8008`
 ```json
 {
   "meta": {
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-v4.1-flash",
     "reasoning_effort": "low",
     "style": ""
   },
-  "data": { "id": "qwen-max" }
+  "data": { "id": "glm-5.3-flash" }
 }
 ```
 
@@ -103,22 +104,24 @@ Base URL: `http://<host>:8008`
 {
   "models": [
     {
-      "id": "qwen-max",
-      "name": "Qwen Max",
-      "model": "qwen-max",
-      "url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "id": "glm-5.3-flash",
+      "name": "glm5.3 flash",
+      "model": "glm-5.3-flash",
+      "url": "https://tokenhub.tencentmaas.com/v1",
       "reasoning_effort_options": [],
       "reasoning_effort_selected": "",
-      "style_options": [],
+      "style_options": ["Formal", "Casual", "Technical"],
       "style_selected": "",
-      "supports_images": false
+      "supports_images": true
     }
   ],
-  "current_model": "qwen-max",
+  "current_model": "glm-5.3-flash",
   "current_reasoning_effort": "",
   "current_style": ""
 }
 ```
+
+> `models` 实际返回全部配置模型（此处仅列选中的一条）。
 
 > **错误**: 模型 id 不存在时返回 `404 {"detail": "Model '<id>' not found"}`。
 
@@ -130,7 +133,7 @@ Base URL: `http://<host>:8008`
 ```json
 {
   "meta": {
-    "model": "glm-5.3-flash",
+    "model": "glm-5.3-flashx",
     "reasoning_effort": "max",
     "style": ""
   },
@@ -262,7 +265,7 @@ Base URL: `http://<host>:8008`
 **参数**: `filename` (路径), `download` (可选查询参数)
 
 **查询参数**:
-- `download=1` — 强制浏览器下载
+- `download` — 只要请求携带该参数（无论取值，如 `download=1`、`download=`），即强制浏览器下载（`Content-Disposition: attachment`）；不携带则在线展示
 
 **响应** `200` — 文件内容。
 
@@ -283,26 +286,47 @@ Base URL: `http://<host>:8008`
 
 ### GET `/api/session/{session_id}/history`
 
-获取会话的完整对话历史。
+获取会话的完整对话历史。直接返回 `data_access/observe_log.py` 的 `reconstruct_conversation_history(session_id)` 结果。
 
 **参数**: `session_id` (路径)
 
 **响应** `200`
 ```json
-{ "messages": [...], "actions": [...] }
+{
+  "session_id": "xxx",
+  "question": "查询上个月销售额",
+  "status": "active",
+  "total_cycles": 3,
+  "total_tokens": 12000,
+  "created_at": "2026-01-01 10:00:00",
+  "updated_at": "2026-01-01 10:05:00",
+  "conversation_history": [...],
+  "cycle_count": 3
+}
 ```
 
-**错误** `404`: 会话不存在。
+**错误** `404`: 会话不存在（`{"error": "Session not found"}`）。
 
 ### GET `/api/session/{session_id}/generated-files`
 
-列出会话生成的报告文件。
+列出会话生成的报告文件（来自 `data_access/report_log.py` 的 `get_generated_files`，每项为对象而非文件名字符串）。
 
 **参数**: `session_id` (路径)
 
 **响应** `200`
 ```json
-{ "files": ["report_xxx.md", "report_xxx.docx"] }
+{
+  "files": [
+    {
+      "id": 1,
+      "title": "销售分析报告",
+      "downloadUrlMd": "http://127.0.0.1:8008/tmp_imgs/doc_xxxx.md",
+      "downloadUrlDocx": "http://127.0.0.1:8008/tmp_imgs/doc_xxxx.docx",
+      "downloadUrlPdf": "http://127.0.0.1:8008/tmp_imgs/doc_xxxx.pdf",
+      "createdAt": "2026-01-01T10:05:00"
+    }
+  ]
+}
 ```
 
 ### POST `/api/log-user-input/`
@@ -386,7 +410,7 @@ data: {"type":"done","content":""}
 }
 ```
 
-**`action` 可选值**: `explore_schema`, `explore_functions`, `explore_base_knowledge`, `select_images`, `generate_and_execute`, `generate_document`, `web_search`, `fetch_webpage`, `explore_mcp`, `exe_mcp`
+**`action` 可选值**（`agent/action.py` 的 `VALID_ACTIONS`）: `explore_schema`, `explore_functions`, `generate_and_execute`, `ask_question`, `ask_choice`, `summary_and_pause`, `attempt_completion`, `generate_document`, `select_images`；以及按配置开关追加的 `explore_base_knowledge`（`enable_base_knowledge`）、`web_search`（`enable_web_search`）、`fetch_webpage`（`enable_fetch_url`）、`explore_mcp` / `exe_mcp`（`enable_mcp`）。
 
 `select_images` 的 `params` 形如 `{"images": [{"path": "xxx.png", "reason": "一句话选中原因"}]}`；`path` 为本地 `tmp_imgs` 文件名或完整 `http(s)` 链接，整体覆盖 blackboard 的 `selected_images` 区域，`images: []` 表示清空。用户上传的图片会**追加合并**进同一区域（不通过本 action），见「用户上传图片」小节。
 
@@ -456,13 +480,23 @@ data: {"type":"done","content":""}
 }
 ```
 
-**事件**:
+**事件**（`agent/agent.py` 的 `generate_and_execute_stream`，`phase` 恒为 `"act"`）:
 ```
-data: {"type":"chunk","sub_type":"code_chunk","phase":"generate","content":"..."}
-data: {"type":"chunk","sub_type":"exec_chunk","phase":"exec","content":"..."}
-data: {"type":"done","sub_type":"","phase":"done","content":"...","ans":"..."}
-data: {"type":"chunk","sub_type":"code_gen_error","phase":"exec","content":"error msg"}
+data: {"type":"msg","content":"Analyzing question...","phase":"act","sub_phase":"code"}
+data: {"type":"msg","content":"Generating code...","phase":"act","sub_phase":"code"}
+data: {"type":"chunk","sub_type":"code_chunk","content":"...","phase":"act","sub_phase":"code"}
+data: {"type":"reasoning_chunk","content":"...","phase":"act","sub_phase":"code"}
+data: {"type":"chunk","sub_type":"code_complete","content":"def ...","phase":"act","sub_phase":"code"}
+data: {"type":"chunk","sub_type":"code_gen_error","content":"code generation error","phase":"act","sub_phase":"code"}
+data: {"type":"msg","content":"Executing code...","phase":"act","sub_phase":"exec"}
+data: {"type":"chunk","sub_type":"exec_chunk","content":"...","phase":"act","sub_phase":"exec"}
+data: {"type":"chunk","sub_type":"code_exe_error","content":"...","phase":"act","sub_phase":"exec"}
+data: {"type":"chunk","sub_type":"exec_complete","content":"...","phase":"act","sub_phase":"exec","images":["xxx.png"]}
+data: {"type":"done","code":"...","content":"...","phase":"act","sub_phase":"exec","images":["xxx.png"]}
+data: {"type":"error","content":"generate_and_execute_stream_error","phase":"act"}
 ```
+
+> 终态成功事件为 `done`（含 `code` / `content` / `images`，**没有** `ans` 字段）；`code_gen_error` 的 `phase` 为 `"act"`；重试耗尽时发出 `{"type":"error","content":"generate_and_execute_stream_error","phase":"act"}`。
 
 ### POST `/api/plain-chat/stream/`
 
@@ -482,7 +516,7 @@ data: {"type":"done","content":""}
 
 **请求体 — `AgentInput`**
 
-**事件**: `chunk`, `done`, `error`
+**事件**: `status`, `chunk`, `done`, `error`（先发若干 `status`，再流式 `chunk`，最后要么 `done` 要么 `error`）
 
 ### POST `/api/filter-functions/stream/`
 
@@ -490,7 +524,7 @@ data: {"type":"done","content":""}
 
 **请求体 — `AgentInput`**
 
-**事件**: `chunk`, `done`, `error`
+**事件**: `status`, `chunk`, `done`（先发 `status`，再流式 `chunk`，最后 `done`；不会发出 `error` 事件）
 
 ---
 
@@ -571,6 +605,19 @@ data: {"type":"done","content":""}
 }
 ```
 
+### POST `/api/table-comments/`
+
+获取所有表的表注释（不含列注释）。
+
+**响应** `200`
+```json
+{
+  "ans": {"orders": "订单表", "users": ""},
+  "type": "success",
+  "msg": "Table comments fetched successfully"
+}
+```
+
 ### POST `/api/filter-db-fields/` (非流式)
 
 与流式版本相同，但返回完整响应而非 SSE。
@@ -591,20 +638,34 @@ data: {"type":"done","content":""}
 }
 ```
 
-**事件**:
+**事件**（`agent/document_generator.py` 的 `_event_stream_generate_document`）:
 ```
-data: {"type":"chunk","phase":"outline","content":"..."}
-data: {"type":"chunk","phase":"writing","content":"..."}
-data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
+data: {"phase":"outline","type":"msg","content":"Generating document outline..."}
+data: {"phase":"outline","type":"chunk","content":"..."}
+data: {"phase":"outline","type":"done","content":"...","outline":{"title":"...","parts":[{"heading":"...","description":"..."}]}}
+data: {"phase":"part","type":"msg","content":"Generating part 1/N: ...","part_index":0,"heading":"..."}
+data: {"phase":"part","type":"chunk","content":"...","part_index":0}
+data: {"phase":"part","type":"done","content":"...","part_index":0,"heading":"..."}
+data: {"phase":"document","type":"done","content":"...","title":"...","parts_count":N,"file_name":"doc_xxxx","download_url_md":"...","download_url_docx":"...","download_url_pdf":"...","conversation_history":[...]}
 ```
+
+> 阶段依次为 `outline` → `part`（每个部分一次 msg/chunk/done），终态 `done` 事件的 `phase` 为 `"document"`。大纲无 parts 时发出 `{"phase":"outline","type":"error","content":"No parts generated in outline"}`。
 
 ### POST `/api/generate-document/stream/unified/`
 
-单次通过的文档生成（统一提示）。
+单次通过的文档生成（统一提示）。走 `agent/act.py` 的 `generate_document` action 路径，事件带 `phase:"act"` 与 `sub_phase:"generate_document"`。
 
 **请求体 — `DocumentInput`**
 
-**事件**: 同上。
+**事件**（`_event_stream_generate_document_unified`）:
+```
+data: {"phase":"act","sub_phase":"generate_document","type":"msg","content":"Generating document..."}
+data: {"phase":"act","sub_phase":"generate_document","type":"chunk","content":"..."}
+data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"..."}
+data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<full markdown>","title":"...","file_name":"doc_xxxx","download_url_md":"...","download_url_docx":"...","download_url_pdf":"...","conversation_history":[...]}
+```
+
+> 统一模式会先发一个仅含 `content` 的 `done`，再发一个含完整文件元数据的 `done`。
 
 ### POST `/api/generate-document/generate-yaml-outline/`
 
@@ -630,8 +691,10 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 
 **响应** `200`
 ```json
-{ "prompt": "你是一位数据分析师...", "sections": [...] }
+{ "prompt": "The following document outline is a YAML template. ..." }
 ```
+
+**错误** `400` — `yaml_content` 为空/缺失时返回 `{"error": "yaml_content is required"}`。
 
 ### POST `/api/generate-document/stream/from-yaml/`
 
@@ -669,11 +732,11 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 
 #### GET `/api/doc-workspace/files/`
 
-列出 `doc_workspace/` 目录下的 YAML 文件。
+列出 `doc_workspace/` 目录下的 YAML 文件（每项为对象，按文件名倒序）。
 
 **响应** `200`
 ```json
-{ "files": ["outline_xxx.yaml"] }
+{ "files": [{"name": "outline_xxx.yaml", "type": "yaml", "mtime": 1735700000.0}] }
 ```
 
 #### GET `/api/doc-workspace/file/{filename}`
@@ -718,15 +781,13 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 
 ### LIST — `GET /api/sys-knowledge/{resource}/`
 
-**响应** `200`
+**响应** `200`（仅返回 `id` / `key` / `value`，不含时间戳）
 ```json
 [
   {
     "id": 1,
     "key": "数据库命名规范",
-    "value": "表名使用小写蛇形命名",
-    "created_at": "...",
-    "updated_at": "..."
+    "value": "表名使用小写蛇形命名"
   }
 ]
 ```
@@ -747,7 +808,7 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 }
 ```
 
-**响应** `201` — 创建后的记录。
+**响应** `200` — 创建后的记录（`{"id": ..., "key": ..., "value": ...}`；FastAPI 默认状态码）。
 
 **错误** `409`: 键已存在。
 
@@ -790,7 +851,7 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 { "value": "PostgreSQL" }
 ```
 
-`attr` 不存在时自动创建。
+`attr` 不存在时不会创建，返回 `404 {"detail": "Attribute '<attr>' not found"}`（brief-info 不支持新增/删除）。
 
 **响应** `200`
 ```json
@@ -815,12 +876,23 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 | `file` | File | — | CSV 文件 |
 | `table_name` | Form | `"uploaded_data"` | 目标表名 |
 
-**响应** `200`
+**响应** `200`（成功）
 ```json
 {
-  "status": "success",
-  "table_name": "uploaded_data",
-  "rows_inserted": 100
+  "success": true,
+  "message": "Successfully created table 'uploaded_data' and inserted 100 records.",
+  "row_count": 100,
+  "table_name": "uploaded_data"
+}
+```
+
+失败时（校验错误或导入异常）返回 `success:false` 与 `error`：
+```json
+{
+  "success": false,
+  "error": "Validation failed:\n...",
+  "row_count": 0,
+  "table_name": "uploaded_data"
 }
 ```
 

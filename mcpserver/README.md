@@ -52,7 +52,7 @@ def add(a: float, b: float) -> float:
     return a + b
 
 if __name__ == "__main__":
-    # 可选 transport: "stdio"（默认）, "sse", "streamable-http"
+    # 可选 transport: "stdio", "sse"（Data Copilot 客户端仅支持这两种）
     mcp.run(transport="sse", host="0.0.0.0", port=8200)
 ```
 

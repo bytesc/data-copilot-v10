@@ -2,7 +2,7 @@
 
 ## 概述
 
-Brief 是注入 LLM prompt 的概览性知识，帮助 LLM 理解数据库、业务领域、MCP 服务器和可用函数的能力范围。系统支持 4 种 Brief，每种可通过 **MD 文件**（静态）和 **`brief_info` 表**（动态）两种来源配置，两者合并后注入。
+Brief 是注入 LLM prompt 的概览性知识，帮助 LLM 理解数据库、业务领域、MCP 服务器和可用函数的能力范围。系统支持 5 种 Brief：多数可通过 **MD 文件**（静态）和 **`brief_info` 表**（动态）两种来源配置，两者合并后注入；FUNCTION_BRIEF 则完全硬编码在代码中。
 
 ---
 
@@ -10,11 +10,11 @@ Brief 是注入 LLM prompt 的概览性知识，帮助 LLM 理解数据库、业
 
 | Brief | MD 文件 | `brief_info` attr | 注入阶段 | 标签 |
 |-------|---------|-------------------|----------|------|
-| DB_BRIEF | `knowledge_docs/db_brief.md` | `db_brief` | think / explore_schema | `DataBase Brief` |
-| BASE_KNOWLEDGE_BRIEF | `knowledge_docs/base_knowledge_brief.md` | `base_knowledge_brief` | think | `Domain Knowledge Brief` |
-| MCP_BRIEF | `knowledge_docs/mcp_brief.md` | `mcp_brief` | think / explore_mcp | `MCP Brief` |
+| DB_BRIEF | `agent/tools/base_knowledge/knowledge_docs/db_brief.md` | `db_brief` | think / explore_schema | `DataBase Brief` |
+| BASE_KNOWLEDGE_BRIEF | `agent/tools/base_knowledge/knowledge_docs/base_knowledge_brief.md` | `base_knowledge_brief` | think / explore_base_knowledge | `Domain Knowledge Brief` |
+| MCP_BRIEF | `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md` | `mcp_brief` | think / explore_mcp | `MCP Brief` |
 | FUNCTION_BRIEF | 代码硬编码 | 无 | think | `Function Brief` |
-| CUSTOM_FUNC_BRIEF | `knowledge_docs/custom_func_brief.md` | `custom_func_brief` | think | `Custom Function Brief` |
+| CUSTOM_FUNC_BRIEF | `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md` | `custom_func_brief` | think / explore_functions | `Custom Function Brief` |
 
 ---
 
@@ -63,7 +63,7 @@ CREATE TABLE brief_info (
 
 ### BASE_KNOWLEDGE_BRIEF — 基础业务知识摘要
 
-**注入位置**：think 阶段（`Domain Knowledge Brief` 区段）。
+**注入位置**：think 阶段（`Domain Knowledge Brief` 区段）+ `explore_base_knowledge` action。
 
 **作用**：说明业务领域的范围和能分析哪些业务问题。
 
@@ -87,12 +87,12 @@ CREATE TABLE brief_info (
 **作用**：说明有哪些类别的函数可用。
 
 - 内容完全硬编码在代码中，不依赖 MD 文件或数据库
-- 函数的大类划分（如数据库查询、数据加载、可视化、网络搜索等）
+- 函数的大类划分（仅数据库查询 Database 与可视化 Visualization 两大类）
 - 每个大类能解决什么类型的问题
 
 ### CUSTOM_FUNC_BRIEF — 自定义函数摘要
 
-**注入位置**：think 阶段（`Custom Function Brief` 区段）。
+**注入位置**：think 阶段（`Custom Function Brief` 区段）+ `explore_functions` action。
 
 **作用**：说明自定义/额外注册的函数的能力。
 
@@ -115,7 +115,7 @@ CREATE TABLE brief_info (
 
 ### db_brief.md 写法
 
-格式参考 `knowledge_docs/db_brief.md`：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/db_brief.md`：
 
 ```markdown
 DataBase:
@@ -137,7 +137,7 @@ What it can do:
 
 ### base_knowledge_brief.md 写法
 
-格式参考 `knowledge_docs/base_knowledge_brief.md`：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/base_knowledge_brief.md`：
 
 ```markdown
 Knowledge Base:
@@ -158,7 +158,7 @@ What it can do:
 
 ### mcp_brief.md 写法
 
-格式参考 `knowledge_docs/mcp_brief.md`：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`：
 
 ```markdown
 MCP Servers:
@@ -176,7 +176,7 @@ Server List:
 
 ### custom_func_brief.md 写法
 
-格式参考 `knowledge_docs/custom_func_brief.md`：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md`：
 
 ```markdown
 Custom Functions:

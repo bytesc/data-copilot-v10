@@ -47,6 +47,11 @@ def _resolve_image_url(value):
     text = str(value or "").strip()
     if not text:
         return None
+    # A usable image reference is a single clean token. HTML fragments and
+    # multi-line strings (e.g. an accidentally captured iframe) must not be sent
+    # as an image_url, otherwise the model gateway rejects the whole request.
+    if any(ch.isspace() for ch in text) or "<" in text or ">" in text:
+        return None
     if text.startswith("data:image/"):
         return text
 

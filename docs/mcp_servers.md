@@ -24,7 +24,7 @@ mcp_servers:
 |------|------|------|
 | `name` | 是 | 服务器唯一标识 |
 | `description` | 否 | 展示给 LLM 的描述文本 |
-| `transport` | 是 | `"sse"`（HTTP 端点）或 `"stdio"`（子进程管道）|
+| `transport` | 否 | `"sse"`（HTTP 端点）或 `"stdio"`（子进程管道）；缺省为 `"stdio"` |
 | `url` | 仅 `sse` | SSE 端点地址 |
 | `command` | 仅 `stdio` | 启动命令 |
 | `args` | 否 | 参数列表 |
@@ -75,7 +75,7 @@ def add(a: float, b: float) -> float:
     return a + b
 
 if __name__ == "__main__":
-    # 可选 transport: "stdio"（默认）, "sse", "streamable-http"
+    # 可选 transport: "stdio"（默认）, "sse"（客户端仅支持这两种）
     mcp.run(transport="sse", host="0.0.0.0", port=8200)
 ```
 

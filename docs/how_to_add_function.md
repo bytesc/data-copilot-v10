@@ -17,17 +17,17 @@ Think → Action → Act(generate_and_execute) → Code Generation → Code Exec
 
 | 步骤 | 文件 | 修改内容 |
 |------|------|----------|
-| 1 | `agent/tools/tools_def.py` | 定义 Python 函数（含 docstring） |
-| 2 | `agent/tools/get_function_info.py` | 注册到 `FUNCTION_DICT`、`FUNCTION_IMPORT` |
-| 3 | `agent/tools/search_func.py` | 注册到 `FUNC_CATEGORIES`（可选） |
+| 1 | `agent/tools/tools_def.py`（核心）或 `agent/tools/custom_tools_def.py`（自定义） | 定义 Python 函数（含 docstring） |
+| 2 | `agent/tools/get_function_info.py` | 注册到 `FUNCTION_DICT`、`FUNCTION_IMPORT`（自定义函数由 `CUSTOM_FUNC_NAMES` 自动识别） |
+| 3 | `agent/tools/search_func.py` | 加入 `_CORE_CATEGORIES` 分类（可选；自定义函数自动进入 `Custom` 分类） |
 | 4 | `agent/tools/get_function_info.py` | 添加到 `IMPORTANT_FUNC`（可选） |
 | 5 | `agent/agent.py` | 检查是否需要更新 prompt 或 import 注入 |
 
 ## 详细步骤
 
-### 1. `agent/tools/tools_def.py` — 定义函数
+### 1. 定义函数（`agent/tools/tools_def.py` 或 `agent/tools/custom_tools_def.py`）
 
-在 `tools_def.py` 中定义新函数，docstring 必须严格遵循以下格式，因为 LLM 通过 docstring 理解函数签名和用途：
+核心函数定义在 `agent/tools/tools_def.py`；自定义/扩展函数定义在 `agent/tools/custom_tools_def.py`。docstring 必须严格遵循以下格式，因为 LLM 通过 docstring 理解函数签名和用途：
 
 ```python
 def my_new_function(param1: str, param2: int = 10) -> pd.DataFrame:
@@ -69,21 +69,21 @@ def my_new_function(param1: str, param2: int = 10) -> pd.DataFrame:
 
 | 场景 | 代码位置 | 截取方式 | 用途 |
 |------|----------|----------|------|
-| 函数选择（`FUNCTION_DESCRIPTION`） | `get_function_info.py:42` | `splitlines()[1:4]`（第 2~4 行，跳过签名行） | LLM 选择函数时的简短描述 |
-| 函数目录（`explore_functions`） | `search_func.py:15` | `splitlines()[1:4]`（同上） | 展示给 LLM 的函数目录 |
-| 函数摘要表（`Purpose` 列） | `search_func.py:50` | `splitlines()[3]`（第 4 行） | Think/Action 阶段函数摘要表的 Purpose 列 |
-| 代码生成（brief 模式） | `get_function_info.py:85,118` | `splitlines()[:3]`（第 1~3 行，含签名行） | 代码生成 prompt 中的函数简介 |
+| 函数选择（`FUNCTION_DESCRIPTION`） | `get_function_info.py:67-69` | `splitlines()[1:4]`（docstring 以空行开头，故为签名行 + 描述行 + Returns 行） | LLM 选择函数时的简短描述 |
+| 函数目录（`get_func_catalog_markdown` / `_get_func_desc`） | `search_func.py:25-26` | `splitlines()[1:4]`（同上） | 展示给 LLM 的函数目录 |
+| 函数摘要表（`Purpose` 列） | `search_func.py:60-61` | `splitlines()[3]`（第 4 行，即 Returns 描述行） | Think/Action 阶段函数摘要表的 Purpose 列 |
+| 代码生成（brief 模式） | `get_function_info.py:111,142` | `splitlines()[:3]`（第 1~3 行，即空行 + 签名行 + 描述行） | 代码生成 prompt 中的函数简介 |
 
 以 `exe_sql` 为例，其 docstring 各行的使用情况：
 
 ```
-line 0: exe_sql(sql: str) -> pd.DataFrame:            ← [:3] 时展示，作为函数签名
-line 1: Execute the sql query string. Must be used...  ← [1:4] 和 [:3] 时展示，功能描述
-line 2: Returns the query results in pandas DataFrame. ← [1:4] 和 [:3] 时展示，返回值描述
-line 3: (空行)                                          ← splitlines()[3] 时作为 Purpose（当前为空）
+line 0: (空行)                                          ← 因 docstring 以空行开头，[:3] 时会一并展示
+line 1: exe_sql(sql: str) -> pd.DataFrame:            ← [1:4] 和 [:3] 时展示，作为函数签名
+line 2: Execute the sql query string. Must be used...  ← [1:4] 和 [:3] 时展示，功能描述
+line 3: Returns the query results in pandas DataFrame. ← [1:4] 时展示；splitlines()[3] 时作为 Purpose 列
 ```
 
-> **注意：** 当前所有函数的 `doc_lines[3]`（第 4 行）都是空行，导致摘要表中的 `Purpose` 列为空。如果需要利用 `Purpose` 列，应在第 4 行写一句话描述。
+> **注意：** `doc_lines[3]`（第 4 行）是 Returns 描述行，因此摘要表的 `Purpose` 列 **并非为空**，而是显示该行内容。
 
 ### 2. `agent/tools/get_function_info.py` — 注册函数
 
@@ -93,7 +93,9 @@ line 3: (空行)                                          ← splitlines()[3] �
 from agent.tools.tools_def import my_new_function
 ```
 
-**b) 添加到 `FUNCTION_DICT`**（约第 5 行）：
+> 若函数定义在 `custom_tools_def.py`，改为 `from agent.tools.custom_tools_def import my_new_function`。`CUSTOM_FUNC_NAMES` 通过函数对象的 `__module__` 自动识别自定义函数，无需额外登记。
+
+**b) 添加到 `FUNCTION_DICT`**（约第 6 行）：
 
 ```python
 FUNCTION_DICT = {
@@ -104,7 +106,7 @@ FUNCTION_DICT = {
 }
 ```
 
-**c) 添加到 `FUNCTION_IMPORT`**（约第 17 行）：
+**c) 添加到 `FUNCTION_IMPORT`**（约第 28 行）：
 
 ```python
 FUNCTION_IMPORT = {
@@ -115,27 +117,27 @@ FUNCTION_IMPORT = {
 }
 ```
 
-`FUNCTION_IMPORT` 中的字符串会被自动注入到 LLM 生成的代码中，确保代码执行时能正确导入。
+`FUNCTION_IMPORT` 中的字符串会被自动注入到 LLM 生成的代码中，确保代码执行时能正确导入。自定义函数的映射字符串应指向 `agent.tools.custom_tools_def`（例如 `from agent.tools.custom_tools_def import my_new_function`）。
 
 ### 3. `agent/tools/search_func.py` — 注册分类（可选）
 
-将函数加入 `FUNC_CATEGORIES`（约第 6 行），使其在函数目录中按分类显示：
+核心函数的分类定义在 `_CORE_CATEGORIES`（约第 5-10 行），将函数加入对应列表即可在函数目录中按分类显示：
 
 ```python
-FUNC_CATEGORIES = {
+_CORE_CATEGORIES = {
     "Database": ["exe_sql"],
     "Data Loading": ["load_data"],
     "Visualization": ["get_save_image_path"],
     "Web Search": ["search_web", "fetch_webpage"],
-    "My Category": ["my_new_function"],   # 新增
+    # 新增分类：例如 "My Category": ["my_new_function"]
 }
 ```
 
-> 如果不添加到此字典，函数仍然可用，但不会出现在 `explore_functions` 的分类目录中。
+> 定义在 `custom_tools_def.py` 的函数无需在此登记：`_get_func_categories()` 会把 `CUSTOM_FUNC_NAMES`（由函数 `__module__` 推导）中未出现在核心分类里的函数自动归入 `Custom` 分类。该分类与 `/api/tools/custom-functions` 接口（只列出 `CUSTOM_FUNC_NAMES` 中的函数）一致。
 
 ### 4. `agent/tools/get_function_info.py` — 设为重要函数（可选）
 
-如果该函数应在每次代码生成时默认可用，添加到 `IMPORTANT_FUNC`（约第 34 行）：
+如果该函数应在每次代码生成时默认可用，添加到 `IMPORTANT_FUNC`（约第 60 行）：
 
 ```python
 IMPORTANT_FUNC = ["load_data", "get_save_image_path", "my_new_function"]
@@ -147,8 +149,8 @@ IMPORTANT_FUNC = ["load_data", "get_save_image_path", "my_new_function"]
 
 通常不需要修改 `agent.py`，但以下情况需要检查：
 
-- **函数依赖第三方库**：如果新函数使用了 `tools_def.py` 之外的第三方模块，需要在 `agent/agent.py` 中将 import 语句添加到 `IMPORTANT_MODULE` 或 `THIRD_MODULE`（约第 35-36 行），确保生成代码时自动注入。
-- **函数需要数据库上下文**：如果函数涉及数据库查询，检查 `agent/agent.py` 中 `get_cot_code_prompt()` 的数据库上下文注入逻辑（约第 74-80 行）。
+- **函数依赖第三方库**：如果新函数使用了 `tools_def.py` 之外的第三方模块，需要在 `agent/agent.py` 中将 import 语句添加到 `IMPORTANT_MODULE` 或 `THIRD_MODULE`（约第 31-40 行），确保生成代码时自动注入。
+- **函数需要数据库上下文**：如果函数涉及数据库查询，检查 `agent/agent.py` 中 `get_cot_code_prompt()` 的数据库上下文注入逻辑（约第 108-121 行）。
 
 ## 函数定义的完整格式规范
 
@@ -182,9 +184,10 @@ def function_name(param1: Type1, param2: Type2 = default) -> ReturnType:
 
 | 文件 | 用途 |
 |------|------|
-| `agent/tools/tools_def.py` | 函数定义实现 |
-| `agent/tools/get_function_info.py` | 函数注册表（`FUNCTION_DICT`、`FUNCTION_IMPORT`、`IMPORTANT_FUNC`） |
-| `agent/tools/search_func.py` | 函数目录和搜索（`FUNC_CATEGORIES`、`get_func_summary_for_agent`） |
+| `agent/tools/tools_def.py` | 核心函数定义实现 |
+| `agent/tools/custom_tools_def.py` | 自定义函数定义实现（`CUSTOM_FUNC_NAMES` 的来源） |
+| `agent/tools/get_function_info.py` | 函数注册表（`FUNCTION_DICT`、`FUNCTION_IMPORT`、`IMPORTANT_FUNC`、`CUSTOM_FUNC_NAMES`） |
+| `agent/tools/search_func.py` | 函数目录和搜索（`_CORE_CATEGORIES`、`get_func_summary_for_agent`） |
 | `agent/agent.py` | 代码生成 prompt 构建（`get_cot_code_prompt`）和执行入口（`generate_and_execute_stream`） |
 | `agent/act.py` | 动作分发，`generate_and_execute` 路由到 `_act_generate_and_execute` |
 | `agent/tools/copilot/utils/code_executor.py` | 代码执行（`exec()`） |

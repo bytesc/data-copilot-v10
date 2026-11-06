@@ -82,7 +82,7 @@ title: "文档标题"                      # 最终 .docx/.pdf 居中显示
 sections:
   - heading: "1. 章节标题"
     description: "章节描述（1-2句）"
-    elements:                          # 可选，按顺序列出每个内容块
+    elements:                          # 必填，按顺序列出每个内容块
       - type: text                     # text / table / image
         description: "简述本段文字内容"
       - type: table
@@ -92,14 +92,15 @@ sections:
     subsections:
       - heading: "1.1 子节标题"
         description: "子节描述"
-        elements:                      # 子节也可有 elements
+        elements:                      # 必填，子节也必须有 elements
           - type: text
             description: "简述"
           - type: image
             description: "简述"
 ```
 
-- `elements` 为可选字段，每个元素有 `type`（`text`/`table`/`image`）和简短 `description`。
+- `YAML_OUTLINE_SYSTEM` 规则 2 要求每个 section 与 subsection 都必须同时包含 `elements` 和 `subsections` 两个键，无内容时用空列表 `[]`（如末节 `elements: []` / `subsections: []`）；`elements` 不是可选字段。
+- `elements` 中每个元素有 `type`（`text`/`table`/`image`）和简短 `description`。
 - `YAML_PART_SYSTEM` 规则 10 要求 LLM 按照 `elements` 定义的顺序和类型生成内容。
 
 ### 3b. 双模式编辑器

@@ -6,8 +6,8 @@
 
 核心实现位于 `utils/context_trim.py`，所有 LLM 调用点通过两个包装器接入：
 
-- `stream_with_context_retry(build_prompt, llm, images=None, max_level=4)`：流式，逐块 `yield (chunk, reasoning)`。
-- `call_with_context_retry(build_prompt, llm, images=None, max_level=4)`：非流式，返回原始 response 对象。
+- `stream_with_context_retry(build_prompt, llm, images=None, max_level=4, on_retry=None)`：流式，逐块 `yield (chunk, reasoning)`。
+- `call_with_context_retry(build_prompt, llm, images=None, max_level=4, on_retry=None)`：非流式，返回原始 response 对象。
 
 两者都需要一个 `build_prompt(level) -> str` 闭包：level 决定裁剪强度。
 
@@ -86,7 +86,7 @@ N = min(base_limit, cap, round(base_limit * factor))   # 且不小于 1
 
 ### 2) 段落字符分级（对 prompt 内嵌大块）
 
-`cap_text(text, level, base_cap=None)` 按 level 设字符上限并截断，截断处追加 `...[truncated]`：
+`cap_text(text, level, base_cap=None)` 按 level 设字符上限并截断，截断处追加 `\n...[truncated]`：
 
 | level | 上限（字符） |
 |-------|--------------|

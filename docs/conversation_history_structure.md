@@ -57,8 +57,8 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
       },
       "knowledge": {
         "selected_knowledge_ids": [1, 2],
-        "knowledge_content": "知识内容",
-        "summary": "摘要"
+        "summary": "摘要",
+        "knowledge_content": "知识内容"
       },
       "mcp": {
         "selected_tools": [],
@@ -268,8 +268,8 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
     },
     "knowledge": {
       "selected_knowledge_ids": [1, 2],
-      "knowledge_content": "...",
-      "summary": "..."
+      "summary": "...",
+      "knowledge_content": "..."
     },
     "mcp": {
       "selected_tools": [{"server": "calculator", "name": "calculate"}],
@@ -298,7 +298,7 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
 | --- | --- | --- |
 | `schema` | `explore_schema` | `selected_fields`, `explore_plan`, `selected_guides`, `query_guide_content`, `schema_detail` |
 | `functions` | `explore_functions` | `selected_functions`, `explore_plan`, `func_docs` |
-| `knowledge` | `explore_base_knowledge` | `selected_knowledge_ids`, `knowledge_content`, `summary` |
+| `knowledge` | `explore_base_knowledge` | `selected_knowledge_ids`, `summary`, `knowledge_content` |
 | `mcp` | `explore_mcp` | `selected_tools`, `explore_plan`, `tool_detail`, `catalog` |
 | `rencent_generated_images` | `generate_and_execute` | `images` |
 | `selected_images` | `select_images` / 用户上传图片 | `images`（每项为 `{"path", "reason"}`） |
@@ -595,9 +595,9 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 | `needs_user_input: true` | ask_question / ask_choice |
 | `choices: []` | ask_choice |
 | `paused: true` | summary_and_pause |
-| `completed: true` | attempt_completion / generate_document |
+| `completed: true` | attempt_completion |
 
-> 实时流程中，前端执行类动作通常只出现在 `action_decision.content` 里（带 `action` 与 `text`），不一定单独产生 `type:"act"` 条目；由日志重建时才会补成上述 `act` 条目。
+> 实时流程中，前端执行类动作通常只出现在 `action_decision.content` 里（带 `action` 与 `text`），不一定单独产生 `type:"act"` 条目；由日志重建时才会补成上述 `act` 条目。重建仅针对决策里带 `text` 的前端交互动作（ask_question / ask_choice / summary_and_pause / attempt_completion）；`generate_document` 决策携带的是 `title` 而非 `text`，因此重建逻辑不会为它补出 `act` 条目（示例中的 `completed: true` 只由 attempt_completion 触发）。
 
 ## observe
 
@@ -670,9 +670,9 @@ func_docs:
 note: Business domain knowledge gathered by `explore_base_knowledge`: selected knowledge IDs, a summary, and the full content. Re-running `explore_base_knowledge` overwrites this region.
 selected_knowledge_ids:
 [1, 2]
-knowledge_content:
-...
 summary:
+...
+knowledge_content:
 ...
 
 ### MCP
@@ -712,9 +712,9 @@ images:
 | --- | --- |
 | think | 3 |
 | action_decision | 3 |
-| generate_and_execute 代码 | 1 |
-| generate_and_execute 失败 | 1 |
-| generate_and_execute 结果 | 999（永久） |
+| generate_and_execute 含 `code`（`act_code`） | 1 |
+| generate_and_execute 仅含 `error`（`act_error`） | 1 |
+| generate_and_execute 既无 `code` 也无 `error`（`act_result`） | 999（永久） |
 | explore_schema | 3 |
 | explore_functions | 3 |
 | explore_base_knowledge | 3 |
@@ -727,6 +727,8 @@ images:
 | observe（默认） | 5 |
 | 未匹配类别 | 999（永久） |
 | blackboard | 不参与裁剪（不进入 trimmed_context） |
+
+> `generate_and_execute` 条目的分类顺序固定：先判 `code`（命中即 `act_code`，保留 1），其次判 `error`（`act_error`，保留 1），两者都无才算 `act_result`。落库的成功/失败条目都带 `code`，因此正常流程下 `act_result` 类别基本不会命中，`act_code`（保留 1）才是实际约束代码类条目数量的类别。
 
 ## 各阶段使用方式
 

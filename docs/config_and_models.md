@@ -19,22 +19,40 @@ static_path: "http://127.0.0.1:8008/"
 
 # 大模型（多模型配置，前端可选择切换，列表第一个为默认）
 llm_models:
-  - id: "deepseek-v4-flash"              # 唯一标识（默认取 name），供前端切换接口引用
-    name: "DeepSeek V4 Flash"            # 自定义模型名称（前端下拉框显示）
-    model: "deepseek-v4-flash"           # 实际调用的模型名称
+  - id: "deepseek-v4.1-flash"            # 唯一标识（默认取 name），供前端切换接口引用
+    name: "DeepSeek V4.1 Flash"          # 自定义模型名称（前端下拉框显示）
+    model: "deepseek-v4.1-flash"         # 实际调用的模型名称
     url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
     key_file: "api_key_openai.txt"       # key 文件名（agent/utils/llm_access/ 目录下），不填用默认 api_key_openai.txt
     supports_images: true                # 是否支持图片多模态输入；为 true 时会把 blackboard rencent_generated_images / selected_images 区域的图片随请求上传
-    reasoning_effort: ["low", "high", "max"]  # 前端 Depth 下拉选项，默认选中第一个；不填/[] 则该项不可用
+    reasoning_effort: ["none", "low", "high", "max"]  # 前端 Depth 下拉选项，默认选中第一个；不填/[] 则该项不可用
     style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}  # 前端 Style 下拉，默认 Default；不填/{} 则该项不可用
-    extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}  # 该模型专属额外请求参数
-  - id: "qwen-max"
-    name: "Qwen Max"
-    model: "qwen-max"
-    url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    key_file: "api_key_qwen.txt"
+    extra_params: {"max_tokens": 393216}  # 该模型专属额外请求参数
+  - id: "deepseek-v4-flash"
+    name: "DeepSeek V4 Flash"
+    model: "deepseek-v4-flash"
+    url: "https://tokenhub.tencentmaas.com/v1"
+    key_file: "api_key_openai.txt"
+    supports_images: false
+    reasoning_effort: ["none", "low", "high", "max"]
+    style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
+    extra_params: {"max_tokens": 393216}
+  - id: "glm-5.3-flash"
+    name: "glm5.3 flash"
+    model: "glm-5.3-flash"
+    url: "https://tokenhub.tencentmaas.com/v1"
+    key_file: "api_key_openai.txt"
+    supports_images: true
     style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
     extra_params: {}                     # {} 或删除表示使用模型默认行为；无对应选项时下拉禁用
+  - id: "glm-5.3-flashx"
+    name: "glm5.3 flashx"
+    model: "glm-5.3-flashx"
+    url: "https://tokenhub.tencentmaas.com/v1"
+    key_file: "api_key_openai.txt"
+    supports_images: true
+    reasoning_effort: ["low", "high", "max"]
+    extra_params: {}
 
 # Depth 默认选中列表第一个，Style 默认选中 Default（不额外上传 reasoning_effort/temperature）。
 # extra_params 若也含 reasoning_effort 或 temperature，最终合并时以 extra_params 为准。
@@ -45,10 +63,9 @@ llm_models:
 # extra_params 说明（各模型单独配置，透传给 OpenAI 兼容接口的扩展字段）：
 # DeepSeek 官方文档（api-docs.deepseek.com/zh-cn/guides/thinking_mode）：
 #   关闭思考  -> {"thinking": {"type": "disabled"}}
-#   思考强度  -> reasoning_effort: "low" / "high" / "max"（默认 high）
+#   思考强度  -> reasoning_effort: "none" / "low" / "high" / "max"
 # 其他厂商（参数各不相同，网关可能透传/忽略/报错）：
-#   Qwen3 / 旧版 GLM -> {"enable_thinking": false}
-#   GLM-4.5/4.6      -> {"thinking": {"type": "disabled"}}
+#   GLM-5.3          -> {"thinking": {"type": "enabled"}, "reasoning_effort": "low"|"high"|"max"}（默认 max）
 #   OpenAI gpt-5/o 系-> 无法完全关闭，用 {"reasoning_effort": "low"}
 # 设 {} 或删除该项则保持模型默认行为
 
@@ -57,13 +74,12 @@ enable_mcp: true              # MCP 外部工具
 enable_base_knowledge: true   # 基础知识库检索
 enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
-enable_target_knowledge: false # 目标模板
 enable_edit: true             # 数据/知识编辑（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
 enable_llmlog: false           # 记录 LLM 调用日志到 llmlog/*.txt
 enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 ```
 
-> 图片能力需以模型供应商实际支持为准。当前仓库配置中 `deepseek-v4.1-flash`、`glm-5.3-flash` 已开启 `supports_images`；`glm-5.3-flashx` 经 tokenhub 实测不支持图片输入（纯文本请求正常），保持 `false`。
+> 图片能力需以模型供应商实际支持为准。当前仓库配置中 `deepseek-v4.1-flash`、`glm-5.3-flash`、`glm-5.3-flashx` 已开启 `supports_images: true`；`deepseek-v4-flash` 为 `false`。
 
 **DSN 格式**: `mysql+pymysql://用户名:密码@主机:端口/数据库名`
 
@@ -181,7 +197,7 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 }
 ```
 
-`action` 可选值: `explore_schema`, `explore_functions`, `explore_base_knowledge`, `generate_and_execute`, `generate_document`, `web_search`, `fetch_webpage`, `explore_mcp`, `exe_mcp`
+`action` 可选值: `explore_schema`, `explore_functions`, `explore_base_knowledge`, `generate_and_execute`, `generate_document`, `web_search`, `fetch_webpage`, `explore_mcp`, `exe_mcp`, `select_images`
 
 **用于**: `POST /api/act/stream/`
 
@@ -295,7 +311,7 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 ```json
 {
   "conversation_history": [...],
-  "yaml_outline": {"title": "...", "sections": [...]},
+  "yaml_outline": "title: ...\nsections: [...]",
   "session_id": "xxx",
   "section_index": null,
   "confirmed_sections": [],
@@ -303,7 +319,7 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 }
 ```
 
-`section_index` 为 `null` 时生成全部章节。
+`yaml_outline` 为 YAML 文本字符串（字段类型 `str`，即上面 JSON 示例中的字符串值）；`section_index` 为 `null` 时生成全部章节。
 
 **用于**: `POST /api/generate-document/stream/from-yaml/`
 
@@ -395,7 +411,7 @@ created_at  DATETIME
 | `pydantic` | 请求/响应模型校验 |
 | `SQLAlchemy` + `PyMySQL` + `cryptography` | MySQL 数据库 ORM |
 | `openai` | LLM API 调用 |
-| `httpx` | HTTP 客户端（MCP 及代理） |
+| `httpx` | HTTP 客户端（`front.py` 反向代理、文档图片下载；MCP 客户端使用标准库 `urllib.request`）|
 | `pandas` | 数据处理 |
 | `matplotlib` + `seaborn` | 图表绘制 |
 | `Pillow` | 图片处理 |
@@ -404,10 +420,14 @@ created_at  DATETIME
 | `ddgs` | DuckDuckGo 搜索 |
 | `mcp` | MCP 官方 SDK（测试服务器用）|
 | `PyYAML` | YAML 配置文件读取 |
+| `numpy` | 数值计算（pandas / matplotlib 依赖）|
+| `requests` | HTTP 请求 |
+| `greenlet` | SQLAlchemy 运行依赖 |
 | `PyJWT` | JWT（预留） |
 | `python-multipart` | 文件上传 |
 | `pygwalker` | 交互式可视化 |
 | `markdown-pdf` | MD → PDF 转换 |
+| `playwright` | 无头浏览器（`get_streetdirectory_static_map` 截图，需本机安装 Chrome）|
 | `starlette` | FastAPI 底层 |
 
 ---
@@ -426,7 +446,7 @@ created_at  DATETIME
 
 | 前缀 | 代理目标 |
 |------|----------|
-| `/api` | `VITE_SERVER_URL`（默认 `http://localhost:5173` 直接请求）|
+| `/api` | `VITE_SERVER_URL`（`vue-front/.env` 中配置为 `http://127.0.0.1:8008`）|
 | `/upload-csv` | 同上 |
 | `/upload-txt` | 同上 |
 | `/tmp_imgs` | 同上 |
@@ -443,7 +463,7 @@ created_at  DATETIME
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `BACKEND_URL` | 是 | 后端服务地址，需设置（无默认值）|
+| `BACKEND_URL` | 否 | 后端服务地址，默认由 `config/config.yaml` 的 `server_host`/`server_port` 推导为 `http://{server_host}:{server_port}` |
 | `FRONT_HOST` | 否 | 监听地址，默认 `0.0.0.0` |
 | `FRONT_PORT` | 否 | 监听端口，默认 `8010` |
 

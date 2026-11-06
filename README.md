@@ -4,8 +4,6 @@
 
 通过自然语言与数据库交互，自动理解用户意图，将复杂问题拆解为子任务，通过 T-A-A-O 自主循环（Think → Action → Act → Observe）逐步完成 SQL 查询、代码生成执行、图表绘制与报告生成。支持多源知识库蒸馏、联网搜索、CSV 一键导入与全链路可观测。
 
-🚩 [English Readme](./README.en.md)
-
 ### 相关项目
 - [基于大语言模型的可解释型自然语言数据库查询系统](https://github.com/bytesc/data-copilot-steps)
 - [基于大语言模型和并发预测模型的自然语言数据库查询系统](https://github.com/bytesc/data-copilot-v2)
@@ -80,15 +78,21 @@
 
 ### 工具函数
 
+以下为 `agent/tools/get_function_info.py` 的 `FUNCTION_DICT` 实际暴露给 LLM 的函数（`query_database`、`draw_graph`、`draw_compare_graph`、`search_web`、`fetch_webpage` 等已在字典中被注释禁用）：
+
 | 函数 | 功能 |
 |------|------|
-| `exe_sql(sql)` | 执行原始 SQL 查询 |
-| `query_database(question, columns)` | 自然语言转 SQL 查询 |
-| `explain_data(question, data)` | 自然语言数据分析说明 |
-| `load_data(url)` | 从 CSV 链接加载数据 |
-| `search_web(query)` | DuckDuckGo 网页搜索 |
-| `fetch_webpage(url)` | 抓取网页内容 |
-| `exe_mcp(server, tool, params)` | 调用 MCP 外部工具 |
+| `exe_sql(sql)` | 执行 SQL 查询字符串，返回 pandas DataFrame |
+| `explain_data(question, data, col_explanation=None)` | 对传入的 DataFrame 按自然语言问题输出分析说明 |
+| `load_data(url)` | 从 CSV 文件 URL（如 `./tmp_imgs/xxx.csv`）加载数据 |
+| `get_save_image_path()` | 获取保存图表 PNG 的唯一路径（位于 `tmp_imgs/`） |
+| `predict_hdb_price(from_date=None, to_date=None, ...)` | 基于历史数据预测 HDB 转售价格，返回预测 DataFrame 与历史/预测对比图路径 |
+| `get_onemap_static_map(layerchosen="default", latitude=None, longitude=None, postal=None, ...)` | 调用 OneMap.sg PNG API 生成静态地图图片 |
+| `get_osm_minimap(markers=None, zoom=15, width=480, height=480)` | 生成 OpenStreetMap 带标记迷你地图 iframe |
+| `get_streetdirectory_minimap(urls=None, width=800, height=480)` | 由 StreetDirectory 地点页 URL 生成迷你地图 iframe |
+| `get_streetdirectory_static_map(urls=None, width=800, height=600)` | 渲染 StreetDirectory 地点页并截图保存为静态地图 PNG |
+| `search_streetdirectory(query)` | 在新加坡 StreetDirectory 按邮编或地址检索地点 URL |
+| `exe_mcp(server, tool, params=None)` | 调用 MCP 外部服务器上的指定工具 |
 
 ### 动作类型
 
@@ -100,6 +104,11 @@
 | `explore_mcp` | 探索外部 MCP 服务器的可用工具列表 | 是（`enable_mcp`） |
 | `exe_mcp` | 调用外部 MCP 服务器上的具体工具 | 是（`enable_mcp`） |
 | `generate_and_execute` | 生成并执行代码（SQL/Python） | 否 |
+| `ask_question` | 反问用户以获取必要信息 | 否 |
+| `ask_choice` | 给出若干选项供用户单选 | 否 |
+| `summary_and_pause` | 输出进度总结并暂停流程 | 否 |
+| `attempt_completion` | 输出最终结果并结束流程 | 否 |
+| `select_images` | 设置 `selected_images` 区域，保存选中图片（文件名或 URL）及一句话原因，供后续多模态查看 | 否 |
 | `web_search` | DuckDuckGo 联网搜索 | 是（`enable_web_search`） |
 | `fetch_webpage` | 抓取网页内容 | 是（`enable_fetch_url`） |
 | `generate_document` | 自动生成分析报告（MD/DOCX/PDF） | 否 |
@@ -119,11 +128,13 @@ pip install -r requirement.txt
 
 ### 初始化系统数据库
 
-使用 `init.sql` 创建 `data_copilot_v10_sys` 库下的所有系统表：
+`init.sql` 只包含 `CREATE TABLE` 语句（不创建数据库），需在 `config/config.yaml` 里 `mysql_sys` 指定的系统库中执行，例如 `data_copilot_v10_land_sys`：
 
 ```bash
 mysql -u root -p < init.sql
 ```
+
+`main.py` 启动时也会自动创建缺失的系统表，包括 `init.sql` 未包含的 `graph_code_guide`。
 
 ### 配置文件
 
@@ -134,10 +145,10 @@ server_port: 8008
 server_host: "0.0.0.0"
 
 # 用户数据数据库
-mysql: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10"
+mysql: "mysql+pymysql://root:123456@localhost:3306/singapore_land_2"
 
 # 系统数据库（会话日志、知识库等）
-mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_sys"
+mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
 
 # 静态文件服务地址
 static_path: "http://127.0.0.1:8008/"
@@ -145,36 +156,54 @@ static_path: "http://127.0.0.1:8008/"
 
 # 大模型配置（多模型，前端可切换，列表第一个为默认）
 llm_models:
-  - id: "deepseek-v4-flash"
-    name: "DeepSeek V4 Flash"          # 自定义模型名称（前端下拉框显示）
-    model: "deepseek-v4-flash"         # 实际调用的模型名称
+  - id: "deepseek-v4.1-flash"
+    name: "DeepSeek V4.1 Flash"        # 自定义模型名称（前端下拉框显示）
+    model: "deepseek-v4.1-flash"       # 实际调用的模型名称
     url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
     key_file: "api_key_openai.txt"     # key 文件名（位于 agent/utils/llm_access/），不填用默认 api_key_openai.txt
-    reasoning_effort: ["low", "high", "max"]  # 前端 Depth 下拉选项，默认选中第一个；不填则该项不可用
-    style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}  # 前端 Style 下拉，默认 Default；不填则该项不可用
-    extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}  # 该模型专属额外请求参数
-  - id: "qwen-max"
-    name: "Qwen Max"
-    model: "qwen-max"
-    url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    key_file: "api_key_qwen.txt"
+    supports_images: true              # 是否支持图片多模态输入
+    reasoning_effort: ["none", "low", "high", "max"]  # 前端 Depth 下拉选项，默认选中第一个；不填/[] 则该项不可用
+    style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}  # 前端 Style 下拉，默认 Default；不填/{} 则该项不可用
+    extra_params: {"max_tokens": 393216}  # 该模型专属额外请求参数
+  - id: "deepseek-v4-flash"
+    name: "DeepSeek V4 Flash"
+    model: "deepseek-v4-flash"
+    url: "https://tokenhub.tencentmaas.com/v1"
+    key_file: "api_key_openai.txt"
+    supports_images: false
+    reasoning_effort: ["none", "low", "high", "max"]
     style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
-    extra_params: {}                   # {} 或删除表示使用模型默认行为；无 reasoning_effort/style_temperature 时对应下拉禁用
+    extra_params: {"max_tokens": 393216}
+  - id: "glm-5.3-flash"
+    name: "glm5.3 flash"
+    model: "glm-5.3-flash"
+    url: "https://tokenhub.tencentmaas.com/v1"
+    key_file: "api_key_openai.txt"
+    supports_images: true
+    style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
+    extra_params: {}
+  - id: "glm-5.3-flashx"
+    name: "glm5.3 flashx"
+    model: "glm-5.3-flashx"
+    url: "https://tokenhub.tencentmaas.com/v1"
+    key_file: "api_key_openai.txt"
+    supports_images: true
+    reasoning_effort: ["low", "high", "max"]
+    extra_params: {}
 
 # Depth 默认选中列表第一个，Style 默认选中 Default（不额外上传 reasoning_effort/temperature）。
 # extra_params 若也含 reasoning_effort 或 temperature，最终合并时以 extra_params 为准。
 
 # extra_params 参考（各模型单独配置）：
-# DeepSeek 关闭思考: {"thinking": {"type": "disabled"}}；调强度用 reasoning_effort: low/high/max
-# Qwen3/旧版GLM 用 {"enable_thinking": false}；GLM-4.5/4.6 用 {"thinking": {"type": "disabled"}}
-# OpenAI gpt-5/o 系无法完全关闭，用 {"reasoning_effort": "low"}；设 {} 恢复默认
+# DeepSeek 关闭思考: {"thinking": {"type": "disabled"}}；调强度用 reasoning_effort: none/low/high/max
+# GLM-5.3: {"thinking": {"type": "enabled"}, "reasoning_effort": "low"|"high"|"max"}（默认 max）
+# OpenAI gpt-5/o 系：无法完全关闭，用 {"reasoning_effort": "low"}；设 {} 恢复默认
 
 # 功能开关（设为 false 关闭对应能力）
 enable_mcp: true              # MCP 外部工具集成
 enable_base_knowledge: true   # 基础知识库检索
 enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
-enable_target_knowledge: false # 目标文档模板
 enable_edit: true             # 数据/知识管理页（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
 enable_llmlog: false          # 记录 LLM 调用日志到 llmlog/*.txt
 enable_perf_log: true         # 写接口性能指标到 perf_log.csv
@@ -244,6 +273,7 @@ FRONT_PORT=8010 python front.py
 | [`docs/config_and_models.md`](docs/config_and_models.md) | 配置格式（config.yaml / .env）、Pydantic 请求模型、日志表结构、依赖说明、前端构建配置 |
 | [`docs/mcp_servers.md`](docs/mcp_servers.md) | MCP 服务器配置与启动指南（mcp_servers.yaml、测试服务器、新增步骤） |
 | [`docs/sse_event_flow.md`](docs/sse_event_flow.md) | SSE 流式事件类型与数据格式 |
+| [`docs/context_overflow_handling.md`](docs/context_overflow_handling.md) | 上下文超长（Context Overflow）处理机制 |
 | [`docs/conversation_history_structure.md`](docs/conversation_history_structure.md) | 对话历史结构定义 |
 | [`docs/actions_input_output.md`](docs/actions_input_output.md) | Action 的输入输出规范 |
 | [`docs/document_generation.md`](docs/document_generation.md) | 文档生成流程 |

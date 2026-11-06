@@ -379,8 +379,12 @@ def generate_and_execute_stream(question, tables=None, retries=2,
                 if isinstance(item, str):
                     if is_local_png_path(item):
                         images.append(os.path.basename(item))
-                    elif is_png_url(item):
-                        images.extend(re.findall(r'http[s]?://[^"]+\.(?:png)', item))
+                    elif not is_iframe_tag(item):
+                        # Only capture clean, standalone image URLs. The previous
+                        # `[^"]+` pattern greedily matched across HTML/newlines, so
+                        # an OpenStreetMap minimap iframe (which embeds script and
+                        # Leaflet `.png` tile URLs) was captured as a bogus image.
+                        images.extend(re.findall(r'https?://[^\s"\'<>]+\.png', item))
                 yield {"type": "chunk", "sub_type": "exec_chunk", "content": formatted, "phase": "act", "sub_phase": "exec"}
         except Exception as e:
             error_msg = str(e)

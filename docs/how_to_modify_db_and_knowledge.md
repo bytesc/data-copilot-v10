@@ -28,7 +28,7 @@
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/base_knowledge_brief.md` |
 | 数据库表 | `brief_info` 中 `attr='base_knowledge_brief'` 的行 |
 
-用于 think 阶段的 `## Domain Knowledge Brief` 区段。**仅摘要**，完整业务知识（`base_knowledge` 表）通过 `explore_base_knowledge` action 按需获取。
+用于 think 阶段的 `## Domain Knowledge Brief` 区段和 `explore_base_knowledge` action。**仅摘要**，完整业务知识（`base_knowledge` 表）通过 `explore_base_knowledge` action 按需获取。
 
 ### 3.3 DB_QUERY_GUIDE — SQL 查询指南
 
@@ -43,9 +43,9 @@
 
 | 来源 | 说明 |
 |---|---|
-| 代码自动生成 | `get_func_summary_for_agent()` |
+| 代码硬编码 | `agent/tools/base_knowledge/get_base_knowledge.py` |
 
-用于 think 阶段的 `## Function Brief` 区段。自动从注册的函数列表中生成摘要表格（函数名、分类、用途）。
+用于 think 阶段的 `## Function Brief` 区段。内容为代码中写死的静态摘要（仅 Database 与 Visualization 两大类）。
 
 ### 3.5 MCP_BRIEF — MCP 服务器摘要
 
@@ -63,27 +63,18 @@
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md` |
 | 数据库表 | `brief_info` 中 `attr='custom_func_brief'` 的行 |
 
-用于 think 阶段的 `## Custom Function Brief` 区段。描述自定义/额外注册的函数能力，与代码自动生成的主函数摘要（`get_func_summary_for_agent()`）互补。
+用于 think 阶段的 `## Custom Function Brief` 区段和 `explore_functions` action。描述自定义/额外注册的函数能力，与 Function Brief 互补。
 
-### 3.7 TARGET — 目标输出模板
-
-| 来源 | 路径/表 |
-|---|---|
-| MD 文件 | `agent/tools/base_knowledge/knowledge_docs/target_knowledge.md` |
-| 数据库表 | 无 |
-
-仅支持 MD 文件，仅用于 think 阶段。需非空时才会注入。
-
-### 3.8 BASE — 基础业务知识（完整）
+### 3.7 BASE — 基础业务知识（完整）
 
 | 来源 | 路径/表 |
 |---|---|
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/base_knowledge.md` |
 | 数据库表 | `base_knowledge` 表（key-value 结构） |
 
-**不再注入 think / action 提示词**。仅通过 `explore_base_knowledge` action 按需获取。`BASE_KNOWLEDGE_BRIEF` 为其摘要版本。
+**不注入 think / action 提示词**：通过 `explore_base_knowledge` action 按需获取；同时在 `generate_and_execute` 与文档生成（generate_document）阶段全量注入。`BASE_KNOWLEDGE_BRIEF` 为其摘要版本。
 
-### 3.9 DOC — 文档知识
+### 3.8 DOC — 文档知识
 
 | 来源 | 路径/表 |
 |---|---|
@@ -92,7 +83,7 @@
 
 全量注入 `generate_document` 阶段 prompt。内容为空时标签不显示。
 
-### 3.10 THINK_KNOWLEDGE — 思考分析策略
+### 3.9 THINK_KNOWLEDGE — 思考分析策略
 
 | 来源 | 路径/表 |
 |---|---|
@@ -101,7 +92,7 @@
 
 全量注入 think 阶段 prompt。内容为空时标签不显示。
 
-### 3.11 CODE_GUIDE — 代码生成指南
+### 3.10 CODE_GUIDE — 代码生成指南
 
 | 来源 | 路径/表 |
 |---|---|
@@ -110,7 +101,7 @@
 
 全量注入 `generate_and_execute` 阶段 prompt。内容为空时标签不显示。
 
-### 3.12 GRAPH_CODE_GUIDE — 图表代码指南
+### 3.11 GRAPH_CODE_GUIDE — 图表代码指南
 
 | 来源 | 路径/表 |
 |---|---|
@@ -124,18 +115,17 @@
 | 配置项 | MD 文件 | DB 表 | 使用阶段 | 关系 |
 |---|---|---|---|---|---|---|
 | DB_BRIEF | `db_brief.md` | `brief_info.db_brief` | think / explore_schema | 合并，空时不显示标签 |
-| BASE_KNOWLEDGE_BRIEF | `base_knowledge_brief.md` | `brief_info.base_knowledge_brief` | think | 合并 |
+| BASE_KNOWLEDGE_BRIEF | `base_knowledge_brief.md` | `brief_info.base_knowledge_brief` | think / explore_base_knowledge | 合并 |
 | MCP_BRIEF | `mcp_brief.md` | `brief_info.mcp_brief` | think / explore_mcp | 合并，空时不显示标签 |
 | FUNCTION_BRIEF | 代码硬编码 | 无 | think | 固定 |
-| CUSTOM_FUNC_BRIEF | `custom_func_brief.md` | `brief_info.custom_func_brief` | think | 合并 |
-| Function Catalog | 代码自动生成 | 无 | think | 自动 |
+| CUSTOM_FUNC_BRIEF | `custom_func_brief.md` | `brief_info.custom_func_brief` | think / explore_functions | 合并 |
+| Function Catalog | 代码自动生成 | 无 | explore_functions | 自动 |
 | BASE | `base_knowledge.md` | `base_knowledge` | explore_base_knowledge / generate_and_execute / generate_document | 合并 |
 | DOC | `doc_guide.md` | `doc_guide` | generate_document | 合并，空时不显示标签 |
 | THINK_KNOWLEDGE | `think_guide.md` | `think_guide` | think | 合并，空时不显示标签 |
 | CODE_GUIDE | 无 | `code_guide` | generate_and_execute | 仅 DB，空时不显示标签 |
 | GRAPH_CODE_GUIDE | 无 | `graph_code_guide` | generate_and_execute | 仅 DB，空时不显示标签 |
 | DB_QUERY_GUIDE | `db_query_guide.md` | `db_query_guide` | explore_schema | 合并，空时不显示标签 |
-| TARGET | `target_knowledge.md` | 无 | think / generate_and_execute / generate_document / observe | 仅 MD |
 
 ## 5. 验证
 

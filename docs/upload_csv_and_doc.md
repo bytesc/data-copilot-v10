@@ -27,7 +27,7 @@ pandas 读取 CSV 后逐列推断：
 | `float64` | `Float` | pandas 自动推断 |
 | `datetime64` | `DateTime` | pandas 自动推断 |
 | `bool` | `Boolean` | pandas 自动推断 |
-| `object`（字符串） | `VARCHAR(n)` 或 `Text` | 非空值最大字符长度 ≤ 500 → `VARCHAR(长度×2，上限8000)`，否则 `Text` |
+| `object`（字符串） | `VARCHAR(n)` 或 `Text` | 先取 `min(非空值最大字符长度×2, 8000)`，再判断 ≤ 500 → 仅当原始最大长度 ≤ 250 时用 `VARCHAR(长度×2)`，否则 `Text`（8000 上限实际不可达） |
 | 全空列 | `VARCHAR(255)` | 无数据时回退 |
 
 ### 名称清洗
@@ -38,8 +38,8 @@ pandas 读取 CSV 后逐列推断：
 |------|----------|------|
 | 含非法字符（空格、符号等） | 替换为 `_` | `"user id"` → `user_id` |
 | 数字开头 | 加前缀 | `"123abc"` → `col_123abc` 或 `tbl_123abc` |
-| MySQL 保留字 | 末尾追加 `_` | `"select"` → `select_` |
-| 空名称 | 回退默认值 | 表名 → `uploaded_data`，列名 → `column` |
+| 硬编码保留字 | 末尾追加 `_` | `"select"` → `select_`（仅覆盖代码内硬编码的约 59 个常见词，`interval`/`limit`/`offset`/`rank`/`value` 等不在其中） |
+| 空名称 | 加前缀（后续回退分支不可达） | 空字符串清洗后为 `''`，随即进入加前缀分支变成 `col_`（列名）/`tbl_`（表名），因此 `if not cleaned` 的 `column`/`uploaded_data` 回退永不触发；表名默认值 `uploaded_data` 只来自接口 `Form` 默认值 |
 | 名称冲突 | 末尾追加 `_` | 已有 `col_` → `col__` |
 
 ### 原子性与报错逻辑

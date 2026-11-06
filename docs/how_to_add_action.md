@@ -29,14 +29,28 @@ VALID_ACTIONS = [
 ]
 ```
 
-**b) 添加到 `ACTIONS` 提示字符串**
+若新动作受功能开关控制，需像 `explore_base_knowledge` / `web_search` / `fetch_webpage` / `explore_mcp` / `exe_mcp` 一样在开关为真时条件追加：
 
 ```python
-ACTIONS = """
-...
-- my_new_action: {{"action": "my_new_action", "param1": "value1"}}
-  描述该动作的作用和使用场景。
-"""
+if ENABLE_WEB_SEARCH:
+    VALID_ACTIONS.append("web_search")
+```
+
+并在 `agent/act.py` 的 `_DISABLED_ACTIONS` 中为关闭状态登记一条原因，开关关闭时由 `_event_stream_act_impl` 中已有的 `if action in _DISABLED_ACTIONS:` 守卫返回错误：
+
+```python
+_DISABLED_ACTIONS = {}
+if not _ENABLE_WEB_SEARCH:
+    _DISABLED_ACTIONS["web_search"] = "Web search support is disabled in config"
+```
+
+**b) 在 `_ACTION_DESCRIPTIONS` 中添加提示词**
+
+每个 action 的提示文本都定义在 `agent/action.py` 的 `_ACTION_DESCRIPTIONS` 字典中，`ACTIONS` / `ACTIONS_BODY` 会按 `VALID_ACTIONS` 的顺序拼接生成。新增动作时直接新增一个字典条目，不要编辑 `ACTIONS` 字符串（它由 `_ACTION_DESCRIPTIONS` 生成，且新 action 不在字典中会触发 `KeyError`）：
+
+```python
+_ACTION_DESCRIPTIONS["my_new_action"] = """- my_new_action: {{"action": "my_new_action", "param1": "value1"}}
+  描述该动作的作用和使用场景。"""
 ```
 
 **c) 在 `_parse_action_json` 中提取参数**
@@ -48,6 +62,12 @@ return {
 }
 ```
 
+**d) 若需支持多动作批量执行**
+
+多动作由 `actions` 数组触发，`_parse_action_json` 逐项校验后交给 `_build_multi_action_result` 重建每个条目的字段。要支持批量还需：
+- 把 action 名加入 `_GROUP_1_ACTIONS`（探索/选图类）或 `_GROUP_2_ACTIONS`（用户交互类）。解析器只强制 Group 1 与 Group 2 不能混用，其他动作的“只能单独执行”仅由提示词约束，不在解析器中强制。
+- 在 `_build_multi_action_result` 中为每个条目补充需要保留的字段（该函数按白名单字段逐项重建）。
+
 ### 2. `agent/act.py` — 添加执行逻辑
 
 **a) 导入执行函数**
@@ -56,7 +76,9 @@ return {
 from agent.some_module import some_exec_function
 ```
 
-**b) 在 `_event_stream_act` 中添加路由**
+**b) 在 `_event_stream_act_impl` 中添加路由**
+
+路由分发逻辑位于 `_event_stream_act_impl`；`_event_stream_act` 只是包一层的 try/except 守卫，把未捕获异常转成终止性 error 事件，不承载各 action 的 `if/elif` 分发。
 
 ```python
 elif action == "my_new_action":
@@ -170,7 +192,7 @@ function subPhaseLabel(name) {
 ```
 ```
 
-### 10. `docs/conversation_history_structure.md` — 文档
+### 9. `docs/conversation_history_structure.md` — 文档
 
 在 act 章节下添加历史结构说明：
 
@@ -189,8 +211,8 @@ function subPhaseLabel(name) {
 搜索网络信息，使用 DuckDuckGo 引擎，返回标题、URL、摘要。
 
 ### 实现要点
-- **`action.py`**: `VALID_ACTIONS` 添加 `"web_search"`，`ACTIONS` prompt 添加 `query`/`max_results` 参数描述，`_parse_action_json` 提取 `query`/`max_results`
-- **`act.py`**: 导入 `search_web`，`_event_stream_act` 分发到 `_act_web_search`，`_build_act_entries` 保存 `search_result` 和 `query`
+- **`action.py`**: `VALID_ACTIONS` 添加 `"web_search"`，`_ACTION_DESCRIPTIONS` 添加 `query`/`max_results` 参数描述，`_parse_action_json` 提取 `query`/`max_results`
+- **`act.py`**: 导入 `search_web`，`_event_stream_act_impl` 分发到 `_act_web_search`，`_build_act_entries` 保存 `search_result` 和 `query`
 - **执行函数**: 直接调用 `search_web(query, max_results)`，结果格式化为 markdown 后 yield `done` 事件
 - **前端**: `useChat.js` params 传递 `query`/`max_results`，`ActMessage.vue` 添加 `web_search` 模板和 `subPhaseLabel`
 
@@ -212,8 +234,8 @@ function subPhaseLabel(name) {
 获取指定 URL 的网页文本内容，通常用于 `web_search` 之后阅读详细页面。
 
 ### 实现要点
-- **`action.py`**: `VALID_ACTIONS` 添加 `"fetch_webpage"`，`ACTIONS` prompt 添加 `url`/`max_length` 参数描述，`_parse_action_json` 提取 `url`/`max_length`
-- **`act.py`**: 导入 `fetch_webpage`，`_event_stream_act` 分发到 `_act_fetch_webpage`，`_build_act_entries` 保存 `url` 和 `content`（存入 `page_content` 字段）
+- **`action.py`**: `VALID_ACTIONS` 添加 `"fetch_webpage"`，`_ACTION_DESCRIPTIONS` 添加 `url`/`max_length` 参数描述，`_parse_action_json` 提取 `url`/`max_length`
+- **`act.py`**: 导入 `fetch_webpage`，`_event_stream_act_impl` 分发到 `_act_fetch_webpage`，`_build_act_entries` 保存 `url` 和 `content`（存入 `page_content` 字段）
 - **执行函数**: 直接调用 `fetch_webpage(url, max_length)`，返回内容 yield `chunk` 和 `done` 事件
 - **前端**: `useChat.js` params 传递 `url`/`max_length`，`ActMessage.vue` 添加 `fetch_webpage` 模板和 `subPhaseLabel`
 
@@ -232,8 +254,8 @@ function subPhaseLabel(name) {
 ## 完整示例：`generate_document` 动作
 
 参考已实现的 `generate_document` 动作，该动作：
-- 在 `action.py` 中注册为 `VALID_ACTIONS` 和 `ACTIONS` 提示
+- 在 `action.py` 中注册为 `VALID_ACTIONS`，并在 `_ACTION_DESCRIPTIONS` 添加提示
 - 在 `act.py` 中通过 `_act_generate_document` 执行
 - 调用 `document_generator.py` 中的 `generate_document_from_context`
 - SSE 事件使用 `phase: 'act'` + `sub_phase: 'generate_document'`
-- 历史记录通过 `_build_act_entries` 保存为 `{"role":"assistant","type":"act","action":"generate_document","title":"...","file_name":"...","result":"..."}`
+- 历史记录通过 `_build_act_entries` 保存为 `{"role":"assistant","type":"act","action":"generate_document","title":"...","file_name":"...","full_text":"...","download_url_md":"...","download_url_docx":"...","download_url_pdf":"..."}`（没有 `result` 字段）

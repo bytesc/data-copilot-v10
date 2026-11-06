@@ -51,7 +51,7 @@
 {"role":"assistant","type":"action_decision","content":{"actions":[{"action":"ask_question","text":"..."},{"action":"ask_choice","text":"...","choices":["..."]}]}}
 ```
 
-Group 1（`explore_*` / `select_images`）和 Group 2（`ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion`）不能混在同一个 `actions` 数组中。例如 `[{"action":"select_images",...},{"action":"ask_question",...}]` 是非法的，后端会拒绝并要求重新决策；需要选图并说明时应拆成两个 cycle。
+Group 1（`explore_*` / `select_images`）和 Group 2（`ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion`）不能混在同一个 `actions` 数组中。例如 `[{"action":"select_images",...},{"action":"ask_question",...}]` 是非法的，后端会拒绝并要求重新决策；需要选图并说明时应拆成两个 cycle。解析器只强制上述 Group 1 / Group 2 互斥；其余 action（`generate_and_execute` / `generate_document` / `web_search` / `fetch_webpage` / `exe_mcp`）的“只能单独执行”仅由提示词约束（见 `agent/action.py` 的 `ACTIONS` 文本），`_parse_action_json` 并不会拒绝把它们放进 `actions` 数组。
 
 **上下文**
 ```
@@ -65,7 +65,7 @@ Group 1（`explore_*` / `select_images`）和 Group 2（`ask_question` / `ask_ch
 | --- | --- | --- | --- |
 | `action` | 全部 | 单动作格式必填，与 `actions` 二选一 | 缺少 `actions` 时决策无效 |
 | `actions` | 全部 | 多动作格式必填，与 `action` 二选一 | 与 `action` 同时出现时优先使用 `actions` |
-| `keyword` | explore_schema / explore_functions / explore_base_knowledge / explore_mcp | 可选 | 不附加关注提示，不用于过滤数据 |
+| `keyword` | 任意单动作均可解析；仅 explore_schema / explore_functions / explore_base_knowledge / explore_mcp 会消费 | 可选 | 其他 action 携带时被忽略；explore_* 中为空则不附加关注提示，不用于过滤数据 |
 | ~~`funcs`~~ | generate_and_execute | 已移除 | 函数名统一从 blackboard 的 `functions.selected_functions` 读取 |
 | `research_guide` | generate_and_execute | 可选 | 为空，不提供额外研究提示 |
 | `text` | ask_question / ask_choice / summary_and_pause / attempt_completion | 前端交互必填 | 缺少时前端无可展示/提问的内容 |
@@ -81,7 +81,18 @@ Group 1（`explore_*` / `select_images`）和 Group 2（`ask_question` / `ask_ch
 | `tools` | exe_mcp | 批量格式必填 | 为空时回退到 `server` / `tool` 单工具格式 |
 | `images` | select_images | 必填（可为空数组） | 为空数组时清空 `selected_images` 区域；每项为 `{"path", "reason"}` |
 
-后端只保留上述字段（`agent/action.py` 的 `_parse_action_json`），未列出的字段会被丢弃。
+SSE `done` 事件的 `action_result` 只保留上述字段（由 `agent/action.py` 的 `_parse_action_json` 规范化），未列出的字段会被丢弃；但写入 `conversation_history` 的 `action_decision` 条目保存的是 LLM 的完整原始 JSON（`agent/action.py` 通过 `parse_json_raw(raw)` 保存），不做字段裁剪。
+
+**功能开关**
+
+以下 action 只有在配置开启对应开关时才有效；未开启时 `agent/action.py` 不会把它们追加进 `VALID_ACTIONS`（决策会被判定为未知 action），`agent/act.py` 也会通过 `_DISABLED_ACTIONS` 直接返回错误。开关关闭时还会省略其提示词、分组与相关决策规则。
+
+| action | 开关（`config_data`） |
+| --- | --- |
+| explore_base_knowledge | `enable_base_knowledge` |
+| web_search | `enable_web_search` |
+| fetch_webpage | `enable_fetch_url` |
+| explore_mcp / exe_mcp | `enable_mcp` |
 
 ---
 
@@ -341,15 +352,20 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 **输出**
 ```json
-{"role":"assistant","type":"act","action":"generate_document","title":"...","file_name":"...","full_text":"..."}
+{"role":"assistant","type":"act","action":"generate_document","title":"...","file_name":"...","full_text":"...",
+ "download_url_md":"...","download_url_docx":"...","download_url_pdf":"..."}
 ```
+
+文档始终生成 `.md`；`.docx` 与 `.pdf` 在转换成功时生成，失败时对应的 `download_url_docx` / `download_url_pdf` 为空字符串（`download_url_md` 始终非空）。
 
 **上下文**
 ```
-[ACT generate_document] file_name: {file_name}.md / .docx
+[ACT generate_document] file_name: {file_name}.md / {file_name}.docx
 [ACT generate_document] full_text:
 {full_text}
 ```
+
+`download_url_md` / `download_url_docx` / `download_url_pdf` 只写入历史条目用于前端下载，`history_to_text` 不渲染它们。
 
 ---
 
@@ -445,18 +461,29 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 ```json
 {"role":"assistant","type":"act","action":"exe_mcp",
  "results":[{"server":"...","tool":"...","result":{...}},...],
- "error":null}
+ "display_content":"..."}
 ```
+
+`results`、`display_content`、`error` 三个字段仅在非空时写入条目：成功时没有 `error` 键（不是 `error:null`），只有存在错误时才会出现 `"error":"..."`。`display_content` 是所有工具执行结果的合并展示文本（以 `## MCP Tool Execution Results` 开头）。
 
 **上下文（成功）**
 ```
 [ACT exe_mcp] {server}/{tool} result:
 {result_json}
+[ACT exe_mcp] result:
+{display_content}
 ```
 
 **上下文（失败）**
+
+单个工具失败：
 ```
 [ACT exe_mcp] {server}/{tool} error: {error}
+```
+
+整次执行失败（如未提供可用工具）：
+```
+[ACT exe_mcp] error: {error}
 ```
 
 ---
