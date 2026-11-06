@@ -533,7 +533,7 @@ def _act_generate_document(conversation_history, session_id, title: str = "", re
     file_name = last_event.get("file_name", "")
     if file_name:
         static_url = config_data["static_path"].rstrip("/")
-        static_folder = config_data.get("static_folder", "tmp_imgs")
+        static_folder = "tmp_imgs"
         download_url_md = f"{static_url}/{static_folder}/{file_name}.md"
         download_url_docx = f"{static_url}/{static_folder}/{file_name}.docx"
         download_url_pdf = f"{static_url}/{static_folder}/{file_name}.pdf"

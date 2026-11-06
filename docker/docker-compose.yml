@@ -22,7 +22,7 @@ services:
     depends_on:
       - mysql
     volumes:
-      # 修改 static_folder 时需同步修改此路径
+      # 静态文件目录固定为 tmp_imgs，前后端共享
       - ../tmp_imgs:/app/tmp_imgs
       - ../front_img:/app/front_img
       - ../doc_workspace:/app/doc_workspace

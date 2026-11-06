@@ -49,7 +49,7 @@ def record_report_generation(session_id, file_name, chat_history="", outline="",
 def get_generated_files(session_id):
     try:
         static_url = config_data["static_path"].rstrip("/")
-        static_folder = config_data.get("static_folder", "tmp_imgs")
+        static_folder = "tmp_imgs"
         with sys_engine.connect() as conn:
             result = conn.execute(
                 select(report_generation_log)

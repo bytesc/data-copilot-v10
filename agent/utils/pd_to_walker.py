@@ -5,7 +5,7 @@ import pandas as pd
 import pygwalker as pyg
 from agent.utils.get_config import config_data
 STATIC_URL = config_data['static_path']
-STATIC_FOLDER = config_data.get('static_folder', 'tmp_imgs')
+STATIC_FOLDER = "tmp_imgs"
 
 def generate_random_string(length=8):
     letters = string.ascii_lowercase

@@ -152,7 +152,7 @@ def _run_in_llm_context(func, *args):
     """把请求上下文（模型/Depth/Style）带入线程池中的 LLM 调用。"""
     return contextvars.copy_context().run(func, *args)
 
-STATIC_FOLDER = config_data.get("static_folder", "tmp_imgs")
+STATIC_FOLDER = "tmp_imgs"
 STATIC_PATH = f"/{STATIC_FOLDER}"
 
 

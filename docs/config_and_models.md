@@ -15,8 +15,7 @@ mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys
 
 # 静态文件 URL 前缀（部署时改为服务器实际地址，如 http://your-server-ip:8008/）
 static_path: "http://127.0.0.1:8008/"
-# 静态文件存储目录（相对于项目根）
-static_folder: "tmp_imgs"
+# 静态文件固定存储在项目根目录 tmp_imgs/ 下（不可配置）
 
 # 大模型（多模型配置，前端可选择切换，列表第一个为默认）
 llm_models:

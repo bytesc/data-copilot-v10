@@ -20,7 +20,7 @@ DATABASE_URL = config_data['mysql']
 engine = sqlalchemy.create_engine(DATABASE_URL)
 
 STATIC_URL = config_data['static_path']
-STATIC_FOLDER = config_data.get('static_folder', 'tmp_imgs')
+STATIC_FOLDER = "tmp_imgs"
 
 llm = get_llm_dynamic()
 

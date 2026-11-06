@@ -112,6 +112,7 @@
               <div class="bb-images">
                 <a v-for="(src, i) in images" :key="i" :href="imageSrc(src)" target="_blank" class="bb-image-item">
                   <img :src="imageSrc(src)" alt="generated image" loading="lazy" />
+                  <span class="bb-image-name">{{ imageName(src) }}</span>
                 </a>
               </div>
             </div>
@@ -154,6 +155,12 @@ function imageSrc(src) {
   if (!src) return ''
   if (/^https?:\/\//i.test(src)) return src
   return `${IMAGE_BASE_URL}/tmp_imgs/${src}`
+}
+
+function imageName(src) {
+  if (!src) return ''
+  const parts = String(src).split('/')
+  return parts[parts.length - 1] || src
 }
 
 const filledRegions = computed(() => [schema, functions, knowledge, mcp, props.board?.images || {}].filter(r => has(r.value)).length)
@@ -323,6 +330,15 @@ function formatJson(value) {
   border-radius: 4px;
   border: 1px solid var(--border-color);
   background: var(--bg-primary, rgba(0, 0, 0, 0.15));
+}
+
+.bb-image-name {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  word-break: break-all;
 }
 
 @media (max-width: 768px) {

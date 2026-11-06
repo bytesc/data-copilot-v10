@@ -66,6 +66,7 @@
                   <div class="images-grid">
                     <a v-for="(src, j) in att.images" :key="j" :href="imageSrc(src)" target="_blank" class="image-item">
                       <img :src="imageSrc(src)" alt="generated image" loading="lazy" />
+                      <span class="image-name">{{ imageName(src) }}</span>
                     </a>
                   </div>
                 </div>
@@ -94,6 +95,7 @@
             <div class="images-grid">
               <a v-for="(src, j) in images" :key="j" :href="imageSrc(src)" target="_blank" class="image-item">
                 <img :src="imageSrc(src)" alt="generated image" loading="lazy" />
+                <span class="image-name">{{ imageName(src) }}</span>
               </a>
             </div>
           </div>
@@ -249,6 +251,12 @@ function imageSrc(src) {
   if (!src) return ''
   if (/^https?:\/\//i.test(src)) return src
   return `${IMAGE_BASE_URL}/tmp_imgs/${src}`
+}
+
+function imageName(src) {
+  if (!src) return ''
+  const parts = String(src).split('/')
+  return parts[parts.length - 1] || src
 }
 
 const selectedFields = computed(() => {
@@ -433,5 +441,13 @@ function subPhaseLabel(name) {
   border-radius: calc(var(--radius) - 2px);
   border: 1px solid var(--border-color);
   background: var(--bg-primary, rgba(0, 0, 0, 0.15));
+}
+.image-name {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  word-break: break-all;
 }
 </style>

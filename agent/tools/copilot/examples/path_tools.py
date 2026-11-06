@@ -1,9 +1,7 @@
 import string
 import random
 
-from agent.utils.get_config import config_data
-
-STATIC_FOLDER = config_data.get('static_folder', 'tmp_imgs')
+STATIC_FOLDER = "tmp_imgs"
 
 
 def generate_random_string(length=8):

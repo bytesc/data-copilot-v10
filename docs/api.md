@@ -250,9 +250,9 @@ Base URL: `http://<host>:8008`
 
 **错误** `403`: `enable_edit=false`。
 
-### GET `/{static_folder}/{filename}`
+### GET `/tmp_imgs/{filename}`
 
-获取静态文件（图片、CSV 等）。
+获取静态文件（图片、CSV 等）。目录固定为项目根目录下的 `tmp_imgs/`。
 
 **参数**: `filename` (路径), `download` (可选查询参数)
 

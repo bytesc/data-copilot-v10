@@ -227,7 +227,7 @@ def _extract_image_urls(text: str) -> Set[str]:
 
 
 def _download_image_bytes(url: str) -> bytes:
-    static_folder = config_data.get("static_folder", "tmp_imgs")
+    static_folder = "tmp_imgs"
     local_match = re.search(rf'{re.escape(static_folder)}/([^\s/]+\.(?:png|jpg|jpeg|gif|bmp|webp))', url, re.IGNORECASE)
     if local_match:
         local_path = os.path.join(static_folder, local_match.group(1))
@@ -580,7 +580,7 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
     full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_document, flags=re.DOTALL)
 
     file_name = f"doc_{generate_random_string(8)}"
-    static_folder = config_data.get("static_folder", "tmp_imgs")
+    static_folder = "tmp_imgs"
     os.makedirs(static_folder, exist_ok=True)
 
     md_path = os.path.join(static_folder, file_name + ".md")
@@ -600,7 +600,7 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
         pdf_path = None
 
     static_url = config_data["static_path"].rstrip("/")
-    static_folder = config_data.get("static_folder", "tmp_imgs")
+    static_folder = "tmp_imgs"
     download_url_md = f"{static_url}/{static_folder}/{file_name}.md"
     download_url_docx = f"{static_url}/{static_folder}/{file_name}.docx" if docx_path else ""
     download_url_pdf = f"{static_url}/{static_folder}/{file_name}.pdf" if pdf_path else ""
@@ -686,7 +686,7 @@ Write the complete business summary document in markdown format. Start with `# T
     title = title_match.group(1).strip() if title_match else "Summary Document"
 
     file_name = f"doc_{generate_random_string(8)}"
-    static_folder = config_data.get("static_folder", "tmp_imgs")
+    static_folder = "tmp_imgs"
     os.makedirs(static_folder, exist_ok=True)
 
     md_path = os.path.join(static_folder, file_name + ".md")
@@ -706,7 +706,7 @@ Write the complete business summary document in markdown format. Start with `# T
         pdf_path = None
 
     static_url = config_data["static_path"].rstrip("/")
-    static_folder = config_data.get("static_folder", "tmp_imgs")
+    static_folder = "tmp_imgs"
     download_url_md = f"{static_url}/{static_folder}/{file_name}.md"
     download_url_docx = f"{static_url}/{static_folder}/{file_name}.docx" if docx_path else ""
     download_url_pdf = f"{static_url}/{static_folder}/{file_name}.pdf" if pdf_path else ""
@@ -1036,7 +1036,7 @@ def _event_stream_finalize(markdown_content: str, session_id: str, request_json:
     title_match = re.search(r'^#\s+(.+)$', full_document, re.MULTILINE)
     title = title_match.group(1).strip() if title_match else "Summary Document"
 
-    static_folder = config_data.get("static_folder", "tmp_imgs")
+    static_folder = "tmp_imgs"
     os.makedirs(static_folder, exist_ok=True)
 
     file_name = f"doc_{generate_random_string(8)}"
@@ -1058,7 +1058,7 @@ def _event_stream_finalize(markdown_content: str, session_id: str, request_json:
         pdf_path = None
 
     static_url = config_data["static_path"].rstrip("/")
-    static_folder = config_data.get("static_folder", "tmp_imgs")
+    static_folder = "tmp_imgs"
     download_url_md = f"{static_url}/{static_folder}/{file_name}.md"
     download_url_docx = f"{static_url}/{static_folder}/{file_name}.docx" if docx_path else ""
     download_url_pdf = f"{static_url}/{static_folder}/{file_name}.pdf" if pdf_path else ""
