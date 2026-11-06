@@ -181,7 +181,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 ]}
 ```
 
-`path` 为本地 `tmp_imgs` 下的图片文件名，或完整的 `http(s)` 图片链接；`reason` 为每个图片的一句话选中原因。该 action 属于 Group 1，可与 `explore_*` 动作在同一次 `actions` 数组中批量执行。重复执行会**整体覆盖** `selected_images` 区域；`images: []` 会清空该区域。
+`path` 为本地 `tmp_imgs` 下的图片文件名，或完整的 `http(s)` 图片链接；`reason` 为每个图片的一句话选中原因。该 action 属于 Group 1，可与 `explore_*` 动作在同一次 `actions` 数组中批量执行。重复执行会**整体覆盖** `selected_images` 区域；`images: []` 会清空该区域。当用户需求变化（新范围、新分析目标或纠正）时，应重新运行 `select_images` 更新该区域，而不是保留过期的选中图片。
 
 **输出**
 ```json
