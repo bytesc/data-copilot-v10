@@ -194,7 +194,7 @@ function historyToText(history) {
     interruptRequested.value = false
     cycleIndex.value = 0
 
-    addMessage('user', 'question', { content: questionText, uploaded })
+    addMessage('user', 'question', { content: questionText, collapsed: true, uploaded })
     const userEntry = { role: 'user', type: 'question', content: questionText }
     if (uploaded.length) userEntry.uploaded = uploaded
     conversationHistory.value.push(userEntry)
@@ -787,7 +787,7 @@ function historyToText(history) {
       } else if (utype === 'response' || utype === 'input') {
         addMessage('user', 'input', { content, collapsed: true })
       } else {
-        addMessage('user', 'question', { content, uploaded })
+        addMessage('user', 'question', { content, uploaded, collapsed: true })
       }
       return
     }
