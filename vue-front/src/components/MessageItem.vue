@@ -3,22 +3,23 @@
     <div class="phase-badge" v-if="phaseLabel">{{ phaseLabel }}</div>
     <div class="message-content">
       <template v-if="message.type === 'user'">
-        <details v-if="message.collapsed" class="msg-collapse">
+        <details class="msg-collapse" open>
           <summary class="collapse-summary">{{ userSummary }}</summary>
-          <div class="collapse-body" v-html="renderedContent"></div>
+          <div class="collapse-body">
+            <div v-html="renderedContent"></div>
+            <div v-if="uploadedImages.length" class="uploaded-images">
+              <a
+                v-for="(img, i) in uploadedImages"
+                :key="i"
+                :href="img.src"
+                target="_blank"
+                class="uploaded-image-item"
+              >
+                <img :src="img.src" :alt="img.name" loading="lazy" />
+              </a>
+            </div>
+          </div>
         </details>
-        <div v-else class="message-body" v-html="renderedContent"></div>
-        <div v-if="uploadedImages.length" class="uploaded-images">
-          <a
-            v-for="(img, i) in uploadedImages"
-            :key="i"
-            :href="img.src"
-            target="_blank"
-            class="uploaded-image-item"
-          >
-            <img :src="img.src" :alt="img.name" loading="lazy" />
-          </a>
-        </div>
       </template>
 
       <template v-else-if="message.type === 'stream' && message.phase === 'think'">

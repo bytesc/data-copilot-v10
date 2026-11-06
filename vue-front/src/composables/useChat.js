@@ -194,7 +194,7 @@ function historyToText(history) {
     interruptRequested.value = false
     cycleIndex.value = 0
 
-    addMessage('user', 'question', { content: questionText, collapsed: true, uploaded })
+    addMessage('user', 'question', { content: questionText, uploaded })
     const userEntry = { role: 'user', type: 'question', content: questionText }
     if (uploaded.length) userEntry.uploaded = uploaded
     conversationHistory.value.push(userEntry)
@@ -686,7 +686,7 @@ function historyToText(history) {
     isPaused.value = false
     const userInput = input || 'continue'
     conversationHistory.value.push({ role: 'user', type: 'input', content: userInput })
-    addMessage('user', 'input', { content: userInput, collapsed: true })
+    addMessage('user', 'input', { content: userInput })
     try {
       await logUserInput(sessionId.value, cycleIndex.value, `User: ${userInput}`)
     } catch (e) {
@@ -714,7 +714,7 @@ function historyToText(history) {
 
     isCompleted.value = false
     question.value = newQuestion
-    addMessage('user', 'question', { content: newQuestion, collapsed: true, uploaded })
+    addMessage('user', 'question', { content: newQuestion, uploaded })
     const userEntry = { role: 'user', type: 'question', content: newQuestion }
     if (uploaded.length) userEntry.uploaded = uploaded
     conversationHistory.value.push(userEntry)
@@ -783,11 +783,11 @@ function historyToText(history) {
       const content = entry.content || ''
       const uploaded = Array.isArray(entry.uploaded) ? entry.uploaded : []
       if (utype === 'choice') {
-        addMessage('user', 'choice', { content: `Selected: ${content}`, collapsed: true })
+        addMessage('user', 'choice', { content: `Selected: ${content}` })
       } else if (utype === 'response' || utype === 'input') {
-        addMessage('user', 'input', { content, collapsed: true })
+        addMessage('user', 'input', { content })
       } else {
-        addMessage('user', 'question', { content, uploaded, collapsed: true })
+        addMessage('user', 'question', { content, uploaded })
       }
       return
     }
