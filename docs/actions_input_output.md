@@ -1,11 +1,11 @@
 # Action 输入输出文档
 
 > 文中 API 入参示例展示的是统一请求信封中的 `data` 内容；实际发送到后端的 JSON `POST/PUT/PATCH`
-> 请求体必须为 `{"meta": {"model": "...", "reasoning_effort": "...", "style": "..."}, "data": {...}}`。
+> 请求体必须为 `{"meta": {"model": "...", "reasoning_effort": "...", "style": "...", "use_images": true}, "data": {...}}`。
 
 每个环节记录三项：**输入**（LLM 决策输出的 JSON / API 入参）、**输出**（写入 `conversation_history` 的条目）、**上下文**（`history_to_text` 转换后喂给 LLM 的文本）。
 
-> 除下文列出的上下文外，每个 LLM 阶段还会额外注入独立的 `## Blackboard` 段（`blackboard_section(conversation_history)`），用于提供完整的 DB schema、函数文档、业务知识和 MCP 工具详情。blackboard 不进入 `history_to_text`，详见 `docs/conversation_history_structure.md`。blackboard 的 `images` 区域（最近一次代码执行生成的图片文件名列表）也随该段注入 LLM。
+> 除下文列出的上下文外，每个 LLM 阶段还会额外注入独立的 `## Blackboard` 段（`blackboard_section(conversation_history)`），用于提供完整的 DB schema、函数文档、业务知识和 MCP 工具详情。blackboard 不进入 `history_to_text`，详见 `docs/conversation_history_structure.md`。blackboard 的 `images` 区域（最近一次代码执行生成的图片列表）和 `selected_images` 区域（`select_images` 选中的图片及原因）也随该段以文本注入；当模型 `supports_images=true` 且请求 `meta.use_images` 开启时，两处图片会按 `images` 在前、`selected_images` 在后的顺序以 `image_url` 内容数组的形式随请求提交（本地文件/本机静态 URL 转 base64，外部 URL 原样传递，详见 `docs/conversation_history_structure.md`）。
 
 ---
 
@@ -170,6 +170,44 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 ---
 
+## 4.5. select_images
+
+**输入**
+```json
+{"action": "select_images", "images": [
+  {"path": "xxx.png", "reason": "一句话说明为什么保留这张图"},
+  {"path": "https://example.com/chart.png", "reason": "一句话说明为什么保留这张图"}
+]}
+```
+
+`path` 为本地 `tmp_imgs` 下的图片文件名，或完整的 `http(s)` 图片链接；`reason` 为每个图片的一句话选中原因。该 action 属于 Group 1，可与 `explore_*` 动作在同一次 `actions` 数组中批量执行。重复执行会**整体覆盖** `selected_images` 区域；`images: []` 会清空该区域。
+
+**输出**
+```json
+{"role":"assistant","type":"act","action":"select_images","selected_images":[
+  {"path":"xxx.png","reason":"..."},
+  {"path":"https://example.com/chart.png","reason":"..."}
+]}
+```
+
+**Blackboard 写入**
+```json
+{"regions":{"selected_images":{"images":[
+  {"path":"xxx.png","reason":"..."},
+  {"path":"https://example.com/chart.png","reason":"..."}
+]}}}
+```
+
+**上下文**
+```
+[ACT select_images] xxx.png: 一句话说明为什么保留这张图
+[ACT select_images] https://example.com/chart.png: 一句话说明为什么保留这张图
+```
+
+`selected_images` 区域随 `## Blackboard` 段以文本注入所有 LLM 阶段；模型支持图片且 `meta.use_images` 开启时，这些图片会排在上一次代码执行生成的 `images` 之后作为 `image_url` 内容提交。
+
+---
+
 ## 5. generate_and_execute
 
 **输入**
@@ -205,7 +243,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 {error}
 ```
 
-`images` 为本次执行生成的图片文件名列表（去重后；本地图片仅存文件名，外部 http 图片保留完整 URL）。`act` 条目的该字段仅用于前端展示，不进入 LLM 上下文（`history_to_text` 不渲染该字段）；同时会覆盖写入 blackboard 的 `images` 区域，并随 `## Blackboard` 段注入所有 LLM 阶段。
+`images` 为本次执行生成的图片列表（去重后；本地图片通常只存文件名，本机静态地址或外部 http 图片保留完整 URL）。`act` 条目的该字段仅用于前端展示，不进入 LLM 上下文（`history_to_text` 不渲染该字段）；同时会覆盖写入 blackboard 的 `images` 区域，并随 `## Blackboard` 段以文本注入所有 LLM 阶段。若模型 `supports_images=true` 且请求 `meta.use_images` 开启，这些图片还会作为 `image_url` 内容数组附加到用户消息中，每张图片前带 `Image filename: ...` 标签。
 
 ---
 

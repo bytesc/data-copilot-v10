@@ -3,9 +3,9 @@
 Base URL: `http://<host>:8008`
 
 > **统一请求信封**：所有 JSON `POST/PUT/PATCH` 必须发送
-> `{"meta": {"model": "...", "reasoning_effort": "...", "style": "..."}, "data": {...}}`。
+> `{"meta": {"model": "...", "reasoning_effort": "...", "style": "...", "use_images": true}, "data": {...}}`。
 > 下文请求体示例若无特别说明，展示的是 `data` 内容；未使用信封会返回 `400`。
-> `reasoning_effort` / `style` 为空字符串表示 `Default`。后端不保存选择，GET/DELETE 不使用信封。
+> `reasoning_effort` / `style` 为空字符串表示 `Default`。`use_images` 控制是否随请求上传 blackboard 图片，仅对 `supports_images=true` 的模型生效；未携带时按模型能力取默认值。后端不保存选择，GET/DELETE 不使用信封。
 > Multipart 上传使用 `meta` 表单字段，目前仅 `/upload-txt/` 会读取。
 
 ---
@@ -47,7 +47,8 @@ Base URL: `http://<host>:8008`
       "reasoning_effort_options": ["none", "low", "high", "max"],
       "reasoning_effort_selected": "none",
       "style_options": ["Formal", "Casual", "Technical"],
-      "style_selected": ""
+      "style_selected": "",
+      "supports_images": true
     },
     {
       "id": "qwen-max",
@@ -57,7 +58,8 @@ Base URL: `http://<host>:8008`
       "reasoning_effort_options": [],
       "reasoning_effort_selected": "",
       "style_options": ["Formal", "Casual", "Technical"],
-      "style_selected": ""
+      "style_selected": "",
+      "supports_images": false
     }
   ],
   "current_model": "deepseek-v4-flash",
@@ -71,6 +73,7 @@ Base URL: `http://<host>:8008`
 > GET 请求没有 `meta`，因此 `current_*` 返回默认值（第一个模型、Depth 第一个值、Style `Default`）。前端用 localStorage 的 `data-copilot-llm-config` 缓存模型配置列表和选择；启动时从后端获取并校验，不一致或选择失效时回退默认值。
 
 > **`models`**: 配置的模型列表及 Depth/Style 可选值，前端据此渲染下拉框；对应配置缺失时下拉禁用。
+> **`supports_images`**: 模型是否支持图片多模态输入。前端据此渲染 Images 开关：支持时默认开启，不支持时关闭并置灰；实际提交还受请求 `meta.use_images` 控制。
 
 ### GET `/api/models/`
 
@@ -106,7 +109,8 @@ Base URL: `http://<host>:8008`
       "reasoning_effort_options": [],
       "reasoning_effort_selected": "",
       "style_options": [],
-      "style_selected": ""
+      "style_selected": "",
+      "supports_images": false
     }
   ],
   "current_model": "qwen-max",
@@ -793,7 +797,7 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 |------|------|--------|------|
 | `file` | File | — | 支持 `.txt`, `.doc`, `.docx`, `.pdf` |
 | `table_name` | Form | `"uploaded_data"` | 目标表名 |
-| `meta` | Form(string) | `null` | 模型调用选择 JSON，如 `{"model":"glm-5.3-flash","reasoning_effort":"max","style":"Casual"}` |
+| `meta` | Form(string) | `null` | 模型调用选择 JSON，如 `{"model":"glm-5.3-flash","reasoning_effort":"max","style":"Casual","use_images":true}` |
 
 **响应** `200`
 ```json

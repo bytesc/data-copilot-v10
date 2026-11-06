@@ -313,6 +313,7 @@ function historyToText(history) {
         tool: actionResult.tool || undefined,
         params: actionResult.params || undefined,
         tools: actionResult.tools || undefined,
+        images: actionResult.images || actionResult.selected_images || undefined,
         search_keyword: actionResult.keyword || undefined,
       },
     })
@@ -369,6 +370,7 @@ function historyToText(history) {
               result: event.result.exec_result,
               error: event.result.error,
               images: event.result.images,
+              selected_images: event.result.selected_images,
               search_result: currentSubContent,
               page_content: currentSubContent,
               selected_knowledge_ids: event.result.selected_knowledge_ids,
@@ -669,6 +671,7 @@ function historyToText(history) {
         result: entry.result,
         error: entry.error,
         images: entry.images,
+        selected_images: entry.selected_images,
         solved_ans: entry.solved_ans,
         selected_fields: entry.selected_fields,
         selected_functions: entry.selected_functions,

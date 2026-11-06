@@ -3,7 +3,7 @@
     <div class="modal-content blackboard-modal">
       <h3 class="blackboard-header">
         <span>Blackboard</span>
-        <span class="blackboard-count">{{ filledRegions }}/5</span>
+        <span class="blackboard-count">{{ filledRegions }}/6</span>
         <button class="bb-close" type="button" @click="$emit('close')">✕</button>
       </h3>
 
@@ -119,6 +119,25 @@
             <div v-else class="bb-empty">No images generated yet</div>
           </div>
         </details>
+
+        <details class="bb-region">
+          <summary class="bb-region-title">SELECTED IMAGES</summary>
+          <div class="bb-region-body">
+            <div v-if="hasSelectedImages" class="bb-block">
+              <div class="bb-label">Selected by the select_images action</div>
+              <div class="bb-images">
+                <div v-for="(item, i) in selectedImages" :key="i" class="bb-image-item">
+                  <a :href="imageSrc(item.path)" target="_blank">
+                    <img :src="imageSrc(item.path)" :alt="item.reason || 'selected image'" loading="lazy" />
+                  </a>
+                  <span class="bb-image-name">{{ imageName(item.path) }}</span>
+                  <span class="bb-image-reason">{{ item.reason || '(no reason)' }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="bb-empty">No images selected yet</div>
+          </div>
+        </details>
       </div>
 
       <div class="modal-actions">
@@ -149,12 +168,20 @@ const images = computed(() => {
 
 const hasImages = computed(() => images.value.length > 0)
 
+const selectedImages = computed(() => {
+  const list = props.board?.selected_images?.images
+  return Array.isArray(list) ? list.filter(item => item && item.path) : []
+})
+
+const hasSelectedImages = computed(() => selectedImages.value.length > 0)
+
 const IMAGE_BASE_URL = import.meta.env.VITE_SERVER_URL || window.location.origin
 
 function imageSrc(src) {
   if (!src) return ''
-  if (/^https?:\/\//i.test(src)) return src
-  return `${IMAGE_BASE_URL}/tmp_imgs/${src}`
+  if (/^https?:\/\//i.test(src) || /^data:image\//i.test(src)) return src
+  const clean = String(src).replace(/^\/?tmp_imgs\//i, '')
+  return `${IMAGE_BASE_URL}/tmp_imgs/${clean}`
 }
 
 function imageName(src) {
@@ -163,7 +190,7 @@ function imageName(src) {
   return parts[parts.length - 1] || src
 }
 
-const filledRegions = computed(() => [schema, functions, knowledge, mcp, props.board?.images || {}].filter(r => has(r.value)).length)
+const filledRegions = computed(() => [schema, functions, knowledge, mcp, props.board?.images || {}, props.board?.selected_images || {}].filter(r => has(r.value ?? r)).length)
 
 function has(region) {
   return !!region && Object.keys(region).some(k => {
@@ -339,6 +366,15 @@ function formatJson(value) {
   color: var(--text-muted);
   text-align: center;
   word-break: break-all;
+}
+
+.bb-image-reason {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary, var(--text-muted));
+  word-break: break-word;
 }
 
 @media (max-width: 768px) {

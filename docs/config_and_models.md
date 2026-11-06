@@ -38,6 +38,9 @@ llm_models:
 
 # Depth 默认选中列表第一个，Style 默认选中 Default（不额外上传 reasoning_effort/temperature）。
 # extra_params 若也含 reasoning_effort 或 temperature，最终合并时以 extra_params 为准。
+# supports_images 未配置时默认 false；为 true 时前端 Images 开关可用且默认开启，
+# 请求会把 blackboard images 区域中的图片作为 image_url 内容提交给模型。
+# 请求 meta.use_images=false 可临时关闭图片提交；不支持的模型开关置灰且始终不提交图片。
 
 # extra_params 说明（各模型单独配置，透传给 OpenAI 兼容接口的扩展字段）：
 # DeepSeek 官方文档（api-docs.deepseek.com/zh-cn/guides/thinking_mode）：
@@ -59,6 +62,8 @@ enable_edit: true             # 数据/知识编辑（设为 false 时前端隐�
 enable_llmlog: false           # 记录 LLM 调用日志到 llmlog/*.txt
 enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 ```
+
+> 图片能力需以模型供应商实际支持为准。当前仓库配置中 `deepseek-v4.1-flash`、`glm-5.3-flash` 已开启 `supports_images`；`glm-5.3-flashx` 经 tokenhub 实测不支持图片输入（纯文本请求正常），保持 `false`。
 
 **DSN 格式**: `mysql+pymysql://用户名:密码@主机:端口/数据库名`
 
@@ -97,7 +102,8 @@ VITE_SERVER_URL=http://127.0.0.1:8008
   "meta": {
     "model": "glm-5.3-flash",
     "reasoning_effort": "max",
-    "style": "Casual"
+    "style": "Casual",
+    "use_images": true
   },
   "data": {
     "question": "分析上个月销售趋势",
@@ -106,7 +112,8 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 }
 ```
 
-- `meta` 只包含模型调用选择：`model`、`reasoning_effort`、`style`、`use_images`；为空字符串表示 `Default`。`use_images` 控制是否随请求上传 blackboard 图片，仅对 `supports_images` 为 true 的模型生效。
+- `meta` 只包含模型调用选择：`model`、`reasoning_effort`、`style`、`use_images`；为空字符串表示 `Default`。
+- `use_images` 控制是否随请求上传 blackboard 图片，仅对 `supports_images` 为 true 的模型生效；未携带时按模型能力取默认值（支持则为 true，不支持则为 false）。前端 Images 开关的状态会缓存在 localStorage 并随每次请求发送。
 - 后端中间件读取 `meta` 后只把 `data` 交给原 Pydantic 接口，因此下文各请求模型的示例均表示 `data` 内容。
 - 未使用信封的 JSON 请求返回 `400`；不再支持 header 回退。
 - 后端不保存用户选择；浏览器用 localStorage 的 `data-copilot-llm-config` 缓存模型配置列表和当前选择，并在每次请求中发送。

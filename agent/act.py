@@ -26,7 +26,8 @@ from utils.blackboard import (
     update_code_images,
     blackboard_selected_fields,
     blackboard_section,
-    blackboard_images,
+    blackboard_input_images,
+    normalize_selected_images,
 )
 from utils.get_config import config_data
 from utils.perf_log import perf_api
@@ -149,6 +150,13 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
         if act_data.get("error"):
             entry["error"] = act_data["error"]
         entries.append(entry)
+    elif action == "select_images":
+        entries.append({
+            "role": "assistant",
+            "type": "act",
+            "action": "select_images",
+            "selected_images": normalize_selected_images(act_data.get("images")),
+        })
     return entries
 
 
@@ -171,7 +179,7 @@ def _event_stream_act(
 
     blackboard = get_blackboard(conversation_history)
     blackboard_text = blackboard_section(conversation_history)
-    images = blackboard_images(blackboard)
+    images = blackboard_input_images(blackboard)
     if not selected_fields or (
         isinstance(selected_fields, dict) and selected_fields.get("__no_db__")
     ):
@@ -212,6 +220,11 @@ def _event_stream_act(
 
     elif action == "exe_mcp":
         act_data = yield from _act_exe_mcp(full_question, session_id, params, request_json)
+
+    elif action == "select_images":
+        act_data = yield from _act_select_images(session_id, params, request_json)
+        if act_data.get("error"):
+            return
 
     else:
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
@@ -800,6 +813,46 @@ def _format_mcp_result(server_name: str, tool_name: str, result: dict) -> str:
             result_text_parts.append(str(part))
     result_text = "\n".join(result_text_parts) if result_text_parts else json.dumps(result, ensure_ascii=False, indent=2)
     return f"### {server_name}/{tool_name}\n\n{result_text}"
+
+
+def _act_select_images(session_id: str, params: dict, request_json: str = ""):
+    raw_images = params.get("images")
+    if raw_images is None:
+        raw_images = params.get("selected_images")
+
+    if not isinstance(raw_images, list):
+        err = "select_images requires an `images` array"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'select_images', 'type': 'error', 'content': err}, ensure_ascii=False)}\n\n"
+        return {"error": err}
+
+    images = normalize_selected_images(raw_images)
+    if raw_images and not images:
+        err = "select_images received no valid image entries (each needs a path and reason)"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'select_images', 'type': 'error', 'content': err}, ensure_ascii=False)}\n\n"
+        return {"error": err}
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'select_images', 'type': 'msg', 'content': f'Updating selected images ({len(images)})...'}, ensure_ascii=False)}\n\n"
+
+    if images:
+        display_content = "## Selected Images\n\n" + "\n".join(
+            f"- {item['path']}: {item['reason'] or '(no reason)'}" for item in images
+        )
+    else:
+        display_content = "## Selected Images\n\n(none)"
+
+    log_observe_cycle(session_id, 0, "act", "select_images",
+                      prompt="", response=json.dumps({"images": images}, ensure_ascii=False)[:5000],
+                      token_estimate=0)
+    record_session_operation(
+        session_id, "/api/act/stream/", request_json,
+        json.dumps({"images": images}, ensure_ascii=False),
+        "success", f"Selected images: {len(images)}",
+    )
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'select_images', 'type': 'chunk', 'content': display_content}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'select_images', 'type': 'done', 'content': display_content, 'result': {'selected_images': images}}, ensure_ascii=False)}\n\n"
+
+    return {"images": images}
 
 
 def _act_exe_mcp(full_question: str, session_id: str, params: dict, request_json: str = ""):

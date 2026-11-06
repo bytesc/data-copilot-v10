@@ -40,6 +40,14 @@ tool_detail:
 ...
 catalog:
 ...
+
+### IMAGES
+images:
+["xxx.png", "http://127.0.0.1:8008/tmp_imgs/yyy.png", "https://example.com/zzz.png"]
+
+### SELECTED IMAGES
+images:
+[{"path": "xxx.png", "reason": "一句话选中原因"}, {"path": "https://example.com/chart.png", "reason": "一句话选中原因"}]
 ```
 
 该段会追加到以下所有阶段：
@@ -50,6 +58,8 @@ catalog:
 - Act explore_schema / explore_functions / explore_base_knowledge / explore_mcp
 - Act generate_and_execute
 - 文档生成（outline / part / unified / YAML outline / YAML section）
+
+`### IMAGES` 段让 LLM 知道最近一次执行生成了哪些图片及其文件名/URL；`### SELECTED IMAGES` 段展示 `select_images` 选中的图片及每张图的一句话选中原因。除文本注入外，当模型 `supports_images=true` 且请求 `meta.use_images` 开启时，两处图片会按 `images` 在前、`selected_images` 在后的顺序作为 `image_url` 内容数组随请求提交，每张图片前附带 `Image filename: ...` 文本标签；本地文件/本机静态 URL 转 base64，外部 URL 原样传递。详见 `docs/conversation_history_structure.md`。
 
 普通历史条目由 `prepare_trimmed_context` 裁剪后经 `history_to_text` 渲染成 `## Context`，其中 **不包含 blackboard**，因此两部分不会重复注入。
 

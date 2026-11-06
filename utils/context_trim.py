@@ -25,6 +25,7 @@ HISTORY_RETENTION = {
     "act_web_search": 3,               # web_search 的搜索结果
     "act_fetch_webpage": 3,            # fetch_webpage 的页面内容
     "act_exe_mcp": 999,                  # exe_mcp 的执行结果
+    "act_select_images": 3,              # select_images 的选中图片列表
     "act_output_text": 999,            # output_text 动作的输出文本（永久保留）
     "act_ask_question": 999,           # ask_question 动作的提问内容（永久保留）
     "act_ask_choice": 999,             # ask_choice 动作的选择项（永久保留）
@@ -78,6 +79,8 @@ def _get_entry_category(entry: dict) -> Optional[str]:
             return "act_explore_mcp"
         if action == "exe_mcp":
             return "act_exe_mcp"
+        if action == "select_images":
+            return "act_select_images"
         if action in FRONTEND_ACTIONS:
             return f"act_{action}"
         return "act_default"

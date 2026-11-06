@@ -4,7 +4,7 @@
 
 逻辑上分为两部分：
 
-- **blackboard 条目**：完整搜索结果，固定在数组第一个位置，包含 DB schema、函数文档、业务知识、MCP 工具详情，以及最近一次代码执行生成的图片列表。
+- **blackboard 条目**：完整搜索结果，固定在数组第一个位置，包含 DB schema、函数文档、业务知识、MCP 工具详情、最近一次代码执行生成的图片列表，以及 `select_images` 选中的图片及原因。
 - **普通条目**：用户输入、`think`、`action_decision`、`act` 元数据、`observe` 等。
 
 数据库中的两份数据：
@@ -18,7 +18,7 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
 
 ```json
 [
-  {"role": "system", "type": "blackboard", "regions": {"schema": {}, "functions": {}, "knowledge": {}, "mcp": {}, "images": {}}},
+  {"role": "system", "type": "blackboard", "regions": {"schema": {}, "functions": {}, "knowledge": {}, "mcp": {}, "images": {}, "selected_images": {}}},
   {"role": "user", "type": "question", "content": "..."},
   {"role": "assistant", "type": "think", "content": {"description": "...", "todo": ["..."]}},
   {"role": "assistant", "type": "action_decision", "content": {"action": "..."}},
@@ -251,7 +251,7 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
 
 ## blackboard
 
-blackboard 是完整 history 的第一个元素，保存 explore 类动作选中的完整搜索结果，以及最近一次代码执行生成的图片列表。各 explore action 只把参数/计划/选中项写入对应的 `act` 条目，完整内容统一写入 blackboard 的对应区域。
+blackboard 是完整 history 的第一个元素，保存 explore 类动作选中的完整搜索结果、最近一次代码执行生成的图片列表，以及 `select_images` 选中的图片及原因。各 explore action 只把参数/计划/选中项写入对应的 `act` 条目，完整内容统一写入 blackboard 的对应区域。
 
 ```json
 {
@@ -282,7 +282,17 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
       "catalog": "..."
     },
     "images": {
-      "images": ["xxx.png"]
+      "images": [
+        "xxx.png",
+        "http://127.0.0.1:8008/tmp_imgs/yyy.png",
+        "https://example.com/zzz.png"
+      ]
+    },
+    "selected_images": {
+      "images": [
+        {"path": "xxx.png", "reason": "展示销售趋势，与当前分析目标一致"},
+        {"path": "https://example.com/chart.png", "reason": "外部参考图，用于对比目标样式"}
+      ]
     }
   }
 }
@@ -295,16 +305,44 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
 | `knowledge` | `explore_base_knowledge` | `selected_knowledge_ids`, `knowledge_content`, `summary` |
 | `mcp` | `explore_mcp` | `selected_tools`, `explore_plan`, `tool_detail`, `catalog` |
 | `images` | `generate_and_execute` | `images` |
+| `selected_images` | `select_images` | `images`（每项为 `{"path", "reason"}`） |
 
-`images` 区域保存最近一次代码执行生成的图片文件名列表（本地图片仅存文件名，如 `xxx.png`；外部 http 图片保留完整 URL）：每次 `generate_and_execute` 执行完成后**覆盖更新**，会经 `blackboard_to_text` 渲染进 `## Blackboard` 提示词段喂给 LLM，前端 Blackboard 弹窗也从该区域读取展示。
+`images` 区域保存最近一次代码执行生成的图片列表（本地图片通常只存文件名，如 `xxx.png`；本机静态地址或外部 http 图片保留完整 URL）：每次 `generate_and_execute` 执行完成后**覆盖更新**，会经 `blackboard_to_text` 渲染进 `## Blackboard` 提示词段喂给 LLM，前端 Blackboard 弹窗也从该区域读取展示。
+
+`selected_images` 区域由 `select_images` action 写入，每项为 `{"path": "...", "reason": "..."}`：`path` 是本地 `tmp_imgs` 文件名或完整 `http(s)` 图片链接，`reason` 是一句话选中原因。每次 `select_images` 执行后**整体覆盖**该区域；`images: []` 会清空。该区域同样会渲染进 `## Blackboard`，并且其中的图片会排在上一次代码执行生成的 `images` 之后提交给支持多模态的模型。
+
+两个图片区域包含的格式一致，LLM 图片提交逻辑均兼容：
+
+- `xxx.png` / `./tmp_imgs/xxx.png`：从本地 `tmp_imgs/` 读取并转为 base64 data URL。
+- `http://127.0.0.1:8008/tmp_imgs/xxx.png`：识别为本机静态图，同样读取本地文件转 base64。
+- 外部 `http(s)://...`：原样作为 `image_url` 提交，依赖模型服务端能访问该 URL。
+- `data:image/...`：直接透传。
+- 文件不存在、非图片或超过 20MB 的图片会被跳过，重复图片会去重。
+
+图片仅在当前模型 `supports_images=true` 且请求 `meta.use_images` 未关闭时提交。提交时用户消息为多模态内容数组，每张图片前会附带文件名标签：
+
+```json
+{
+  "role": "user",
+  "content": [
+    {"type": "text", "text": "## Blackboard ..."},
+    {"type": "text", "text": "Image filename: xxx.png"},
+    {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
+  ]
+}
+```
+
+相关实现：`utils/blackboard.py` 保存图片列表，`agent/utils/llm_access/image_input.py` 负责格式解析与内容组装，`agent/tools/copilot/utils/call_llm_test.py` 负责判断模型能力/开关并提交请求。
 
 blackboard 由 `utils/blackboard.py` 维护：
 
-- `update_blackboard()`：explore 动作完成后写入对应区域
+- `update_blackboard()`：explore / `select_images` 动作完成后写入对应区域
 - `update_code_images()`：`generate_and_execute` 执行完成后覆盖写入 `images` 区域
+- `normalize_selected_images()`：把 `select_images` 的输入规范为 `{"path", "reason"}` 列表并去重
+- `blackboard_input_images()`：按“`images` 在前、`selected_images` 在后”合并出提交给 LLM 的图片列表并去重
 - `replace_blackboard()`：保证 history 中只有一个 blackboard 条目，并固定在第一个位置
 - `get_blackboard()`：从完整 history 读取
-- `blackboard_section()`：渲染为 `## Blackboard` 提示词段（含 `images` 区域）
+- `blackboard_section()`：渲染为 `## Blackboard` 提示词段（含 `images` / `selected_images` 区域）
 
 ## 通用字段
 
@@ -313,10 +351,11 @@ blackboard 由 `utils/blackboard.py` 维护：
 | `role` | `user`、`assistant` 或 `system`（仅 blackboard） |
 | `type` | 条目类型：`question` / `choice` / `response` / `input` / `think` / `action_decision` / `act` / `observe` / `document` / `blackboard` |
 | `content` | `think`、`action_decision`、`observe`、用户输入和 `document` 的载荷 |
-| `regions` | 仅 `type:"blackboard"` 使用，包含 `schema` / `functions` / `knowledge` / `mcp` / `images` 五个区域 |
+| `regions` | 仅 `type:"blackboard"` 使用，包含 `schema` / `functions` / `knowledge` / `mcp` / `images` / `selected_images` 六个区域 |
 | `action` | 仅 `type:"act"` 使用，表示具体动作名 |
 | `text` | 前端交互类动作的展示文本 |
 | `images` | 仅 `type:"act"` 且 `action:"generate_and_execute"` 使用，本次执行生成的图片文件名列表（本地图片仅存文件名，前端拼 `/tmp_imgs/` 展示；不喂给 LLM） |
+| `selected_images` | 仅 `type:"act"` 且 `action:"select_images"` 使用，选中的图片列表，每项为 `{"path", "reason"}`（同时写入 blackboard 的 `selected_images` 区域） |
 
 ## 用户输入
 
@@ -344,7 +383,7 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 
 ## action
 
-LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explore_schema/functions/base_knowledge）可批量；用户交互类（output_text/ask_question/ask_choice/summary_and_pause/attempt_completion）可批量，summary_and_pause/attempt_completion 必须在最后。两类不可混排。
+LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explore_schema/functions/base_knowledge/mcp）与 `select_images` 可批量；用户交互类（output_text/ask_question/ask_choice/summary_and_pause/attempt_completion）可批量，summary_and_pause/attempt_completion 必须在最后。两类不可混排。
 
 单 action 格式 `{"action": "...", ...}`：
 
@@ -378,6 +417,7 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 | `tool` | exe_mcp | 单工具格式必填，与 `server` 搭配 | 使用 `tools` 批量格式时忽略 |
 | `params` | exe_mcp | 可选 | 默认 `{}` |
 | `tools` | exe_mcp | 批量格式必填 | 为空时回退到 `server` / `tool` 单工具格式 |
+| `images` | select_images | 必填（可为空数组） | 为空数组时清空 `selected_images` 区域；每项需包含 `path`，`reason` 可为空 |
 
 ## act
 
@@ -412,6 +452,18 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 ```
 
 完整 `func_docs` 保存在 `blackboard.regions.functions`。
+
+### select_images
+
+```json
+{"role":"assistant","type":"act","action":"select_images",
+ "selected_images":[
+   {"path":"xxx.png","reason":"一句话选中原因"},
+   {"path":"https://example.com/chart.png","reason":"一句话选中原因"}
+ ]}
+```
+
+`path` 为本地 `tmp_imgs` 图片文件名或完整 `http(s)` 链接，`reason` 为一句话选中原因。完整列表同时保存在 `blackboard.regions.selected_images`，重复执行会整体覆盖；上下文格式为每行 `[ACT select_images] {path}: {reason}`。
 
 ### generate_and_execute — 成功
 
@@ -611,9 +663,13 @@ catalog:
 ### IMAGES
 images:
 ["xxx.png", "http://.../yyy.png"]
+
+### SELECTED IMAGES
+images:
+[{"path": "xxx.png", "reason": "一句话选中原因"}, {"path": "https://example.com/chart.png", "reason": "一句话选中原因"}]
 ```
 
-`images` 区域渲染为 `### IMAGES` 段（字段 `images` 为 JSON 数组），随 `## Blackboard` 一起注入所有 LLM 阶段。聊天记录 `act` 条目里的 `images` 字段仍只用于前端展示，不进入 `history_to_text`。
+`images` / `selected_images` 区域分别渲染为 `### IMAGES` / `### SELECTED IMAGES` 段（字段 `images` 均为 JSON），随 `## Blackboard` 一起注入所有 LLM 阶段。聊天记录 `act` 条目里的 `images` 字段仍只用于前端展示，不进入 `history_to_text`。除文本注入外，图片还会按上文的规则在模型支持且 `use_images` 开启时作为 `image_url` 内容提交，顺序为 `images` 在前、`selected_images` 在后。
 
 该段会注入到所有 LLM 阶段：Think、Action、Observe、Act explore_*、generate_and_execute、文档生成。
 
@@ -635,6 +691,7 @@ images:
 | explore_functions | 3 |
 | explore_base_knowledge | 3 |
 | explore_mcp | 3 |
+| select_images | 3 |
 | web_search / fetch_webpage | 3 |
 | exe_mcp | 999（永久） |
 | output_text / ask_question / ask_choice / summary_and_pause / attempt_completion | 999（永久） |
@@ -653,6 +710,7 @@ images:
 | Action | 同上 | 同上 |
 | Observe | 同上 | 同上 |
 | Act explore_schema / explore_functions / explore_base_knowledge / explore_mcp | 同上 | 同上 |
+| Act select_images | 同上 | 同上 |
 | Act generate_and_execute | 同上 | 同上 |
 | 文档生成 / YAML 生成 | 同上（先裁剪） | 同上 |
 

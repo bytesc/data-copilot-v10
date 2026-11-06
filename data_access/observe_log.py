@@ -8,8 +8,8 @@ import json
 from data_access.sys_db_conn import sys_engine
 from data_access.session_log import session_operation_log
 from utils.blackboard import (
-    SCHEMA, FUNCTIONS, KNOWLEDGE, MCP, REGIONS,
-    empty_blackboard, replace_blackboard,
+    SCHEMA, FUNCTIONS, KNOWLEDGE, MCP, SELECTED_IMAGES, REGIONS,
+    empty_blackboard, normalize_selected_images, replace_blackboard,
 )
 
 
@@ -386,6 +386,7 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
             elif phase == "action" and sub_phase == "decide":
                 if response:
                     history.append({"role": "assistant", "type": "action_decision", "content": _parse_json_raw(response)})
+                    _rebuild_selected_images_from_action(board, response)
                     action_type, action_text = _parse_action_decision(response)
                     if action_type and action_text:
                         act_entry = {"role": "assistant", "type": "act", "action": action_type, "text": action_text}
@@ -406,6 +407,12 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
                     history.append({"role": "assistant", "type": "observe", "content": _parse_json_raw(response)})
             elif phase == "act" and sub_phase in ("explore_schema", "explore_functions", "explore_base_knowledge", "explore_mcp"):
                 _rebuild_blackboard_region(board, sub_phase, response, exec_result, history)
+            elif phase == "act" and sub_phase == "select_images":
+                parsed = _parse_json_raw(response) if response else {}
+                images = parsed.get("images") if isinstance(parsed, dict) else None
+                if images is None and isinstance(parsed, dict):
+                    images = parsed.get("selected_images")
+                board[SELECTED_IMAGES] = {"images": normalize_selected_images(images)}
             elif phase == "act" and sub_phase == "generate_and_execute":
                 act_entry = {"role": "assistant", "type": "act", "action": "generate_and_execute"}
                 if exec_code:
@@ -430,6 +437,23 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
     if any(board.get(region) for region in REGIONS):
         history = replace_blackboard(history, board)
     return history
+
+
+def _rebuild_selected_images_from_action(board, response):
+    """Restore the selected images region from a logged action decision."""
+    parsed = _parse_json_raw(response)
+    actions = parsed.get("actions")
+    if isinstance(actions, list):
+        candidates = actions
+    else:
+        candidates = [parsed]
+    for item in candidates:
+        if not isinstance(item, dict) or item.get("action") != "select_images":
+            continue
+        images = item.get("images")
+        if images is None:
+            images = item.get("selected_images")
+        board[SELECTED_IMAGES] = {"images": normalize_selected_images(images)}
 
 
 def _rebuild_blackboard_region(board, sub_phase, response, exec_result, history):

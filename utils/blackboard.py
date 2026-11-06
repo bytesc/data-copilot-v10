@@ -3,10 +3,10 @@
 The blackboard lives inside the conversation history JSON as a single
 ``{"role": "system", "type": "blackboard", ...}`` entry.  Large search
 results produced by ``explore_schema`` / ``explore_functions`` /
-``explore_base_knowledge`` / ``explore_mcp`` are written into their own region
-instead of the individual act entries, so the LLM context only keeps
-parameters, plans and selected identifiers.  Code generation reads the regions
-back when needed.
+``explore_base_knowledge`` / ``explore_mcp`` and the images selected by
+``select_images`` are written into their own region instead of the individual
+act entries, so the LLM context only keeps parameters, plans and selected
+identifiers.  Code generation reads the regions back when needed.
 """
 
 import json
@@ -19,14 +19,16 @@ FUNCTIONS = "functions"
 KNOWLEDGE = "knowledge"
 MCP = "mcp"
 IMAGES = "images"
+SELECTED_IMAGES = "selected_images"
 
-REGIONS = (SCHEMA, FUNCTIONS, KNOWLEDGE, MCP, IMAGES)
+REGIONS = (SCHEMA, FUNCTIONS, KNOWLEDGE, MCP, IMAGES, SELECTED_IMAGES)
 
 ACTION_REGION_MAP = {
     "explore_schema": SCHEMA,
     "explore_functions": FUNCTIONS,
     "explore_base_knowledge": KNOWLEDGE,
     "explore_mcp": MCP,
+    "select_images": SELECTED_IMAGES,
 }
 
 
@@ -61,7 +63,47 @@ def replace_blackboard(history: Optional[List[dict]], board: Dict[str, Dict[str,
     return entries
 
 
+def normalize_selected_images(images: Any) -> List[Dict[str, str]]:
+    """Normalize selected image items to ``{"path", "reason"}`` dictionaries.
+
+    ``path`` may be a local image filename (for files saved under ``tmp_imgs``)
+    or a full http(s) URL for a remote image.  Plain strings are accepted for
+    robustness and become entries with an empty reason.
+    """
+    if not isinstance(images, list):
+        return []
+    normalized = []
+    seen = set()
+    for item in images:
+        if isinstance(item, str):
+            item = {"path": item, "reason": ""}
+        if not isinstance(item, dict):
+            continue
+        path = (
+            item.get("path")
+            or item.get("url")
+            or item.get("filename")
+            or item.get("file")
+            or item.get("name")
+        )
+        if not isinstance(path, str) or not path.strip():
+            continue
+        path = path.strip()
+        if path in seen:
+            continue
+        seen.add(path)
+        reason = item.get("reason") or item.get("why") or ""
+        normalized.append({"path": path, "reason": str(reason).strip()})
+    return normalized
+
+
 def _action_region_payload(action: str, act_data: dict) -> Optional[Dict[str, Any]]:
+    if action == "select_images":
+        return {
+            "images": normalize_selected_images(
+                act_data.get("images") or act_data.get("selected_images")
+            ),
+        }
     if action == "explore_schema":
         return {
             "selected_fields": act_data.get("selected_fields"),
@@ -138,12 +180,43 @@ def blackboard_images_from_history(history: Optional[List[dict]]) -> List[str]:
     return blackboard_images(get_blackboard(history))
 
 
+def blackboard_selected_images(board: Dict[str, Dict[str, Any]]) -> List[Dict[str, str]]:
+    images = (board.get(SELECTED_IMAGES) or {}).get("images")
+    return images if isinstance(images, list) else []
+
+
+def blackboard_input_images(board: Dict[str, Dict[str, Any]]) -> List[str]:
+    """Return images for multimodal LLM input.
+
+    The last code execution's generated images come first, followed by the
+    images explicitly selected through the ``select_images`` action.
+    """
+    result = []
+    seen = set()
+    for image in blackboard_images(board):
+        if image and image not in seen:
+            seen.add(image)
+            result.append(image)
+    for item in blackboard_selected_images(board):
+        path = item.get("path") if isinstance(item, dict) else None
+        if path and path not in seen:
+            seen.add(path)
+            result.append(path)
+    return result
+
+
+def blackboard_input_images_from_history(history: Optional[List[dict]]) -> List[str]:
+    """Read generated + selected images directly from a conversation history."""
+    return blackboard_input_images(get_blackboard(history))
+
+
 _REGION_LABELS = {
     SCHEMA: "DB",
     FUNCTIONS: "FUNC",
     KNOWLEDGE: "KNOWLEDGE",
     MCP: "MCP",
     IMAGES: "IMAGES",
+    SELECTED_IMAGES: "SELECTED IMAGES",
 }
 
 _REGION_FIELDS = {
@@ -173,6 +246,9 @@ _REGION_FIELDS = {
     IMAGES: [
         ("images", True),
     ],
+    SELECTED_IMAGES: [
+        ("images", True),
+    ],
 }
 
 
@@ -180,7 +256,9 @@ def blackboard_to_text(board: Dict[str, Dict[str, Any]]) -> str:
     """Render all blackboard regions as a prompt-friendly text block.
 
     The IMAGES region (last code execution's generated image list) is rendered as
-    well, so the LLM sees which images were produced. The ``images`` field of the
+    well, so the LLM sees which images were produced.  SELECTED IMAGES follows it
+    and holds the images explicitly marked by ``select_images`` together with a
+    one-sentence reason.  The ``images`` field of the
     ``generate_and_execute`` act entry, however, stays display-only and is never
     included by ``history_to_text``.
     """

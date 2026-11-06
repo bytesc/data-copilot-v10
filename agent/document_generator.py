@@ -31,7 +31,7 @@ _ENABLE_TARGET = config_data.get('enable_target_knowledge', False)
 from data_access.observe_log import log_observe_cycle
 from data_access.report_log import record_report_generation
 from utils.front_utils import history_to_text
-from utils.blackboard import blackboard_section, blackboard_images_from_history
+from utils.blackboard import blackboard_section, blackboard_input_images_from_history
 from utils.context_trim import prepare_trimmed_context
 from utils.perf_log import perf_api
 
@@ -488,7 +488,7 @@ def _event_stream_generate_document(conversation_history: List[dict], session_id
     trimmed = prepare_trimmed_context(session_id, conversation_history)
     context = history_to_text(trimmed)
     blackboard_text = blackboard_section(conversation_history)
-    images = blackboard_images_from_history(conversation_history)
+    images = blackboard_input_images_from_history(conversation_history)
 
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
@@ -652,7 +652,7 @@ def _event_stream_generate_document_unified(conversation_history: List[dict], se
     trimmed = prepare_trimmed_context(session_id, conversation_history)
     context = history_to_text(trimmed)
     blackboard_text = blackboard_section(conversation_history)
-    images = blackboard_images_from_history(conversation_history)
+    images = blackboard_input_images_from_history(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': 'Generating document...'}, ensure_ascii=False)}\n\n"
@@ -758,7 +758,7 @@ def _event_stream_generate_yaml_outline(conversation_history: List[dict], sessio
     trimmed = prepare_trimmed_context(session_id, conversation_history)
     context = history_to_text(trimmed)
     blackboard_text = blackboard_section(conversation_history)
-    images = blackboard_images_from_history(conversation_history)
+    images = blackboard_input_images_from_history(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
     user_instruction = ""
@@ -853,7 +853,7 @@ def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outl
     trimmed = prepare_trimmed_context(session_id, conversation_history)
     context = history_to_text(trimmed)
     blackboard_text = blackboard_section(conversation_history)
-    images = blackboard_images_from_history(conversation_history)
+    images = blackboard_input_images_from_history(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
     yaml_outline = _parse_yaml_outline(yaml_outline)
     parsed = _parse_yaml_sections(yaml_outline)

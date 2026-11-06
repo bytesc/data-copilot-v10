@@ -109,6 +109,24 @@
       </template>
     </template>
 
+    <template v-else-if="message.action === 'select_images'">
+      <details class="msg-collapse" open>
+        <summary class="collapse-summary">Selected Images ({{ selectedImages.length }})</summary>
+        <div class="collapse-body">
+          <div v-if="hasSelectedImages" class="images-grid">
+            <div v-for="(item, i) in selectedImages" :key="i" class="image-item">
+              <a :href="imageSrc(item.path)" target="_blank">
+                <img :src="imageSrc(item.path)" :alt="item.reason || 'selected image'" loading="lazy" />
+              </a>
+              <span class="image-name">{{ imageName(item.path) }}</span>
+              <span class="image-reason">{{ item.reason || '(no reason)' }}</span>
+            </div>
+          </div>
+          <div v-else class="raw-content">No images selected.</div>
+        </div>
+      </details>
+    </template>
+
     <template v-else-if="message.action === 'web_search'">
       <details class="msg-collapse" open>
         <summary class="collapse-summary">Web Search Results</summary>
@@ -245,12 +263,20 @@ const images = computed(() => {
 
 const hasImages = computed(() => images.value.length > 0)
 
+const selectedImages = computed(() => {
+  const list = props.message.selected_images || props.message.parsed?.selected_images || []
+  return Array.isArray(list) ? list.filter(item => item && item.path) : []
+})
+
+const hasSelectedImages = computed(() => selectedImages.value.length > 0)
+
 const IMAGE_BASE_URL = import.meta.env.VITE_SERVER_URL || window.location.origin
 
 function imageSrc(src) {
   if (!src) return ''
-  if (/^https?:\/\//i.test(src)) return src
-  return `${IMAGE_BASE_URL}/tmp_imgs/${src}`
+  if (/^https?:\/\//i.test(src) || /^data:image\//i.test(src)) return src
+  const clean = String(src).replace(/^\/?tmp_imgs\//i, '')
+  return `${IMAGE_BASE_URL}/tmp_imgs/${clean}`
 }
 
 function imageName(src) {
@@ -390,6 +416,7 @@ function subPhaseLabel(name) {
     fetch_webpage: 'Fetched Webpage',
     explore_mcp: 'MCP Tools',
     exe_mcp: 'MCP Execution Result',
+    select_images: 'Selected Images',
   }
   return labels[name] || name
 }
@@ -449,5 +476,13 @@ function subPhaseLabel(name) {
   color: var(--text-muted);
   text-align: center;
   word-break: break-all;
+}
+.image-reason {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary, var(--text-muted));
+  word-break: break-word;
 }
 </style>

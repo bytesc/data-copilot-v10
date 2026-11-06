@@ -94,6 +94,11 @@ def history_to_text(history: List[dict]) -> str:
                     lines.append(f"[ACT exe_mcp] result:\n{entry['display_content']}")
                 if entry.get("error"):
                     lines.append(f"[ACT exe_mcp] error: {entry['error']}")
+            elif action == "select_images":
+                for item in entry.get("selected_images") or []:
+                    path = item.get("path", "")
+                    reason = item.get("reason", "")
+                    lines.append(f"[ACT select_images] {path}: {reason}")
             else:
                 if entry.get("search_result"):
                     lines.append(f"[ACT {action}] search_result:\n{entry['search_result']}")

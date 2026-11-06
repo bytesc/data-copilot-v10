@@ -12,7 +12,7 @@ from agent.tools.copilot.utils.call_llm_test import call_llm_stream_with_reasoni
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
-from utils.blackboard import blackboard_section, blackboard_images_from_history
+from utils.blackboard import blackboard_section, blackboard_input_images_from_history
 from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
 from utils.get_config import config_data
 from utils.perf_log import perf_api
@@ -47,7 +47,7 @@ def _event_stream_observe(
     else:
         context = ""
     blackboard_text = blackboard_section(conversation_history)
-    images = blackboard_images_from_history(conversation_history)
+    images = blackboard_input_images_from_history(conversation_history)
 
     target_section = ""
     if _ENABLE_TARGET and TARGET.strip() != "":
