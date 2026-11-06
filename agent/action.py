@@ -52,9 +52,9 @@ class ActionInput(BaseModel):
 
 _ACTION_DESCRIPTIONS = {
     "explore_schema": """- explore_schema: {"action": "explore_schema", "keyword": "..."}
-  Explore the database schema and structure. Optional keyword hints the LLM to focus on specific tables/columns. Not used to query data, you should use `generate_and_execute` to exe_sql.""",
+  Explore the database schema and structure. Optional keyword hints the LLM to focus on specific tables/columns. Running it writes/overwrites the DB region of the blackboard; re-run it when the user's data requirements change. Not used to query data, you should use `generate_and_execute` to exe_sql.""",
     "explore_functions": """- explore_functions: {"action": "explore_functions", "keyword": "..."}
-  Explore the available function catalog. Optional keyword hints the LLM to focus on relevant functions. Use `explore_functions` for more available functions. Then use `generate_and_execute` action to call.""",
+  Explore the available function catalog. Optional keyword hints the LLM to focus on relevant functions. Running it writes/overwrites the FUNC region of the blackboard; re-run it when the user's requirements change. Use `explore_functions` for more available functions. Then use `generate_and_execute` action to call.""",
     "generate_and_execute": """- generate_and_execute: {"action": "generate_and_execute", "research_guide": "..."}
   Decide to execute code that calls functions. The function names are read from the FUNC region of the blackboard (selected by `explore_functions`); do NOT include a "funcs" field. The actual code will be generated in the next phase. Do NOT include any code or "code" field in the JSON output.
   research_guide: Optional natural language description of what data to search for and what images/charts to generate. Include details like chart types, data sources, labels, colors, and axis sorting. This guides the code generation phase to produce the correct visualizations. Use this when the task requires specific charts or images.""",
@@ -74,7 +74,7 @@ _ACTION_DESCRIPTIONS = {
 
 if ENABLE_BASE_KNOWLEDGE:
     _ACTION_DESCRIPTIONS["explore_base_knowledge"] = """- explore_base_knowledge: {"action": "explore_base_knowledge", "keyword": "..."}
-  Explore the base knowledge (business domain knowledge, documentation, thinking strategies). Optional keyword hints the LLM to focus on specific knowledge entries. Use this to retrieve relevant business context, domain rules, or documentation from the knowledge base."""
+  Explore the base knowledge (business domain knowledge, documentation, thinking strategies). Optional keyword hints the LLM to focus on specific knowledge entries. Running it writes/overwrites the KNOWLEDGE region of the blackboard; re-run it when the user's requirements or domain context change. Use this to retrieve relevant business context, domain rules, or documentation from the knowledge base."""
 
 if ENABLE_WEB_SEARCH:
     _ACTION_DESCRIPTIONS["web_search"] = """- web_search: {"action": "web_search", "query": "search query", "max_results": 10}
@@ -86,7 +86,7 @@ if ENABLE_FETCH_URL:
 
 if ENABLE_MCP:
     _ACTION_DESCRIPTIONS["explore_mcp"] = """- explore_mcp: {"action": "explore_mcp", "keyword": "..."}
-   Explore available tools from all configured MCP (Model Context Protocol) servers. Optional keyword hints the LLM to focus on relevant tools. Returns a list of available tools with their server, descriptions and parameter schemas. Use this to discover what capabilities MCP servers offer. Then use `exe_mcp` action to call a specific tool."""
+   Explore available tools from all configured MCP (Model Context Protocol) servers. Optional keyword hints the LLM to focus on relevant tools. Running it writes/overwrites the MCP region of the blackboard; re-run it when the user's requirements change. Returns a list of available tools with their server, descriptions and parameter schemas. Use this to discover what capabilities MCP servers offer. Then use `exe_mcp` action to call a specific tool."""
     _ACTION_DESCRIPTIONS["exe_mcp"] = """- exe_mcp: {"action": "exe_mcp", "server": "server_name", "tool": "tool_name", "params": {"key": "value"}}
    Execute one or more tools on MCP servers. Single tool format: use "server", "tool", "params" fields. Multi-tool format: use "tools" array:
    {"action": "exe_mcp", "tools": [{"server": "...", "tool": "...", "params": {...}}, ...]}
@@ -138,6 +138,7 @@ if ENABLE_WEB_SEARCH:
 if ENABLE_FETCH_URL:
     _DECISION_RULES.append("`fetch_webpage` fetches and reads the full text content of a specific URL. Use it after `web_search` to get detailed information from a specific page. The URL should come from a previous search result.")
 _DECISION_RULES.append("When you have multiple actions that are independent and belong to the same group, use the \"actions\" array to output them together. This is more efficient than executing them one by one. For example, if you need to explore both schema and functions, output both in one cycle.")
+_DECISION_RULES.append("Each `explore_*` action writes/overwrites its region of the blackboard, and the blackboard is the source of truth for later code generation. When the user's requirements change (new scope, new tables, new analysis, or a correction), re-run the affected `explore_*` actions instead of relying on stale blackboard data.")
 if ENABLE_MCP:
     _DECISION_RULES.append("`explore_mcp` connects to an external MCP server to discover available tools. Use it when you need capabilities not available in the local system (e.g., send emails, query external APIs, access specialized services). First `explore_mcp` to see what's available, then `exe_mcp` to call a specific tool.")
     _DECISION_RULES.append("`exe_mcp` calls a specific tool on an MCP server. Use it after `explore_mcp` has shown you the available tools. The `server` field must match the server name used in `explore_mcp`.")
