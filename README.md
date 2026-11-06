@@ -21,7 +21,7 @@
 - **智能图表绘制**：自动选择图表类型（matplotlib/seaborn），支持对比图、数据标注
 - **知识蒸馏与检索**：多源知识库（业务规则、查询指南、思维策略、代码范例），动态注入上下文
 - **上下文智能裁剪**：按类别独立保留策略，避免长对话上下文溢出
-- **Blackboard 探索缓存**：explore_schema / explore_functions / explore_base_knowledge / explore_mcp 的完整结果存入 history 的 blackboard，独立注入所有 LLM 阶段，上下文只保留参数、计划和选中项；blackboard 另设 `images` 区域保存最近一次代码执行生成的图片列表，`selected_images` 区域通过 `select_images` action 保存人工/模型选中的图片（文件名或 URL）及一句话选中原因，随 `## Blackboard` 段喂给 LLM。支持图片多模态的模型还会把图片作为 `image_url` 内容随请求提交（前端 Images 开关控制），本地图片/本机静态 URL 转 base64，外部 URL 原样传递；聊天记录 act 条目的 `images` 字段仅前端展示
+- **Blackboard 探索缓存**：explore_schema / explore_functions / explore_base_knowledge / explore_mcp 的完整结果存入 history 的 blackboard，独立注入所有 LLM 阶段，上下文只保留参数、计划和选中项；blackboard 另设 `rencent_generated_images` 区域保存最近一次代码执行生成的图片列表，`selected_images` 区域通过 `select_images` action 保存人工/模型选中的图片（文件名或 URL）及一句话选中原因，随 `## Blackboard` 段喂给 LLM。支持图片多模态的模型还会把图片作为 `image_url` 内容随请求提交（前端 Images 开关控制），本地图片/本机静态 URL 转 base64，外部 URL 原样传递；聊天记录 act 条目的 `images` 字段仅前端展示
 - **文档自动生成**：一键生成 Markdown / DOCX / PDF 格式分析报告，含图表的智能排版
 - **任意 CSV 导入**：上传 CSV 自动建表，上传文档自动生成数据注释
 - **联网搜索**：支持 DuckDuckGo 联网搜索，结合外部信息分析

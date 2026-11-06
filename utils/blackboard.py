@@ -18,7 +18,8 @@ SCHEMA = "schema"
 FUNCTIONS = "functions"
 KNOWLEDGE = "knowledge"
 MCP = "mcp"
-IMAGES = "images"
+IMAGES = "rencent_generated_images"
+LEGACY_IMAGES = "images"
 SELECTED_IMAGES = "selected_images"
 
 REGIONS = (SCHEMA, FUNCTIONS, KNOWLEDGE, MCP, IMAGES, SELECTED_IMAGES)
@@ -51,6 +52,8 @@ def get_blackboard(history: Optional[List[dict]]) -> Dict[str, Dict[str, Any]]:
             continue
         for region in REGIONS:
             value = regions.get(region)
+            if region == IMAGES and not isinstance(value, dict):
+                value = regions.get(LEGACY_IMAGES)
             if isinstance(value, dict):
                 board[region].update(value)
     return board
