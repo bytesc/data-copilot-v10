@@ -41,7 +41,7 @@
 {"role":"assistant","type":"action_decision","content":{"action":"...", ...}}
 ```
 
-**输出（多 action，Explore类可批量）**
+**输出（多 action，Explore 类与 select_images 可批量）**
 ```json
 {"role":"assistant","type":"action_decision","content":{"actions":[{"action":"explore_schema"},{"action":"explore_functions"}]}}
 ```
@@ -77,6 +77,7 @@
 | `tool` | exe_mcp | 单工具格式必填，与 `server` 搭配 | 使用 `tools` 批量格式时忽略 |
 | `params` | exe_mcp | 可选 | 默认 `{}` |
 | `tools` | exe_mcp | 批量格式必填 | 为空时回退到 `server` / `tool` 单工具格式 |
+| `images` | select_images | 必填（可为空数组） | 为空数组时清空 `selected_images` 区域；每项为 `{"path", "reason"}` |
 
 后端只保留上述字段（`agent/action.py` 的 `_parse_action_json`），未列出的字段会被丢弃。
 

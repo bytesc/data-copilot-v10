@@ -249,6 +249,13 @@ def _event_stream_action(
     yield f"data: {json.dumps({'phase': 'action', 'type': 'error', 'content': f'Action failed: {error_content}'}, ensure_ascii=False)}\n\n"
 
 
+def _extract_images(item: dict):
+    """Read `images` without losing an explicit empty list (used to clear the region)."""
+    if "images" in item:
+        return item.get("images")
+    return item.get("selected_images")
+
+
 def _parse_action_json(raw: str) -> dict:
     result = parse_json(raw)
     if result is None:
@@ -281,7 +288,7 @@ def _parse_action_json(raw: str) -> dict:
         "tool": result.get("tool"),
         "params": result.get("params"),
         "tools": result.get("tools"),
-        "images": result.get("images") or result.get("selected_images"),
+        "images": _extract_images(result),
     }
 
 
@@ -303,7 +310,7 @@ def _build_multi_action_result(actions_list: list) -> dict:
                 "tool": item.get("tool"),
                 "params": item.get("params"),
                 "tools": item.get("tools"),
-                "images": item.get("images") or item.get("selected_images"),
+                "images": _extract_images(item),
             }
             for item in actions_list
         ],

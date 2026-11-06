@@ -385,7 +385,9 @@ data: {"type":"done","content":""}
 }
 ```
 
-**`action` 可选值**: `explore_schema`, `explore_functions`, `explore_base_knowledge`, `generate_and_execute`, `generate_document`, `web_search`, `fetch_webpage`, `explore_mcp`, `exe_mcp`
+**`action` 可选值**: `explore_schema`, `explore_functions`, `explore_base_knowledge`, `select_images`, `generate_and_execute`, `generate_document`, `web_search`, `fetch_webpage`, `explore_mcp`, `exe_mcp`
+
+`select_images` 的 `params` 形如 `{"images": [{"path": "xxx.png", "reason": "一句话选中原因"}]}`；`path` 为本地 `tmp_imgs` 文件名或完整 `http(s)` 链接，整体覆盖 blackboard 的 `selected_images` 区域，`images: []` 表示清空。
 
 **事件**: `code_chunk`, `exec_chunk`, `code_gen_error`
 
