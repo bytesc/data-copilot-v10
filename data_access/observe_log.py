@@ -288,7 +288,7 @@ def get_session_cycles(session_id, limit=200):
         return []
 
 
-FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion", "generate_document"}
+FRONTEND_ACTIONS = {"ask_question", "ask_choice", "summary_and_pause", "attempt_completion", "generate_document"}
 
 
 def _parse_action_decision(raw: str):

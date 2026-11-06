@@ -137,7 +137,6 @@ const assistantSummary = computed(() => {
   if (p === 'action_decision') return 'Decision'
   if (p === 'observe') return 'Updated Plan'
   const a = props.message.action || ''
-  if (a === 'output_text') return 'Output'
   if (a === 'ask_question') return 'Question'
   if (a === 'ask_choice') return 'Choice'
   if (a === 'summary_and_pause') return 'Summary'

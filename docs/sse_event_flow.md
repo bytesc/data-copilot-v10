@@ -29,7 +29,7 @@
 
 ## action
 
-支持单 action 输出 `action_result:{action, ...}` 或多 action 输出 `action_result:{actions:[{action, ...}, ...]}`。Explore 类（explore_schema/functions/base_knowledge）可批量；用户交互类（output_text/ask_question/ask_choice/summary_and_pause/attempt_completion）可批量，其中 summary_and_pause/attempt_completion 必须在最后。两类不可混排，其余 action 只能单次。
+支持单 action 输出 `action_result:{action, ...}` 或多 action 输出 `action_result:{actions:[{action, ...}, ...]}`。Explore 类（explore_schema/functions/base_knowledge）可批量；用户交互类（ask_question/ask_choice/summary_and_pause/attempt_completion）可批量，其中 summary_and_pause/attempt_completion 必须在最后。两类不可混排，其余 action 只能单次。
 
 ```
 成功：

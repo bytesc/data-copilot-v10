@@ -239,13 +239,12 @@ const props = defineProps({
   message: { type: Object, required: true },
 })
 
-const FRONTEND_ACTIONS = ['output_text', 'ask_question', 'ask_choice', 'summary_and_pause', 'attempt_completion']
+const FRONTEND_ACTIONS = ['ask_question', 'ask_choice', 'summary_and_pause', 'attempt_completion']
 
 const isFrontendAction = computed(() => FRONTEND_ACTIONS.includes(props.message.action))
 
 const frontendActionLabel = computed(() => {
   const a = props.message.action
-  if (a === 'output_text') return 'Output'
   if (a === 'ask_question') return 'Question'
   if (a === 'ask_choice') return 'Choice'
   if (a === 'summary_and_pause') return 'Summary'
@@ -406,7 +405,6 @@ function subPhaseLabel(name) {
     generate: 'Generated Code',
     code: 'Generated Code',
     exec: 'Execution Output',
-    output_text: 'Output',
     summary: 'Summary',
     completion: 'Completion',
     ask_question: 'Question',

@@ -186,12 +186,6 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
   {
     "role": "assistant",
     "type": "act",
-    "action": "output_text",
-    "text": "输出文本"
-  },
-  {
-    "role": "assistant",
-    "type": "act",
     "action": "ask_question",
     "text": "向用户提问",
     "needs_user_input": true
@@ -383,7 +377,7 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 
 ## action
 
-LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explore_schema/functions/base_knowledge/mcp）与 `select_images` 可批量；用户交互类（output_text/ask_question/ask_choice/summary_and_pause/attempt_completion）可批量，summary_and_pause/attempt_completion 必须在最后。两类不可混排。
+LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explore_schema/functions/base_knowledge/mcp）与 `select_images` 可批量；用户交互类（ask_question/ask_choice/summary_and_pause/attempt_completion）可批量，summary_and_pause/attempt_completion 必须在最后。两类不可混排。
 
 单 action 格式 `{"action": "...", ...}`：
 
@@ -406,7 +400,7 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 | `keyword` | explore_schema / explore_functions / explore_base_knowledge / explore_mcp | 可选 | 不附加关注提示，仍检索全部内容 |
 | ~~`funcs`~~ | generate_and_execute | 已移除 | 函数名统一从 blackboard 的 `functions.selected_functions` 读取 |
 | `research_guide` | generate_and_execute | 可选 | 为空，不提供额外研究提示 |
-| `text` | output_text / ask_question / ask_choice / summary_and_pause / attempt_completion | 前端交互必填 | 缺少时前端无可展示/提问的内容 |
+| `text` | ask_question / ask_choice / summary_and_pause / attempt_completion | 前端交互必填 | 缺少时前端无可展示/提问的内容 |
 | `choices` | ask_choice | ask_choice 必填（至少一项） | 其他 action 中无效；ask_choice 缺失时用户无可选项 |
 | `title` | generate_document | 可选 | 由文档生成器自动生成标题 |
 | `query` | web_search | 建议必填 | 为空时回退使用当前完整上下文作为查询词 |
@@ -561,10 +555,10 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 
 ### 纯前端执行
 
-`output_text` / `ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion`
+`ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion`
 
 ```json
-{"role":"assistant","type":"act","action":"output_text","text":"..."}
+{"role":"assistant","type":"act","action":"ask_question","text":"..."}
 {"role":"assistant","type":"act","action":"ask_choice","text":"...","choices":["A","B"]}
 ```
 
@@ -694,7 +688,7 @@ images:
 | select_images | 3 |
 | web_search / fetch_webpage | 3 |
 | exe_mcp | 999（永久） |
-| output_text / ask_question / ask_choice / summary_and_pause / attempt_completion | 999（永久） |
+| ask_question / ask_choice / summary_and_pause / attempt_completion | 999（永久） |
 | generate_document | 1 |
 | observe（默认） | 5 |
 | 未匹配类别 | 999（永久） |

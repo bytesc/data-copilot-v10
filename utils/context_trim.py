@@ -5,7 +5,7 @@ from utils.json_parse import parse_json
 from utils.blackboard import is_blackboard_entry
 
 
-FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
+FRONTEND_ACTIONS = {"ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
 
 
 def parse_json_raw(raw: str) -> dict:
@@ -26,7 +26,6 @@ HISTORY_RETENTION = {
     "act_fetch_webpage": 3,            # fetch_webpage 的页面内容
     "act_exe_mcp": 999,                  # exe_mcp 的执行结果
     "act_select_images": 3,              # select_images 的选中图片列表
-    "act_output_text": 999,            # output_text 动作的输出文本（永久保留）
     "act_ask_question": 999,           # ask_question 动作的提问内容（永久保留）
     "act_ask_choice": 999,             # ask_choice 动作的选择项（永久保留）
     "act_summary_and_pause": 999,      # summary_and_pause 动作的进度摘要（永久保留）
@@ -37,7 +36,6 @@ HISTORY_RETENTION = {
     "observe_explore_functions": 3,    # explore_functions 后的 observe 结果
     "observe_explore_base_knowledge": 3, # explore_base_knowledge 后的 observe 结果
     "observe_generate_and_execute": 3, # generate_and_execute 后的 observe 结果
-    "observe_output_text": 3,          # output_text 后的 observe 结果
     "observe_ask_question": 3,         # ask_question 后的 observe 结果
     "observe_ask_choice": 3,           # ask_choice 后的 observe 结果
     "observe_summary_and_pause": 3,    # summary_and_pause 后的 observe 结果

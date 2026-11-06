@@ -48,10 +48,10 @@
 
 **输出（多 action，用户交互类可批量，summary_and_pause/attempt_completion 必须在最后）**
 ```json
-{"role":"assistant","type":"action_decision","content":{"actions":[{"action":"output_text","text":"..."},{"action":"ask_question","text":"..."}]}}
+{"role":"assistant","type":"action_decision","content":{"actions":[{"action":"ask_question","text":"..."},{"action":"ask_choice","text":"...","choices":["..."]}]}}
 ```
 
-Group 1（`explore_*` / `select_images`）和 Group 2（`output_text` / `ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion`）不能混在同一个 `actions` 数组中。例如 `[{"action":"select_images",...},{"action":"output_text",...}]` 是非法的，后端会拒绝并要求重新决策；需要选图并说明时应拆成两个 cycle。
+Group 1（`explore_*` / `select_images`）和 Group 2（`ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion`）不能混在同一个 `actions` 数组中。例如 `[{"action":"select_images",...},{"action":"ask_question",...}]` 是非法的，后端会拒绝并要求重新决策；需要选图并说明时应拆成两个 cycle。
 
 **上下文**
 ```
@@ -68,7 +68,7 @@ Group 1（`explore_*` / `select_images`）和 Group 2（`output_text` / `ask_que
 | `keyword` | explore_schema / explore_functions / explore_base_knowledge / explore_mcp | 可选 | 不附加关注提示，不用于过滤数据 |
 | ~~`funcs`~~ | generate_and_execute | 已移除 | 函数名统一从 blackboard 的 `functions.selected_functions` 读取 |
 | `research_guide` | generate_and_execute | 可选 | 为空，不提供额外研究提示 |
-| `text` | output_text / ask_question / ask_choice / summary_and_pause / attempt_completion | 前端交互必填 | 缺少时前端无可展示/提问的内容 |
+| `text` | ask_question / ask_choice / summary_and_pause / attempt_completion | 前端交互必填 | 缺少时前端无可展示/提问的内容 |
 | `choices` | ask_choice | ask_choice 必填（至少一项） | 其他 action 中无效 |
 | `title` | generate_document | 可选 | 由文档生成器自动生成标题 |
 | `query` | web_search | 建议必填 | 为空时回退使用当前完整上下文作为查询词 |
@@ -183,7 +183,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 ]}
 ```
 
-`path` 为本地 `tmp_imgs` 下的图片文件名，或完整的 `http(s)` 图片链接；`reason` 为每个图片的一句话选中原因。可选图片包括当前 `rencent_generated_images` 区域中的图片、**本会话更早轮次生成过的图片**、会话附件图片和上下文中出现的图片 URL；`rencent_generated_images` 只保留最近一次代码执行的图片，因此更早生成的图片即使不在该区域中，也仍然可以被选中，不应据此判断图片已丢失。历史 `generate_and_execute` 结果中的 markdown 图片 URL（如 `.../tmp_imgs/xxx.png`）可用于提取文件名；用户按“第二张”等位置或描述指代旧图时，应从历史中解析对应文件名并直接选中，而不是要求用户重新生成。该 action 属于 Group 1，可与 `explore_*` 动作在同一次 `actions` 数组中批量执行，但不能与 `output_text` / `ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion` 混用。当前 `selected_images` 已经包含相同路径时不要重复调用；只有选中集合实际变化时才更新。重复执行会**整体覆盖** `selected_images` 区域；`images: []` 会清空该区域。当用户需求变化（新范围、新分析目标或纠正）时，应重新运行 `select_images` 更新该区域，而不是保留过期的选中图片。
+`path` 为本地 `tmp_imgs` 下的图片文件名，或完整的 `http(s)` 图片链接；`reason` 为每个图片的一句话选中原因。可选图片包括当前 `rencent_generated_images` 区域中的图片、**本会话更早轮次生成过的图片**、会话附件图片和上下文中出现的图片 URL；`rencent_generated_images` 只保留最近一次代码执行的图片，因此更早生成的图片即使不在该区域中，也仍然可以被选中，不应据此判断图片已丢失。历史 `generate_and_execute` 结果中的 markdown 图片 URL（如 `.../tmp_imgs/xxx.png`）可用于提取文件名；用户按“第二张”等位置或描述指代旧图时，应从历史中解析对应文件名并直接选中，而不是要求用户重新生成。该 action 属于 Group 1，可与 `explore_*` 动作在同一次 `actions` 数组中批量执行，但不能与 `ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion` 混用。当前 `selected_images` 已经包含相同路径时不要重复调用；只有选中集合实际变化时才更新。重复执行会**整体覆盖** `selected_images` 区域；`images: []` 会清空该区域。当用户需求变化（新范围、新分析目标或纠正）时，应重新运行 `select_images` 更新该区域，而不是保留过期的选中图片。
 
 **输出**
 ```json
@@ -252,29 +252,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 ---
 
-## 6. output_text
-
-**输入**
-```json
-{"action": "output_text", "text": "..."}
-```
-
-`output_text` 不能用于描述未经过 `select_images` 选中的图片。用户要求查看/描述图片时，必须先单独调用 `select_images`，下一轮再输出描述。
-
-**输出**
-```json
-{"role":"assistant","type":"act","action":"output_text","text":"..."}
-```
-
-**上下文**
-```
-[ACT output_text] text:
-{text}
-```
-
----
-
-## 7. ask_question
+## 6. ask_question
 
 **输入**
 ```json
@@ -294,7 +272,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 ---
 
-## 8. ask_choice
+## 7. ask_choice
 
 **输入**
 ```json
@@ -314,7 +292,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 ---
 
-## 9. summary_and_pause
+## 8. summary_and_pause
 
 **输入**
 ```json
@@ -334,7 +312,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 ---
 
-## 10. attempt_completion
+## 9. attempt_completion
 
 **输入**
 ```json
@@ -354,7 +332,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 ---
 
-## 11. generate_document
+## 10. generate_document
 
 **输入**
 ```json
@@ -375,7 +353,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 ---
 
-## 12. web_search
+## 11. web_search
 
 **输入**
 ```json
@@ -396,7 +374,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 ---
 
-## 13. fetch_webpage
+## 12. fetch_webpage
 
 **输入**
 ```json
@@ -419,7 +397,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 #---
 
-## 14. explore_mcp
+## 13. explore_mcp
 
 **输入**
 ```json
@@ -450,7 +428,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 
 ---
 
-## 15. exe_mcp
+## 14. exe_mcp
 
 **输入**
 ```json
@@ -483,7 +461,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 
 ---
 
-## 16. Observe
+## 15. Observe
 
 **输入**
 ```json
@@ -503,7 +481,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 
 ---
 
-## 17. 用户反馈
+## 16. 用户反馈
 
 **选择**
 ```

@@ -96,7 +96,7 @@ function historyToText(history) {
     }).filter(line => line !== null).join('\n')
   }
 
-  const FRONTEND_ACTIONS = new Set(['output_text', 'ask_question', 'ask_choice', 'summary_and_pause', 'attempt_completion'])
+  const FRONTEND_ACTIONS = new Set(['ask_question', 'ask_choice', 'summary_and_pause', 'attempt_completion'])
 
   async function startChat(questionText) {
     if (isRunning.value) return
@@ -434,9 +434,7 @@ function historyToText(history) {
 
     conversationHistory.value.push({ role: 'assistant', type: 'act', action, text })
 
-    if (action === 'output_text') {
-      addMessage('assistant', 'act', { action, text, collapsed: true })
-    } else if (action === 'ask_question') {
+    if (action === 'ask_question') {
       addMessage('assistant', 'act', { action, text, collapsed: false })
       result.needs_user_input = true
     } else if (action === 'ask_choice') {

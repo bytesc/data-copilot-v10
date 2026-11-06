@@ -2,7 +2,7 @@ import json
 from typing import List
 
 
-FRONTEND_ACTIONS = {"output_text", "ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
+FRONTEND_ACTIONS = {"ask_question", "ask_choice", "summary_and_pause", "attempt_completion"}
 
 
 def history_to_text(history: List[dict]) -> str:
