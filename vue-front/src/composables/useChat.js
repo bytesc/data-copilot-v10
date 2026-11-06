@@ -658,8 +658,15 @@ function historyToText(history) {
         notifyError(e, 'Request failed')
       }
     } else {
-      conversationHistory.value.push({ role: 'user', type: 'response', content: response })
-      addMessage('user', 'response', { content: response })
+      const { uploaded, ok } = await _encodePendingImages()
+      if (!ok) {
+        awaitingInput.value = true
+        return
+      }
+      const userEntry = { role: 'user', type: 'response', content: response }
+      if (uploaded.length) userEntry.uploaded = uploaded
+      conversationHistory.value.push(userEntry)
+      addMessage('user', 'response', { content: response, uploaded })
       try {
         await logUserInput(sessionId.value, cycleIndex.value, `User response: ${response}`)
       } catch (e) {
@@ -685,8 +692,15 @@ function historyToText(history) {
   async function submitPausedInput(input) {
     isPaused.value = false
     const userInput = input || 'continue'
-    conversationHistory.value.push({ role: 'user', type: 'input', content: userInput })
-    addMessage('user', 'input', { content: userInput })
+    const { uploaded, ok } = await _encodePendingImages()
+    if (!ok) {
+      isPaused.value = true
+      return
+    }
+    const userEntry = { role: 'user', type: 'input', content: userInput }
+    if (uploaded.length) userEntry.uploaded = uploaded
+    conversationHistory.value.push(userEntry)
+    addMessage('user', 'input', { content: userInput, uploaded })
     try {
       await logUserInput(sessionId.value, cycleIndex.value, `User: ${userInput}`)
     } catch (e) {
@@ -785,7 +799,7 @@ function historyToText(history) {
       if (utype === 'choice') {
         addMessage('user', 'choice', { content: `Selected: ${content}` })
       } else if (utype === 'response' || utype === 'input') {
-        addMessage('user', 'input', { content })
+        addMessage('user', 'input', { content, uploaded })
       } else {
         addMessage('user', 'question', { content, uploaded })
       }

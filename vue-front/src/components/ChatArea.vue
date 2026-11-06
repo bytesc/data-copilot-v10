@@ -61,6 +61,23 @@
         </div>
       </div>
 
+      <div v-if="pendingImages.length || uploadingImages" class="upload-preview-bar">
+        <div
+          v-for="(img, i) in pendingImages"
+          :key="img.previewUrl"
+          class="upload-preview-item"
+        >
+          <img :src="img.previewUrl" :alt="img.name" />
+          <button
+            class="upload-preview-remove"
+            type="button"
+            :disabled="isRunning"
+            @click="removeUploadImage(i)"
+          >✕</button>
+        </div>
+        <span v-if="uploadingImages" class="upload-preview-status">Uploading...</span>
+      </div>
+
       <div v-if="awaitingInput" class="user-input-prompt">
         <div v-if="inputChoices.length > 0" class="choices-group">
           <p class="input-prompt-text">{{ inputPrompt }}</p>
@@ -83,7 +100,23 @@
             placeholder="Type your response..."
             @keydown.enter.exact.prevent="onUserResponse(userInput)"
           ></textarea>
-          <button class="send-btn" @click="onUserResponse(userInput)">Send</button>
+          <div class="input-actions">
+            <button
+              class="attach-btn"
+              type="button"
+              :disabled="isRunning || uploadingImages || !canAttachImages || pendingImages.length >= MAX_UPLOAD_IMAGES"
+              :title="canAttachImages ? `Upload up to ${MAX_UPLOAD_IMAGES} images` : 'Turn on the Images switch to upload images'"
+              @click="onPickImages"
+            >
+              <span class="attach-icon">🖼</span>
+              <span class="attach-count">{{ pendingImages.length }}/{{ MAX_UPLOAD_IMAGES }}</span>
+            </button>
+            <button
+              class="send-btn"
+              :disabled="isRunning || uploadingImages"
+              @click="onUserResponse(userInput)"
+            >Send</button>
+          </div>
         </div>
       </div>
 
@@ -97,27 +130,27 @@
             placeholder="continue"
             @keydown.enter.exact.prevent="onPausedSubmit"
           ></textarea>
-          <button class="send-btn" @click="onPausedSubmit">Continue</button>
+          <div class="input-actions">
+            <button
+              class="attach-btn"
+              type="button"
+              :disabled="isRunning || uploadingImages || !canAttachImages || pendingImages.length >= MAX_UPLOAD_IMAGES"
+              :title="canAttachImages ? `Upload up to ${MAX_UPLOAD_IMAGES} images` : 'Turn on the Images switch to upload images'"
+              @click="onPickImages"
+            >
+              <span class="attach-icon">🖼</span>
+              <span class="attach-count">{{ pendingImages.length }}/{{ MAX_UPLOAD_IMAGES }}</span>
+            </button>
+            <button
+              class="send-btn"
+              :disabled="isRunning || uploadingImages"
+              @click="onPausedSubmit"
+            >Continue</button>
+          </div>
         </div>
       </div>
 
       <div v-else class="question-input-area">
-        <div v-if="pendingImages.length || uploadingImages" class="upload-preview-bar">
-          <div
-            v-for="(img, i) in pendingImages"
-            :key="img.previewUrl"
-            class="upload-preview-item"
-          >
-            <img :src="img.previewUrl" :alt="img.name" />
-            <button
-              class="upload-preview-remove"
-              type="button"
-              :disabled="isRunning"
-              @click="removeUploadImage(i)"
-            >✕</button>
-          </div>
-          <span v-if="uploadingImages" class="upload-preview-status">Uploading...</span>
-        </div>
         <div class="question-input-row">
           <textarea
             v-model="currentQuestion"
@@ -131,8 +164,8 @@
             <button
               class="attach-btn"
               type="button"
-              :disabled="isRunning || uploadingImages || pendingImages.length >= MAX_UPLOAD_IMAGES"
-              :title="`Upload up to ${MAX_UPLOAD_IMAGES} images`"
+              :disabled="isRunning || uploadingImages || !canAttachImages || pendingImages.length >= MAX_UPLOAD_IMAGES"
+              :title="canAttachImages ? `Upload up to ${MAX_UPLOAD_IMAGES} images` : 'Turn on the Images switch to upload images'"
               @click="onPickImages"
             >
               <span class="attach-icon">🖼</span>
@@ -145,15 +178,16 @@
             >Send</button>
           </div>
         </div>
-        <input
-          ref="imageInputRef"
-          class="hidden-file-input"
-          type="file"
-          accept="image/*"
-          multiple
-          @change="onImagesSelected"
-        />
       </div>
+
+      <input
+        ref="imageInputRef"
+        class="hidden-file-input"
+        type="file"
+        accept="image/*"
+        multiple
+        @change="onImagesSelected"
+      />
 
       </div>
   </div>
@@ -192,6 +226,7 @@ const supportsImages = computed(() => {
   const model = configState.models.find(m => m.id === configState.current_model)
   return !!model?.supports_images
 })
+const canAttachImages = computed(() => supportsImages.value && useImages.value)
 
 function onToggleImages() {
   if (isRunning.value || !supportsImages.value) return
@@ -222,7 +257,7 @@ async function onSubmitQuestion() {
 }
 
 function onPickImages() {
-  if (isRunning.value || uploadingImages.value) return
+  if (isRunning.value || uploadingImages.value || !canAttachImages.value) return
   imageInputRef.value?.click()
 }
 
@@ -234,10 +269,10 @@ function onImagesSelected(event) {
   addUploadImages(files)
 }
 
-function onUserResponse(text) {
+async function onUserResponse(text) {
   const t = text?.trim?.() || text
-  if (!t) return
-  submitUserResponse(t)
+  if (!t || uploadingImages.value) return
+  await submitUserResponse(t)
   userInput.value = ''
 }
 
@@ -245,9 +280,10 @@ function onInterrupt() {
   requestInterrupt()
 }
 
-function onPausedSubmit() {
+async function onPausedSubmit() {
+  if (uploadingImages.value) return
   const input = pausedInput.value.trim()
-  submitPausedInput(input)
+  await submitPausedInput(input)
   pausedInput.value = ''
 }
 
