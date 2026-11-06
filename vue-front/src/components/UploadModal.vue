@@ -40,6 +40,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { showErrorToast } from '@/utils/toast.js'
 
 const props = defineProps({
   type: { type: String, required: true },
@@ -78,6 +79,7 @@ async function upload() {
     if (res.ok) {
       const data = await res.json()
       if (data.error) {
+        showErrorToast('Upload failed')
         result.value = { success: false, message: `Upload failed: ${data.error}` }
       } else {
         result.value = {

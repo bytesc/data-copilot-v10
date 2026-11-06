@@ -2,6 +2,8 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import { configState } from './utils/config.js'
+import { markErrorAsNotified } from './utils/errors.js'
+import { notifyError, showErrorToast } from './utils/toast.js'
 import './assets/styles/main.css'
 
 function buildLlmMeta() {
@@ -35,12 +37,14 @@ function wrapJsonBody(body, meta) {
   return JSON.stringify({ meta: meta || {}, data: payload })
 }
 
-if (!window.__llmEnvelopeFetchInstalled) {
-  window.__llmEnvelopeFetchInstalled = true
-  const nativeFetch = window.fetch.bind(window)
+function reportHttpError(response) {
+  showErrorToast(String(response.status))
+}
 
-  window.fetch = function (input, init) {
+function installFetchErrorInterceptor(nativeFetch) {
+  return function (input, init) {
     const isRequest = typeof Request !== 'undefined' && input instanceof Request
+    const silent = !!(init && init.silentError)
     const headers = new Headers(
       init?.headers || (isRequest ? input.headers : undefined),
     )
@@ -56,11 +60,40 @@ if (!window.__llmEnvelopeFetchInstalled) {
     }
 
     const options = { ...(init || {}), headers, body }
-    if (isRequest) {
-      return nativeFetch(new Request(input, options))
-    }
-    return nativeFetch(input, options)
+    const requestInput = isRequest ? new Request(input, options) : input
+    const requestOptions = isRequest ? undefined : options
+
+    return nativeFetch(requestInput, requestOptions)
+      .then((response) => {
+        if (!response.ok && !silent) {
+          reportHttpError(response)
+        }
+        return response
+      })
+      .catch((error) => {
+        if (error?.name === 'AbortError') throw error
+        if (!silent) {
+          showErrorToast('Network error')
+          markErrorAsNotified(error)
+        }
+        throw error
+      })
   }
+}
+
+if (!window.__llmEnvelopeFetchInstalled) {
+  window.__llmEnvelopeFetchInstalled = true
+  const nativeFetch = window.fetch.bind(window)
+  window.fetch = installFetchErrorInterceptor(nativeFetch)
+}
+
+if (!window.__unhandledRejectionToastInstalled) {
+  window.__unhandledRejectionToastInstalled = true
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason
+    if (reason?.name === 'AbortError') return
+    notifyError(reason, 'Unexpected error')
+  })
 }
 
 createApp(App).use(router).mount('#app')

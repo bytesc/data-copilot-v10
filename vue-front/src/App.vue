@@ -25,6 +25,7 @@
     </div>
 
     <IcpArea />
+    <ToastHost />
 
     <button class="theme-toggle" :title="isDark ? '切换到亮色主题' : '切换到暗色主题'" @click="toggleTheme">
       <svg v-if="isDark" viewBox="0 0 24 24">
@@ -42,6 +43,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { configState, loadConfig } from '@/utils/config.js'
 import IcpArea from '@/components/IcpArea.vue'
+import ToastHost from '@/components/ToastHost.vue'
 
 const isDark = ref(true)
 

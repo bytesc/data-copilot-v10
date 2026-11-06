@@ -256,6 +256,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { marked } from 'marked'
 import * as jsyaml from 'js-yaml'
 import YamlVisualEditor from './YamlVisualEditor.vue'
+import { notifyError, showErrorToast } from '@/utils/toast.js'
 
 function generateRandomString(length = 8) {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
@@ -399,7 +400,7 @@ async function loadFile(file) {
 
     // 1. Try merged draft
     try {
-      const draftRes = await fetch(`/api/doc-workspace/file/draft_${base}.md`)
+      const draftRes = await fetch(`/api/doc-workspace/file/draft_${base}.md`, { silentError: true })
       if (draftRes.ok) {
         const draftData = await draftRes.json()
         const sections = parseSectionsFromMd(draftData.content)
@@ -419,7 +420,7 @@ async function loadFile(file) {
     for (let i = 0; i < 100; i++) {
       const name = `draft_${base}_s${String(i).padStart(2, '0')}.md`
       try {
-        const secRes = await fetch(`/api/doc-workspace/file/${name}`)
+        const secRes = await fetch(`/api/doc-workspace/file/${name}`, { silentError: true })
         if (secRes.ok) {
           const secData = await secRes.json()
           const content = secData.content || ''
@@ -648,6 +649,7 @@ async function generateYamlOutline() {
         } else if (event.type === 'error') {
           yamlContent.value = `# Error: ${event.content || 'Failed to generate YAML outline'}`
           streamingYaml.value = ''
+          if (!event.silent) showErrorToast('Request failed')
         }
       }
     }
@@ -655,6 +657,7 @@ async function generateYamlOutline() {
     await nextTick()
     if (yamlTextarea.value) yamlTextarea.value.focus()
   } catch (e) {
+    notifyError(e)
     yamlContent.value = `# Error generating YAML outline:\n# ${e.message}`
     streamingYaml.value = ''
     generatingYaml.value = false
@@ -703,10 +706,12 @@ async function generateNextSection() {
         } else if (event.type === 'error') {
           currentSectionContent.value = `Error: ${event.content || 'Unknown'}`
           currentSectionDone.value = true
+          if (!event.silent) showErrorToast('Request failed')
         }
       }
     }
   } catch (e) {
+    notifyError(e)
     currentSectionContent.value = `Error: ${e.message}`
     currentSectionDone.value = true
   } finally {
@@ -782,10 +787,12 @@ async function finalizeDoc() {
           downloadUrlPdf: event.download_url_pdf || '',
           createdAt: Date.now(),
         })
+      } else if (event.type === 'error') {
+        if (!event.silent) showErrorToast('Request failed')
       }
     }
   } catch (e) {
-    console.error('Finalize error:', e)
+    notifyError(e, 'Request failed')
   } finally {
     finalizing.value = false
   }
@@ -800,7 +807,7 @@ async function* createSSEStream(url, payload) {
     body: JSON.stringify(payload),
   })
   if (!response.ok) {
-    yield { type: 'error', content: `HTTP ${response.status}` }
+    yield { type: 'error', content: `Error ${response.status}`, silent: true }
     return
   }
   const reader = response.body.getReader()

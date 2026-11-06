@@ -62,6 +62,7 @@
 <script setup>
 import { ref } from 'vue'
 import DbOverview from '@/components/DbOverview.vue'
+import { showErrorToast } from '@/utils/toast.js'
 
 const serverUrl = import.meta.env.VITE_SERVER_URL || window.location.origin
 
@@ -96,6 +97,7 @@ async function upload() {
     if (res.ok) {
       const data = await res.json()
       if (!data.success) {
+        showErrorToast('Upload failed')
         result.value = { success: false, message: `Upload failed: ${data.error || 'unknown error'}` }
       } else {
         let msg = data.message || `File uploaded successfully! Table: ${data.table_name || tableName.value || 'uploaded_data'}, Rows: ${data.row_count || 'N/A'}`

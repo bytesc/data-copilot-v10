@@ -84,6 +84,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { showErrorToast, showSuccessToast } from '@/utils/toast.js'
 
 const API_BASE = '/api/comment-manage'
 
@@ -222,13 +223,13 @@ async function importCsv(event, tableName) {
     }
     const result = await res.json()
     if (!result.success) {
-      alert(`Import failed:\n${result.error}`)
+      showErrorToast('Import failed')
       return
     }
-    alert(`Import successful!\nTable comment updated: ${result.table_comment_updated}\nColumns updated: ${result.columns_updated}`)
+    showSuccessToast('Import successful')
     await fetchTables()
-  } catch (e) {
-    alert(`Import failed: ${e.message}`)
+  } catch {
+    /* HTTP and network errors are reported by the global fetch handler */
   }
 }
 

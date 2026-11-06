@@ -1,27 +1,39 @@
+import { ApiError, isErrorNotified, markErrorAsNotified } from './errors.js'
+
 const BASE_URL = import.meta.env.VITE_API_BASE || '/api'
 
+async function request(url, init) {
+  const response = await fetch(url, init)
+  if (!response.ok) {
+    const error = new ApiError(String(response.status), {
+      status: response.status,
+      url,
+    })
+    markErrorAsNotified(error)
+    throw error
+  }
+  return response
+}
+
 export async function fetchSessions(limit = 50) {
-  const res = await fetch(`${BASE_URL}/sessions/?limit=${limit}`)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const res = await request(`${BASE_URL}/sessions/?limit=${limit}`)
   const data = await res.json()
   return data.sessions || []
 }
 
 export async function fetchSessionHistory(sessionId) {
-  const res = await fetch(`${BASE_URL}/session/${sessionId}/history`)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const res = await request(`${BASE_URL}/session/${sessionId}/history`)
   return res.json()
 }
 
 export async function fetchGeneratedFiles(sessionId) {
-  const res = await fetch(`${BASE_URL}/session/${sessionId}/generated-files`)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const res = await request(`${BASE_URL}/session/${sessionId}/generated-files`)
   const data = await res.json()
   return data.files || []
 }
 
 export async function logUserInput(sessionId, cycleIndex, userInput) {
-  await fetch(`${BASE_URL}/log-user-input/`, {
+  await request(`${BASE_URL}/log-user-input/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id: sessionId, cycle_index: cycleIndex, user_input: userInput }),
@@ -52,56 +64,75 @@ export function generateDocumentUnifiedStream(payload) {
   return createSSEStream(`${BASE_URL}/generate-document/stream/unified/`, payload)
 }
 
-
+function parseSSELine(line) {
+  if (!line.startsWith('data: ')) return null
+  try {
+    return JSON.parse(line.slice(6))
+  } catch (_) {
+    return null
+  }
+}
 
 async function* createSSEStream(url, payload) {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-
-  if (!response.ok) {
-    yield { type: 'error', content: `HTTP ${response.status}` }
+  let response
+  try {
+    response = await request(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  } catch (error) {
+    yield {
+      type: 'error',
+      content: error?.message || 'Request failed',
+      silent: isErrorNotified(error),
+    }
     return
   }
 
-  const reader = response.body.getReader()
+  const reader = response.body?.getReader()
+  if (!reader) {
+    yield { type: 'error', content: 'Request failed' }
+    return
+  }
+
   const decoder = new TextDecoder()
   let buffer = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
 
-    buffer += decoder.decode(value, { stream: true })
-    const parts = buffer.split('\n\n')
-    buffer = parts.pop()
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop()
 
-    for (const part of parts) {
-      for (const line of part.split('\n')) {
-        if (line.startsWith('data: ')) {
-          try {
-            const json = JSON.parse(line.slice(6))
-            yield json
-          } catch {
-            // skip malformed JSON
-          }
+      for (const part of parts) {
+        for (const line of part.split('\n')) {
+          const event = parseSSELine(line)
+          if (event) yield event
         }
       }
     }
-  }
 
-  if (buffer.trim()) {
-    for (const line of buffer.split('\n')) {
-      if (line.startsWith('data: ')) {
-        try {
-          const json = JSON.parse(line.slice(6))
-          yield json
-        } catch {
-          // skip
-        }
+    if (buffer.trim()) {
+      for (const line of buffer.split('\n')) {
+        const event = parseSSELine(line)
+        if (event) yield event
       }
+    }
+  } catch (error) {
+    yield {
+      type: 'error',
+      content: error?.message || 'Request failed',
+      silent: isErrorNotified(error),
+    }
+  } finally {
+    try {
+      reader.releaseLock()
+    } catch (_) {
+      /* ignore */
     }
   }
 }

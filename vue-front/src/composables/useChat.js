@@ -3,6 +3,7 @@ import {
   thinkStream, actionStream, actStream, observeStream,
   logUserInput, fetchGeneratedFiles, generateDocumentStream, generateDocumentUnifiedStream,
 } from '@/utils/api.js'
+import { notifyError, showErrorToast } from '@/utils/toast.js'
 
 export function useChat() {
   const sessionId = ref(generateSessionId())
@@ -116,6 +117,7 @@ function historyToText(history) {
       await runMainLoop()
     } catch (e) {
       console.error('Chat error:', e)
+      notifyError(e, 'Request failed')
       addMessage('error', 'system', { content: `Error: ${e.message}` })
       isCompleted.value = true
     } finally {
@@ -241,6 +243,7 @@ function historyToText(history) {
         updateStreamingMessage(msgId, rawPlan, false)
       } else if (event.type === 'error') {
         updateStreamingMessage(msgId, event.content, false, true)
+        if (!event.silent) showErrorToast('Request failed')
       } else if (event.type === 'history') {
         handleHistoryEvent(event.history)
       }
@@ -271,6 +274,7 @@ function historyToText(history) {
         updateStreamingMessage(msgId, rawDecision, false)
       } else if (event.type === 'error') {
         updateStreamingMessage(msgId, event.content, false, true)
+        if (!event.silent) showErrorToast('Request failed')
       } else if (event.type === 'history') {
         handleHistoryEvent(event.history)
       }
@@ -404,6 +408,7 @@ function historyToText(history) {
         }
       } else if (etype === 'error') {
         updateStreamingSubPhase(msgId, currentSubPhase, content, false, true)
+        if (!event.silent) showErrorToast('Request failed')
       }
     }
 
@@ -474,6 +479,7 @@ function historyToText(history) {
         updateStreamingMessage(msgId, rawReview, false)
       } else if (event.type === 'error') {
         updateStreamingMessage(msgId, event.content, false, true)
+        if (!event.silent) showErrorToast('Request failed')
       } else if (event.type === 'history') {
         handleHistoryEvent(event.history)
       }
@@ -534,11 +540,19 @@ function historyToText(history) {
     if (inputChoices.value.length > 0) {
       conversationHistory.value.push({ role: 'user', type: 'choice', content: response })
       addMessage('user', 'choice', { content: `Selected: ${response}` })
-      await logUserInput(sessionId.value, cycleIndex.value, `User chose: ${response}`)
+      try {
+        await logUserInput(sessionId.value, cycleIndex.value, `User chose: ${response}`)
+      } catch (e) {
+        notifyError(e, 'Request failed')
+      }
     } else {
       conversationHistory.value.push({ role: 'user', type: 'response', content: response })
       addMessage('user', 'response', { content: response })
-      await logUserInput(sessionId.value, cycleIndex.value, `User response: ${response}`)
+      try {
+        await logUserInput(sessionId.value, cycleIndex.value, `User response: ${response}`)
+      } catch (e) {
+        notifyError(e, 'Request failed')
+      }
     }
     inputChoices.value = []
     inputPrompt.value = ''
@@ -548,6 +562,7 @@ function historyToText(history) {
       await runMainLoop()
     } catch (e) {
       console.error('Chat error:', e)
+      notifyError(e, 'Request failed')
       addMessage('error', 'system', { content: `Error: ${e.message}` })
       isCompleted.value = true
     } finally {
@@ -560,13 +575,18 @@ function historyToText(history) {
     const userInput = input || 'continue'
     conversationHistory.value.push({ role: 'user', type: 'input', content: userInput })
     addMessage('user', 'input', { content: userInput, collapsed: true })
-    await logUserInput(sessionId.value, cycleIndex.value, `User: ${userInput}`)
+    try {
+      await logUserInput(sessionId.value, cycleIndex.value, `User: ${userInput}`)
+    } catch (e) {
+      notifyError(e, 'Request failed')
+    }
 
     isRunning.value = true
     try {
       await runMainLoop()
     } catch (e) {
       console.error('Chat error:', e)
+      notifyError(e, 'Request failed')
       addMessage('error', 'system', { content: `Error: ${e.message}` })
       isCompleted.value = true
     } finally {
@@ -586,6 +606,7 @@ function historyToText(history) {
       await runMainLoop()
     } catch (e) {
       console.error('Chat error:', e)
+      notifyError(e, 'Request failed')
       addMessage('error', 'system', { content: `Error: ${e.message}` })
       isCompleted.value = true
     } finally {
@@ -748,6 +769,7 @@ function historyToText(history) {
             updateDocMessage(docMsgId, { docOutline: outlineData, outlineGenerating: null })
           } else if (etype === 'error') {
             updateDocMessage(docMsgId, { outlineError: content })
+            if (!event.silent) showErrorToast('Request failed')
           }
         } else if (phase === 'part') {
           const partIdx = event.part_index ?? -1
@@ -796,6 +818,8 @@ function historyToText(history) {
           })
         }
       }
+    } catch (e) {
+      notifyError(e, 'Request failed')
     } finally {
       docGenerating.value = false
     }
@@ -845,8 +869,12 @@ function historyToText(history) {
             downloadUrlPdf: event.download_url_pdf,
             createdAt: Date.now(),
           })
+        } else if (etype === 'error') {
+          if (!event.silent) showErrorToast('Request failed')
         }
       }
+    } catch (e) {
+      notifyError(e, 'Request failed')
     } finally {
       docGenerating.value = false
     }
