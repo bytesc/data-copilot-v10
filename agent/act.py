@@ -23,6 +23,7 @@ from utils.context_trim import prepare_trimmed_context, save_session_step
 from utils.blackboard import (
     get_blackboard,
     update_blackboard,
+    update_code_images,
     blackboard_selected_fields,
     blackboard_section,
 )
@@ -93,14 +94,20 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
         full_code = act_data.get("full_code", "")
         full_ans = act_data.get("full_ans", "")
         exec_error = act_data.get("exec_error")
+        images = act_data.get("images") or []
         if full_ans and not exec_error and full_code:
-            entries.append({"role": "assistant", "type": "act", "action": "generate_and_execute", "code": full_code, "result": full_ans})
+            entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "code": full_code, "result": full_ans}
+            if images:
+                entry["images"] = images
+            entries.append(entry)
         elif exec_error:
             entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "error": exec_error}
             if full_code:
                 entry["code"] = full_code
             if full_ans:
                 entry["result"] = full_ans
+            if images:
+                entry["images"] = images
             entries.append(entry)
     elif action == "generate_document":
         title = act_data.get("title", "")
@@ -209,9 +216,11 @@ def _event_stream_act(
 
     new_entries = _build_act_entries(action, act_data)
     base_history = update_blackboard(conversation_history, action, act_data)
-    history = None
-    if new_entries or base_history is not conversation_history:
-        history = save_session_step(session_id, base_history, new_entries)
+    history = base_history
+    if action == "generate_and_execute":
+        history = update_code_images(history, act_data.get("images"))
+    if new_entries or history is not conversation_history:
+        history = save_session_step(session_id, history, new_entries)
     if history:
         yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
 
@@ -461,6 +470,7 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
     full_code = ""
     full_ans = ""
     exec_error = None
+    images = []
     for event in generate_and_execute_stream(
         full_question, tables, retries=2,
         selected_fields=selected_fields,
@@ -472,6 +482,7 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
                 full_code = ""
                 full_ans = ""
                 exec_error = None
+                images = []
             full_code += event.get("content", "")
         if event.get("sub_type") == "code_complete":
             full_code = event.get("content", "")
@@ -483,12 +494,14 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
         if event.get("type") == "done" and event.get("sub_phase") == "exec":
             full_code = event.get("code", full_code)
             full_ans = event.get("content", full_ans)
+            images = event.get("images", images)
             event = {
                 **event,
                 "result": {
                     "code": full_code,
                     "exec_result": full_ans,
                     "error": exec_error,
+                    "images": images,
                 }
             }
         yield f"data: {json.dumps({**event}, ensure_ascii=False)}\n\n"
@@ -504,7 +517,7 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
                           prompt=full_question[:10000], response=full_code[:10000],
                           exec_code=full_code[:10000], exec_result=full_ans[:10000])
 
-    return {"full_code": full_code, "full_ans": full_ans, "exec_error": exec_error}
+    return {"full_code": full_code, "full_ans": full_ans, "exec_error": exec_error, "images": images}
 
 
 def _act_generate_document(conversation_history, session_id, title: str = "", request_json: str = ""):

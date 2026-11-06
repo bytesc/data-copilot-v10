@@ -3,7 +3,7 @@
     <div class="modal-content blackboard-modal">
       <h3 class="blackboard-header">
         <span>Blackboard</span>
-        <span class="blackboard-count">{{ filledRegions }}/4</span>
+        <span class="blackboard-count">{{ filledRegions }}/5</span>
         <button class="bb-close" type="button" @click="$emit('close')">✕</button>
       </h3>
 
@@ -103,6 +103,21 @@
             <div v-else class="bb-empty">No MCP content</div>
           </div>
         </details>
+
+        <details class="bb-region">
+          <summary class="bb-region-title">IMAGES</summary>
+          <div class="bb-region-body">
+            <div v-if="hasImages" class="bb-block">
+              <div class="bb-label">Last Code Execution Images</div>
+              <div class="bb-images">
+                <a v-for="(src, i) in images" :key="i" :href="imageSrc(src)" target="_blank" class="bb-image-item">
+                  <img :src="imageSrc(src)" alt="generated image" loading="lazy" />
+                </a>
+              </div>
+            </div>
+            <div v-else class="bb-empty">No images generated yet</div>
+          </div>
+        </details>
       </div>
 
       <div class="modal-actions">
@@ -126,8 +141,22 @@ const schema = computed(() => props.board?.schema || {})
 const functions = computed(() => props.board?.functions || {})
 const knowledge = computed(() => props.board?.knowledge || {})
 const mcp = computed(() => props.board?.mcp || {})
+const images = computed(() => {
+  const list = props.board?.images?.images
+  return Array.isArray(list) ? list : []
+})
 
-const filledRegions = computed(() => [schema, functions, knowledge, mcp].filter(r => has(r.value)).length)
+const hasImages = computed(() => images.value.length > 0)
+
+const IMAGE_BASE_URL = import.meta.env.VITE_SERVER_URL || window.location.origin
+
+function imageSrc(src) {
+  if (!src) return ''
+  if (/^https?:\/\//i.test(src)) return src
+  return `${IMAGE_BASE_URL}/tmp_imgs/${src}`
+}
+
+const filledRegions = computed(() => [schema, functions, knowledge, mcp, props.board?.images || {}].filter(r => has(r.value)).length)
 
 function has(region) {
   return !!region && Object.keys(region).some(k => {
@@ -273,6 +302,27 @@ function formatJson(value) {
 .bb-empty {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.bb-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.bb-image-item {
+  display: block;
+  max-width: 200px;
+  flex: 1 1 auto;
+}
+
+.bb-image-item img {
+  display: block;
+  width: 100%;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary, rgba(0, 0, 0, 0.15));
 }
 
 @media (max-width: 768px) {

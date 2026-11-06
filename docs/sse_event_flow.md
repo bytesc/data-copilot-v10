@@ -254,9 +254,9 @@
   {phase:"act", type:"chunk", sub_type:"code_gen_error",sub_phase:"code", content:"code generation error"}
   {phase:"act", type:"msg",   sub_phase:"exec", content:"Executing code..."}
   {phase:"act", type:"chunk", sub_type:"exec_chunk",    sub_phase:"exec", content:"..."}  ×N
-  {phase:"act", type:"chunk", sub_type:"exec_complete", sub_phase:"exec", content:"..."}
+  {phase:"act", type:"chunk", sub_type:"exec_complete", sub_phase:"exec", content:"...", images:["xxx.png"]}
   {phase:"act", type:"done",  sub_phase:"exec", code:"...", content:"...",
-   result:{code:"...", exec_result:"...", error:null}}
+   result:{code:"...", exec_result:"...", error:null, images:["xxx.png"]}}
   {type:"history", history:[...]}
 
 执行错误后重试成功：
@@ -267,6 +267,8 @@
 重试耗尽失败：
   ... → {phase:"act", type:"error", content:"generate_and_execute_stream_error"}
 ```
+
+`exec_complete` / `done` 事件中的 `images` 字段携带本次代码执行生成的图片文件名列表（去重后；本地图片仅存文件名，外部 http 图片保留完整 URL）。前端渲染时拼接 `/tmp_imgs/`；该字段仅用于前端展示，不喂给 LLM。
 
 ## observe
 
@@ -289,6 +291,7 @@
 
 - `{type:"history", history:[...]}` 是最后一条事件，包含完整的 `conversation_history`。前端收到后替换本地历史并重建显示。
 - `history` 的第一个元素是 blackboard 条目（`type:"blackboard"`），保存完整探索结果；普通 act 条目只保留参数、计划和选中项。前端从该条目读取 Blackboard 弹窗内容。
+- `generate_and_execute` 每次执行后会把本次生成的图片列表写入 blackboard 的 `images` 区域（覆盖更新）；该区域仅用于前端展示，不参与 `## Blackboard` 提示词渲染。
 - 所有 `chunk` 事件仅用于流式临时显示，最终显示由 `history` 决定。
 - 重试次数为 2（首次 + 1 次重试）。explore_functions 无重试；YAML Outline 生成也有 2 次重试。
 - generate_document_unified 的 done 事件会先发一个仅含 content 的 done，再发一个含完整文件元数据的 done。

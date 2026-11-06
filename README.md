@@ -21,7 +21,7 @@
 - **智能图表绘制**：自动选择图表类型（matplotlib/seaborn），支持对比图、数据标注
 - **知识蒸馏与检索**：多源知识库（业务规则、查询指南、思维策略、代码范例），动态注入上下文
 - **上下文智能裁剪**：按类别独立保留策略，避免长对话上下文溢出
-- **Blackboard 探索缓存**：explore_schema / explore_functions / explore_base_knowledge / explore_mcp 的完整结果存入 history 的 blackboard，独立注入所有 LLM 阶段，上下文只保留参数、计划和选中项
+- **Blackboard 探索缓存**：explore_schema / explore_functions / explore_base_knowledge / explore_mcp 的完整结果存入 history 的 blackboard，独立注入所有 LLM 阶段，上下文只保留参数、计划和选中项；blackboard 另设 `images` 区域保存最近一次代码执行生成的图片列表，供前端展示（不喂给 LLM）
 - **文档自动生成**：一键生成 Markdown / DOCX / PDF 格式分析报告，含图表的智能排版
 - **任意 CSV 导入**：上传 CSV 自动建表，上传文档自动生成数据注释
 - **联网搜索**：支持 DuckDuckGo 联网搜索，结合外部信息分析

@@ -1,4 +1,6 @@
 import logging
+import os
+import re
 import time as _time
 
 import pandas as pd
@@ -350,6 +352,7 @@ def generate_and_execute_stream(question, tables=None, retries=2,
 
         error_msg = ""
         formatted_result = ""
+        images = []
         _exec_start = _time.monotonic()
         try:
             result = execute_py_code(code)
@@ -357,6 +360,11 @@ def generate_and_execute_stream(question, tables=None, retries=2,
                 formatted = format_yield_item(item, print_rows)
                 formatted_result += formatted
                 formatted_result += "\n"
+                if isinstance(item, str):
+                    if is_local_png_path(item):
+                        images.append(os.path.basename(item))
+                    elif is_png_url(item):
+                        images.extend(re.findall(r'http[s]?://[^"]+\.(?:png)', item))
                 yield {"type": "chunk", "sub_type": "exec_chunk", "content": formatted, "phase": "act", "sub_phase": "exec"}
         except Exception as e:
             error_msg = str(e)
@@ -366,8 +374,11 @@ def generate_and_execute_stream(question, tables=None, retries=2,
         finally:
             record_code_exec(_time.monotonic() - _exec_start)
 
-        yield {"type": "chunk", "sub_type": "exec_complete", "content": formatted_result, "phase": "act", "sub_phase": "exec"}
-        yield {"type": "done", "code": code, "content": formatted_result, "phase": "act", "sub_phase": "exec"}
+        seen = set()
+        images = [u for u in images if not (u in seen or seen.add(u))]
+
+        yield {"type": "chunk", "sub_type": "exec_complete", "content": formatted_result, "phase": "act", "sub_phase": "exec", "images": images}
+        yield {"type": "done", "code": code, "content": formatted_result, "phase": "act", "sub_phase": "exec", "images": images}
         return
 
     yield {"type": "error", "content": "generate_and_execute_stream_error", "phase": "act"}

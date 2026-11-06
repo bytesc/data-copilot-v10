@@ -4,7 +4,7 @@
 
 逻辑上分为两部分：
 
-- **blackboard 条目**：完整搜索结果，固定在数组第一个位置，包含 DB schema、函数文档、业务知识、MCP 工具详情。
+- **blackboard 条目**：完整搜索结果，固定在数组第一个位置，包含 DB schema、函数文档、业务知识、MCP 工具详情，以及最近一次代码执行生成的图片列表。
 - **普通条目**：用户输入、`think`、`action_decision`、`act` 元数据、`observe` 等。
 
 数据库中的两份数据：
@@ -18,7 +18,7 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
 
 ```json
 [
-  {"role": "system", "type": "blackboard", "regions": {"schema": {}, "functions": {}, "knowledge": {}, "mcp": {}}},
+  {"role": "system", "type": "blackboard", "regions": {"schema": {}, "functions": {}, "knowledge": {}, "mcp": {}, "images": {}}},
   {"role": "user", "type": "question", "content": "..."},
   {"role": "assistant", "type": "think", "content": {"description": "...", "todo": ["..."]}},
   {"role": "assistant", "type": "action_decision", "content": {"action": "..."}},
@@ -63,6 +63,9 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
         "explore_plan": "探索计划",
         "tool_detail": "工具详情",
         "catalog": "工具目录"
+      },
+      "images": {
+        "images": ["xxx.png"]
       }
     }
   },
@@ -126,7 +129,8 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
     "type": "act",
     "action": "generate_and_execute",
     "code": "生成的 Python 代码",
-    "result": "执行输出"
+    "result": "执行输出",
+    "images": ["xxx.png"]
   },
   {
     "role": "assistant",
@@ -134,7 +138,8 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
     "action": "generate_and_execute",
     "code": "生成的 Python 代码",
     "error": "执行错误",
-    "result": "可选的部分输出"
+    "result": "可选的部分输出",
+    "images": ["xxx.png"]
   },
   {
     "role": "assistant",
@@ -246,7 +251,7 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
 
 ## blackboard
 
-blackboard 是完整 history 的第一个元素，保存 explore 类动作选中的完整搜索结果。各 explore action 只把参数/计划/选中项写入对应的 `act` 条目，完整内容统一写入 blackboard 的四个区域。
+blackboard 是完整 history 的第一个元素，保存 explore 类动作选中的完整搜索结果，以及最近一次代码执行生成的图片列表。各 explore action 只把参数/计划/选中项写入对应的 `act` 条目，完整内容统一写入 blackboard 的对应区域。
 
 ```json
 {
@@ -275,6 +280,9 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
       "explore_plan": "...",
       "tool_detail": "...",
       "catalog": "..."
+    },
+    "images": {
+      "images": ["xxx.png"]
     }
   }
 }
@@ -286,13 +294,17 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
 | `functions` | `explore_functions` | `selected_functions`, `explore_plan`, `func_docs` |
 | `knowledge` | `explore_base_knowledge` | `selected_knowledge_ids`, `knowledge_content`, `summary` |
 | `mcp` | `explore_mcp` | `selected_tools`, `explore_plan`, `tool_detail`, `catalog` |
+| `images` | `generate_and_execute` | `images` |
+
+`images` 区域是纯展示数据：每次 `generate_and_execute` 执行完成后**覆盖更新**为本次生成的图片文件名列表（本地图片仅存文件名，如 `xxx.png`；外部 http 图片保留完整 URL），供前端 Blackboard 弹窗展示，前端渲染时拼接 `/tmp_imgs/`；它**不参与** `blackboard_to_text` 渲染，因此不会喂给 LLM。
 
 blackboard 由 `utils/blackboard.py` 维护：
 
 - `update_blackboard()`：explore 动作完成后写入对应区域
+- `update_code_images()`：`generate_and_execute` 执行完成后覆盖写入 `images` 区域
 - `replace_blackboard()`：保证 history 中只有一个 blackboard 条目，并固定在第一个位置
 - `get_blackboard()`：从完整 history 读取
-- `blackboard_section()`：渲染为 `## Blackboard` 提示词段
+- `blackboard_section()`：渲染为 `## Blackboard` 提示词段（`images` 区域除外）
 
 ## 通用字段
 
@@ -301,9 +313,10 @@ blackboard 由 `utils/blackboard.py` 维护：
 | `role` | `user`、`assistant` 或 `system`（仅 blackboard） |
 | `type` | 条目类型：`question` / `choice` / `response` / `input` / `think` / `action_decision` / `act` / `observe` / `document` / `blackboard` |
 | `content` | `think`、`action_decision`、`observe`、用户输入和 `document` 的载荷 |
-| `regions` | 仅 `type:"blackboard"` 使用，包含 `schema` / `functions` / `knowledge` / `mcp` 四个区域 |
+| `regions` | 仅 `type:"blackboard"` 使用，包含 `schema` / `functions` / `knowledge` / `mcp` / `images` 五个区域 |
 | `action` | 仅 `type:"act"` 使用，表示具体动作名 |
 | `text` | 前端交互类动作的展示文本 |
+| `images` | 仅 `type:"act"` 且 `action:"generate_and_execute"` 使用，本次执行生成的图片文件名列表（本地图片仅存文件名，前端拼 `/tmp_imgs/` 展示；不喂给 LLM） |
 
 ## 用户输入
 
@@ -404,17 +417,17 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 
 ```json
 {"role":"assistant","type":"act","action":"generate_and_execute",
- "code":"...","result":"..."}
+ "code":"...","result":"...","images":["xxx.png"]}
 ```
 
 ### generate_and_execute — 失败
 
 ```json
 {"role":"assistant","type":"act","action":"generate_and_execute",
- "error":"...","code":"...","result":"..."}
+ "error":"...","code":"...","result":"...","images":["xxx.png"]}
 ```
 
-失败时 `error` 必填，`code` / `result` 在存在时保留。
+失败时 `error` 必填，`code` / `result` 在存在时保留。`images` 为本轮执行过程中生成的图片文件名列表（去重后，本地图片仅存文件名，外部 http 图片保留完整 URL），无论成功失败，只要生成过图片就保留；仅用于前端展示，不进入 LLM 上下文。
 
 ### generate_document
 
@@ -548,6 +561,8 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 
 `content` 为对象时使用 `json.dumps(..., ensure_ascii=False)` 序列化。
 
+`generate_and_execute` 条目的 `images` 字段不会被 `history_to_text` 渲染，因此不会进入任何 LLM 阶段。
+
 ## blackboard 渲染
 
 `utils/blackboard.py` 的 `blackboard_section(conversation_history)` 从完整 history 中读取 blackboard，渲染成独立的 `## Blackboard` 段：
@@ -593,6 +608,8 @@ tool_detail:
 catalog:
 ...
 ```
+
+`images` 区域不参与上述渲染：它是纯展示数据，只在 Blackboard 弹窗中由前端读取，不会被喂给 LLM。
 
 该段会注入到所有 LLM 阶段：Think、Action、Observe、Act explore_*、generate_and_execute、文档生成。
 

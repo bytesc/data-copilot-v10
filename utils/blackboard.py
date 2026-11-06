@@ -18,8 +18,9 @@ SCHEMA = "schema"
 FUNCTIONS = "functions"
 KNOWLEDGE = "knowledge"
 MCP = "mcp"
+IMAGES = "images"
 
-REGIONS = (SCHEMA, FUNCTIONS, KNOWLEDGE, MCP)
+REGIONS = (SCHEMA, FUNCTIONS, KNOWLEDGE, MCP, IMAGES)
 
 ACTION_REGION_MAP = {
     "explore_schema": SCHEMA,
@@ -113,6 +114,24 @@ def blackboard_selected_functions(board: Dict[str, Dict[str, Any]]) -> Optional[
     return funcs if isinstance(funcs, list) else None
 
 
+def update_code_images(history: Optional[List[dict]], images: Optional[List[str]]) -> List[dict]:
+    """Overwrite the IMAGES region with the last code execution's generated image list.
+
+    The images are display-only: they are stored in the blackboard for the frontend
+    but are intentionally excluded from ``_REGION_FIELDS`` so they are never fed to the LLM.
+    """
+    if not isinstance(images, list):
+        images = []
+    board = get_blackboard(history)
+    board[IMAGES] = {"images": images}
+    return replace_blackboard(history, board)
+
+
+def blackboard_images(board: Dict[str, Dict[str, Any]]) -> List[str]:
+    images = (board.get(IMAGES) or {}).get("images")
+    return images if isinstance(images, list) else []
+
+
 _REGION_LABELS = {
     SCHEMA: "DB",
     FUNCTIONS: "FUNC",
@@ -148,9 +167,15 @@ _REGION_FIELDS = {
 
 
 def blackboard_to_text(board: Dict[str, Dict[str, Any]]) -> str:
-    """Render all blackboard regions as a prompt-friendly text block."""
+    """Render all blackboard regions as a prompt-friendly text block.
+
+    The IMAGES region is display-only and deliberately excluded from the rendered
+    text so it is never fed to the LLM.
+    """
     sections = []
     for region in REGIONS:
+        if region not in _REGION_FIELDS:
+            continue
         data = board.get(region) or {}
         lines = []
         for field, is_json in _REGION_FIELDS[region]:

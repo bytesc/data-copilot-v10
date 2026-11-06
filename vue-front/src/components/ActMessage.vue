@@ -60,6 +60,16 @@
                 <summary class="collapse-summary">Result (Attempt {{ i + 1 }})</summary>
                 <div class="collapse-body" v-html="renderMd(att.result)"></div>
               </details>
+              <details v-if="att.images?.length" class="msg-collapse">
+                <summary class="collapse-summary">Images ({{ att.images.length }})</summary>
+                <div class="collapse-body">
+                  <div class="images-grid">
+                    <a v-for="(src, j) in att.images" :key="j" :href="imageSrc(src)" target="_blank" class="image-item">
+                      <img :src="imageSrc(src)" alt="generated image" loading="lazy" />
+                    </a>
+                  </div>
+                </div>
+              </details>
               <div v-if="att.error" class="error-block">
                 <strong>Error:</strong> {{ att.error }}
               </div>
@@ -77,6 +87,16 @@
         <details v-if="message.result" class="msg-collapse" open>
           <summary class="collapse-summary">Result</summary>
           <div class="collapse-body" v-html="renderMd(message.result)"></div>
+        </details>
+        <details v-if="hasImages" class="msg-collapse">
+          <summary class="collapse-summary">Images ({{ images.length }})</summary>
+          <div class="collapse-body">
+            <div class="images-grid">
+              <a v-for="(src, j) in images" :key="j" :href="imageSrc(src)" target="_blank" class="image-item">
+                <img :src="imageSrc(src)" alt="generated image" loading="lazy" />
+              </a>
+            </div>
+          </div>
         </details>
         <details v-if="message.error" class="msg-collapse">
           <summary class="collapse-summary">Error</summary>
@@ -216,6 +236,20 @@ const frontendActionLabel = computed(() => {
 const attempts = computed(() => {
   return props.message.attempts || props.message.parsed?.attempts || []
 })
+
+const images = computed(() => {
+  return props.message.images || props.message.parsed?.images || []
+})
+
+const hasImages = computed(() => images.value.length > 0)
+
+const IMAGE_BASE_URL = import.meta.env.VITE_SERVER_URL || window.location.origin
+
+function imageSrc(src) {
+  if (!src) return ''
+  if (/^https?:\/\//i.test(src)) return src
+  return `${IMAGE_BASE_URL}/tmp_imgs/${src}`
+}
 
 const selectedFields = computed(() => {
   return props.message.selected_fields || props.message.parsed?.selected_fields
@@ -382,5 +416,22 @@ function subPhaseLabel(name) {
 .search-query {
   margin-bottom: 8px;
   font-size: 13px;
+}
+.images-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.image-item {
+  display: block;
+  max-width: 240px;
+  flex: 1 1 auto;
+}
+.image-item img {
+  display: block;
+  width: 100%;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary, rgba(0, 0, 0, 0.15));
 }
 </style>
