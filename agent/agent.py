@@ -50,10 +50,9 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
     board_schema = blackboard.get("schema") or {}
     board_functions = blackboard.get("functions") or {}
 
-    if selected_functions is None:
-        board_selected_functions = board_functions.get("selected_functions")
-        if isinstance(board_selected_functions, list):
-            selected_functions = board_selected_functions
+    board_selected_functions = board_functions.get("selected_functions")
+    if isinstance(board_selected_functions, list):
+        selected_functions = board_selected_functions
 
     rag_ans = ""
     knowledge = ""

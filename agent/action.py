@@ -55,8 +55,8 @@ _ACTION_DESCRIPTIONS = {
   Explore the database schema and structure. Optional keyword hints the LLM to focus on specific tables/columns. Not used to query data, you should use `generate_and_execute` to exe_sql.""",
     "explore_functions": """- explore_functions: {"action": "explore_functions", "keyword": "..."}
   Explore the available function catalog. Optional keyword hints the LLM to focus on relevant functions. Use `explore_functions` for more available functions. Then use `generate_and_execute` action to call.""",
-    "generate_and_execute": """- generate_and_execute: {"action": "generate_and_execute", "funcs": ["exe_sql", "load_data"], "research_guide": "..."}
-  Decide to execute code that calls functions. funcs: list of function names to use. The actual code will be generated in the next phase. Do NOT include any code or "code" field in the JSON output.
+    "generate_and_execute": """- generate_and_execute: {"action": "generate_and_execute", "research_guide": "..."}
+  Decide to execute code that calls functions. The function names are read from the FUNC region of the blackboard (selected by `explore_functions`); do NOT include a "funcs" field. The actual code will be generated in the next phase. Do NOT include any code or "code" field in the JSON output.
   research_guide: Optional natural language description of what data to search for and what images/charts to generate. Include details like chart types, data sources, labels, colors, and axis sorting. This guides the code generation phase to produce the correct visualizations. Use this when the task requires specific charts or images.""",
     "output_text": """- output_text: {"action": "output_text", "text": "Your response content here..."}
   Output some text to the user without stopping the pipline.""",
@@ -263,7 +263,6 @@ def _parse_action_json(raw: str) -> dict:
     return {
         "action": action,
         "keyword": result.get("keyword"),
-        "funcs": result.get("funcs"),
         "text": result.get("text"),
         "choices": result.get("choices"),
         "research_guide": result.get("research_guide"),
@@ -285,7 +284,6 @@ def _build_multi_action_result(actions_list: list) -> dict:
             {
                 "action": item.get("action"),
                 "keyword": item.get("keyword"),
-                "funcs": item.get("funcs"),
                 "text": item.get("text"),
                 "choices": item.get("choices"),
                 "research_guide": item.get("research_guide"),

@@ -303,7 +303,6 @@ function historyToText(history) {
         tables: [],
         search_keyword: actionResult.keyword || undefined,
         selected_fields: undefined,
-        selected_functions: actionResult.funcs || undefined,
         research_guide: actionResult.research_guide || undefined,
         title: actionResult.title || undefined,
         query: actionResult.query || undefined,

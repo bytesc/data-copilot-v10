@@ -85,7 +85,6 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
     "content": {
       "action": "explore_schema",
       "keyword": "可选关键词",
-      "funcs": ["可选函数"],
       "text": "可选文本",
       "choices": ["可选选项"],
       "research_guide": "可选",
@@ -353,7 +352,7 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 | `action` | 全部 | 单动作格式必填，与 `actions` 二选一 | 缺少 `actions` 时决策无效 |
 | `actions` | 全部 | 多动作格式必填，与 `action` 二选一 | 与 `action` 同时出现时优先使用 `actions` |
 | `keyword` | explore_schema / explore_functions / explore_base_knowledge / explore_mcp | 可选 | 不附加关注提示，仍检索全部内容 |
-| `funcs` | generate_and_execute | 可选 | 由系统根据问题自动选择函数（前端映射为 `selected_functions`） |
+| ~~`funcs`~~ | generate_and_execute | 已移除 | 函数名统一从 blackboard 的 `functions.selected_functions` 读取 |
 | `research_guide` | generate_and_execute | 可选 | 为空，不提供额外研究提示 |
 | `text` | output_text / ask_question / ask_choice / summary_and_pause / attempt_completion | 前端交互必填 | 缺少时前端无可展示/提问的内容 |
 | `choices` | ask_choice | ask_choice 必填（至少一项） | 其他 action 中无效；ask_choice 缺失时用户无可选项 |

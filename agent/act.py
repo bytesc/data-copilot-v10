@@ -24,7 +24,6 @@ from utils.blackboard import (
     get_blackboard,
     update_blackboard,
     blackboard_selected_fields,
-    blackboard_selected_functions,
     blackboard_section,
 )
 from utils.get_config import config_data
@@ -160,7 +159,6 @@ def _event_stream_act(
     search_keyword = params.get("search_keyword")
     tables = params.get("tables")
     selected_fields = params.get("selected_fields")
-    selected_functions = params.get("selected_functions")
     research_guide = params.get("research_guide")
 
     blackboard = get_blackboard(conversation_history)
@@ -171,10 +169,6 @@ def _event_stream_act(
         board_fields = blackboard_selected_fields(blackboard)
         if board_fields is not None:
             selected_fields = board_fields
-    if not selected_functions:
-        board_functions = blackboard_selected_functions(blackboard)
-        if board_functions is not None:
-            selected_functions = board_functions
 
     if action in _DISABLED_ACTIONS:
         reason = _DISABLED_ACTIONS[action]
@@ -192,7 +186,7 @@ def _event_stream_act(
         act_data = yield from _act_explore_functions(full_question, session_id, search_keyword, blackboard_text)
 
     elif action == "generate_and_execute":
-        act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, selected_functions, request_json, research_guide, blackboard)
+        act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, request_json, research_guide, blackboard)
 
     elif action == "generate_document":
         title = params.get("title")
@@ -462,7 +456,7 @@ def _parse_base_knowledge_json(raw: str) -> dict | None:
     return None
 
 
-def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, selected_functions, request_json: str = "", research_guide: str = "", blackboard=None):
+def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, request_json: str = "", research_guide: str = "", blackboard=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': 'Generating and executing code...'}, ensure_ascii=False)}\n\n"
     full_code = ""
     full_ans = ""
@@ -470,7 +464,6 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
     for event in generate_and_execute_stream(
         full_question, tables, retries=2,
         selected_fields=selected_fields,
-        selected_functions=selected_functions,
         research_guide=research_guide,
         blackboard=blackboard,
     ):
