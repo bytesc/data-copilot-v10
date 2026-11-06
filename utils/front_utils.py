@@ -15,14 +15,28 @@ def history_to_text(history: List[dict]) -> str:
         if role == "user":
             utype = entry.get("type", "question")
             content = entry.get("content", "")
+            suffix = ""
+            uploaded = entry.get("uploaded")
+            if isinstance(uploaded, list) and uploaded:
+                names = []
+                for item in uploaded:
+                    if isinstance(item, str):
+                        if item:
+                            names.append(item)
+                    elif isinstance(item, dict):
+                        label = item.get("path") or item.get("filename") or item.get("name")
+                        if label:
+                            names.append(str(label))
+                if names:
+                    suffix = "\nUploaded images: " + ", ".join(names)
             if utype == "question":
-                lines.append(f"Q: {content}")
+                lines.append(f"Q: {content}{suffix}")
             elif utype == "choice":
-                lines.append(f"User chose: {content}")
+                lines.append(f"User chose: {content}{suffix}")
             elif utype == "response":
-                lines.append(f"User response: {content}")
+                lines.append(f"User response: {content}{suffix}")
             elif utype == "input":
-                lines.append(f"User: {content}")
+                lines.append(f"User: {content}{suffix}")
         elif entry_type == "think":
             content = entry.get("content", "")
             lines.append(f"[THINK] content:\n{json.dumps(content, ensure_ascii=False) if isinstance(content, dict) else content}")

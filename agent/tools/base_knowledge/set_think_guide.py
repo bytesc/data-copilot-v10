@@ -2,8 +2,8 @@ import json
 from sqlalchemy import select, insert
 from data_access.sys_db_conn import sys_engine
 from data_access.think_guide_db import think_guide
-from agent.tools.copilot.utils.call_llm_test import call_llm
 from agent.tools.tools_def import llm
+from utils.context_trim import call_with_context_retry, cap_text
 from utils.perf_log import perf_context
 
 
@@ -14,13 +14,14 @@ def set_think_guide(text=""):
     existing_knowledge = _get_existing_knowledge()
     existing_text = "\n\n".join(f"### {k}\n{v}" for k, v in existing_knowledge.items()) if existing_knowledge else "*(None)*"
 
-    prompt = f"""You are a knowledge extraction expert. Extract structured knowledge from the user's input text.
+    def build_prompt(level):
+        return f"""You are a knowledge extraction expert. Extract structured knowledge from the user's input text.
 
 ## Existing Think Knowledge
-{existing_text}
+{cap_text(existing_text, level)}
 
 ## Input Text
-{text.strip()}
+{cap_text(text.strip(), level)}
 
 ## Instructions
 1. Analyze the input text and extract key knowledge points.
@@ -36,7 +37,7 @@ Example:
 
     try:
         with perf_context("sys-knowledge/set_think_guide"):
-            response = call_llm(prompt, llm)
+            response = call_with_context_retry(build_prompt, llm)
         raw = response.content.strip()
     except Exception as e:
         print(f"[WARNING] Failed to call LLM for set_think_guide: {e}")

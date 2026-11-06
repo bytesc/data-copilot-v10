@@ -1,6 +1,5 @@
-from .utils import call_llm_test
-
 from .utils.parse_output import parse_generated_python_code
+from utils.context_trim import call_with_context_retry, cap_text
 
 import logging
 import pandas as pd
@@ -39,8 +38,12 @@ Remind:
 4. Just describe the data, do not use any phrase to explain what you are doing.
 """
 
-    final_prompt = pre_prompt + example_prompt + data_prompt + col_prompt + end_prompt + "\n" + question
-    ans = call_llm_test.call_llm(final_prompt, llm)
+    final_prompt = pre_prompt + example_prompt + data_prompt + col_prompt + end_prompt + "\n"
+
+    def build_prompt(level):
+        return final_prompt + cap_text(question, level)
+
+    ans = call_with_context_retry(build_prompt, llm)
 
     return ans.content
 

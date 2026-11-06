@@ -3,7 +3,7 @@ import {
   thinkStream, actionStream, actStream, observeStream,
   logUserInput, fetchGeneratedFiles, generateDocumentStream, generateDocumentUnifiedStream,
 } from '@/utils/api.js'
-import { notifyError, showErrorToast } from '@/utils/toast.js'
+import { notifyError, showErrorToast, showWarningToast } from '@/utils/toast.js'
 
 export function useChat() {
   const sessionId = ref(generateSessionId())
@@ -24,6 +24,9 @@ export function useChat() {
   const generatedFiles = ref([])
   const statusMsg = ref('')
   const docGenerating = ref(false)
+  const pendingImages = ref([])
+  const uploadingImages = ref(false)
+  const MAX_UPLOAD_IMAGES = 10
 
   const blackboard = computed(() => getBlackboard(conversationHistory.value))
 
@@ -99,8 +102,89 @@ function historyToText(history) {
 
   const FRONTEND_ACTIONS = new Set(['ask_question', 'ask_choice', 'summary_and_pause', 'attempt_completion'])
 
+  function addUploadImages(files) {
+    const list = Array.from(files || []).filter(
+      f => f && (!f.type || f.type.startsWith('image/')),
+    )
+    if (list.length === 0) return
+
+    const remaining = MAX_UPLOAD_IMAGES - pendingImages.value.length
+    if (remaining <= 0) {
+      showWarningToast(`You can upload at most ${MAX_UPLOAD_IMAGES} images`)
+      return
+    }
+    let accepted = list
+    if (list.length > remaining) {
+      accepted = list.slice(0, remaining)
+      showWarningToast(`You can upload at most ${MAX_UPLOAD_IMAGES} images; extra files were ignored`)
+    }
+
+    for (const file of accepted) {
+      pendingImages.value.push({
+        file,
+        name: file.name,
+        previewUrl: URL.createObjectURL(file),
+      })
+    }
+  }
+
+  function _releasePendingImage(img) {
+    try {
+      if (img?.previewUrl) URL.revokeObjectURL(img.previewUrl)
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function removeUploadImage(index) {
+    if (index < 0 || index >= pendingImages.value.length) return
+    const [img] = pendingImages.value.splice(index, 1)
+    _releasePendingImage(img)
+  }
+
+  function clearUploadImages() {
+    for (const img of pendingImages.value) _releasePendingImage(img)
+    pendingImages.value = []
+  }
+
+  function _readFileAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = () => reject(reader.error || new Error('Failed to read file'))
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function _encodePendingImages() {
+    const images = pendingImages.value.slice()
+    if (images.length === 0) return { uploaded: [], ok: true }
+
+    uploadingImages.value = true
+    const uploaded = []
+    try {
+      for (const img of images) {
+        try {
+          const data = await _readFileAsDataURL(img.file)
+          uploaded.push({ name: img.name, data })
+        } catch (e) {
+          notifyError(e, `Failed to read ${img.name}`)
+          return { uploaded: [], ok: false }
+        }
+      }
+    } finally {
+      uploadingImages.value = false
+    }
+
+    clearUploadImages()
+    return { uploaded, ok: true }
+  }
+
   async function startChat(questionText) {
-    if (isRunning.value) return
+    if (isRunning.value || uploadingImages.value) return false
+
+    const { uploaded, ok } = await _encodePendingImages()
+    if (!ok) return false
 
     question.value = questionText
     isRunning.value = true
@@ -110,8 +194,10 @@ function historyToText(history) {
     interruptRequested.value = false
     cycleIndex.value = 0
 
-    addMessage('user', 'question', { content: questionText })
-    conversationHistory.value.push({ role: 'user', type: 'question', content: questionText })
+    addMessage('user', 'question', { content: questionText, uploaded })
+    const userEntry = { role: 'user', type: 'question', content: questionText }
+    if (uploaded.length) userEntry.uploaded = uploaded
+    conversationHistory.value.push(userEntry)
 
     try {
       await runMainLoop()
@@ -123,6 +209,7 @@ function historyToText(history) {
     } finally {
       isRunning.value = false
     }
+    return true
   }
 
   function requestInterrupt() {
@@ -595,10 +682,17 @@ function historyToText(history) {
   }
 
   async function submitNewQuestion(newQuestion) {
+    if (isRunning.value || uploadingImages.value) return false
+
+    const { uploaded, ok } = await _encodePendingImages()
+    if (!ok) return false
+
     isCompleted.value = false
     question.value = newQuestion
-    addMessage('user', 'question', { content: newQuestion, collapsed: true })
-    conversationHistory.value.push({ role: 'user', type: 'question', content: newQuestion })
+    addMessage('user', 'question', { content: newQuestion, collapsed: true, uploaded })
+    const userEntry = { role: 'user', type: 'question', content: newQuestion }
+    if (uploaded.length) userEntry.uploaded = uploaded
+    conversationHistory.value.push(userEntry)
     cycleIndex.value = 0
 
     isRunning.value = true
@@ -612,6 +706,7 @@ function historyToText(history) {
     } finally {
       isRunning.value = false
     }
+    return true
   }
 
   async function resumeSession(sessionData) {
@@ -661,12 +756,13 @@ function historyToText(history) {
     if (role === 'user') {
       const utype = entry.type || 'question'
       const content = entry.content || ''
+      const uploaded = Array.isArray(entry.uploaded) ? entry.uploaded : []
       if (utype === 'choice') {
         addMessage('user', 'choice', { content: `Selected: ${content}`, collapsed: true })
       } else if (utype === 'response' || utype === 'input') {
         addMessage('user', 'input', { content, collapsed: true })
       } else {
-        addMessage('user', 'question', { content })
+        addMessage('user', 'question', { content, uploaded })
       }
       return
     }
@@ -907,6 +1003,7 @@ function historyToText(history) {
     inputPrompt.value = ''
     inputChoices.value = []
     generatedFiles.value = []
+    clearUploadImages()
     sessionId.value = generateSessionId()
     question.value = ''
   }
@@ -920,6 +1017,12 @@ function historyToText(history) {
     generatedFiles,
     statusMsg,
     docGenerating,
+    pendingImages,
+    uploadingImages,
+    MAX_UPLOAD_IMAGES,
+    addUploadImages,
+    removeUploadImage,
+    clearUploadImages,
     isRunning,
     isCompleted,
     isPaused,

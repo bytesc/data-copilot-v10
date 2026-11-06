@@ -506,3 +506,14 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 输出: {"role":"user","type":"question","content":"..."}
 上下文: Q: {content}
 ```
+
+**上传图片**
+
+提问时可附带图片，写入 user 条目的 `uploaded` 字段（图片随本轮第一个 JSON 请求以 base64 提交，无独立上传接口）：
+```
+前端发送: {"role":"user","type":"question","content":"...","uploaded":[{"name":"a.png","data":"data:image/png;base64,..."}]}
+后端摄取后: {"role":"user","type":"question","content":"...","uploaded":["upload_abcd1234.png"]}
+上下文: Q: {content}
+        Uploaded images: upload_abcd1234.png
+```
+后端在请求信封中间件（`utils/image_ingest.py`）把 base64 保存为 `tmp_imgs/upload_<8位小写字母>.png`，改写 `uploaded` 为文件名列表，并追加合并进 blackboard 的 `selected_images` 区域。详见 `docs/api.md` 的「用户上传图片」。

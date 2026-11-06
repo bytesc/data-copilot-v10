@@ -4,8 +4,10 @@
 
 逻辑上分为两部分：
 
-- **blackboard 条目**：完整搜索结果，固定在数组第一个位置，包含 DB schema、函数文档、业务知识、MCP 工具详情、最近一次代码执行生成的图片列表，以及 `select_images` 选中的图片及原因。
+- **blackboard 条目**：完整搜索结果，固定在数组第一个位置，包含 DB schema、函数文档、业务知识、MCP 工具详情、最近一次代码执行生成的图片列表，以及 `select_images` 选中或用户上传的图片及原因。
 - **普通条目**：用户输入、`think`、`action_decision`、`act` 元数据、`observe` 等。
+
+> **用户上传图片**：前端选择图片后先暂存在浏览器，点击发送时才随 `conversation_history` 的 user 条目的 `uploaded` 字段以 base64 一起提交（**不使用独立的 Multipart 上传接口**）。后端在请求信封中间件（`main.py` 的 `unified_request_envelope` → `utils/image_ingest.py` 的 `ingest_uploaded_images`）里解码、保存为 `tmp_imgs/upload_<8位小写字母>.png`，并把该字段改写成文件名列表、合并进 blackboard 的 `selected_images` 区域。处理是幂等的，已在同一请求内完成，因此后续阶段与持久化的都是文件名版本。
 
 数据库中的两份数据：
 
@@ -299,11 +301,11 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
 | `knowledge` | `explore_base_knowledge` | `selected_knowledge_ids`, `knowledge_content`, `summary` |
 | `mcp` | `explore_mcp` | `selected_tools`, `explore_plan`, `tool_detail`, `catalog` |
 | `rencent_generated_images` | `generate_and_execute` | `images` |
-| `selected_images` | `select_images` | `images`（每项为 `{"path", "reason"}`） |
+| `selected_images` | `select_images` / 用户上传图片 | `images`（每项为 `{"path", "reason"}`） |
 
 `rencent_generated_images` 区域保存最近一次代码执行生成的图片列表（本地图片通常只存文件名，如 `xxx.png`；本机静态地址或外部 http 图片保留完整 URL）：每次 `generate_and_execute` 执行完成后**覆盖更新**，会经 `blackboard_to_text` 渲染进 `## Blackboard` 提示词段喂给 LLM，前端 Blackboard 弹窗也从该区域读取展示。
 
-`selected_images` 区域由 `select_images` action 写入，每项为 `{"path": "...", "reason": "..."}`：`path` 是本地 `tmp_imgs` 文件名或完整 `http(s)` 图片链接，`reason` 是一句话选中原因。每次 `select_images` 执行后**整体覆盖**该区域；`images: []` 会清空。该区域同样会渲染进 `## Blackboard`，并且其中的图片会排在上一次代码执行生成的 `images` 之后提交给支持多模态的模型。
+`selected_images` 区域由 `select_images` action 写入，每项为 `{"path": "...", "reason": "..."}`：`path` 是本地 `tmp_imgs` 文件名或完整 `http(s)` 图片链接，`reason` 是一句话选中原因。每次 `select_images` 执行后**整体覆盖**该区域；`images: []` 会清空。用户上传的图片不通过 `select_images`，而是在请求摄取时**追加合并**进该区域（`reason` 为 `"user uploaded image"`，按 `path` 去重，不覆盖已有项）。该区域同样会渲染进 `## Blackboard`，并且其中的图片会排在上一次代码执行生成的 `images` 之后提交给支持多模态的模型。
 
 两个图片区域包含的格式一致，LLM 图片提交逻辑均兼容：
 
@@ -333,6 +335,7 @@ blackboard 由 `utils/blackboard.py` 维护：
 - `update_blackboard()`：explore / `select_images` 动作完成后写入对应区域
 - `update_code_images()`：`generate_and_execute` 执行完成后覆盖写入 `rencent_generated_images` 区域
 - `normalize_selected_images()`：把 `select_images` 的输入规范为 `{"path", "reason"}` 列表并去重
+- `utils/image_ingest.py` 的 `ingest_uploaded_images()`：请求摄取时把 user 条目 `uploaded` 中的 base64 图片保存为 `upload_<8位小写字母>.png` 并**追加合并**进 `selected_images` 区域
 - `blackboard_input_images()`：按“`images` 在前、`selected_images` 在后”合并出提交给 LLM 的图片列表并去重
 - `replace_blackboard()`：保证 history 中只有一个 blackboard 条目，并固定在第一个位置
 - `get_blackboard()`：从完整 history 读取
@@ -350,6 +353,7 @@ blackboard 由 `utils/blackboard.py` 维护：
 | `text` | 前端交互类动作的展示文本 |
 | `images` | 仅 `type:"act"` 且 `action:"generate_and_execute"` 使用，本次执行生成的图片文件名列表（本地图片仅存文件名，前端拼 `/tmp_imgs/` 展示；不喂给 LLM） |
 | `selected_images` | 仅 `type:"act"` 且 `action:"select_images"` 使用，选中的图片列表，每项为 `{"path", "reason"}`（同时写入 blackboard 的 `selected_images` 区域） |
+| `uploaded` | 仅 `user` 条目使用，用户随消息上传的图片。请求体中为 `[{"name": "a.png", "data": "data:image/png;base64,..."}]`；被后端摄取后改写为已保存的文件名列表 `["upload_xxxxxxxx.png"]`（同时合并进 blackboard 的 `selected_images` 区域） |
 
 ## 用户输入
 
@@ -366,6 +370,28 @@ blackboard 由 `utils/blackboard.py` 维护：
 {"role":"user","type":"response","content":"用户对提问的回答"}
 {"role":"user","type":"input","content":"用户补充的输入"}
 ```
+
+### 上传图片
+
+用户在提问时附带的图片写入 `question` 条目的 `uploaded` 字段（无上传时不写该字段）。前端发送时是 base64 data URL 数组，后端摄取后变成文件名列表：
+
+```json
+// 前端发送（随 JSON 请求体）
+{"role":"user","type":"question","content":"分析这些图片","uploaded":[
+  {"name":"cat.jpg","data":"data:image/jpeg;base64,..."}
+]}
+
+// 后端摄取/持久化后
+{"role":"user","type":"question","content":"分析这些图片","uploaded":["upload_abcd1234.png"]}
+```
+
+保存规则：写入 `tmp_imgs/upload_<8位小写字母>.png`，扩展名与生成图片一致，进行格式归一（非 `RGB`/`RGBA` 会转换）。每个用户条目最多 10 张（仅前端卡控，后端不限制张数）；不变式是磁盘文件名。
+
+摄取逻辑见 `utils/image_ingest.py`：
+
+- `ingest_uploaded_images(history)`：遍历 user 条目的 `uploaded`，把 base64 项解码保存，改写为文件名列表，并把新增文件名合并进 blackboard 的 `selected_images`（每项 `{"path", "reason": "user uploaded image"}`，按 `path` 去重）。
+- 幂等：`uploaded` 已经是文件名字符串时不再处理、不重复合并。
+- 单项限制 20MB；解码或保存失败的项会被跳过。
 
 ## think
 
@@ -595,10 +621,10 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 
 | 条目 | 渲染结果 |
 | --- | --- |
-| `user/question` | `Q: {content}` |
-| `user/choice` | `User chose: {content}` |
-| `user/response` | `User response: {content}` |
-| `user/input` | `User: {content}` |
+| `user/question` | `Q: {content}{uploaded_suffix}` |
+| `user/choice` | `User chose: {content}{uploaded_suffix}` |
+| `user/response` | `User response: {content}{uploaded_suffix}` |
+| `user/input` | `User: {content}{uploaded_suffix}` |
 | `think` | `[THINK] content:\n{content}` |
 | `action_decision` | `[ACTION] content:\n{content}` |
 | `act` | `[ACT {action}] ...` 各字段按行输出 |
@@ -606,6 +632,8 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 | `blackboard` | 跳过，由 blackboard_section 单独渲染 |
 
 `content` 为对象时使用 `json.dumps(..., ensure_ascii=False)` 序列化。
+
+`uploaded_suffix`：当 user 条目带 `uploaded` 时，在该行后追加一行 `\nUploaded images: a.png, b.png`。仅取文件名（字符串项，或对象项的 `path`/`filename`/`name`），因此 LLM 能看到用户上传的文件名列表。
 
 `generate_and_execute` 条目的 `images` 字段不会被 `history_to_text` 渲染，因此不会进入任何 LLM 阶段。
 
@@ -664,9 +692,9 @@ images:
 ["xxx.png", "http://.../yyy.png"]
 
 ### SELECTED IMAGES
-note: Images explicitly kept by `select_images`, each with a path and a reason. They stay attached to every later LLM call until the region is overwritten.
+note: Images explicitly kept by `select_images` or uploaded by the user, each with a path and a reason. They stay attached to every later LLM call until the region is overwritten.
 images:
-[{"path": "xxx.png", "reason": "一句话选中原因"}, {"path": "https://example.com/chart.png", "reason": "一句话选中原因"}]
+[{"path": "xxx.png", "reason": "一句话选中原因"}, {"path": "upload_abcd1234.png", "reason": "user uploaded image"}]
 ```
 
 `rencent_generated_images` / `selected_images` 区域分别渲染为 `### RECENT_GENERATED_IMAGES` / `### SELECTED IMAGES` 段（字段 `images` 均为 JSON），并各自带一行 `note` 说明其含义与附带规则，随 `## Blackboard` 一起注入所有 LLM 阶段。聊天记录 `act` 条目里的 `images` 字段仍只用于前端展示，不进入 `history_to_text`。除文本注入外，图片还会按上文的规则在模型支持且 `use_images` 开启时作为 `image_url` 内容提交，顺序为 `rencent_generated_images` 在前、`selected_images` 在后。

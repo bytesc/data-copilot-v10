@@ -1,8 +1,8 @@
 from .tools.copilot.sql_code import get_db_info_prompt
-from .tools.copilot.utils import call_llm_test
 from .tools.copilot.utils.parse_output import parse_generated_sql_code
 from .tools.copilot.utils.read_db import execute_sql, execute_sql_2, execute_sql_3
 from .tools.tools_def import engine, llm
+from utils.context_trim import call_with_context_retry, cap_text
 
 def get_llm_data_comment_func(txt, table):
     print("##############doc")
@@ -34,8 +34,12 @@ Example:
 IMPORTANT: You MUST ONLY generate comments for the table specified in the table structure above. Do NOT include any other tables in your output. Focus exclusively on the table named in the schema information provided.
 """
 
-    final_prompt = pre_prompt + txt + "\n" + data_prompt + "\n" + end_prompt
-    ans = call_llm_test.call_llm(final_prompt, llm)
+    def build_prompt(level):
+        return pre_prompt + cap_text(txt, level) + "\n" + "Here is the table structure: \n" + cap_text(data_str, level) + """
+only write comment for the specified  table name: 
+""" + table + "\n" + end_prompt
+
+    ans = call_with_context_retry(build_prompt, llm)
     print("##############sql")
     print(ans.content)
     result_sql = parse_generated_sql_code(ans.content)

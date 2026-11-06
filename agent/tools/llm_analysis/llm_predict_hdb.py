@@ -180,10 +180,10 @@ def get_llm_predict_hdb_info(engine, plan_area=None, flat_type=None, blk_no=None
         return search_conditions, hdb_price_history, hdb_price_history  # No averaging or sampling needed
 
 
-from .utils.call_llm_test import call_llm
+from utils.context_trim import call_with_context_retry, cap_text
 
 
-def get_llm_predict_hdb_prompt(from_date, to_date, search_conditions, hdb_price_history):
+def get_llm_predict_hdb_prompt(from_date, to_date, search_conditions, hdb_price_history, level=0):
     pre_prompt = """
 You are a real estate expert specializing in Singapore HDB flat prices. 
 Based on the historical price data and search conditions provided, predict the resale prices for each month between the specified date range.
@@ -191,11 +191,11 @@ Based on the historical price data and search conditions provided, predict the r
 
     search_prompt = """
 ### Search Conditions:
-""" + str(search_conditions)
+""" + cap_text(str(search_conditions), level)
 
     history_prompt = """
 ### Historical Price Data:
-""" + str(hdb_price_history)
+""" + cap_text(str(hdb_price_history), level)
 
     date_prompt = """
 ### You should predict the result in the month range:
@@ -268,8 +268,10 @@ def llm_predict_hdb_func(engine, llm, from_date: str = None, to_date: str = None
         if (to_year < from_year) or (to_year == from_year and to_month <= from_month):
             to_date = f"{from_year + 1}-{from_month:02d}"
 
-    prompt = get_llm_predict_hdb_prompt(from_date, to_date, search_conditions, sample)
-    ans = call_llm(prompt, llm)
+    ans = call_with_context_retry(
+        lambda lvl: get_llm_predict_hdb_prompt(from_date, to_date, search_conditions, sample, level=lvl),
+        llm,
+    )
     ans = ans.content
 
     try:

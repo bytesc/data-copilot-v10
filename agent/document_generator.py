@@ -22,7 +22,6 @@ from docx.oxml.ns import qn
 
 from agent.tools.base_knowledge.get_base_knowledge import DOC, TARGET, BASE
 from agent.tools.tools_def import llm
-from agent.tools.copilot.utils.call_llm_test import call_llm_stream, call_llm
 from agent.utils.pd_to_walker import generate_random_string
 from agent.utils.get_config import config_data
 from data_access.session_log import record_session_operation
@@ -32,11 +31,18 @@ from data_access.observe_log import log_observe_cycle
 from data_access.report_log import record_report_generation
 from utils.front_utils import history_to_text
 from utils.blackboard import blackboard_section, blackboard_input_images_from_history
-from utils.context_trim import prepare_trimmed_context
+from utils.context_trim import prepare_trimmed_context, stream_with_context_retry, cap_text
 from utils.perf_log import perf_api
 
 DOC_WORKSPACE = "doc_workspace"
 os.makedirs(DOC_WORKSPACE, exist_ok=True)
+
+
+def _doc_context(conversation_history, session_id: str, level: int = 0):
+    trimmed = prepare_trimmed_context(session_id, conversation_history, level=level)
+    context = history_to_text(trimmed)
+    blackboard_text = blackboard_section(conversation_history, level=level)
+    return context, blackboard_text
 
 
 class DocumentInput(BaseModel):
@@ -485,29 +491,31 @@ def _save_intermediate_markdown(markdown_text: str, base_name: str, session_id: 
 
 @perf_api("/api/generate-document/stream/")
 def _event_stream_generate_document(conversation_history: List[dict], session_id: str, request_json: str = ""):
-    trimmed = prepare_trimmed_context(session_id, conversation_history)
-    context = history_to_text(trimmed)
-    blackboard_text = blackboard_section(conversation_history)
+    context, blackboard_text = _doc_context(conversation_history, session_id, 0)
     images = blackboard_input_images_from_history(conversation_history)
 
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
     yield f"data: {json.dumps({'phase': 'outline', 'type': 'msg', 'content': 'Generating document outline...'}, ensure_ascii=False)}\n\n"
 
-    outline_prompt = f"""{OUTLINE_SYSTEM}
+    def build_outline_prompt(level):
+        ctx, bb = _doc_context(conversation_history, session_id, level)
+        return f"""{OUTLINE_SYSTEM}
 
-{BASE}
+{cap_text(BASE, level)}
 
-{DOC}
+{cap_text(DOC, level)}
 
 {_target_section if _ENABLE_TARGET else ""}
 
 Conversation History:
-{context}
-{blackboard_text}"""
+{ctx}
+{bb}"""
+
+    outline_prompt = build_outline_prompt(0)
 
     outline_raw = ""
-    for chunk in call_llm_stream(outline_prompt, llm, images=images):
+    for chunk, _ in stream_with_context_retry(build_outline_prompt, llm, images=images):
         outline_raw += chunk
         yield f"data: {json.dumps({'phase': 'outline', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
@@ -516,7 +524,7 @@ Conversation History:
 
     log_observe_cycle(session_id, 0, "generate_document", "outline",
                       prompt=outline_prompt[:10000], response=outline_raw[:10000],
-                      token_estimate=len(outline_prompt) // 3)
+                      token_estimate=len(outline_prompt))
 
     parts = outline.get("parts", [])
     title = outline.get("title", "Summary Document")
@@ -538,7 +546,9 @@ Conversation History:
             used_list = "\n".join(f"- {url}" for url in sorted(used_images))
             used_hint = f"\n\nIMPORTANT: The following images have already been used in previous sections. Do NOT include them again:\n{used_list}\n"
 
-        part_prompt = f"""{PART_SYSTEM}
+        def build_part_prompt(level, heading=heading, description=description, used_hint=used_hint):
+            ctx, bb = _doc_context(conversation_history, session_id, level)
+            return f"""{PART_SYSTEM}
 
 Document Title: {title}
 Section Heading: {heading}
@@ -547,20 +557,21 @@ Section Description: {description}{used_hint}
 Full Document Outline (all sections):
 {chr(10).join(f'  {j+1}. {p["heading"]} — {p["description"]}' for j, p in enumerate(parts))}
 
-{BASE}
+{cap_text(BASE, level)}
 
-{DOC}
+{cap_text(DOC, level)}
 
 {_target_section}
 
 Conversation History:
-{context}
-{blackboard_text}
+{ctx}
+{bb}
 
 Write the content for the section "{heading}" in markdown format. ⚠️ CRITICAL: Do NOT repeat the section heading "{heading}" in your output. The heading will be added automatically. Start directly with the body content — no heading, no title line."""
 
+        part_prompt = build_part_prompt(0)
         part_raw = ""
-        for chunk in call_llm_stream(part_prompt, llm, images=images):
+        for chunk, _ in stream_with_context_retry(build_part_prompt, llm, images=images):
             part_raw += chunk
             yield f"data: {json.dumps({'phase': 'part', 'type': 'chunk', 'content': chunk, 'part_index': i}, ensure_ascii=False)}\n\n"
 
@@ -572,7 +583,7 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
 
         log_observe_cycle(session_id, i + 1, "generate_document", "part",
                           prompt=part_prompt[:10000], response=part_raw[:10000],
-                          token_estimate=len(part_prompt) // 3)
+                          token_estimate=len(part_prompt))
 
     full_document = f"# {title}\n\n"
     for idx, (heading, content) in enumerate(document_parts, 1):
@@ -649,30 +660,32 @@ def generate_document_from_context(conversation_history: List[dict], session_id:
 
 @perf_api("/api/generate-document/stream/unified/")
 def _event_stream_generate_document_unified(conversation_history: List[dict], session_id: str, title: str = "", request_json: str = ""):
-    trimmed = prepare_trimmed_context(session_id, conversation_history)
-    context = history_to_text(trimmed)
-    blackboard_text = blackboard_section(conversation_history)
+    context, blackboard_text = _doc_context(conversation_history, session_id, 0)
     images = blackboard_input_images_from_history(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': 'Generating document...'}, ensure_ascii=False)}\n\n"
 
-    prompt = f"""{UNIFIED_SYSTEM}
+    def build_unified_prompt(level):
+        ctx, bb = _doc_context(conversation_history, session_id, level)
+        return f"""{UNIFIED_SYSTEM}
 
-{BASE}
+{cap_text(BASE, level)}
 
-{DOC}
+{cap_text(DOC, level)}
 
 {_target_section}
 
 Conversation History:
-{context}
-{blackboard_text}
+{ctx}
+{bb}
 
 Write the complete business summary document in markdown format. Start with `# Title` as the top-level heading. Do NOT wrap the output in any code blocks or fences — output raw markdown only. Do NOT include any introductory or explanatory text outside the markdown document."""
 
+    prompt = build_unified_prompt(0)
+
     full_raw = ""
-    for chunk in call_llm_stream(prompt, llm, images=images):
+    for chunk, _ in stream_with_context_retry(build_unified_prompt, llm, images=images):
         full_raw += chunk
         yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
@@ -680,7 +693,7 @@ Write the complete business summary document in markdown format. Start with `# T
 
     log_observe_cycle(session_id, 0, "generate_document_unified", "full",
                       prompt=prompt[:10000], response=full_raw[:10000],
-                      token_estimate=len(prompt) // 3)
+                      token_estimate=len(prompt))
 
     full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_raw, flags=re.DOTALL)
 
@@ -755,9 +768,7 @@ async def generate_document_unified_stream_api(request: Request, user_input: Doc
 
 @perf_api("/api/generate-document/generate-yaml-outline/")
 def _event_stream_generate_yaml_outline(conversation_history: List[dict], session_id: str, request_json: str = "", user_prompt: str = ""):
-    trimmed = prepare_trimmed_context(session_id, conversation_history)
-    context = history_to_text(trimmed)
-    blackboard_text = blackboard_section(conversation_history)
+    context, blackboard_text = _doc_context(conversation_history, session_id, 0)
     images = blackboard_input_images_from_history(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
@@ -768,17 +779,21 @@ def _event_stream_generate_yaml_outline(conversation_history: List[dict], sessio
 
     yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'msg', 'content': 'Generating YAML outline...'}, ensure_ascii=False)}\n\n"
 
-    prompt = f"""{YAML_OUTLINE_SYSTEM}
+    def build_yaml_outline_prompt(level):
+        ctx, bb = _doc_context(conversation_history, session_id, level)
+        return f"""{YAML_OUTLINE_SYSTEM}
 
-{BASE}
+{cap_text(BASE, level)}
 
-{DOC}
+{cap_text(DOC, level)}
 
 {_target_section if _ENABLE_TARGET else ""}
 {user_instruction}
 Conversation History:
-{context}
-{blackboard_text}"""
+{ctx}
+{bb}"""
+
+    prompt = build_yaml_outline_prompt(0)
 
     error_hint = ""
     for attempt in range(2):
@@ -786,7 +801,7 @@ Conversation History:
             yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'msg', 'content': 'Parsing failed, re-generating YAML outline...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk in call_llm_stream(prompt + error_hint, llm, images=images):
+        for chunk, _ in stream_with_context_retry(lambda lvl: build_yaml_outline_prompt(lvl) + error_hint, llm, images=images):
             raw += chunk
             yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
@@ -805,7 +820,7 @@ Conversation History:
 
     log_observe_cycle(session_id, 0, "generate_yaml_outline", "outline",
                       prompt=prompt[:10000], response=raw[:10000],
-                      token_estimate=len(prompt) // 3)
+                      token_estimate=len(prompt))
 
     yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'done', 'content': yaml_str, 'yaml_file': yaml_file_name, 'yaml_base': yaml_base}, ensure_ascii=False)}\n\n"
 
@@ -850,9 +865,7 @@ async def yaml_to_prompt_api(request: Request):
 
 @perf_api("/api/generate-document/stream/from-yaml/")
 def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outline: str, session_id: str, request_json: str = "", section_index: Optional[int] = None, confirmed_sections: Optional[List[dict]] = None, yaml_base: str = ""):
-    trimmed = prepare_trimmed_context(session_id, conversation_history)
-    context = history_to_text(trimmed)
-    blackboard_text = blackboard_section(conversation_history)
+    context, blackboard_text = _doc_context(conversation_history, session_id, 0)
     images = blackboard_input_images_from_history(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
     yaml_outline = _parse_yaml_outline(yaml_outline)
@@ -921,7 +934,9 @@ def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outl
             if prev_parts:
                 previous_sections_text = "\n\nAlready written sections (read for context — do NOT repeat this content):\n\n" + "\n\n---\n\n".join(prev_parts)
 
-        section_prompt = f"""{YAML_PART_SYSTEM.format(
+        def build_section_prompt(level, heading=heading, description=description, used_hint=used_hint, previous_sections_text=previous_sections_text):
+            ctx, bb = _doc_context(conversation_history, session_id, level)
+            return f"""{YAML_PART_SYSTEM.format(
             title=title,
             heading=heading,
             description=description,
@@ -929,20 +944,21 @@ def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outl
             used_hint=used_hint,
         )}
 
-{BASE}
+{cap_text(BASE, level)}
 
-{DOC}
+{cap_text(DOC, level)}
 
-{_target_section}{previous_sections_text}
+{_target_section}{cap_text(previous_sections_text, level)}
 
 Conversation History:
-{context}
-{blackboard_text}
+{ctx}
+{bb}
 
 Write the content for the section "{heading}" in markdown format."""
 
+        section_prompt = build_section_prompt(0)
         part_raw = ""
-        for chunk in call_llm_stream(section_prompt, llm, images=images):
+        for chunk, _ in stream_with_context_retry(build_section_prompt, llm, images=images):
             part_raw += chunk
             yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'chunk', 'content': chunk, 'section_index': i}, ensure_ascii=False)}\n\n"
 
@@ -961,7 +977,7 @@ Write the content for the section "{heading}" in markdown format."""
 
         log_observe_cycle(session_id, actual_idx + 1, "generate_from_yaml", "part",
                           prompt=section_prompt[:10000], response=part_raw[:10000],
-                          token_estimate=len(section_prompt) // 3)
+                          token_estimate=len(section_prompt))
 
     if section_index is None:
         full_document = f"# {title}\n\n"

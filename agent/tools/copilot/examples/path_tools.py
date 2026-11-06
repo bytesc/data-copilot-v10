@@ -14,5 +14,9 @@ def generate_img_path():
     return f"./{STATIC_FOLDER}/" + generate_random_string() + ".png"
 
 
+def generate_upload_img_path():
+    return f"./{STATIC_FOLDER}/upload_" + generate_random_string() + ".png"
+
+
 def generate_html_path():
     return f"./{STATIC_FOLDER}/" + generate_random_string() + ".html"

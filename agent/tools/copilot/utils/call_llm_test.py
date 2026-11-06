@@ -45,6 +45,22 @@ def _count_message_images(messages):
     )
 
 
+def _print_usage(usage):
+    if usage is None:
+        print("[llm usage] token usage not available")
+        return
+    parts = [
+        f"prompt_tokens={getattr(usage, 'prompt_tokens', None)}",
+        f"completion_tokens={getattr(usage, 'completion_tokens', None)}",
+        f"total_tokens={getattr(usage, 'total_tokens', None)}",
+    ]
+    details = getattr(usage, "completion_tokens_details", None)
+    reasoning_tokens = getattr(details, "reasoning_tokens", None) if details is not None else None
+    if reasoning_tokens is not None:
+        parts.append(f"reasoning_tokens={reasoning_tokens}")
+    print(f"[llm usage] {' '.join(parts)}")
+
+
 def call_llm(question, llm, images=None):
     model_cfg = get_model_config()
     messages = _build_messages(question, model_cfg, images)
@@ -57,6 +73,7 @@ def call_llm(question, llm, images=None):
         extra_body=get_extra_body(model_cfg["id"])
     )
     record_llm_complete()
+    _print_usage(getattr(response, "usage", None))
 
     answer = response.choices[0].message
     if config_data.get("enable_llmlog", False):
@@ -83,11 +100,15 @@ def _call_llm_stream_events(question, llm, images=None):
         model=model_cfg["model"],
         messages=messages,
         stream=True,
+        stream_options={"include_usage": True},
         extra_body=get_extra_body(model_cfg["id"])
     )
 
     full_content = ""
+    usage = None
     for chunk in response:
+        if getattr(chunk, "usage", None) is not None:
+            usage = chunk.usage
         if chunk.choices:
             delta = chunk.choices[0].delta
             if getattr(delta, 'content', None) is not None:
@@ -101,6 +122,7 @@ def _call_llm_stream_events(question, llm, images=None):
                 yield None, reasoning_delta
     record_llm_complete()
     print()
+    _print_usage(usage)
 
     if config_data.get("enable_llmlog", False):
         _write_llmlog(question, full_content)

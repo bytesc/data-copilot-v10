@@ -293,6 +293,7 @@
 - `history` 的第一个元素是 blackboard 条目（`type:"blackboard"`），保存完整探索结果；普通 act 条目只保留参数、计划和选中项。前端从该条目读取 Blackboard 弹窗内容。
 - `generate_and_execute` 每次执行后会把本次生成的图片列表写入 blackboard 的 `rencent_generated_images` 区域（覆盖更新；本地图片通常为文件名，本机静态地址或外部图片为完整 URL），该区域随 `## Blackboard` 段以文本喂给 LLM；模型 `supports_images=true` 且请求 `meta.use_images` 开启时，图片还会作为 `image_url` 内容随请求提交。`act` 条目中的 `images` 字段仅用于前端展示。
 - `select_images` 执行后会把 `{"path", "reason"}` 列表整体覆盖写入 blackboard 的 `selected_images` 区域，并返回含 `selected_images` 的 `act` 条目；这些图片会排在上一次代码执行生成的 `images` 之后提交给支持多模态的模型。该 action 属于 Group 1，可与 `explore_*` 在同一次 `actions` 数组中选择。
+- 用户上传的图片随本轮第一个请求（Think 模式的 `POST /api/think/stream/`，Chat 模式的 `POST /api/action/stream/`）以 base64 放在 user 条目的 `uploaded` 字段提交，无独立上传接口。请求信封中间件（`utils/image_ingest.py`）会解码保存为 `tmp_imgs/upload_<8位小写字母>.png`，把 `uploaded` 改写为文件名列表，并**追加合并**进 blackboard 的 `selected_images` 区域；处理在路由前完成且幂等，因此该请求的 `## Context` 与随后的 `history` 事件都已是文件名版本。详见 `docs/api.md` 的「用户上传图片」。
 - 所有 `chunk` 事件仅用于流式临时显示，最终显示由 `history` 决定。
 - 重试次数为 2（首次 + 1 次重试）。explore_functions 无重试；YAML Outline 生成也有 2 次重试。
 - generate_document_unified 的 done 事件会先发一个仅含 content 的 done，再发一个含完整文件元数据的 done。

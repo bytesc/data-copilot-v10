@@ -26,6 +26,7 @@ from data_access.insert_data_from_csv import process_csv_to_database
 from data_access.read_db import get_all_comments_from_table
 from data_access.db_conn import engine
 from utils.get_config import config_data
+from utils.image_ingest import ingest_uploaded_images
 
 from agent.agent import  generate_and_execute_stream, get_db
 from utils.process_file import process_file_content
@@ -123,6 +124,9 @@ async def unified_request_envelope(request: Request, call_next):
                 },
             )
         _apply_meta(payload["meta"])
+        data = payload["data"]
+        if isinstance(data, dict) and isinstance(data.get("conversation_history"), list):
+            data["conversation_history"] = ingest_uploaded_images(data["conversation_history"])
         inner = json.dumps(payload["data"], ensure_ascii=False).encode("utf-8")
         request._body = inner
         headers = [

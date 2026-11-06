@@ -10,11 +10,10 @@ from agent.action import ACTIONS, ACTIONS_BODY
 from agent.tools.base_knowledge.get_base_knowledge import TARGET, BRIEF_INFO, THINK_KNOWLEDGE
 from agent.tools.tools_def import llm
 from agent.tools.search_func import get_func_summary_for_agent
-from agent.tools.copilot.utils.call_llm_test import call_llm_stream_with_reasoning
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle, log_observe_session
 from utils.front_utils import history_to_text
-from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
+from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json, stream_with_context_retry
 from utils.blackboard import blackboard_section, blackboard_input_images_from_history
 from utils.get_config import config_data
 from utils.perf_log import perf_api
@@ -30,31 +29,12 @@ class ThinkInput(BaseModel):
     conversation_history: Optional[List[dict]] = None
 
 
-@perf_api("/api/think/stream/")
-def _event_stream_think(
-    question: str,
-    session_id: str,
-    conversation_history: Optional[List[dict]],
-    request_json: str = "",
-):
-    """Think phase: pure LLM reasoning with custom prompt to generate a plan."""
-    log_observe_session(session_id, question=question, status="active")
-
-    trimmed = prepare_trimmed_context(session_id, conversation_history)
-    if conversation_history:
-        context = history_to_text(trimmed)
-    else:
-        context = question
-    blackboard_text = blackboard_section(conversation_history)
-    images = blackboard_input_images_from_history(conversation_history)
-
-    func_catalog = get_func_summary_for_agent()
-
+def _build_think_prompt(context: str, blackboard_text: str) -> str:
     target_section = ""
     if _ENABLE_TARGET and TARGET.strip() != "":
         target_section = "The target document template below defines the final report structure and content that must be produced. Ensure your plan covers all sections, data points, images, and tables required by this template:\n\n" + TARGET
 
-    think_prompt = f"""You are an autonomous data analysis Thinker. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
+    return f"""You are an autonomous data analysis Thinker. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
 
 {target_section}
 
@@ -100,6 +80,28 @@ FINAL LANGUAGE CHECK: The knowledge base above is in Chinese — IGNORE THAT. Yo
 Current time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """
 
+
+@perf_api("/api/think/stream/")
+def _event_stream_think(
+    question: str,
+    session_id: str,
+    conversation_history: Optional[List[dict]],
+    request_json: str = "",
+):
+    """Think phase: pure LLM reasoning with custom prompt to generate a plan."""
+    log_observe_session(session_id, question=question, status="active")
+
+    images = blackboard_input_images_from_history(conversation_history)
+
+    func_catalog = get_func_summary_for_agent()
+
+    def build_prompt(level):
+        trimmed = prepare_trimmed_context(session_id, conversation_history, level=level)
+        context = history_to_text(trimmed) if conversation_history else question
+        blackboard_text = blackboard_section(conversation_history, level=level)
+        return _build_think_prompt(context, blackboard_text)
+
+    think_prompt = build_prompt(0)
     prompt_length = len(think_prompt)
     error_msg = ""
 
@@ -110,7 +112,7 @@ Current time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
             yield f"data: {json.dumps({'phase': 'think', 'type': 'msg', 'content': 'Generating analysis plan...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk, reasoning in call_llm_stream_with_reasoning(think_prompt + error_msg, llm, images=images):
+        for chunk, reasoning in stream_with_context_retry(lambda lvl: build_prompt(lvl) + error_msg, llm, images=images):
             if chunk:
                 raw += chunk
                 yield f"data: {json.dumps({'phase': 'think', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
@@ -123,9 +125,9 @@ Current time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
             log_observe_cycle(session_id, 0, "think", "plan",
                               prompt=think_prompt[:5000], response=raw[:5000],
-                              token_estimate=prompt_length // 3)
+                              token_estimate=prompt_length)
             record_session_operation(session_id, "/api/think/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
-            log_observe_session(session_id, status="think_done", total_tokens=prompt_length // 3)
+            log_observe_session(session_id, status="think_done", total_tokens=prompt_length)
             history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "think", "content": parse_json_raw(raw)}])
             if history:
                 yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"

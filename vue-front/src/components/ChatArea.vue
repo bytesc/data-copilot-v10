@@ -102,7 +102,33 @@
       </div>
 
       <div v-else class="question-input-area">
+        <div v-if="pendingImages.length || uploadingImages" class="upload-preview-bar">
+          <div
+            v-for="(img, i) in pendingImages"
+            :key="img.previewUrl"
+            class="upload-preview-item"
+          >
+            <img :src="img.previewUrl" :alt="img.name" />
+            <button
+              class="upload-preview-remove"
+              type="button"
+              :disabled="isRunning"
+              @click="removeUploadImage(i)"
+            >✕</button>
+          </div>
+          <span v-if="uploadingImages" class="upload-preview-status">Uploading...</span>
+        </div>
         <div class="question-input-row">
+          <button
+            class="attach-btn"
+            type="button"
+            :disabled="isRunning || uploadingImages || pendingImages.length >= MAX_UPLOAD_IMAGES"
+            :title="`Upload up to ${MAX_UPLOAD_IMAGES} images`"
+            @click="onPickImages"
+          >
+            <span class="attach-icon">🖼</span>
+            <span class="attach-count">{{ pendingImages.length }}/{{ MAX_UPLOAD_IMAGES }}</span>
+          </button>
           <textarea
             v-model="currentQuestion"
             class="question-textarea"
@@ -113,10 +139,18 @@
           ></textarea>
           <button
             class="send-btn"
-            :disabled="isRunning || !currentQuestion.trim()"
+            :disabled="isRunning || uploadingImages || !currentQuestion.trim()"
             @click="onSubmitQuestion"
           >Send</button>
         </div>
+        <input
+          ref="imageInputRef"
+          class="hidden-file-input"
+          type="file"
+          accept="image/*"
+          multiple
+          @change="onImagesSelected"
+        />
       </div>
 
       </div>
@@ -140,6 +174,8 @@ const {
   interruptRequested,
   statusMsg,
   chatMode,
+  pendingImages, uploadingImages, MAX_UPLOAD_IMAGES,
+  addUploadImages, removeUploadImage,
 } = props.chat
 
 const currentQuestion = ref('')
@@ -147,6 +183,7 @@ const userInput = ref('')
 const pausedInput = ref('')
 const messagesContainer = ref(null)
 const userInputRef = ref(null)
+const imageInputRef = ref(null)
 
 const useImages = computed(() => configState.use_images)
 const supportsImages = computed(() => {
@@ -173,15 +210,26 @@ function setQuestion(text) {
 }
 defineExpose({ setQuestion })
 
-function onSubmitQuestion() {
+async function onSubmitQuestion() {
   const q = currentQuestion.value.trim()
-  if (!q || isRunning.value) return
-  if (isCompleted.value) {
-    submitNewQuestion(q)
-  } else {
-    startChat(q)
-  }
-  currentQuestion.value = ''
+  if (!q || isRunning.value || uploadingImages.value) return
+  const ok = isCompleted.value
+    ? await submitNewQuestion(q)
+    : await startChat(q)
+  if (ok) currentQuestion.value = ''
+}
+
+function onPickImages() {
+  if (isRunning.value || uploadingImages.value) return
+  imageInputRef.value?.click()
+}
+
+function onImagesSelected(event) {
+  const input = event.target
+  const files = Array.from(input.files || [])
+  input.value = ''
+  if (files.length === 0) return
+  addUploadImages(files)
 }
 
 function onUserResponse(text) {

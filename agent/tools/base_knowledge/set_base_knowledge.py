@@ -2,9 +2,9 @@ import json
 from sqlalchemy import select, insert, delete
 from data_access.sys_db_conn import sys_engine
 from data_access.base_knowledge_db import base_knowledge
-from agent.tools.copilot.utils.call_llm_test import call_llm
 from agent.tools.tools_def import llm, engine
 from agent.tools.search_db import get_db_structure_markdown
+from utils.context_trim import call_with_context_retry, cap_text
 from utils.perf_log import perf_context
 
 
@@ -16,16 +16,17 @@ def set_base_knowledge(text=""):
     existing_text = "\n\n".join(f"### {k}\n{v}" for k, v in existing_knowledge.items()) if existing_knowledge else "*(None)*"
     db_structure_text = get_db_structure_markdown(engine)
 
-    prompt = f"""You are a knowledge extraction expert. Extract structured knowledge from the user's input text.
+    def build_prompt(level):
+        return f"""You are a knowledge extraction expert. Extract structured knowledge from the user's input text.
 
 ## Existing Knowledge
-{existing_text}
+{cap_text(existing_text, level)}
 
 ## Database Structure
-{db_structure_text}
+{cap_text(db_structure_text, level)}
 
 ## Input Text
-{text.strip()}
+{cap_text(text.strip(), level)}
 
 ## Instructions
 1. Analyze the input text and extract key knowledge points.
@@ -44,7 +45,7 @@ Example:
 
     try:
         with perf_context("sys-knowledge/set_base_knowledge"):
-            response = call_llm(prompt, llm)
+            response = call_with_context_retry(build_prompt, llm)
         raw = response.content.strip()
     except Exception as e:
         print(f"[WARNING] Failed to call LLM for set_base_knowledge: {e}")

@@ -1,4 +1,3 @@
-from .utils import call_llm_test
 from .utils.code_insert import insert_lines_into_function
 
 from .utils.parse_output import parse_generated_python_code
@@ -6,6 +5,8 @@ from .utils.parse_output import parse_generated_python_code
 from .utils.code_executor import execute_py_code_with_data
 from .utils.parse_output import assert_png_file
 from .examples.ask_ai_for_graph import get_ask_graph_prompt, get_ask_compare_graph_prompt
+
+from utils.context_trim import call_with_context_retry, cap_text
 
 import logging
 import pandas as pd
@@ -48,13 +49,16 @@ Remind:
 6. Access DataFrames from data_dict using keys, e.g., data_dict['key_name']
 """
 
-    final_prompt = pre_prompt + "\n" + data_prompt + end_prompt + question
+    final_prompt = pre_prompt + "\n" + data_prompt + end_prompt
+
+    def build_prompt(level):
+        return final_prompt + cap_text(question, level)
 
     retries_times = 0
     error_msg = ""
     while retries_times <= retries:
         retries_times += 1
-        ans = call_llm_test.call_llm(final_prompt + error_msg, llm)
+        ans = call_with_context_retry(lambda lvl: build_prompt(lvl) + error_msg, llm)
         ans_code = parse_generated_python_code(ans.content)
         if ans_code is not None:
             return ans_code
@@ -100,13 +104,16 @@ Remind:
 5. Do not use `input()` !!!
 """
 
-    final_prompt = pre_prompt + "\n" + data_prompt + end_prompt + question
+    final_prompt = pre_prompt + "\n" + data_prompt + end_prompt
+
+    def build_prompt(level):
+        return final_prompt + cap_text(question, level)
 
     retries_times = 0
     error_msg = ""
     while retries_times <= retries:
         retries_times += 1
-        ans = call_llm_test.call_llm(final_prompt + error_msg, llm)
+        ans = call_with_context_retry(lambda lvl: build_prompt(lvl) + error_msg, llm)
         ans_code = parse_generated_python_code(ans.content)
         if ans_code is not None:
             return ans_code
@@ -142,13 +149,16 @@ Remind:
 5. Do not use `input()` !!!
 """
 
-    final_prompt = pre_prompt + "\n" + end_prompt + question
+    final_prompt = pre_prompt + "\n" + end_prompt
+
+    def build_prompt(level):
+        return final_prompt + cap_text(question, level)
 
     retries_times = 0
     error_msg = ""
     while retries_times <= retries:
         retries_times += 1
-        ans = call_llm_test.call_llm(final_prompt + error_msg, llm)
+        ans = call_with_context_retry(lambda lvl: build_prompt(lvl) + error_msg, llm)
         ans_code = parse_generated_python_code(ans.content)
         if ans_code is not None:
             return ans_code

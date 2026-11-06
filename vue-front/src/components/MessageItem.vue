@@ -8,6 +8,17 @@
           <div class="collapse-body" v-html="renderedContent"></div>
         </details>
         <div v-else class="message-body" v-html="renderedContent"></div>
+        <div v-if="uploadedImages.length" class="uploaded-images">
+          <a
+            v-for="(img, i) in uploadedImages"
+            :key="i"
+            :href="img.src"
+            target="_blank"
+            class="uploaded-image-item"
+          >
+            <img :src="img.src" :alt="img.name" loading="lazy" />
+          </a>
+        </div>
       </template>
 
       <template v-else-if="message.type === 'stream' && message.phase === 'think'">
@@ -108,6 +119,37 @@ const props = defineProps({
 
 const renderedContent = computed(() => {
   return renderMarkdown(props.message.content || '')
+})
+
+const IMAGE_BASE_URL = import.meta.env.VITE_SERVER_URL || window.location.origin
+
+function imageSrc(src) {
+  if (!src) return ''
+  if (/^https?:\/\//i.test(src) || /^data:image\//i.test(src)) return src
+  const clean = String(src).replace(/^\.?\/?tmp_imgs\//i, '')
+  return `${IMAGE_BASE_URL}/tmp_imgs/${clean}`
+}
+
+function imageName(src) {
+  if (!src) return ''
+  const parts = String(src).split('/')
+  return parts[parts.length - 1] || src
+}
+
+const uploadedImages = computed(() => {
+  const list = props.message.uploaded
+  if (!Array.isArray(list)) return []
+  return list.map((item) => {
+    if (typeof item === 'string') {
+      return { src: imageSrc(item), name: imageName(item) }
+    }
+    if (item && typeof item === 'object') {
+      const raw = item.data || item.url || item.path || ''
+      const src = typeof raw === 'string' && raw.startsWith('data:') ? raw : imageSrc(raw)
+      return { src, name: item.name || imageName(item.path || raw) }
+    }
+    return null
+  }).filter(entry => entry && entry.src)
 })
 
 const phaseLabel = computed(() => {

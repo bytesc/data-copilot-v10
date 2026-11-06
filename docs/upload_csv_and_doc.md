@@ -208,16 +208,37 @@ email,邮箱地址
 
 ---
 
-## 7. 相关代码文件
+## 7. 用户上传图片（随 JSON 请求）
+
+图片上传与 CSV/文档不同，**不使用 Multipart 接口**。前端选择图片后先在浏览器暂存，点击发送时才编码为 base64，放进 `conversation_history` 的 user 条目 `uploaded` 字段，随 Think/Action 等 JSON 请求提交；后端信封中间件解码保存为 `tmp_imgs/upload_<8位小写字母>.png`，把 `uploaded` 改写为文件名列表并追加进 blackboard 的 `selected_images`。
+
+| 项目 | 说明 |
+|------|------|
+| 传输 | base64 data URL，位于 JSON 请求 `data.conversation_history[].uploaded`（`[{"name", "data"}]`） |
+| 保存 | `tmp_imgs/upload_<8位小写字母>.png`（扩展名与生成图片一致，非 RGB/RGBA 会转换） |
+| 落库 | `uploaded` 改写为文件名列表，并合并进 blackboard 的 `selected_images` 区域 |
+| 张数 | 前端最多 10 张；后端不限制 |
+| 单张大小 | ≤ 20MB，超限或解码/保存失败会被跳过 |
+| 幂等 | `uploaded` 已是文件名字符串时不再处理、不重复合并 |
+| 实现 | `utils/image_ingest.py` 的 `ingest_uploaded_images`（经 `main.py` 的 `unified_request_envelope` 调用） |
+
+详见 `docs/api.md` 的「用户上传图片」与 `docs/conversation_history_structure.md` 的「用户输入 → 上传图片」。
+
+---
+
+## 8. 相关代码文件
 
 | 文件 | 职责 |
 |------|------|
-| `main.py` | 所有接口路由定义 |
+| `main.py` | 所有接口路由定义；请求信封中间件 |
 | `data_access/insert_data_from_csv.py` | CSV 解析、类型推断、名称清洗、预校验、建表写入 |
 | `utils/process_file.py` | 文档格式解析（.txt / .docx / .pdf / .doc） |
+| `utils/image_ingest.py` | 用户上传图片：base64 解码、保存为 upload_*.png、写入 history/blackboard |
 | `agent/data_comment.py` | LLM 调用生成注释 SQL |
 | `agent/tools/copilot/utils/read_db.py` | SQL 执行器（`execute_sql_3`） |
 | `agent/tools/copilot/sql_code.py` | 数据库结构信息获取 |
 | `vue-front/src/pages/DataUploadPage.vue` | 数据上传页 |
 | `vue-front/src/pages/CommentManagePage.vue` | 注释管理页 |
 | `vue-front/src/components/DbOverview.vue` | 数据库概览组件（含数据导出） |
+| `vue-front/src/components/ChatArea.vue` | 聊天输入区（含图片选择/暂存/预览） |
+| `vue-front/src/composables/useChat.js` | 会话流程（含发送时 base64 编码） |

@@ -7,6 +7,7 @@ Base URL: `http://<host>:8008`
 > 下文请求体示例若无特别说明，展示的是 `data` 内容；未使用信封会返回 `400`。
 > `reasoning_effort` / `style` 为空字符串表示 `Default`。`use_images` 控制是否随请求上传 blackboard 图片，仅对 `supports_images=true` 的模型生效；未携带时按模型能力取默认值。后端不保存选择，GET/DELETE 不使用信封。
 > Multipart 上传使用 `meta` 表单字段，目前仅 `/upload-txt/` 会读取。
+> **用户上传图片**不走 Multipart、也没有独立接口：前端把图片以 base64 放进 `data.conversation_history` 的 user 条目的 `uploaded` 字段（`[{"name": "a.png", "data": "data:image/png;base64,..."}]`）。后端信封中间件会解码保存为 `tmp_imgs/upload_<8位小写字母>.png`，把 `uploaded` 改写为文件名列表，并追加合并进 blackboard 的 `selected_images` 区域。详见 [4. Agent 核心流程](#4-agent-核心流程-sse-流式) 的「用户上传图片」小节。
 
 ---
 
@@ -387,7 +388,7 @@ data: {"type":"done","content":""}
 
 **`action` 可选值**: `explore_schema`, `explore_functions`, `explore_base_knowledge`, `select_images`, `generate_and_execute`, `generate_document`, `web_search`, `fetch_webpage`, `explore_mcp`, `exe_mcp`
 
-`select_images` 的 `params` 形如 `{"images": [{"path": "xxx.png", "reason": "一句话选中原因"}]}`；`path` 为本地 `tmp_imgs` 文件名或完整 `http(s)` 链接，整体覆盖 blackboard 的 `selected_images` 区域，`images: []` 表示清空。
+`select_images` 的 `params` 形如 `{"images": [{"path": "xxx.png", "reason": "一句话选中原因"}]}`；`path` 为本地 `tmp_imgs` 文件名或完整 `http(s)` 链接，整体覆盖 blackboard 的 `selected_images` 区域，`images: []` 表示清空。用户上传的图片会**追加合并**进同一区域（不通过本 action），见「用户上传图片」小节。
 
 **事件**: `code_chunk`, `exec_chunk`, `code_gen_error`
 
@@ -404,6 +405,39 @@ data: {"type":"done","content":""}
 ```
 
 **事件**: `chunk` (type: chunk, phase: observe)
+
+---
+
+### 用户上传图片
+
+图片随任意携带 `conversation_history` 的 JSON 请求一起提交（通常是本轮第一个请求：Think 模式为 `POST /api/think/stream/`，Chat 模式为 `POST /api/action/stream/`），**没有独立的上传接口，也不走 Multipart**。前端在浏览器内暂存图片，点击发送时才编码为 base64。
+
+**请求体中 user 条目带 `uploaded`**（在 `data.conversation_history` 内）：
+
+```json
+{
+  "meta": {"model": "deepseek-v4.1-flash", "use_images": true},
+  "data": {
+    "question": "分析这些图片",
+    "session_id": "xxx",
+    "conversation_history": [
+      {"role":"user","type":"question","content":"分析这些图片","uploaded":[
+        {"name":"cat.jpg","data":"data:image/jpeg;base64,..."}
+      ]}
+    ]
+  }
+}
+```
+
+**后端处理**（`main.py` 的 `unified_request_envelope` → `utils/image_ingest.py` 的 `ingest_uploaded_images`）：
+
+1. 解码每个 base64 项并保存为 `tmp_imgs/upload_<8位小写字母>.png`（扩展名与生成图片一致，非 `RGB`/`RGBA` 会转换；单张 ≤20MB）。
+2. 把该条目的 `uploaded` 改写为文件名列表 `["upload_abcd1234.png"]`。
+3. 把这些文件名追加合并进 blackboard 的 `selected_images` 区域（每项 `{"path", "reason": "user uploaded image"}`，按 `path` 去重，不覆盖已有选中项）。
+
+处理发生在路由之前且**幂等**：后续阶段收到的 `conversation_history` 里 `uploaded` 已是文件名，不会再解码或重复合并；当前请求构建的 `## Context` 已能看到 `Uploaded images: ...` 文件名列表。文件名随会话历史持久化；若 `meta.use_images` 开启且模型 `supports_images=true`，图片会按 `selected_images` 规则作为 `image_url` 提交。
+
+> 前端卡控最多 10 张；后端不限制张数。图片保存失败或为空会被跳过，不影响其余消息。
 
 ---
 
@@ -768,6 +802,7 @@ data: {"type":"chunk","phase":"done","file_name":"report_xxx"}
 ## 8. 文件上传
 
 > 本节接口受 `enable_edit` 控制，设为 `false` 时返回 `403`。
+> 图片上传不在本节：图片以 base64 随 JSON 请求的 `conversation_history[].uploaded` 提交，见 [4. Agent 核心流程](#4-agent-核心流程-sse-流式) 的「用户上传图片」小节。
 
 ### POST `/upload-csv/`
 

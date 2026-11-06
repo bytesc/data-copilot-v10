@@ -1,4 +1,4 @@
-from .copilot.utils.call_llm_test import call_llm, call_llm_stream
+from utils.context_trim import call_with_context_retry, stream_with_context_retry, cap_text
 from .tools_def import draw_graph, query_database, explain_data, exe_sql, draw_compare_graph, load_data, \
     get_save_image_path, search_web, fetch_webpage, exe_mcp
 from .custom_tools_def import get_onemap_minimap, get_onemap_static_map, predict_hdb_price, get_osm_minimap, get_osm_static_map, get_streetdirectory_minimap, get_streetdirectory_static_map, search_streetdirectory, search_osm
@@ -69,7 +69,7 @@ FUNCTION_DESCRIPTION = {
 }
 
 
-def get_function_prompt(question):
+def get_function_prompt(question, level=0):
     pre_prompt = """ 
 Please select ALL functions that will be called in the generated code to solve the problem.
 Include every function from the list below that will appear in the code, including utility functions.
@@ -93,7 +93,7 @@ exe_sql, get_save_image_path
 Example 2:
 exe_sql
 """
-    return pre_prompt + function_prompt + str(FUNCTION_DESCRIPTION) + example_code + "question:" + question
+    return pre_prompt + function_prompt + cap_text(str(FUNCTION_DESCRIPTION), level) + example_code + "question:" + cap_text(question, level)
 
 
 def get_function_info(question, llm, use_all_functions=False, brief=False):
@@ -117,10 +117,8 @@ def get_function_info(question, llm, use_all_functions=False, brief=False):
 
         return function_set, function_info, function_import
 
-    function_prompt = get_function_prompt(question)
-    function_list_str = call_llm(function_prompt, llm).content
-    if function_list_str == "solved":
-        return {}, "solved", []
+    function_list_str = call_with_context_retry(lambda lvl: get_function_prompt(question, level=lvl), llm).content
+    if function_list_str == "solved":        return {}, "solved", []
     function_list = [part.strip() for part in function_list_str.split(',')]
     function_list = [f for f in function_list if f]
     if not function_list:
@@ -157,7 +155,7 @@ def filter_functions_stream(question, llm):
     prompt_length = len(function_prompt)
     full_content = ""
 
-    for chunk in call_llm_stream(function_prompt, llm):
+    for chunk, _ in stream_with_context_retry(lambda lvl: get_function_prompt(question, level=lvl), llm):
         full_content += chunk
         yield {"type": "chunk", "content": chunk}
 

@@ -3,10 +3,9 @@ import logging
 import re
 
 from .utils.read_db import get_table_creation_statements, get_rows_from_all_tables, \
-    get_table_and_column_comments, get_all_comments
-from .utils.call_llm_test import call_llm, call_llm_stream
+    get_table_and_column_comments, get_all_comments, execute_select
 from .utils.parse_output import parse_generated_sql_code
-from .utils.read_db import execute_select
+from utils.context_trim import call_with_context_retry, stream_with_context_retry, cap_text
 
 def get_db_info_prompt(engine, simple=False, example=False, tables=None, selected_fields=None):
     data_prompt = """
@@ -58,9 +57,12 @@ Please write SQL code to select the data needed according to the following requi
 Remind:
 1. All code should be completed in a single markdown code block without any comments, explanations or cmds.
 """
-        final_prompt = pre_prompt + "\n" + data_prompt + end_prompt + question
+        final_prompt = pre_prompt + "\n" + data_prompt + end_prompt
 
-        ans = call_llm(final_prompt + error_msg, llm)
+        def build_prompt(level):
+            return pre_prompt + "\n" + cap_text(data_prompt, level) + end_prompt + cap_text(question, level)
+
+        ans = call_with_context_retry(lambda lvl: build_prompt(lvl) + error_msg, llm)
         print("sql################################3")
         print(ans.content)
         result_sql = parse_generated_sql_code(ans.content)
@@ -131,8 +133,9 @@ def parse_selected_fields_json(txt):
     return None
 
 
-def _build_filter_prompt(question, engine, tables=None):
-    schema = _build_compact_schema(engine, tables)
+def _build_filter_prompt(question, engine, tables=None, level=0):
+    schema = cap_text(_build_compact_schema(engine, tables), level)
+    question = cap_text(question, level)
     empty_json = "{}"
     return f"""You are a database analysis assistant. Analyze the following input to determine which database tables and columns are needed:
 
@@ -197,10 +200,8 @@ No database query needed (only for pure conversation):
 
 
 def filter_db_fields(question, engine, llm, tables=None, retries=2):
-    prompt = _build_filter_prompt(question, engine, tables)
-
     for attempt in range(retries):
-        response = call_llm(prompt, llm)
+        response = call_with_context_retry(lambda lvl: _build_filter_prompt(question, engine, tables, level=lvl), llm)
         result = parse_selected_fields_json(response.content)
         if result is not None and isinstance(result, dict):
             logging.info(f"filter_db_fields: Question: {question}\nResult: {result}\n")
@@ -218,7 +219,7 @@ def filter_db_fields_stream(question, engine, llm, tables=None):
     prompt_length = len(prompt)
     full_content = ""
 
-    for chunk in call_llm_stream(prompt, llm):
+    for chunk, _ in stream_with_context_retry(lambda lvl: _build_filter_prompt(question, engine, tables, level=lvl), llm):
         full_content += chunk
         yield {"type": "chunk", "content": chunk}
 

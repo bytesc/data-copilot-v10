@@ -51,9 +51,9 @@ images:
 ["xxx.png", "http://127.0.0.1:8008/tmp_imgs/yyy.png", "https://example.com/zzz.png"]
 
 ### SELECTED IMAGES
-note: Images explicitly kept by `select_images`, each with a path and a reason. They stay attached to every later LLM call until the region is overwritten.
+note: Images explicitly kept by `select_images` or uploaded by the user, each with a path and a reason. They stay attached to every later LLM call until the region is overwritten.
 images:
-[{"path": "xxx.png", "reason": "一句话选中原因"}, {"path": "https://example.com/chart.png", "reason": "一句话选中原因"}]
+[{"path": "xxx.png", "reason": "一句话选中原因"}, {"path": "upload_abcd1234.png", "reason": "user uploaded image"}]
 ```
 
 该段会追加到以下所有阶段：
@@ -65,7 +65,7 @@ images:
 - Act generate_and_execute
 - 文档生成（outline / part / unified / YAML outline / YAML section）
 
-每个区域第一行的 `note:` 会说明该区域由哪个 action 写入、主要字段含义以及覆盖规则，因此即使当前阶段没有 action 描述（如代码生成、文档生成），LLM 也能理解区域语义。`### RECENT_GENERATED_IMAGES` 段（来自 `rencent_generated_images` 区域）让 LLM 知道最近一次执行生成了哪些图片及其文件名/URL，并带有 `note` 说明这些图片会自动附带到下一次 LLM 调用；`### SELECTED IMAGES` 段展示 `select_images` 选中的图片及每张图的一句话选中原因，`note` 说明这些图片会持续附带到后续每次 LLM 调用，直到区域被覆盖。除文本注入外，当模型 `supports_images=true` 且请求 `meta.use_images` 开启时，两处图片会按 `rencent_generated_images` 在前、`selected_images` 在后的顺序作为 `image_url` 内容数组随请求提交，每张图片前附带 `Image filename: ...` 文本标签；本地文件/本机静态 URL 转 base64，外部 URL 原样传递。详见 `docs/conversation_history_structure.md`。
+每个区域第一行的 `note:` 会说明该区域由哪个 action 写入、主要字段含义以及覆盖规则，因此即使当前阶段没有 action 描述（如代码生成、文档生成），LLM 也能理解区域语义。`### RECENT_GENERATED_IMAGES` 段（来自 `rencent_generated_images` 区域）让 LLM 知道最近一次执行生成了哪些图片及其文件名/URL，并带有 `note` 说明这些图片会自动附带到下一次 LLM 调用；`### SELECTED IMAGES` 段展示 `select_images` 选中或用户上传的图片及每张图的一句话选中原因，`note` 说明这些图片会持续附带到后续每次 LLM 调用，直到区域被覆盖。用户上传的图片在请求摄取时（`utils/image_ingest.py`）追加合并进该区域。除文本注入外，当模型 `supports_images=true` 且请求 `meta.use_images` 开启时，两处图片会按 `rencent_generated_images` 在前、`selected_images` 在后的顺序作为 `image_url` 内容数组随请求提交，每张图片前附带 `Image filename: ...` 文本标签；本地文件/本机静态 URL 转 base64，外部 URL 原样传递。详见 `docs/conversation_history_structure.md`。
 
 普通历史条目由 `prepare_trimmed_context` 裁剪后经 `history_to_text` 渲染成 `## Context`，其中 **不包含 blackboard**，因此两部分不会重复注入。
 

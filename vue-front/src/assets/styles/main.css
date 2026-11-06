@@ -441,9 +441,34 @@ html, body {
   overflow-wrap: break-word;
 }
 
+.uploaded-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.uploaded-image-item {
+  display: block;
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.uploaded-image-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .plan-display {
   line-height: 1.6;
 }
+
 
 .plan-display :deep(ul) {
   padding-left: 20px;
@@ -775,6 +800,92 @@ html, body {
 .send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.attach-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 40px;
+  min-width: 52px;
+  padding: 0 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s, opacity 0.2s;
+  white-space: nowrap;
+}
+
+.attach-btn:hover:not(:disabled) {
+  border-color: var(--accent-blue);
+}
+
+.attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.attach-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.attach-count {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.upload-preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-preview-item {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.upload-preview-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.upload-preview-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.upload-preview-status {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .user-input-prompt,

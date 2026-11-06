@@ -12,7 +12,6 @@ from .tools.tools_def import engine, llm, query_database, exe_sql
 from .tools.copilot.python_code import get_py_code
 from .tools.copilot.utils.code_executor import execute_py_code
 from .tools.copilot.sql_code import get_db_info_prompt, filter_db_fields
-from .tools.copilot.utils.call_llm_test import call_llm_stream_with_reasoning
 from .tools.copilot.utils.parse_output import parse_generated_python_code
 from utils.perf_log import record_code_exec
 
@@ -25,6 +24,7 @@ from .utils.get_config import config_data
 from .utils.pd_to_csv import pd_to_csv
 from .utils.pd_to_walker import pd_to_walker
 from utils.blackboard import blackboard_to_text, blackboard_input_images
+from utils.context_trim import cap_text, stream_with_context_retry
 
 STATIC_URL = config_data['static_path']
 
@@ -47,7 +47,7 @@ def get_db():
 
 
 def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_functions=None, research_guide=None,
-                        blackboard=None):
+                        blackboard=None, level=0):
     blackboard = blackboard or {}
     board_schema = blackboard.get("schema") or {}
     board_functions = blackboard.get("functions") or {}
@@ -67,7 +67,7 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
         knowledge += "\nGraph Code Guide:\n" + base_knowledge_to_str(graph_code_guide_data) + "\n"
     blackboard_text = ""
     if blackboard:
-        bb = blackboard_to_text(blackboard)
+        bb = blackboard_to_text(blackboard, level=level)
         if bb:
             blackboard_text = "\n\n## Blackboard\n\n" + bb + "\n"
 
@@ -255,6 +255,12 @@ Your generated code MUST NOT write any import statement, MUST NOT re-import any 
     if research_guide:
         research_section = "\n\nImage and Data Requirements:\n" + research_guide + "\n\nYou MUST query the data and generate the images described above. Include the generated image paths in your output using `yield path`."
 
+    if level > 0:
+        function_info = cap_text(function_info, level)
+        database = cap_text(database, level)
+        knowledge = cap_text(knowledge, level)
+        question = cap_text(question, level)
+
     cot_prompt = pre_prompt + function_prompt + str(function_info) + \
                  module_prompt + example_code + remind_prompt + \
                  database + knowledge + blackboard_text + target_section + research_section + " \nContext:\n" + question + \
@@ -288,6 +294,7 @@ def format_yield_item(item, print_rows=5):
 def generate_and_execute_stream(question, tables=None, retries=2,
                                  selected_fields=None, selected_functions=None, print_rows=5,
                                  research_guide=None, blackboard=None, images=None,
+                                 question_builder=None,
                                  ):
     yield {"type": "msg", "content": "Analyzing question...", "phase": "act", "sub_phase": "code"}
 
@@ -297,6 +304,12 @@ def generate_and_execute_stream(question, tables=None, retries=2,
     input_images = images
     if input_images is None and blackboard:
         input_images = blackboard_input_images(blackboard)
+
+    def build_prompt(level):
+        q = question_builder(level) if question_builder else question
+        cot, _, _ = get_cot_code_prompt(
+            q, tables, selected_fields, selected_functions, research_guide, blackboard, level=level)
+        return cot
 
     error_msg = ""
 
@@ -308,7 +321,7 @@ def generate_and_execute_stream(question, tables=None, retries=2,
 
         full_prompt = cot_prompt + error_msg
         raw_content = ""
-        for chunk, reasoning in call_llm_stream_with_reasoning(full_prompt, llm, images=input_images):
+        for chunk, reasoning in stream_with_context_retry(lambda lvl: build_prompt(lvl) + error_msg, llm, images=input_images):
             if chunk:
                 raw_content += chunk
                 yield {"type": "chunk", "sub_type": "code_chunk", "content": chunk, "phase": "act", "sub_phase": "code"}

@@ -9,7 +9,6 @@ from agent.agent import generate_and_execute_stream
 from agent.document_generator import generate_document_from_context
 from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, TARGET, MCP_BRIEF, CUSTOM_FUNC_BRIEF, BASE_KNOWLEDGE_BRIEF, get_db_query_guide_db, get_base_knowledge_db, base_knowledge_to_str
 from agent.tools.tools_def import engine, llm
-from agent.tools.copilot.utils.call_llm_test import call_llm, call_llm_stream_with_reasoning
 from agent.tools.copilot.sql_code import parse_selected_fields_json
 from agent.tools.search_db import get_db_overview_markdown, search_db_markdown, get_db_summary_for_agent
 from agent.tools.search_func import get_func_catalog_markdown, search_func_by_keyword, get_func_summary_for_agent, get_func_docs_for
@@ -19,7 +18,7 @@ from agent.tools.mcp_client import load_mcp_servers, get_mcp_server, MCPClient, 
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
-from utils.context_trim import prepare_trimmed_context, save_session_step
+from utils.context_trim import prepare_trimmed_context, save_session_step, stream_with_context_retry, cap_text
 from utils.blackboard import (
     get_blackboard,
     update_blackboard,
@@ -60,8 +59,8 @@ class ActInput(BaseModel):
     params: Optional[Dict[str, Any]] = None
 
 
-def _build_context(question: str, conversation_history: Optional[List[dict]], session_id: str = ""):
-    trimmed = prepare_trimmed_context(session_id, conversation_history)
+def _build_context(question: str, conversation_history: Optional[List[dict]], session_id: str = "", level: int = 0):
+    trimmed = prepare_trimmed_context(session_id, conversation_history, level=level)
     if conversation_history:
         return history_to_text(trimmed)
     return question
@@ -170,7 +169,10 @@ def _event_stream_act(
     request_json: str = "",
 ):
     """Act phase: execute exactly ONE action."""
-    full_question = _build_context(question, conversation_history, session_id)
+    def build_question(level):
+        return _build_context(question, conversation_history, session_id, level=level)
+
+    full_question = build_question(0)
     params = params or {}
     search_keyword = params.get("search_keyword")
     tables = params.get("tables")
@@ -178,7 +180,11 @@ def _event_stream_act(
     research_guide = params.get("research_guide")
 
     blackboard = get_blackboard(conversation_history)
-    blackboard_text = blackboard_section(conversation_history)
+
+    def build_blackboard(level):
+        return blackboard_section(conversation_history, level=level)
+
+    blackboard_text = build_blackboard(0)
     images = blackboard_input_images(blackboard)
     if not selected_fields or (
         isinstance(selected_fields, dict) and selected_fields.get("__no_db__")
@@ -194,16 +200,16 @@ def _event_stream_act(
 
     act_data = {}
     if action == "explore_schema":
-        act_data = yield from _act_explore_schema(full_question, session_id, tables, search_keyword, blackboard_text, images)
+        act_data = yield from _act_explore_schema(build_question, session_id, tables, search_keyword, build_blackboard, images)
 
     elif action == "explore_base_knowledge":
-        act_data = yield from _act_explore_base_knowledge(full_question, session_id, search_keyword, blackboard_text, images)
+        act_data = yield from _act_explore_base_knowledge(build_question, session_id, search_keyword, build_blackboard, images)
 
     elif action == "explore_functions":
-        act_data = yield from _act_explore_functions(full_question, session_id, search_keyword, blackboard_text, images)
+        act_data = yield from _act_explore_functions(build_question, session_id, search_keyword, build_blackboard, images)
 
     elif action == "generate_and_execute":
-        act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, request_json, research_guide, blackboard, images)
+        act_data = yield from _act_generate_and_execute(build_question, session_id, tables, selected_fields, request_json, research_guide, blackboard, images)
 
     elif action == "generate_document":
         title = params.get("title")
@@ -216,7 +222,7 @@ def _event_stream_act(
         act_data = yield from _act_fetch_webpage(full_question, session_id, params, request_json)
 
     elif action == "explore_mcp":
-        act_data = yield from _act_explore_mcp(full_question, session_id, params, request_json, blackboard_text, images)
+        act_data = yield from _act_explore_mcp(build_question, session_id, params, request_json, build_blackboard, images)
 
     elif action == "exe_mcp":
         act_data = yield from _act_exe_mcp(full_question, session_id, params, request_json)
@@ -240,24 +246,25 @@ def _event_stream_act(
         yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
 
 
-def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None, blackboard_text: str = "", images=None):
+def _act_explore_schema(build_question, session_id: str, tables, search_keyword: Optional[str] = None, build_blackboard=None, images=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': 'Searching database information...'}, ensure_ascii=False)}\n\n"
 
     full_schema = get_db_overview_markdown(engine, tables, include_samples=True)
 
     keyword_hint = f"\nFocus hint: {search_keyword.strip()}" if search_keyword and search_keyword.strip() else ""
 
-    prompt = f"""Analyze the following database schema and the user's question to select the relevant tables and columns.
+    def build_prompt(level):
+        return f"""Analyze the following database schema and the user's question to select the relevant tables and columns.
 
 {DB_BRIEF}
 
 {DB_QUERY_GUIDE}
 
-{full_schema}
+{cap_text(full_schema, level)}
 
 Context:
-{full_question}
-{blackboard_text}
+{build_question(level)}
+{build_blackboard(level)}
 {keyword_hint}
 
 LANGUAGE IS CRITICAL: The "plan" field text MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, write the plan in Chinese. If the user asked in English, write the plan in English.
@@ -274,6 +281,7 @@ Example:
 {{"tables": {{"users": ["id", "name", "email"], "orders": []}}, "selected_guides": [1, 3, 7], "plan": "Query the users table to get customer IDs and emails, then join with orders table to find purchase records"}}
 ```
 """
+    prompt = build_prompt(0)
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': 'Analyzing required fields...'}, ensure_ascii=False)}\n\n"
 
     error_msg = ""
@@ -282,7 +290,7 @@ Example:
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': 'Parsing failed, re-analyzing...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk, reasoning in call_llm_stream_with_reasoning(prompt + error_msg, llm, images=images):
+        for chunk, reasoning in stream_with_context_retry(lambda lvl: build_prompt(lvl) + error_msg, llm, images=images):
             if chunk:
                 raw += chunk
                 yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
@@ -313,7 +321,7 @@ Example:
             log_observe_cycle(session_id, 0, "act", "explore_schema",
                               prompt=prompt[:5000], response=raw[:5000],
                               exec_result=display_content[:10000],
-                              token_estimate=len(prompt) // 3)
+                              token_estimate=len(prompt))
 
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema, 'explore_plan': explore_plan, 'selected_guides': selected_guide_keys, 'query_guide_content': guide_result}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
@@ -325,22 +333,24 @@ Example:
     return {"selected_fields": {}, "explore_plan": "", "schema_detail": full_schema}
 
 
-def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None, blackboard_text: str = "", images=None):
+def _act_explore_functions(build_question, session_id: str, search_keyword: Optional[str] = None, build_blackboard=None, images=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'msg', 'content': 'Searching function information...'}, ensure_ascii=False)}\n\n"
 
     full_catalog = get_func_catalog_markdown()
 
     keyword_hint = f"\nFocus hint: {search_keyword.strip()}" if search_keyword and search_keyword.strip() else ""
     func_names = ", ".join(FUNCTION_DICT.keys())
-    prompt = f"""Analyze the following function catalog and the user's question to select the needed functions.
+
+    def build_prompt(level):
+        return f"""Analyze the following function catalog and the user's question to select the needed functions.
 
 {CUSTOM_FUNC_BRIEF}
 
-{full_catalog}
+{cap_text(full_catalog, level)}
 
 Context:
-{full_question}
-{blackboard_text}
+{build_question(level)}
+{build_blackboard(level)}
 {keyword_hint}
 
 Available functions: {func_names}
@@ -353,10 +363,11 @@ If no functions are needed, return {{"selected_functions": [], "plan": "No funct
 Example:
 {{"selected_functions": ["exe_sql", "get_save_image_path"], "plan": "Execute SQL query then save the resulting image path."}}
 """
+    prompt = build_prompt(0)
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'status', 'content': 'Analyzing required functions...'}, ensure_ascii=False)}\n\n"
 
     raw = ""
-    for chunk, reasoning in call_llm_stream_with_reasoning(prompt, llm, images=images):
+    for chunk, reasoning in stream_with_context_retry(build_prompt, llm, images=images):
         if chunk:
             raw += chunk
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
@@ -379,7 +390,7 @@ Example:
     log_observe_cycle(session_id, 0, "act", "explore_functions",
                       prompt=prompt[:5000], response=raw_text[:5000],
                       exec_result=display_content[:10000],
-                      token_estimate=len(prompt) // 3)
+                      token_estimate=len(prompt))
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'done', 'content': display_content, 'result': {'selected_functions': selected_functions, 'func_context': full_catalog, 'explore_plan': explore_plan}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
@@ -395,7 +406,7 @@ def _parse_function_explore_json(raw: str) -> dict | None:
     return None
 
 
-def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyword: Optional[str] = None, blackboard_text: str = "", images=None):
+def _act_explore_base_knowledge(build_question, session_id: str, search_keyword: Optional[str] = None, build_blackboard=None, images=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': 'Searching base knowledge...'}, ensure_ascii=False)}\n\n"
 
     base_knowledge = get_base_knowledge_db()
@@ -411,15 +422,16 @@ def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyw
 
     knowledge_text = base_knowledge_to_str(all_knowledge)
 
-    prompt = f"""Analyze the following knowledge base and the user's question to select the relevant knowledge entries.
+    def build_prompt(level):
+        return f"""Analyze the following knowledge base and the user's question to select the relevant knowledge entries.
 
 {BASE_KNOWLEDGE_BRIEF}
 
-{knowledge_text}
+{cap_text(knowledge_text, level)}
 
 Context:
-{full_question}
-{blackboard_text}
+{build_question(level)}
+{build_blackboard(level)}
 {keyword_hint}
 
 Output ONLY a JSON object with the following structure:
@@ -429,6 +441,7 @@ Output ONLY a JSON object with the following structure:
 Example:
 {{"selected_ids": [1, 3, 7], "summary": "The user's question relates to company data analysis, entries 1, 3, 7 provide relevant domain knowledge."}}
 """
+    prompt = build_prompt(0)
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': 'Analyzing relevant knowledge...'}, ensure_ascii=False)}\n\n"
 
@@ -438,7 +451,7 @@ Example:
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': 'Parsing failed, re-analyzing...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk, reasoning in call_llm_stream_with_reasoning(prompt + error_msg, llm, images=images):
+        for chunk, reasoning in stream_with_context_retry(lambda lvl: build_prompt(lvl) + error_msg, llm, images=images):
             if chunk:
                 raw += chunk
                 yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
@@ -457,7 +470,7 @@ Example:
             log_observe_cycle(session_id, 0, "act", "explore_base_knowledge",
                               prompt=prompt[:5000], response=raw[:5000],
                               exec_result=display_content[:10000],
-                              token_estimate=len(prompt) // 3)
+                              token_estimate=len(prompt))
 
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'done', 'content': display_content, 'result': {'selected_knowledge_ids': selected_ids, 'knowledge_content': display_content, 'summary': summary}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
@@ -480,8 +493,9 @@ def _parse_base_knowledge_json(raw: str) -> dict | None:
     return None
 
 
-def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, request_json: str = "", research_guide: str = "", blackboard=None, images=None):
+def _act_generate_and_execute(build_question, session_id: str, tables, selected_fields, request_json: str = "", research_guide: str = "", blackboard=None, images=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': 'Generating and executing code...'}, ensure_ascii=False)}\n\n"
+    full_question = build_question(0)
     full_code = ""
     full_ans = ""
     exec_error = None
@@ -492,6 +506,7 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
         research_guide=research_guide,
         blackboard=blackboard,
         images=images,
+        question_builder=build_question,
     ):
         if event.get("sub_type") == "code_chunk":
             if exec_error:
@@ -601,7 +616,7 @@ def _act_web_search(full_question: str, session_id: str, params: dict, request_j
     log_observe_cycle(session_id, 0, "act", "web_search",
                       prompt=full_question[:5000], response=raw_result[:5000],
                       exec_result=display_content[:10000],
-                      token_estimate=len(full_question) // 3)
+                      token_estimate=len(full_question))
 
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
@@ -644,7 +659,7 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
     log_observe_cycle(session_id, 0, "act", "fetch_webpage",
                       prompt=full_question[:5000], response=content[:5000],
                       exec_result=content[:10000],
-                      token_estimate=len(full_question) // 3)
+                      token_estimate=len(full_question))
 
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
@@ -657,7 +672,7 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
     return {"url": url, "content": content, "display_content": display_content}
 
 
-def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_json: str = "", blackboard_text: str = "", images=None):
+def _act_explore_mcp(build_question, session_id: str, params: dict, request_json: str = "", build_blackboard=None, images=None):
     search_keyword = (params.get("search_keyword") or "").strip()
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': 'Connecting to MCP servers to fetch tool list...'}, ensure_ascii=False)}\n\n"
@@ -709,15 +724,16 @@ def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_
 
     mcp_brief = str(MCP_BRIEF)
 
-    prompt = f"""Analyze the following MCP tool catalog and the user's question to select the relevant tools.
+    def build_prompt(level):
+        return f"""Analyze the following MCP tool catalog and the user's question to select the relevant tools.
 
 {mcp_brief}
 
-{catalog}
+{cap_text(catalog, level)}
 
 Context:
-{full_question}
-{blackboard_text}
+{build_question(level)}
+{build_blackboard(level)}
 {keyword_hint}
 
 Output ONLY a JSON object with the following structure:
@@ -729,10 +745,11 @@ Example:
 
 If no tools are needed, return {{"selected_tools": [], "plan": "No MCP tools needed."}}
 """
+    prompt = build_prompt(0)
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': 'Analyzing required MCP tools...'}, ensure_ascii=False)}\n\n"
 
     raw = ""
-    for chunk, reasoning in call_llm_stream_with_reasoning(prompt, llm, images=images):
+    for chunk, reasoning in stream_with_context_retry(build_prompt, llm, images=images):
         if chunk:
             raw += chunk
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
@@ -767,7 +784,7 @@ If no tools are needed, return {{"selected_tools": [], "plan": "No MCP tools nee
     log_observe_cycle(session_id, 0, "act", "explore_mcp",
                       prompt=prompt[:5000], response=raw[:5000],
                       exec_result=tool_detail[:10000],
-                      token_estimate=len(prompt) // 3)
+                      token_estimate=len(prompt))
 
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
@@ -917,7 +934,7 @@ def _act_exe_mcp(full_question: str, session_id: str, params: dict, request_json
 
     log_observe_cycle(session_id, 0, "act", "exe_mcp",
                       prompt=full_question[:5000], response=result_text[:5000],
-                      token_estimate=len(full_question) // 3)
+                      token_estimate=len(full_question))
 
     status = "success" if not has_error else "partial"
     record_session_operation(

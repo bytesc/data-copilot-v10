@@ -39,7 +39,7 @@ llm_models:
 # Depth 默认选中列表第一个，Style 默认选中 Default（不额外上传 reasoning_effort/temperature）。
 # extra_params 若也含 reasoning_effort 或 temperature，最终合并时以 extra_params 为准。
 # supports_images 未配置时默认 false；为 true 时前端 Images 开关可用且默认开启，
-# 请求会把 blackboard rencent_generated_images / selected_images 区域中的图片作为 image_url 内容提交给模型（rencent_generated_images 在前，selected_images 在后）。
+# 请求会把 blackboard rencent_generated_images / selected_images 区域中的图片作为 image_url 内容提交给模型（rencent_generated_images 在前，selected_images 在后；selected_images 含 `select_images` 选中与用户上传的图片）。
 # 请求 meta.use_images=false 可临时关闭图片提交；不支持的模型开关置灰且始终不提交图片。
 
 # extra_params 说明（各模型单独配置，透传给 OpenAI 兼容接口的扩展字段）：

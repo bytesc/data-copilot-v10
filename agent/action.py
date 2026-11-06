@@ -9,13 +9,12 @@ from agent.tools.base_knowledge.get_base_knowledge import BRIEF_INFO
 from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.tools_def import llm
-from agent.tools.copilot.utils.call_llm_test import call_llm_stream_with_reasoning
 from data_access.observe_log import log_observe_cycle, log_observe_session
 from data_access.session_log import record_session_operation
 from agent.tools.tools_def import engine
 from utils.front_utils import history_to_text
 from utils.blackboard import blackboard_section, blackboard_input_images_from_history
-from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json
+from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json, stream_with_context_retry
 from utils.get_config import config_data
 from utils.perf_log import perf_api
 
@@ -161,12 +160,13 @@ def _build_action_prompt(
         question: str,
         conversation_history: Optional[List[dict]],
         session_id: str = "",
+        level: int = 0,
 ) -> str:
-    trimmed = prepare_trimmed_context(session_id, conversation_history)
+    trimmed = prepare_trimmed_context(session_id, conversation_history, level=level)
     context = ""
     if conversation_history:
         context = history_to_text(trimmed)
-    blackboard_text = blackboard_section(conversation_history)
+    blackboard_text = blackboard_section(conversation_history, level=level)
 
     db_summary = get_db_summary_for_agent(engine)
     func_catalog = get_func_summary_for_agent()
@@ -216,7 +216,10 @@ def _event_stream_action(
             yield f"data: {json.dumps({'phase': 'action', 'type': 'msg', 'content': 'Deciding next action...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk, reasoning in call_llm_stream_with_reasoning(prompt + error_msg, llm, images=images):
+        for chunk, reasoning in stream_with_context_retry(
+            lambda lvl: _build_action_prompt(question, conversation_history, session_id, level=lvl) + error_msg,
+            llm, images=images,
+        ):
             if chunk:
                 raw += chunk
                 yield f"data: {json.dumps({'phase': 'action', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
@@ -232,7 +235,7 @@ def _event_stream_action(
             action_label = action or f"multi({len(actions)} actions)"
             log_observe_cycle(session_id, cycle_index, "action", "decide",
                               prompt=prompt[:5000], response=raw[:5000],
-                              token_estimate=len(prompt) // 3)
+                              token_estimate=len(prompt))
             record_session_operation(
                 session_id, "/api/action/stream/",
                 request_json, str(action_result), "",
