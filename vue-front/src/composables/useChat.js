@@ -248,6 +248,7 @@ function historyToText(history) {
       let loopCompleted = false
       let loopPaused = false
       let loopNeedsInput = false
+      let loopFailed = false
       let loopFullAns = ''
       let loopChoices = []
 
@@ -269,6 +270,10 @@ function historyToText(history) {
           loopCompleted = true
           break
         }
+        if (actResult.streamFailed) {
+          loopFailed = true
+          break
+        }
       }
 
       if (loopNeedsInput) {
@@ -281,6 +286,13 @@ function historyToText(history) {
 
       if (loopPaused) {
         isPaused.value = true
+        isRunning.value = false
+        return
+      }
+
+      if (loopFailed) {
+        addMessage('system', 'error', { content: 'Action execution failed to complete. Stopping to avoid an endless loop.' })
+        isCompleted.value = true
         isRunning.value = false
         return
       }
@@ -385,6 +397,9 @@ function historyToText(history) {
     let currentSubPhase = null
     let currentSubContent = ''
     let currentReasoning = ''
+    let gotDone = false
+    let gotHandledError = false
+    let streamFailed = false
     const gen = actStream({
       action,
       question: fullQuestion,
@@ -441,6 +456,7 @@ function historyToText(history) {
         currentSubContent += content
         updateStreamingSubPhase(msgId, currentSubPhase, currentSubContent)
       } else if (etype === 'done') {
+        gotDone = true
         updateStreamingSubPhase(msgId, currentSubPhase, currentSubContent, false)
         updateStreamingThinking(msgId, currentReasoning, false)
         if (event.result) {
@@ -494,6 +510,11 @@ function historyToText(history) {
           })
         }
       } else if (etype === 'error') {
+        if (event.fatal || (!sub && !event.phase)) {
+          streamFailed = true
+        } else if (sub) {
+          gotHandledError = true
+        }
         updateStreamingSubPhase(msgId, currentSubPhase, content, false, true)
         if (!event.silent) showErrorToast('Request failed')
       }
@@ -507,6 +528,10 @@ function historyToText(history) {
 
     if (action === 'generate_document') {
       return { completed: true }
+    }
+
+    if (streamFailed || (!gotDone && !gotHandledError)) {
+      return { streamFailed: true }
     }
 
     return {}

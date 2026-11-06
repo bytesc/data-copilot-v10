@@ -1,4 +1,5 @@
 import json
+import traceback
 from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, Request
@@ -168,6 +169,37 @@ def _event_stream_act(
     params: Optional[Dict[str, Any]] = None,
     request_json: str = "",
 ):
+    """Act phase wrapper: turn unexpected errors into a terminal error event.
+
+    Without this guard an unhandled exception closes the SSE stream mid-flight
+    and skips the history update, so the caller sees no state change and retries
+    the same action forever. Emitting a fatal error event lets the client stop.
+    """
+    try:
+        yield from _event_stream_act_impl(
+            question, action, session_id, conversation_history, params, request_json,
+        )
+    except Exception as e:
+        traceback.print_exc()
+        message = f"Internal error during `{action}`: {e}"
+        yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': message, 'fatal': True}, ensure_ascii=False)}\n\n"
+        try:
+            entry = {"role": "assistant", "type": "act", "action": action, "error": message}
+            history = save_session_step(session_id, conversation_history, [entry])
+            if history:
+                yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
+        except Exception:
+            traceback.print_exc()
+
+
+def _event_stream_act_impl(
+    question: str,
+    action: str,
+    session_id: str,
+    conversation_history: Optional[List[dict]],
+    params: Optional[Dict[str, Any]] = None,
+    request_json: str = "",
+):
     """Act phase: execute exactly ONE action."""
     def build_question(level):
         return _build_context(question, conversation_history, session_id, level=level)
@@ -230,6 +262,10 @@ def _event_stream_act(
     elif action == "select_images":
         act_data = yield from _act_select_images(session_id, params, request_json)
         if act_data.get("error"):
+            entry = {"role": "assistant", "type": "act", "action": "select_images", "error": act_data["error"]}
+            history = save_session_step(session_id, conversation_history, [entry])
+            if history:
+                yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
             return
 
     else:
