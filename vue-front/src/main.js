@@ -10,6 +10,7 @@ function buildLlmMeta() {
     model: configState.current_model,
     reasoning_effort: configState.current_reasoning_effort || '',
     style: configState.current_style || '',
+    use_images: !!configState.use_images,
   }
 }
 

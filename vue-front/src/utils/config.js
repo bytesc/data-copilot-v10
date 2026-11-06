@@ -11,6 +11,7 @@ export const configState = reactive({
   current_model: '',
   current_reasoning_effort: '',
   current_style: '',
+  use_images: false,
   _loaded: false,
 })
 
@@ -47,6 +48,7 @@ function normalizeModels(models) {
       ? [...m.reasoning_effort_options]
       : [],
     style_options: Array.isArray(m?.style_options) ? [...m.style_options] : [],
+    supports_images: !!m?.supports_images,
   }))
 }
 
@@ -59,6 +61,8 @@ function normalizeSelection(selection) {
     reasoning_effort:
       typeof selection.reasoning_effort === 'string' ? selection.reasoning_effort : '',
     style: typeof selection.style === 'string' ? selection.style : '',
+    use_images:
+      typeof selection.use_images === 'boolean' ? selection.use_images : null,
   }
 }
 
@@ -110,6 +114,7 @@ function defaultSelection(models) {
     model: model?.id || '',
     reasoning_effort: model?.reasoning_effort_options?.[0] || '',
     style: '',
+    use_images: !!model?.supports_images,
   }
 }
 
@@ -126,6 +131,9 @@ function isSelectionValid(selection, models) {
   if (selection.style !== '' && !model.style_options.includes(selection.style)) {
     return false
   }
+  if (selection.use_images === true && !model.supports_images) {
+    return false
+  }
   return true
 }
 
@@ -137,6 +145,10 @@ function applySelection(selection) {
   configState.current_model = selection.model
   configState.current_reasoning_effort = selection.reasoning_effort
   configState.current_style = selection.style
+  const model = findModel(configState.models, selection.model)
+  configState.use_images = model?.supports_images
+    ? selection.use_images !== false
+    : false
 }
 
 function saveStore() {
@@ -148,6 +160,7 @@ function saveStore() {
         model: configState.current_model,
         reasoning_effort: configState.current_reasoning_effort || '',
         style: configState.current_style || '',
+        use_images: !!configState.use_images,
       },
     }),
   )
@@ -164,6 +177,7 @@ watch(
     configState.current_model,
     configState.current_reasoning_effort,
     configState.current_style,
+    configState.use_images,
   ],
   () => {
     if (_persistEnabled) saveStore()
@@ -226,6 +240,7 @@ export async function selectModel(modelId) {
     model: model.id,
     reasoning_effort: model.reasoning_effort_options[0] || '',
     style: '',
+    use_images: !!model.supports_images,
   })
   return true
 }
@@ -245,6 +260,16 @@ export async function selectStyle(value) {
   const style = value || ''
   if (style && !model.style_options.includes(style)) return false
   configState.current_style = style
+  return true
+}
+
+export function selectUseImages(value) {
+  const model = currentModelConfig()
+  if (!model?.supports_images) {
+    configState.use_images = false
+    return false
+  }
+  configState.use_images = !!value
   return true
 }
 

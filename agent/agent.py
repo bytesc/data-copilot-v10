@@ -24,7 +24,7 @@ from .utils.final_output_parse import wrap_png_url_with_markdown_image, is_png_u
 from .utils.get_config import config_data
 from .utils.pd_to_csv import pd_to_csv
 from .utils.pd_to_walker import pd_to_walker
-from utils.blackboard import blackboard_to_text
+from utils.blackboard import blackboard_to_text, blackboard_images
 
 STATIC_URL = config_data['static_path']
 
@@ -287,13 +287,16 @@ def format_yield_item(item, print_rows=5):
 
 def generate_and_execute_stream(question, tables=None, retries=2,
                                  selected_fields=None, selected_functions=None, print_rows=5,
-                                 research_guide=None, blackboard=None,
+                                 research_guide=None, blackboard=None, images=None,
                                  ):
     yield {"type": "msg", "content": "Analyzing question...", "phase": "act", "sub_phase": "code"}
 
     cot_prompt, rag_ans, function_import = get_cot_code_prompt(
         question, tables, selected_fields, selected_functions, research_guide, blackboard)
     prompt_length = len(cot_prompt)
+    input_images = images
+    if input_images is None and blackboard:
+        input_images = blackboard_images(blackboard)
 
     error_msg = ""
 
@@ -305,7 +308,7 @@ def generate_and_execute_stream(question, tables=None, retries=2,
 
         full_prompt = cot_prompt + error_msg
         raw_content = ""
-        for chunk, reasoning in call_llm_stream_with_reasoning(full_prompt, llm):
+        for chunk, reasoning in call_llm_stream_with_reasoning(full_prompt, llm, images=input_images):
             if chunk:
                 raw_content += chunk
                 yield {"type": "chunk", "sub_type": "code_chunk", "content": chunk, "phase": "act", "sub_phase": "code"}

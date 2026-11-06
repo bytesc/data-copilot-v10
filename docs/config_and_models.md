@@ -24,6 +24,7 @@ llm_models:
     model: "deepseek-v4-flash"           # 实际调用的模型名称
     url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
     key_file: "api_key_openai.txt"       # key 文件名（agent/utils/llm_access/ 目录下），不填用默认 api_key_openai.txt
+    supports_images: true                # 是否支持图片多模态输入；为 true 时会把 blackboard images 区域的图片随请求上传
     reasoning_effort: ["low", "high", "max"]  # 前端 Depth 下拉选项，默认选中第一个；不填/[] 则该项不可用
     style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}  # 前端 Style 下拉，默认 Default；不填/{} 则该项不可用
     extra_params: {"thinking": {"type": "disabled"}, "max_tokens": 8192}  # 该模型专属额外请求参数
@@ -105,7 +106,7 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 }
 ```
 
-- `meta` 只包含模型调用选择：`model`、`reasoning_effort`、`style`；为空字符串表示 `Default`。
+- `meta` 只包含模型调用选择：`model`、`reasoning_effort`、`style`、`use_images`；为空字符串表示 `Default`。`use_images` 控制是否随请求上传 blackboard 图片，仅对 `supports_images` 为 true 的模型生效。
 - 后端中间件读取 `meta` 后只把 `data` 交给原 Pydantic 接口，因此下文各请求模型的示例均表示 `data` 内容。
 - 未使用信封的 JSON 请求返回 `400`；不再支持 header 回退。
 - 后端不保存用户选择；浏览器用 localStorage 的 `data-copilot-llm-config` 缓存模型配置列表和当前选择，并在每次请求中发送。

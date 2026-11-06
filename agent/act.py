@@ -26,6 +26,7 @@ from utils.blackboard import (
     update_code_images,
     blackboard_selected_fields,
     blackboard_section,
+    blackboard_images,
 )
 from utils.get_config import config_data
 from utils.perf_log import perf_api
@@ -170,6 +171,7 @@ def _event_stream_act(
 
     blackboard = get_blackboard(conversation_history)
     blackboard_text = blackboard_section(conversation_history)
+    images = blackboard_images(blackboard)
     if not selected_fields or (
         isinstance(selected_fields, dict) and selected_fields.get("__no_db__")
     ):
@@ -184,16 +186,16 @@ def _event_stream_act(
 
     act_data = {}
     if action == "explore_schema":
-        act_data = yield from _act_explore_schema(full_question, session_id, tables, search_keyword, blackboard_text)
+        act_data = yield from _act_explore_schema(full_question, session_id, tables, search_keyword, blackboard_text, images)
 
     elif action == "explore_base_knowledge":
-        act_data = yield from _act_explore_base_knowledge(full_question, session_id, search_keyword, blackboard_text)
+        act_data = yield from _act_explore_base_knowledge(full_question, session_id, search_keyword, blackboard_text, images)
 
     elif action == "explore_functions":
-        act_data = yield from _act_explore_functions(full_question, session_id, search_keyword, blackboard_text)
+        act_data = yield from _act_explore_functions(full_question, session_id, search_keyword, blackboard_text, images)
 
     elif action == "generate_and_execute":
-        act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, request_json, research_guide, blackboard)
+        act_data = yield from _act_generate_and_execute(full_question, session_id, tables, selected_fields, request_json, research_guide, blackboard, images)
 
     elif action == "generate_document":
         title = params.get("title")
@@ -206,7 +208,7 @@ def _event_stream_act(
         act_data = yield from _act_fetch_webpage(full_question, session_id, params, request_json)
 
     elif action == "explore_mcp":
-        act_data = yield from _act_explore_mcp(full_question, session_id, params, request_json, blackboard_text)
+        act_data = yield from _act_explore_mcp(full_question, session_id, params, request_json, blackboard_text, images)
 
     elif action == "exe_mcp":
         act_data = yield from _act_exe_mcp(full_question, session_id, params, request_json)
@@ -225,7 +227,7 @@ def _event_stream_act(
         yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
 
 
-def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None, blackboard_text: str = ""):
+def _act_explore_schema(full_question: str, session_id: str, tables, search_keyword: Optional[str] = None, blackboard_text: str = "", images=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': 'Searching database information...'}, ensure_ascii=False)}\n\n"
 
     full_schema = get_db_overview_markdown(engine, tables, include_samples=True)
@@ -267,7 +269,7 @@ Example:
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': 'Parsing failed, re-analyzing...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk, reasoning in call_llm_stream_with_reasoning(prompt + error_msg, llm):
+        for chunk, reasoning in call_llm_stream_with_reasoning(prompt + error_msg, llm, images=images):
             if chunk:
                 raw += chunk
                 yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
@@ -310,7 +312,7 @@ Example:
     return {"selected_fields": {}, "explore_plan": "", "schema_detail": full_schema}
 
 
-def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None, blackboard_text: str = ""):
+def _act_explore_functions(full_question: str, session_id: str, search_keyword: Optional[str] = None, blackboard_text: str = "", images=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'msg', 'content': 'Searching function information...'}, ensure_ascii=False)}\n\n"
 
     full_catalog = get_func_catalog_markdown()
@@ -341,7 +343,7 @@ Example:
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'status', 'content': 'Analyzing required functions...'}, ensure_ascii=False)}\n\n"
 
     raw = ""
-    for chunk, reasoning in call_llm_stream_with_reasoning(prompt, llm):
+    for chunk, reasoning in call_llm_stream_with_reasoning(prompt, llm, images=images):
         if chunk:
             raw += chunk
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
@@ -380,7 +382,7 @@ def _parse_function_explore_json(raw: str) -> dict | None:
     return None
 
 
-def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyword: Optional[str] = None, blackboard_text: str = ""):
+def _act_explore_base_knowledge(full_question: str, session_id: str, search_keyword: Optional[str] = None, blackboard_text: str = "", images=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': 'Searching base knowledge...'}, ensure_ascii=False)}\n\n"
 
     base_knowledge = get_base_knowledge_db()
@@ -423,7 +425,7 @@ Example:
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'msg', 'content': 'Parsing failed, re-analyzing...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk, reasoning in call_llm_stream_with_reasoning(prompt + error_msg, llm):
+        for chunk, reasoning in call_llm_stream_with_reasoning(prompt + error_msg, llm, images=images):
             if chunk:
                 raw += chunk
                 yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
@@ -465,24 +467,25 @@ def _parse_base_knowledge_json(raw: str) -> dict | None:
     return None
 
 
-def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, request_json: str = "", research_guide: str = "", blackboard=None):
+def _act_generate_and_execute(full_question: str, session_id: str, tables, selected_fields, request_json: str = "", research_guide: str = "", blackboard=None, images=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': 'Generating and executing code...'}, ensure_ascii=False)}\n\n"
     full_code = ""
     full_ans = ""
     exec_error = None
-    images = []
+    generated_images = []
     for event in generate_and_execute_stream(
         full_question, tables, retries=2,
         selected_fields=selected_fields,
         research_guide=research_guide,
         blackboard=blackboard,
+        images=images,
     ):
         if event.get("sub_type") == "code_chunk":
             if exec_error:
                 full_code = ""
                 full_ans = ""
                 exec_error = None
-                images = []
+                generated_images = []
             full_code += event.get("content", "")
         if event.get("sub_type") == "code_complete":
             full_code = event.get("content", "")
@@ -494,14 +497,14 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
         if event.get("type") == "done" and event.get("sub_phase") == "exec":
             full_code = event.get("code", full_code)
             full_ans = event.get("content", full_ans)
-            images = event.get("images", images)
+            generated_images = event.get("images", generated_images)
             event = {
                 **event,
                 "result": {
                     "code": full_code,
                     "exec_result": full_ans,
                     "error": exec_error,
-                    "images": images,
+                    "images": generated_images,
                 }
             }
         yield f"data: {json.dumps({**event}, ensure_ascii=False)}\n\n"
@@ -517,7 +520,7 @@ def _act_generate_and_execute(full_question: str, session_id: str, tables, selec
                           prompt=full_question[:10000], response=full_code[:10000],
                           exec_code=full_code[:10000], exec_result=full_ans[:10000])
 
-    return {"full_code": full_code, "full_ans": full_ans, "exec_error": exec_error, "images": images}
+    return {"full_code": full_code, "full_ans": full_ans, "exec_error": exec_error, "images": generated_images}
 
 
 def _act_generate_document(conversation_history, session_id, title: str = "", request_json: str = ""):
@@ -641,7 +644,7 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
     return {"url": url, "content": content, "display_content": display_content}
 
 
-def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_json: str = "", blackboard_text: str = ""):
+def _act_explore_mcp(full_question: str, session_id: str, params: dict, request_json: str = "", blackboard_text: str = "", images=None):
     search_keyword = (params.get("search_keyword") or "").strip()
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': 'Connecting to MCP servers to fetch tool list...'}, ensure_ascii=False)}\n\n"
@@ -716,7 +719,7 @@ If no tools are needed, return {{"selected_tools": [], "plan": "No MCP tools nee
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': 'Analyzing required MCP tools...'}, ensure_ascii=False)}\n\n"
 
     raw = ""
-    for chunk, reasoning in call_llm_stream_with_reasoning(prompt, llm):
+    for chunk, reasoning in call_llm_stream_with_reasoning(prompt, llm, images=images):
         if chunk:
             raw += chunk
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"

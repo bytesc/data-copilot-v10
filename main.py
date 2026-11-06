@@ -88,6 +88,7 @@ def _apply_meta(meta):
         meta.get("model"),
         meta.get("reasoning_effort"),
         meta.get("style"),
+        meta.get("use_images"),
     )
 
 

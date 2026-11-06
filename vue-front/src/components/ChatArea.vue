@@ -41,6 +41,24 @@
           <span class="mode-switch-option left" :class="{ active: chatMode === 'think' }">Think</span>
           <span class="mode-switch-option right" :class="{ active: chatMode === 'chat' }">Chat</span>
         </div>
+
+        <div
+          class="image-switch-group"
+          :title="supportsImages ? 'Attach blackboard images to model requests' : 'This model does not support image input'"
+        >
+          <span class="mode-switch-label">Images</span>
+          <button
+            class="image-switch"
+            :class="{ on: useImages, disabled: !supportsImages }"
+            :aria-checked="useImages"
+            :aria-disabled="!supportsImages || isRunning"
+            :disabled="!supportsImages || isRunning"
+            role="switch"
+            @click="onToggleImages"
+          >
+            <span class="image-switch-thumb"></span>
+          </button>
+        </div>
       </div>
 
       <div v-if="awaitingInput" class="user-input-prompt">
@@ -106,8 +124,9 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import MessageItem from '@/components/MessageItem.vue'
+import { configState, selectUseImages } from '@/utils/config.js'
 
 const props = defineProps({
   chat: { type: Object, required: true },
@@ -128,6 +147,17 @@ const userInput = ref('')
 const pausedInput = ref('')
 const messagesContainer = ref(null)
 const userInputRef = ref(null)
+
+const useImages = computed(() => configState.use_images)
+const supportsImages = computed(() => {
+  const model = configState.models.find(m => m.id === configState.current_model)
+  return !!model?.supports_images
+})
+
+function onToggleImages() {
+  if (isRunning.value || !supportsImages.value) return
+  selectUseImages(!configState.use_images)
+}
 
 function setMode(mode) {
   chatMode.value = mode

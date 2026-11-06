@@ -24,6 +24,8 @@ static_path: "http://127.0.0.1:8008/"
 #                      "Default" is selected by default (sends no temperature parameter).
 #                      Omit or use {} to disable the dropdown for that model.
 #                      When extra_params also contains temperature, extra_params wins when merged.
+#   supports_images  - boolean, whether the model accepts image (multimodal) input. When true,
+#                      images saved in the blackboard IMAGES region are attached to the user message.
 # Note: extra body params are now configured per model via the extra_params field in llm_models.
 # DeepSeek official docs (api-docs.deepseek.com/zh-cn/guides/thinking_mode):
 #   disable thinking  -> {"thinking": {"type": "disabled"}}
@@ -38,6 +40,7 @@ llm_models:
     model: "deepseek-v4.1-flash"         # actual model name used in API calls
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"     # key file name; defaults if omitted
+    supports_images: true              # attach blackboard images (multimodal input)
     reasoning_effort: ["none", "low", "high", "max"]
     style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
     extra_params: {"max_tokens": 393216}
@@ -46,6 +49,7 @@ llm_models:
     model: "deepseek-v4-flash"         # actual model name used in API calls
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"     # key file name; defaults if omitted
+    supports_images: false
     reasoning_effort: ["none", "low", "high", "max"]
     style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
     extra_params: {"max_tokens": 393216}
@@ -54,6 +58,7 @@ llm_models:
     model: "glm-5.3-flash"
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"       # create the corresponding key file in that directory if needed
+    supports_images: false
     style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
     extra_params: {}
   - id: "glm-5.3-flashx"
@@ -61,8 +66,9 @@ llm_models:
     model: "glm-5.3-flashx"
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"       # create the corresponding key file in that directory if needed
+    supports_images: false
     reasoning_effort: ["low", "high", "max"]
-    extra_params: {}                     # no reasoning_effort list -> Depth dropdown disabled
+    extra_params: {}
 
 
 # Example model names (qwen3.7-flash qwen3.8-max / glm-4 / deepseek-chat deepseek-v4-flash deepseek-v4-pro / qwen-max / gpt-4o-mini)

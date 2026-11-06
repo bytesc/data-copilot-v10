@@ -31,7 +31,7 @@ _ENABLE_TARGET = config_data.get('enable_target_knowledge', False)
 from data_access.observe_log import log_observe_cycle
 from data_access.report_log import record_report_generation
 from utils.front_utils import history_to_text
-from utils.blackboard import blackboard_section
+from utils.blackboard import blackboard_section, blackboard_images_from_history
 from utils.context_trim import prepare_trimmed_context
 from utils.perf_log import perf_api
 
@@ -488,6 +488,7 @@ def _event_stream_generate_document(conversation_history: List[dict], session_id
     trimmed = prepare_trimmed_context(session_id, conversation_history)
     context = history_to_text(trimmed)
     blackboard_text = blackboard_section(conversation_history)
+    images = blackboard_images_from_history(conversation_history)
 
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
@@ -506,7 +507,7 @@ Conversation History:
 {blackboard_text}"""
 
     outline_raw = ""
-    for chunk in call_llm_stream(outline_prompt, llm):
+    for chunk in call_llm_stream(outline_prompt, llm, images=images):
         outline_raw += chunk
         yield f"data: {json.dumps({'phase': 'outline', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
@@ -559,7 +560,7 @@ Conversation History:
 Write the content for the section "{heading}" in markdown format. ⚠️ CRITICAL: Do NOT repeat the section heading "{heading}" in your output. The heading will be added automatically. Start directly with the body content — no heading, no title line."""
 
         part_raw = ""
-        for chunk in call_llm_stream(part_prompt, llm):
+        for chunk in call_llm_stream(part_prompt, llm, images=images):
             part_raw += chunk
             yield f"data: {json.dumps({'phase': 'part', 'type': 'chunk', 'content': chunk, 'part_index': i}, ensure_ascii=False)}\n\n"
 
@@ -651,6 +652,7 @@ def _event_stream_generate_document_unified(conversation_history: List[dict], se
     trimmed = prepare_trimmed_context(session_id, conversation_history)
     context = history_to_text(trimmed)
     blackboard_text = blackboard_section(conversation_history)
+    images = blackboard_images_from_history(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': 'Generating document...'}, ensure_ascii=False)}\n\n"
@@ -670,7 +672,7 @@ Conversation History:
 Write the complete business summary document in markdown format. Start with `# Title` as the top-level heading. Do NOT wrap the output in any code blocks or fences — output raw markdown only. Do NOT include any introductory or explanatory text outside the markdown document."""
 
     full_raw = ""
-    for chunk in call_llm_stream(prompt, llm):
+    for chunk in call_llm_stream(prompt, llm, images=images):
         full_raw += chunk
         yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
@@ -756,6 +758,7 @@ def _event_stream_generate_yaml_outline(conversation_history: List[dict], sessio
     trimmed = prepare_trimmed_context(session_id, conversation_history)
     context = history_to_text(trimmed)
     blackboard_text = blackboard_section(conversation_history)
+    images = blackboard_images_from_history(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
 
     user_instruction = ""
@@ -783,7 +786,7 @@ Conversation History:
             yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'msg', 'content': 'Parsing failed, re-generating YAML outline...'}, ensure_ascii=False)}\n\n"
 
         raw = ""
-        for chunk in call_llm_stream(prompt + error_hint, llm):
+        for chunk in call_llm_stream(prompt + error_hint, llm, images=images):
             raw += chunk
             yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
@@ -850,6 +853,7 @@ def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outl
     trimmed = prepare_trimmed_context(session_id, conversation_history)
     context = history_to_text(trimmed)
     blackboard_text = blackboard_section(conversation_history)
+    images = blackboard_images_from_history(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
     yaml_outline = _parse_yaml_outline(yaml_outline)
     parsed = _parse_yaml_sections(yaml_outline)
@@ -938,7 +942,7 @@ Conversation History:
 Write the content for the section "{heading}" in markdown format."""
 
         part_raw = ""
-        for chunk in call_llm_stream(section_prompt, llm):
+        for chunk in call_llm_stream(section_prompt, llm, images=images):
             part_raw += chunk
             yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'chunk', 'content': chunk, 'section_index': i}, ensure_ascii=False)}\n\n"
 

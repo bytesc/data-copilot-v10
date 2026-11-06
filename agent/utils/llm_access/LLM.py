@@ -42,6 +42,15 @@ def _normalize_style_temperature(value):
     return styles
 
 
+def _normalize_bool(value):
+    """把配置中的布尔开关标准化为 True/False。"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
 def _build_model_configs():
     models = config_data.get("llm_models") or []
     built = []
@@ -54,6 +63,7 @@ def _build_model_configs():
             "key_file": m.get("key_file") or DEFAULT_KEY_FILE,
             "reasoning_effort": _normalize_reasoning_effort(m.get("reasoning_effort")),
             "style_temperature": _normalize_style_temperature(m.get("style_temperature")),
+            "supports_images": _normalize_bool(m.get("supports_images", False)),
             "extra_params": m.get("extra_params") or {},
         })
     return built
@@ -79,10 +89,16 @@ _current_reasoning_effort_var = contextvars.ContextVar(
 )
 # Style 默认 Default（空字符串，不额外上传 temperature）
 _current_style_var = contextvars.ContextVar("llm_current_style", default="")
+# 是否随请求上传 blackboard 图片；None 表示按模型能力取默认值
+_current_use_images_var = contextvars.ContextVar("llm_current_use_images", default=None)
 _clients = {}
 
 
-def apply_request_selection(model_id=None, reasoning_effort=None, style=None):
+def _default_use_images(cfg):
+    return bool(cfg and cfg.get("supports_images"))
+
+
+def apply_request_selection(model_id=None, reasoning_effort=None, style=None, use_images=None):
     """按前端本次请求携带的值设置上下文，不写入全局共享状态。
 
     None 表示请求未携带该字段，此时使用模型默认值；空字符串表示 Default。
@@ -94,6 +110,7 @@ def apply_request_selection(model_id=None, reasoning_effort=None, style=None):
         _current_model_id_var.set(None)
         _current_reasoning_effort_var.set("")
         _current_style_var.set("")
+        _current_use_images_var.set(False)
         return
     _current_model_id_var.set(cfg["id"])
 
@@ -110,6 +127,12 @@ def apply_request_selection(model_id=None, reasoning_effort=None, style=None):
     else:
         current_style = ""
     _current_style_var.set(current_style)
+
+    if use_images is None:
+        use_images_value = _default_use_images(cfg)
+    else:
+        use_images_value = _normalize_bool(use_images) and cfg["supports_images"]
+    _current_use_images_var.set(use_images_value)
 
 
 def _default_reasoning_effort(cfg):
@@ -137,6 +160,7 @@ def list_model_configs():
             "reasoning_effort_selected": current_effort if m["id"] == current_id else "",
             "style_options": list(m["style_temperature"].keys()),
             "style_selected": current_style if m["id"] == current_id else "",
+            "supports_images": bool(m["supports_images"]),
         }
         for m in MODEL_CONFIGS
     ]
@@ -156,6 +180,12 @@ def get_model_config(model_id=None):
     return None
 
 
+def model_supports_images(model_id=None):
+    """当前（或指定）模型是否支持图片多模态输入。"""
+    cfg = get_model_config(model_id)
+    return bool(cfg and cfg.get("supports_images"))
+
+
 def get_current_model_id():
     return _current_model_id_var.get()
 
@@ -168,6 +198,7 @@ def set_current_model(model_id):
     _current_model_id_var.set(cfg["id"])
     _current_reasoning_effort_var.set(_default_reasoning_effort(cfg))
     _current_style_var.set(_default_style(cfg))
+    _current_use_images_var.set(_default_use_images(cfg))
     with _lock:
         _clients.pop(cfg["id"], None)
     return cfg
@@ -199,6 +230,14 @@ def set_current_reasoning_effort(value):
 def get_current_style():
     """当前 Style 名称；空字符串表示 Default（不上传 temperature）"""
     return _current_style_var.get()
+
+
+def get_current_use_images():
+    """本次请求是否上传 blackboard 图片；未显式设置时按当前模型能力决定。"""
+    value = _current_use_images_var.get()
+    if value is None:
+        return model_supports_images()
+    return bool(value)
 
 
 def set_current_style(value):

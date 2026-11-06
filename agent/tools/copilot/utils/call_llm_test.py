@@ -1,6 +1,7 @@
 from utils.get_config import config_data
 from utils.perf_log import record_first_chunk, record_llm_complete, record_llm_input
-from agent.utils.llm_access.LLM import get_model_config, get_extra_body
+from agent.utils.llm_access.LLM import get_model_config, get_extra_body, get_current_use_images
+from agent.utils.llm_access.image_input import build_user_content
 
 from datetime import datetime
 import os
@@ -27,15 +28,31 @@ def _write_llmlog(question, answer):
         print(f"Error writing llmlog: {e}")
 
 
-def call_llm(question, llm):
+def _build_messages(question, model_cfg, images=None):
+    content = question
+    if images and model_cfg.get("supports_images") and get_current_use_images():
+        content = build_user_content(question, images)
+    return [{"role": "user", "content": content}]
+
+
+def _count_message_images(messages):
+    content = messages[0].get("content") if messages else None
+    if not isinstance(content, list):
+        return 0
+    return sum(
+        1 for part in content
+        if isinstance(part, dict) and part.get("type") == "image_url"
+    )
+
+
+def call_llm(question, llm, images=None):
     model_cfg = get_model_config()
-    print("question len : ", len(question), " model:", model_cfg["id"])
+    messages = _build_messages(question, model_cfg, images)
+    print("question len : ", len(question), " model:", model_cfg["id"], " images:", _count_message_images(messages))
     record_llm_input(len(question))
     response = llm.chat.completions.create(
         model=model_cfg["model"],
-        messages=[
-            {"role": "user", "content": question},
-        ],
+        messages=messages,
         stream=False,
         extra_body=get_extra_body(model_cfg["id"])
     )
@@ -47,25 +64,24 @@ def call_llm(question, llm):
     return answer
 
 
-def call_llm_stream(question, llm):
-    for content, _ in _call_llm_stream_events(question, llm):
+def call_llm_stream(question, llm, images=None):
+    for content, _ in _call_llm_stream_events(question, llm, images):
         if content:
             yield content
 
 
-def call_llm_stream_with_reasoning(question, llm):
-    yield from _call_llm_stream_events(question, llm)
+def call_llm_stream_with_reasoning(question, llm, images=None):
+    yield from _call_llm_stream_events(question, llm, images)
 
 
-def _call_llm_stream_events(question, llm):
+def _call_llm_stream_events(question, llm, images=None):
     model_cfg = get_model_config()
-    print("question len (stream): ", len(question), " model:", model_cfg["id"])
+    messages = _build_messages(question, model_cfg, images)
+    print("question len (stream): ", len(question), " model:", model_cfg["id"], " images:", _count_message_images(messages))
     record_llm_input(len(question))
     response = llm.chat.completions.create(
         model=model_cfg["model"],
-        messages=[
-            {"role": "user", "content": question},
-        ],
+        messages=messages,
         stream=True,
         extra_body=get_extra_body(model_cfg["id"])
     )

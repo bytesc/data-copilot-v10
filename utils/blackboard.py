@@ -133,6 +133,11 @@ def blackboard_images(board: Dict[str, Dict[str, Any]]) -> List[str]:
     return images if isinstance(images, list) else []
 
 
+def blackboard_images_from_history(history: Optional[List[dict]]) -> List[str]:
+    """Read the images region directly from a conversation history."""
+    return blackboard_images(get_blackboard(history))
+
+
 _REGION_LABELS = {
     SCHEMA: "DB",
     FUNCTIONS: "FUNC",
