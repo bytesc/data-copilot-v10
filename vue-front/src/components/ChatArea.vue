@@ -119,16 +119,6 @@
           <span v-if="uploadingImages" class="upload-preview-status">Uploading...</span>
         </div>
         <div class="question-input-row">
-          <button
-            class="attach-btn"
-            type="button"
-            :disabled="isRunning || uploadingImages || pendingImages.length >= MAX_UPLOAD_IMAGES"
-            :title="`Upload up to ${MAX_UPLOAD_IMAGES} images`"
-            @click="onPickImages"
-          >
-            <span class="attach-icon">🖼</span>
-            <span class="attach-count">{{ pendingImages.length }}/{{ MAX_UPLOAD_IMAGES }}</span>
-          </button>
           <textarea
             v-model="currentQuestion"
             class="question-textarea"
@@ -137,11 +127,23 @@
             :disabled="isRunning"
             @keydown.ctrl.enter.prevent="onSubmitQuestion"
           ></textarea>
-          <button
-            class="send-btn"
-            :disabled="isRunning || uploadingImages || !currentQuestion.trim()"
-            @click="onSubmitQuestion"
-          >Send</button>
+          <div class="input-actions">
+            <button
+              class="attach-btn"
+              type="button"
+              :disabled="isRunning || uploadingImages || pendingImages.length >= MAX_UPLOAD_IMAGES"
+              :title="`Upload up to ${MAX_UPLOAD_IMAGES} images`"
+              @click="onPickImages"
+            >
+              <span class="attach-icon">🖼</span>
+              <span class="attach-count">{{ pendingImages.length }}/{{ MAX_UPLOAD_IMAGES }}</span>
+            </button>
+            <button
+              class="send-btn"
+              :disabled="isRunning || uploadingImages || !currentQuestion.trim()"
+              @click="onSubmitQuestion"
+            >Send</button>
+          </div>
         </div>
         <input
           ref="imageInputRef"
