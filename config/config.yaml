@@ -66,7 +66,7 @@ llm_models:
     model: "glm-5.3-flashx"
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"       # create the corresponding key file in that directory if needed
-    supports_images: false
+    supports_images: true
     reasoning_effort: ["low", "high", "max"]
     extra_params: {}
 
