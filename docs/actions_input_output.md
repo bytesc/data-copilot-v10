@@ -51,6 +51,8 @@
 {"role":"assistant","type":"action_decision","content":{"actions":[{"action":"output_text","text":"..."},{"action":"ask_question","text":"..."}]}}
 ```
 
+Group 1（`explore_*` / `select_images`）和 Group 2（`output_text` / `ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion`）不能混在同一个 `actions` 数组中。例如 `[{"action":"select_images",...},{"action":"output_text",...}]` 是非法的，后端会拒绝并要求重新决策；需要选图并说明时应拆成两个 cycle。
+
 **上下文**
 ```
 [ACTION] content:
@@ -181,7 +183,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 ]}
 ```
 
-`path` 为本地 `tmp_imgs` 下的图片文件名，或完整的 `http(s)` 图片链接；`reason` 为每个图片的一句话选中原因。该 action 属于 Group 1，可与 `explore_*` 动作在同一次 `actions` 数组中批量执行。重复执行会**整体覆盖** `selected_images` 区域；`images: []` 会清空该区域。当用户需求变化（新范围、新分析目标或纠正）时，应重新运行 `select_images` 更新该区域，而不是保留过期的选中图片。
+`path` 为本地 `tmp_imgs` 下的图片文件名，或完整的 `http(s)` 图片链接；`reason` 为每个图片的一句话选中原因。可选图片包括当前 `rencent_generated_images` 区域中的图片、**本会话更早轮次生成过的图片**、会话附件图片和上下文中出现的图片 URL；`rencent_generated_images` 只保留最近一次代码执行的图片，因此更早生成的图片即使不在该区域中，也仍然可以被选中，不应据此判断图片已丢失。历史 `generate_and_execute` 结果中的 markdown 图片 URL（如 `.../tmp_imgs/xxx.png`）可用于提取文件名；用户按“第二张”等位置或描述指代旧图时，应从历史中解析对应文件名并直接选中，而不是要求用户重新生成。该 action 属于 Group 1，可与 `explore_*` 动作在同一次 `actions` 数组中批量执行，但不能与 `output_text` / `ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion` 混用。当前 `selected_images` 已经包含相同路径时不要重复调用；只有选中集合实际变化时才更新。重复执行会**整体覆盖** `selected_images` 区域；`images: []` 会清空该区域。当用户需求变化（新范围、新分析目标或纠正）时，应重新运行 `select_images` 更新该区域，而不是保留过期的选中图片。
 
 **输出**
 ```json
@@ -205,7 +207,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 [ACT select_images] https://example.com/chart.png: 一句话说明为什么保留这张图
 ```
 
-`selected_images` 区域随 `## Blackboard` 段以文本注入所有 LLM 阶段；模型支持图片且 `meta.use_images` 开启时，这些图片会排在上一次代码执行生成的 `images` 之后作为 `image_url` 内容提交。
+`selected_images` 区域随 `## Blackboard` 段以文本注入所有 LLM 阶段；模型支持图片且 `meta.use_images` 开启时，这些图片会排在上一次代码执行生成的 `rencent_generated_images` 之后作为 `image_url` 内容提交。
 
 ---
 
@@ -215,6 +217,8 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 ```json
 {"action": "generate_and_execute", "research_guide": "..."}
 ```
+
+如果用户只是要求查看、观察或描述已有图片，不应调用本 action 重新生成；应先通过 `select_images` 选中原始图片文件名。
 
 **输出（成功）**
 ```json
@@ -254,6 +258,8 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 ```json
 {"action": "output_text", "text": "..."}
 ```
+
+`output_text` 不能用于描述未经过 `select_images` 选中的图片。用户要求查看/描述图片时，必须先单独调用 `select_images`，下一轮再输出描述。
 
 **输出**
 ```json
