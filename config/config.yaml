@@ -58,7 +58,7 @@ llm_models:
     model: "glm-5.3-flash"
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"       # create the corresponding key file in that directory if needed
-    supports_images: false
+    supports_images: true
     style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
     extra_params: {}
   - id: "glm-5.3-flashx"
