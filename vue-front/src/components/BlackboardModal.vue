@@ -105,7 +105,7 @@
         </details>
 
         <details class="bb-region">
-          <summary class="bb-region-title">IMAGES</summary>
+          <summary class="bb-region-title">RECENT_GENERATED_IMAGES</summary>
           <div class="bb-region-body">
             <div v-if="hasImages" class="bb-block">
               <div class="bb-label">Last Code Execution Images</div>
