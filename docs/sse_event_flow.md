@@ -291,7 +291,7 @@
 
 - `{type:"history", history:[...]}` 是最后一条事件，包含完整的 `conversation_history`。前端收到后替换本地历史并重建显示。
 - `history` 的第一个元素是 blackboard 条目（`type:"blackboard"`），保存完整探索结果；普通 act 条目只保留参数、计划和选中项。前端从该条目读取 Blackboard 弹窗内容。
-- `generate_and_execute` 每次执行后会把本次生成的图片列表写入 blackboard 的 `images` 区域（覆盖更新）；该区域仅用于前端展示，不参与 `## Blackboard` 提示词渲染。
+- `generate_and_execute` 每次执行后会把本次生成的图片文件名列表写入 blackboard 的 `images` 区域（覆盖更新），该区域随 `## Blackboard` 段喂给 LLM；`act` 条目中的 `images` 字段仅用于前端展示。
 - 所有 `chunk` 事件仅用于流式临时显示，最终显示由 `history` 决定。
 - 重试次数为 2（首次 + 1 次重试）。explore_functions 无重试；YAML Outline 生成也有 2 次重试。
 - generate_document_unified 的 done 事件会先发一个仅含 content 的 done，再发一个含完整文件元数据的 done。

@@ -117,8 +117,9 @@ def blackboard_selected_functions(board: Dict[str, Dict[str, Any]]) -> Optional[
 def update_code_images(history: Optional[List[dict]], images: Optional[List[str]]) -> List[dict]:
     """Overwrite the IMAGES region with the last code execution's generated image list.
 
-    The images are display-only: they are stored in the blackboard for the frontend
-    but are intentionally excluded from ``_REGION_FIELDS`` so they are never fed to the LLM.
+    The list (filenames of locally saved images, or full URLs for remote images)
+    is rendered into the ``## Blackboard`` prompt section, so the LLM knows which
+    images the last code execution produced.
     """
     if not isinstance(images, list):
         images = []
@@ -137,6 +138,7 @@ _REGION_LABELS = {
     FUNCTIONS: "FUNC",
     KNOWLEDGE: "KNOWLEDGE",
     MCP: "MCP",
+    IMAGES: "IMAGES",
 }
 
 _REGION_FIELDS = {
@@ -163,14 +165,19 @@ _REGION_FIELDS = {
         ("tool_detail", False),
         ("catalog", False),
     ],
+    IMAGES: [
+        ("images", True),
+    ],
 }
 
 
 def blackboard_to_text(board: Dict[str, Dict[str, Any]]) -> str:
     """Render all blackboard regions as a prompt-friendly text block.
 
-    The IMAGES region is display-only and deliberately excluded from the rendered
-    text so it is never fed to the LLM.
+    The IMAGES region (last code execution's generated image list) is rendered as
+    well, so the LLM sees which images were produced. The ``images`` field of the
+    ``generate_and_execute`` act entry, however, stays display-only and is never
+    included by ``history_to_text``.
     """
     sections = []
     for region in REGIONS:

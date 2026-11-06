@@ -5,7 +5,7 @@
 
 每个环节记录三项：**输入**（LLM 决策输出的 JSON / API 入参）、**输出**（写入 `conversation_history` 的条目）、**上下文**（`history_to_text` 转换后喂给 LLM 的文本）。
 
-> 除下文列出的上下文外，每个 LLM 阶段还会额外注入独立的 `## Blackboard` 段（`blackboard_section(conversation_history)`），用于提供完整的 DB schema、函数文档、业务知识和 MCP 工具详情。blackboard 不进入 `history_to_text`，详见 `docs/conversation_history_structure.md`。blackboard 的 `images` 区域（最近一次代码执行生成的图片列表）是纯展示数据，不注入任何 LLM 阶段。
+> 除下文列出的上下文外，每个 LLM 阶段还会额外注入独立的 `## Blackboard` 段（`blackboard_section(conversation_history)`），用于提供完整的 DB schema、函数文档、业务知识和 MCP 工具详情。blackboard 不进入 `history_to_text`，详见 `docs/conversation_history_structure.md`。blackboard 的 `images` 区域（最近一次代码执行生成的图片文件名列表）也随该段注入 LLM。
 
 ---
 
@@ -205,7 +205,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 {error}
 ```
 
-`images` 为本次执行生成的图片文件名列表（去重后；本地图片仅存文件名，外部 http 图片保留完整 URL），仅用于前端展示（渲染时拼接 `/tmp_imgs/`），不进入 LLM 上下文（`history_to_text` 不渲染该字段）；同时会覆盖写入 blackboard 的 `images` 区域。
+`images` 为本次执行生成的图片文件名列表（去重后；本地图片仅存文件名，外部 http 图片保留完整 URL）。`act` 条目的该字段仅用于前端展示，不进入 LLM 上下文（`history_to_text` 不渲染该字段）；同时会覆盖写入 blackboard 的 `images` 区域，并随 `## Blackboard` 段注入所有 LLM 阶段。
 
 ---
 

@@ -296,7 +296,7 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
 | `mcp` | `explore_mcp` | `selected_tools`, `explore_plan`, `tool_detail`, `catalog` |
 | `images` | `generate_and_execute` | `images` |
 
-`images` 区域是纯展示数据：每次 `generate_and_execute` 执行完成后**覆盖更新**为本次生成的图片文件名列表（本地图片仅存文件名，如 `xxx.png`；外部 http 图片保留完整 URL），供前端 Blackboard 弹窗展示，前端渲染时拼接 `/tmp_imgs/`；它**不参与** `blackboard_to_text` 渲染，因此不会喂给 LLM。
+`images` 区域保存最近一次代码执行生成的图片文件名列表（本地图片仅存文件名，如 `xxx.png`；外部 http 图片保留完整 URL）：每次 `generate_and_execute` 执行完成后**覆盖更新**，会经 `blackboard_to_text` 渲染进 `## Blackboard` 提示词段喂给 LLM，前端 Blackboard 弹窗也从该区域读取展示。
 
 blackboard 由 `utils/blackboard.py` 维护：
 
@@ -304,7 +304,7 @@ blackboard 由 `utils/blackboard.py` 维护：
 - `update_code_images()`：`generate_and_execute` 执行完成后覆盖写入 `images` 区域
 - `replace_blackboard()`：保证 history 中只有一个 blackboard 条目，并固定在第一个位置
 - `get_blackboard()`：从完整 history 读取
-- `blackboard_section()`：渲染为 `## Blackboard` 提示词段（`images` 区域除外）
+- `blackboard_section()`：渲染为 `## Blackboard` 提示词段（含 `images` 区域）
 
 ## 通用字段
 
@@ -607,9 +607,13 @@ tool_detail:
 ...
 catalog:
 ...
+
+### IMAGES
+images:
+["xxx.png", "http://.../yyy.png"]
 ```
 
-`images` 区域不参与上述渲染：它是纯展示数据，只在 Blackboard 弹窗中由前端读取，不会被喂给 LLM。
+`images` 区域渲染为 `### IMAGES` 段（字段 `images` 为 JSON 数组），随 `## Blackboard` 一起注入所有 LLM 阶段。聊天记录 `act` 条目里的 `images` 字段仍只用于前端展示，不进入 `history_to_text`。
 
 该段会注入到所有 LLM 阶段：Think、Action、Observe、Act explore_*、generate_and_execute、文档生成。
 
