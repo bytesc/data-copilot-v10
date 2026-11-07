@@ -1,3 +1,10 @@
+-- 只读用户：供后端 exe_sql 执行 SELECT/SHOW 使用，对应 config/config.yaml 的 mysql_readonly。
+-- 本地开发容器授予所有库只读权限（可 show 表与视图）；生产环境请按需收窄到业务库。
+-- 密码需与 config/config.yaml 中 mysql_readonly 保持一致。
+CREATE USER IF NOT EXISTS 'readonly'@'%' IDENTIFIED BY '123456';
+GRANT SELECT, SHOW VIEW ON *.* TO 'readonly'@'%';
+FLUSH PRIVILEGES;
+
 CREATE DATABASE IF NOT EXISTS 2026start_v3 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS med_data_sys DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
