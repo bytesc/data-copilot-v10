@@ -26,6 +26,11 @@ from utils.blackboard import SELECTED_IMAGES, get_blackboard, replace_blackboard
 
 STATIC_FOLDER = "tmp_imgs"
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
+# Server-side guards (the frontend caps uploads too, but clients cannot be
+# trusted): bound how many images a single request may decode/save and how many
+# total bytes it may write to disk.
+MAX_IMAGES_PER_REQUEST = 10
+MAX_TOTAL_IMAGE_BYTES = 50 * 1024 * 1024
 
 
 def _decode_base64(data: str) -> Optional[bytes]:
@@ -111,12 +116,23 @@ def _merge_selected_images(history: List[dict], filenames: List[str]) -> List[di
 
 
 def ingest_uploaded_images(history: Any) -> Any:
-    """Decode base64 ``uploaded`` items, save them, and update history/blackboard."""
+    """Decode base64 ``uploaded`` items, save them, and update history/blackboard.
+
+    Enforces ``MAX_IMAGES_PER_REQUEST`` and ``MAX_TOTAL_IMAGE_BYTES`` across the
+    whole request so a malicious client cannot flood ``tmp_imgs``. The base64
+    string length is used as a conservative upper bound on decoded bytes.
+    """
     if not isinstance(history, list):
         return history
 
     created: List[str] = []
+    processed = 0
+    total_raw_bytes = 0
+    budget_exhausted = False
+
     for entry in history:
+        if budget_exhausted:
+            break
         if not isinstance(entry, dict) or entry.get("role") != "user":
             continue
         uploaded = entry.get("uploaded")
@@ -129,9 +145,17 @@ def ingest_uploaded_images(history: Any) -> Any:
                 if item:
                     names.append(item)
                 continue
+            if processed >= MAX_IMAGES_PER_REQUEST:
+                budget_exhausted = True
+                break
             data = _item_data(item)
             if not data:
                 continue
+            processed += 1
+            total_raw_bytes += len(data)
+            if total_raw_bytes > MAX_TOTAL_IMAGE_BYTES:
+                budget_exhausted = True
+                break
             filename = save_base64_image(data)
             if filename:
                 names.append(filename)
@@ -139,6 +163,13 @@ def ingest_uploaded_images(history: Any) -> Any:
 
         if names:
             entry["uploaded"] = names
+
+    if budget_exhausted:
+        print(
+            "[image_ingest] WARNING: upload limits exceeded "
+            f"(processed={processed}, raw_bytes={total_raw_bytes}); "
+            "extra images were ignored."
+        )
 
     if created:
         history = _merge_selected_images(history, created)

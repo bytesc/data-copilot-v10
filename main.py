@@ -55,6 +55,37 @@ def _require_edit_enabled():
     if not _ENABLE_EDIT:
         raise HTTPException(status_code=403, detail="Editing is disabled by configuration")
 
+
+def _quote_ident(name):
+    """Quote a MySQL identifier with backticks, doubling embedded backticks.
+
+    Only use on identifiers that have already been validated against the real
+    schema (see ``_require_table``); the doubling then guarantees the name
+    cannot break out of the identifier quoting.
+    """
+    if not isinstance(name, str) or not name:
+        raise HTTPException(status_code=400, detail="Invalid SQL identifier")
+    return "`" + name.replace("`", "``") + "`"
+
+
+def _escape_sql_string(value):
+    """Escape a value for use inside a single-quoted MySQL string literal.
+
+    DDL such as ``ALTER TABLE ... COMMENT '<x>'`` cannot use bound parameters,
+    so backslashes (MySQL's default escape character) and single quotes must be
+    escaped explicitly. The backslash must be escaped first.
+    """
+    if value is None:
+        return ""
+    return str(value).replace("\\", "\\\\").replace("'", "''")
+
+
+def _require_table(inspector, table_name):
+    """Return ``table_name`` only when it names a real table (whitelist)."""
+    if not isinstance(table_name, str) or table_name not in inspector.get_table_names():
+        raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+    return table_name
+
 from data_access.base_knowledge_db import create_base_knowledge_table
 from data_access.db_query_guide_db import create_db_query_guide_table
 from data_access.doc_guide_db import create_doc_guide_table
@@ -323,7 +354,7 @@ async def get_db_overview(request: Request):
                 rows = []
                 try:
                     with engine.connect() as conn:
-                        df = pd.read_sql(text(f"SELECT * FROM `{table_name}` LIMIT 5"), conn)
+                        df = pd.read_sql(text(f"SELECT * FROM {_quote_ident(table_name)} LIMIT 5"), conn)
                         for _, row in df.iterrows():
                             rows.append({k: str(v) if v is not None else "" for k, v in row.items()})
                 except Exception:
@@ -357,10 +388,9 @@ async def drop_table(table_name: str):
     def _drop():
         from sqlalchemy import inspect, text
         inspector = inspect(engine)
-        if not inspector.has_table(table_name):
-            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+        safe_table = _require_table(inspector, table_name)
         with engine.connect() as conn:
-            conn.execute(text(f"DROP TABLE IF EXISTS `{table_name}`"))
+            conn.execute(text(f"DROP TABLE IF EXISTS {_quote_ident(safe_table)}"))
             conn.commit()
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(executor, _drop)
@@ -384,9 +414,8 @@ async def export_table_data_csv(table_name: str):
     def _export():
         from sqlalchemy import inspect, text
         inspector = inspect(engine)
-        if not inspector.has_table(table_name):
-            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
-        df = pd.read_sql(text(f"SELECT * FROM `{table_name}`"), engine)
+        safe_table = _require_table(inspector, table_name)
+        df = pd.read_sql(text(f"SELECT * FROM {_quote_ident(safe_table)}"), engine)
         buf = io.BytesIO()
         df.to_csv(buf, index=False, encoding="utf-8-sig")
         buf.seek(0)
@@ -449,11 +478,10 @@ async def export_comments_csv(table_name: str):
         from sqlalchemy import inspect
         from sqlalchemy.exc import SQLAlchemyError
         inspector = inspect(engine)
-        if not inspector.has_table(table_name):
-            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
-        table_comment = inspector.get_table_comment(table_name)
+        safe_table = _require_table(inspector, table_name)
+        table_comment = inspector.get_table_comment(safe_table)
         table_comment_text = (table_comment or {}).get("text", "") or ""
-        columns = inspector.get_columns(table_name)
+        columns = inspector.get_columns(safe_table)
         rows = []
         rows.append({"column_name": "__table_comment__", "comment": table_comment_text})
         for col in columns:
@@ -485,8 +513,9 @@ async def import_comments_csv(table_name: str, file: UploadFile = File(...)):
         from sqlalchemy.exc import SQLAlchemyError
         try:
             inspector = inspect(engine)
-            if not inspector.has_table(table_name):
+            if table_name not in inspector.get_table_names():
                 return {"success": False, "error": f"Table '{table_name}' not found"}
+            safe_table = _quote_ident(table_name)
             df = pd.read_csv(io.BytesIO(bytes_content))
             if "column_name" not in df.columns or "comment" not in df.columns:
                 return {"success": False, "error": "CSV must contain 'column_name' and 'comment' columns"}
@@ -508,17 +537,18 @@ async def import_comments_csv(table_name: str, file: UploadFile = File(...)):
                     if not col_name:
                         continue
                     if col_name == "__table_comment__":
-                        escaped = comment.replace("'", "''")
-                        conn.execute(text(f"ALTER TABLE `{table_name}` COMMENT = '{escaped}'"))
+                        escaped = _escape_sql_string(comment)
+                        conn.execute(text(f"ALTER TABLE {safe_table} COMMENT = '{escaped}'"))
                     elif col_name in columns_info:
                         col_info = columns_info[col_name]
+                        safe_col = _quote_ident(col_info["name"])
                         col_type = col_info["type"]
                         nullable = col_info.get("nullable", True)
                         default = col_info.get("default")
-                        escaped = comment.replace("'", "''")
+                        escaped = _escape_sql_string(comment)
                         nullable_str = "NULL" if nullable else "NOT NULL"
                         default_str = f"DEFAULT {default}" if default is not None else ""
-                        sql = f"ALTER TABLE `{table_name}` MODIFY COLUMN `{col_name}` {col_type} {nullable_str} {default_str} COMMENT '{escaped}'"
+                        sql = f"ALTER TABLE {safe_table} MODIFY COLUMN {safe_col} {col_type} {nullable_str} {default_str} COMMENT '{escaped}'"
                         conn.execute(text(sql))
                 conn.commit()
             return {
@@ -537,10 +567,12 @@ async def import_comments_csv(table_name: str, file: UploadFile = File(...)):
 async def update_table_comment(table_name: str, entry: CommentUpdate):
     _require_edit_enabled()
     def _update():
-        from sqlalchemy import text
-        escaped = entry.comment.replace("'", "''")
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        safe_table = _require_table(inspector, table_name)
+        escaped = _escape_sql_string(entry.comment)
         with engine.connect() as conn:
-            conn.execute(text(f"ALTER TABLE `{table_name}` COMMENT = '{escaped}'"))
+            conn.execute(text(f"ALTER TABLE {_quote_ident(safe_table)} COMMENT = '{escaped}'"))
             conn.commit()
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(executor, _update)
@@ -553,17 +585,19 @@ async def update_column_comment(table_name: str, column_name: str, entry: Commen
     def _update():
         from sqlalchemy import inspect, text
         inspector = inspect(engine)
-        columns = inspector.get_columns(table_name)
+        safe_table = _require_table(inspector, table_name)
+        columns = inspector.get_columns(safe_table)
         col_info = next((c for c in columns if c["name"] == column_name), None)
         if not col_info:
             raise HTTPException(status_code=404, detail=f"Column '{column_name}' not found in '{table_name}'")
+        safe_column = col_info["name"]
         col_type = col_info["type"]
         nullable = col_info.get("nullable", True)
         default = col_info.get("default")
-        escaped = entry.comment.replace("'", "''")
+        escaped = _escape_sql_string(entry.comment)
         nullable_str = "NULL" if nullable else "NOT NULL"
         default_str = f"DEFAULT {default}" if default is not None else ""
-        sql = f"ALTER TABLE `{table_name}` MODIFY COLUMN `{column_name}` {col_type} {nullable_str} {default_str} COMMENT '{escaped}'"
+        sql = f"ALTER TABLE {_quote_ident(safe_table)} MODIFY COLUMN {_quote_ident(safe_column)} {col_type} {nullable_str} {default_str} COMMENT '{escaped}'"
         with engine.connect() as conn:
             conn.execute(text(sql))
             conn.commit()
@@ -607,8 +641,13 @@ async def log_user_input(request: Request, user_input: UserInputLog):
 
 @app.post("/api/exe-sql/")
 async def exe_sql(request: Request, user_input: AgentInput):
+    if not is_read_only_sql(user_input.question):
+        raise HTTPException(
+            status_code=400,
+            detail="Only single read-only statements (SELECT/SHOW/DESCRIBE/EXPLAIN/WITH) are allowed",
+        )
     loop = asyncio.get_event_loop()
-    ans = await loop.run_in_executor(executor, execute_select, engine, user_input.question)
+    ans = await loop.run_in_executor(executor, execute_select, read_engine, user_input.question)
     processed_data = {
         "ans": ans,
         "type": "success",
@@ -661,10 +700,10 @@ async def get_graph_api(request: Request, user_input: AgentInputDict):
 
 
 from agent.tools.copilot.utils.read_db import get_rows_from_all_tables, get_table_comments_dict, execute_select, \
-    get_all_comments
+    get_all_comments, is_read_only_sql
 from agent.tools.copilot.sql_code import filter_db_fields, filter_db_fields_stream
 from agent.tools.get_function_info import filter_functions_stream
-from agent.tools.tools_def import engine, llm, draw_graph
+from agent.tools.tools_def import engine, read_engine, llm, draw_graph
 
 
 @app.post("/api/db-slice/")
