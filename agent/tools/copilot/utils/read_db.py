@@ -337,8 +337,10 @@ def execute_sql_3(engine, sql):
                 print(f"Executed statement {executed_count}: {statement[:100]}...")
             except SQLAlchemyError as e:
                 print(f"Error at statement {executed_count + 1}: {e}")
+                connection.rollback()
                 raise e  # 或 continue 跳过错误继续执行
 
+        connection.commit()
         return executed_count
 
 def execute_select(engine, sql):
