@@ -284,11 +284,17 @@ def _get_client(model_id=None):
     cfg = get_model_config(model_id)
     if cfg is None:
         raise ValueError("No LLM model configured")
-    client = _clients.get(cfg["id"])
+    cid = cfg["id"]
+    client = _clients.get(cid)
     if client is None:
-        key_path = os.path.join(KEY_FILE_DIR, cfg["key_file"])
-        client = OpenAI(api_key=get_api_key_from_file(key_path), base_url=cfg["url"])
-        _clients[cfg["id"]] = client
+        with _lock:
+            # Double-checked locking: another thread may have created the
+            # client while we were waiting for the lock.
+            client = _clients.get(cid)
+            if client is None:
+                key_path = os.path.join(KEY_FILE_DIR, cfg["key_file"])
+                client = OpenAI(api_key=get_api_key_from_file(key_path), base_url=cfg["url"])
+                _clients[cid] = client
     return client
 
 
@@ -298,22 +304,25 @@ def get_llm(model_id=None):
 
 
 class DynamicLLM:
-    """代理对象：始终委托给当前选中模型的 OpenAI client，实现运行时无缝切换模型"""
+    """代理对象：始终委托给当前选中模型的 OpenAI client，实现运行时无缝切换模型。
 
-    def __init__(self):
-        self._llm_client = None
-        self._llm_client_id = None
+    Resolution reads the per-request model selection from the contextvar and
+    then goes through the per-model-id client cache. It must NOT cache the
+    resolved client on ``self``: ``llm`` is a process-wide singleton, so an
+    instance attribute would be shared across concurrent requests and one
+    request could return another request's client (wrong base_url / api_key).
+    """
 
     def _resolve(self):
         cfg = get_model_config()
-        cid = cfg["id"]
-        if self._llm_client is None or self._llm_client_id != cid:
-            self._llm_client = _get_client(cid)
-            self._llm_client_id = cid
-        return self._llm_client
+        if cfg is None:
+            raise ValueError("No LLM model configured")
+        return _get_client(cfg["id"])
 
     def __getattr__(self, name):
-        if name.startswith("_llm_"):
+        # Only forward real client access; keep private attribute lookups from
+        # recursing into the proxy.
+        if name.startswith("_"):
             raise AttributeError(name)
         return getattr(self._resolve(), name)
 
