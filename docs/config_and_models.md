@@ -7,8 +7,12 @@
 server_port: 8008
 server_host: "0.0.0.0"
 
-# 用户业务数据库（用于查询分析）
+# 用户业务数据库（用于查询分析，同时供需修改数据库的功能使用，如建表、改注释、导入）
 mysql: "mysql+pymysql://root:123456@localhost:3306/singapore_land_2"
+
+# 业务数据库只读用户（可选）：exe_sql 执行 SELECT/SHOW 等只读 SQL 时使用该账号，
+# 仅需 SELECT、SHOW VIEW 权限（可 show 表与视图）；留空或删除则回退到 mysql。
+mysql_readonly: "mysql+pymysql://readonly:123456@localhost:3306/singapore_land_2"
 
 # 系统数据库（会话日志、知识库、操作审计）
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
@@ -82,6 +86,15 @@ enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 > 图片能力需以模型供应商实际支持为准。当前仓库配置中 `deepseek-v4.1-flash`、`glm-5.3-flash`、`glm-5.3-flashx` 已开启 `supports_images: true`；`deepseek-v4-flash` 为 `false`。
 
 **DSN 格式**: `mysql+pymysql://用户名:密码@主机:端口/数据库名`
+
+> **只读用户说明**：`mysql_readonly` 仅被 `exe_sql` 用于执行只读 SQL（含 `SHOW`）；建表、改注释、导入等改库功能仍使用 `mysql`。
+> 创建只读账号（仅需可 show 表和视图）：
+> ```sql
+> CREATE USER 'readonly'@'%' IDENTIFIED BY '123456';
+> GRANT SELECT, SHOW VIEW ON singapore_land_2.* TO 'readonly'@'%';
+> FLUSH PRIVILEGES;
+> ```
+> `SELECT` 覆盖查询与 `SHOW TABLES/COLUMNS`，`SHOW VIEW` 覆盖视图定义（`SHOW CREATE VIEW`）。
 
 ---
 

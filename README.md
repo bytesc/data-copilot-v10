@@ -144,8 +144,11 @@ mysql -u root -p < init.sql
 server_port: 8008
 server_host: "0.0.0.0"
 
-# 用户数据数据库
+# 用户数据数据库（查询分析，同时供需修改数据库的功能使用）
 mysql: "mysql+pymysql://root:123456@localhost:3306/singapore_land_2"
+
+# 业务数据库只读用户（可选）：exe_sql 的 SELECT/SHOW 使用该账号，仅需 SELECT、SHOW VIEW；留空回退到 mysql
+mysql_readonly: "mysql+pymysql://readonly:123456@localhost:3306/singapore_land_2"
 
 # 系统数据库（会话日志、知识库等）
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
