@@ -3,6 +3,7 @@ from sqlalchemy import text, inspect
 from sqlalchemy.exc import SQLAlchemyError
 
 from data_access.db_conn import engine
+from utils.sql_guard import assert_read_only_sql
 
 tables_data = None
 
@@ -237,6 +238,7 @@ def execute_sql_2(sql):
 
 
 def execute_select(sql):
+    sql = assert_read_only_sql(sql)
     try:
         with engine.connect() as connection:
             result_df = pd.read_sql_query(text(sql), connection)

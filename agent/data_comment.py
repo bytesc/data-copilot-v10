@@ -51,11 +51,15 @@ only write comment for the specified  table name:
     ```
     without any additional comments, explanations or cmds !!!
     """
-        print(ans + "No code was generated.")
+        print(str(ans.content) + "No code was generated.")
 
     return result_sql
 
+
 def get_llm_data_comment(extracted_text, table_name):
     sql = get_llm_data_comment_func(extracted_text, table_name)
+    if not sql or not str(sql).strip():
+        print("[WARNING] No SQL comment statements were generated; skipping comment update.")
+        return False
     execute_sql_3(engine, sql)
     return True

@@ -74,7 +74,7 @@ code should only be in a md code block:
 ```
 without any additional comments, explanations or cmds !!!
 """
-            print(ans + "No code was generated.")
+            print(str(ans.content) + "No code was generated.")
             continue
         else:
             return result_sql
