@@ -21,6 +21,11 @@ setup_chinese_font()
 DATABASE_URL = config_data['mysql']
 engine = sqlalchemy.create_engine(DATABASE_URL)
 
+# exe_sql uses the read-only user to run SELECT/SHOW. Mutating features keep using engine
+# (the first user). Falls back to mysql when mysql_readonly is not configured.
+READONLY_DATABASE_URL = config_data.get('mysql_readonly') or DATABASE_URL
+read_engine = sqlalchemy.create_engine(READONLY_DATABASE_URL)
+
 STATIC_URL = config_data['static_path']
 STATIC_FOLDER = "tmp_imgs"
 
@@ -221,7 +226,7 @@ def exe_sql(sql: str) -> pd.DataFrame:
         # ... and so on
         ```
     """
-    ans = execute_select(engine, sql)
+    ans = execute_select(read_engine, sql)
     return ans
 
 
