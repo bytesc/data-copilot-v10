@@ -18,7 +18,12 @@ import re
 
 from utils.sql_safety import quote_ident
 
-_TRAILING_COMMENT_RE = re.compile(r"\s+COMMENT\s+'(?:[^']|'')*'\s*$", re.IGNORECASE | re.DOTALL)
+# MySQL renders an existing comment literal with backslash escaping by default
+# (e.g. ``COMMENT 'it\'s'``) and with doubled quotes under NO_BACKSLASH_ESCAPES.
+# Handle both, plus escaped backslashes, so the old trailing COMMENT is always
+# stripped before the replacement is appended (otherwise two COMMENT clauses are
+# emitted and the ALTER fails).
+_TRAILING_COMMENT_RE = re.compile(r"\s+COMMENT\s+'(?:[^'\\]|\\.|'')*'\s*$", re.IGNORECASE | re.DOTALL)
 
 
 def _find_column_definition(create_sql, column_name):

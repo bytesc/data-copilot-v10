@@ -890,11 +890,16 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 ```json
 {
   "status": "success",
+  "success": true,
+  "message": "Comments were generated and applied to table 'uploaded_data'.",
   "table_name": "uploaded_data",
+  "comment_applied": true,
   "extracted_text_length": 2500,
   "preview": "提取的内容前500字..."
 }
 ```
+
+> 当模型未返回有效注释 JSON、或注释未能写入目标表（如表不存在）时，接口仍返回 `200`，但 `success` 为 `false`、`status` 为 `"error"`，并在 `error` 字段给出原因。
 
 ---
 

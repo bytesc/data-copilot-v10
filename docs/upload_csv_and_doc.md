@@ -177,15 +177,18 @@ email,邮箱地址
 ```json
 {
   "status": "success",
+  "success": true,
+  "message": "Comments were generated and applied to table 'uploaded_data'.",
   "table_name": "uploaded_data",
+  "comment_applied": true,
   "extracted_text_length": 2500,
   "preview": "提取的内容前500字..."
 }
 ```
 
-> LLM 生成的注释 SQL 执行结果当前不返回给前端。如需确认可在 Comments 页面查看。
+> 接口会返回注释写入结果：若模型未返回有效注释 JSON 或注释未能写入目标表，仍返回 `200`，但 `success` 为 `false`、`status` 为 `"error"`，并在 `error` 字段给出原因。
 
-**失败**: 返回 `HTTP 500`，detail 为错误信息。
+**失败**: 文件读取/解析异常返回 `HTTP 500`，detail 为错误信息。
 
 ### 前置条件
 

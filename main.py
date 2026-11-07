@@ -884,17 +884,38 @@ async def upload_txt(
             with perf_context("/upload-txt/"):
                 return get_llm_data_comment(text, table)
 
-        result = await loop.run_in_executor(
+        comment_applied = await loop.run_in_executor(
             executor,
             _run_in_llm_context(_timed_data_comment, extracted_text, table_name),
         )
+        comment_applied = bool(comment_applied)
 
-        result = {
-            "status": "success",
-            "table_name": table_name,
-            "extracted_text_length": len(extracted_text),
-            "preview": extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text
-        }
+        preview = extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text
+        if comment_applied:
+            result = {
+                "status": "success",
+                "success": True,
+                "message": f"Comments were generated and applied to table '{table_name}'.",
+                "table_name": table_name,
+                "comment_applied": True,
+                "extracted_text_length": len(extracted_text),
+                "preview": preview,
+            }
+        else:
+            error = (
+                f"No comments were applied to table '{table_name}'. "
+                "Make sure the table exists and that the model returned valid comment JSON."
+            )
+            result = {
+                "status": "error",
+                "success": False,
+                "error": error,
+                "message": error,
+                "table_name": table_name,
+                "comment_applied": False,
+                "extracted_text_length": len(extracted_text),
+                "preview": preview,
+            }
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}")

@@ -29,7 +29,7 @@ observe_cycle_log = Table(
     Column("sub_phase", String(100), comment="子阶段: filter_db/filter_func/plan/gen_code/exec_code/result"),
     Column("prompt", LONGTEXT, comment="发送给LLM的prompt"),
     Column("response", LONGTEXT, comment="LLM返回的响应"),
-    Column("user_decision", String(50), comment="用户决策: approve/reject/edit/skip"),
+    Column("user_decision", String(2000), comment="用户决策/输入: approve/reject/edit/skip 或用户输入文本(最多2000字)"),
     Column("exec_code", LONGTEXT, comment="执行的代码"),
     Column("exec_result", LONGTEXT, comment="执行结果"),
     Column("exec_error", LONGTEXT, comment="执行错误"),
@@ -59,6 +59,10 @@ def create_observe_log_tables():
     _ensure_column_exists(sys_engine, "observe_cycle_log", "exec_code", "LONGTEXT COMMENT 'exec_code'")
     _ensure_column_exists(sys_engine, "observe_cycle_log", "exec_result", "LONGTEXT COMMENT 'exec_result'")
     _ensure_column_exists(sys_engine, "observe_cycle_log", "exec_error", "LONGTEXT COMMENT 'exec_error'")
+    # user_decision also stores raw user input (up to 2000 chars) from
+    # /api/log-user-input/; widen legacy VARCHAR(50) columns so those writes no
+    # longer fail under MySQL strict mode and get silently dropped.
+    _ensure_column_exists(sys_engine, "observe_cycle_log", "user_decision", "VARCHAR(2000) COMMENT 'user decision/input'")
     _ensure_column_exists(sys_engine, "observe_session_log", "question", "LONGTEXT COMMENT 'question'")
     _ensure_column_exists(sys_engine, "observe_session_log", "conversation_history", "LONGTEXT COMMENT 'conversation history' AFTER total_tokens")
     _ensure_column_exists(sys_engine, "observe_session_log", "trimmed_context", "LONGTEXT COMMENT 'trimmed context for LLM' AFTER conversation_history")
@@ -113,7 +117,7 @@ def log_observe_cycle(
                     sub_phase=sub_phase,
                     prompt=prompt[:10000] if prompt else "",
                     response=response[:10000] if response else "",
-                    user_decision=user_decision,
+                    user_decision=user_decision[:2000] if user_decision else "",
                     exec_code=exec_code[:10000] if exec_code else "",
                     exec_result=exec_result[:10000] if exec_result else "",
                     exec_error=exec_error[:2000] if exec_error else "",
