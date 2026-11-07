@@ -341,8 +341,8 @@ Example:
             if reasoning:
                 yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
 
-        selected_fields = parse_selected_fields_json(raw) or {}
-        if selected_fields is not None and isinstance(selected_fields, dict):
+        selected_fields = parse_selected_fields_json(raw)
+        if isinstance(selected_fields, dict):
             explore_plan = selected_fields.pop("plan", "")
             selected_guide_keys = selected_fields.pop("selected_guides", []) or []
             tables_dict = selected_fields.pop("tables", selected_fields) if "tables" in selected_fields else selected_fields

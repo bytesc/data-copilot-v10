@@ -206,9 +206,9 @@ def execute_sql(sql):
         except SQLAlchemyError as e:
             # 如果发生错误，回滚事务
             connection.rollback()
-            # 打印错误信息
+            # 打印错误信息并抛出，避免调用方把异常对象当返回值使用
             print(f"An error occurred: {e}")
-            return e
+            raise
 
 
 def execute_sql_2(sql):
@@ -242,9 +242,9 @@ def execute_select(sql):
             result_df = pd.read_sql_query(text(sql), connection)
         return result_df
     except SQLAlchemyError as e:
-        # 如果发生错误，打印错误信息
+        # 如果发生错误，打印错误信息并抛出，避免调用方把异常对象当作 DataFrame 使用
         print(f"An error occurred: {e}")
-        return e
+        raise
 
 
 def get_table_creation_statements():

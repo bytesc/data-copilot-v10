@@ -5,8 +5,11 @@ import asyncio
 import contextvars
 import io
 import json
+import math
 import mimetypes
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime
+from decimal import Decimal
 from typing import List, Optional, Dict, Any
 import pandas as pd
 import sqlalchemy
@@ -50,6 +53,11 @@ from utils.perf_log import perf_api, perf_context
 from data_access.report_log import create_report_log_table, get_generated_files
 _ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
 _ENABLE_EDIT = config_data.get('enable_edit', True)
+
+# Paths whose JSON body is a plain payload (no {meta, data} envelope). These
+# endpoints do not trigger an LLM call, so they neither need nor accept the
+# unified request envelope enforced by ``unified_request_envelope``.
+_ENVELOPE_EXEMPT_PREFIXES = ("/api/models/",)
 
 
 def _require_edit_enabled():
@@ -122,39 +130,87 @@ def _apply_meta_json(raw):
         pass
 
 
+def _json_scalar(value):
+    """Coerce a DataFrame cell into a type json.dumps(allow_nan=False) accepts.
+
+    Starlette's JSONResponse uses plain ``json.dumps`` without a ``default``
+    hook and with ``allow_nan=False``, so numpy scalars, datetimes, NaN/NaT and
+    pandas NA all raise. Normalize them to native Python values (dates become
+    ISO strings, missing/non-finite values become None).
+    """
+    if value is None:
+        return None
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, (list, tuple, dict)):
+        return value
+    # numpy scalars (np.int64/np.float64/np.bool_/np.datetime64 ...) -> python natives
+    if hasattr(value, "item"):
+        try:
+            value = value.item()
+        except Exception:
+            pass
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    # Last-resort guard so an unexpected cell type can never raise on serialization.
+    return str(value)
+
+
+def _dataframe_to_records(df):
+    """Convert a DataFrame to a JSON-serializable list of records."""
+    if not isinstance(df, pd.DataFrame):
+        return df
+    return [
+        {k: _json_scalar(v) for k, v in record.items()}
+        for record in df.to_dict(orient="records")
+    ]
+
+
 @app.middleware("http")
 async def unified_request_envelope(request: Request, call_next):
     """解析 {meta, data} 信封：meta 用于本次 LLM 调用，data 原样交给原有接口。"""
     content_type = request.headers.get("content-type", "").lower()
     if request.method in ("POST", "PUT", "PATCH") and content_type.startswith("application/json"):
-        body = await request.body()
-        try:
-            payload = json.loads(body) if body else None
-        except (TypeError, ValueError):
-            payload = None
-        if not (
-            isinstance(payload, dict)
-            and isinstance(payload.get("meta"), dict)
-            and "data" in payload
-        ):
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "detail": 'Request body must be JSON: {"meta": {...}, "data": {...}}'
-                },
-            )
-        _apply_meta(payload["meta"])
-        data = payload["data"]
-        if isinstance(data, dict) and isinstance(data.get("conversation_history"), list):
-            data["conversation_history"] = ingest_uploaded_images(data["conversation_history"])
-        inner = json.dumps(payload["data"], ensure_ascii=False).encode("utf-8")
-        request._body = inner
-        headers = [
-            (k, v) for k, v in request.scope["headers"]
-            if k.lower() != b"content-length"
-        ]
-        headers.append((b"content-length", str(len(inner)).encode()))
-        request.scope["headers"] = headers
+        if not request.url.path.startswith(_ENVELOPE_EXEMPT_PREFIXES):
+            body = await request.body()
+            try:
+                payload = json.loads(body) if body else None
+            except (TypeError, ValueError):
+                payload = None
+            if not (
+                isinstance(payload, dict)
+                and isinstance(payload.get("meta"), dict)
+                and "data" in payload
+            ):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "detail": 'Request body must be JSON: {"meta": {...}, "data": {...}}'
+                    },
+                )
+            _apply_meta(payload["meta"])
+            data = payload["data"]
+            if isinstance(data, dict) and isinstance(data.get("conversation_history"), list):
+                data["conversation_history"] = ingest_uploaded_images(data["conversation_history"])
+            inner = json.dumps(payload["data"], ensure_ascii=False).encode("utf-8")
+            request._body = inner
+            headers = [
+                (k, v) for k, v in request.scope["headers"]
+                if k.lower() != b"content-length"
+            ]
+            headers.append((b"content-length", str(len(inner)).encode()))
+            request.scope["headers"] = headers
     return await call_next(request)
 
 
@@ -612,7 +668,7 @@ async def exe_sql(request: Request, user_input: AgentInput):
     loop = asyncio.get_event_loop()
     ans = await loop.run_in_executor(executor, execute_select, read_engine, user_input.question)
     processed_data = {
-        "ans": ans,
+        "ans": _dataframe_to_records(ans),
         "type": "success",
         "msg": "处理成功",
         "session_id": user_input.session_id or ""
