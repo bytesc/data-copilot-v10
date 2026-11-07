@@ -1,4 +1,5 @@
 import json
+import os
 import yaml
 import threading
 import urllib.request
@@ -8,7 +9,14 @@ from urllib.parse import urlparse
 from typing import Optional
 
 
-MCP_SERVERS_CONFIG_PATH = "./config/mcp_servers.yaml"
+# Resolve the config path relative to this file so the server can be started
+# from any working directory. The previous CWD-relative path made a valid
+# config look "missing" when the process was launched elsewhere.
+MCP_SERVERS_CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+    "config",
+    "mcp_servers.yaml",
+)
 
 _mcp_servers_cache = None
 
@@ -30,12 +38,18 @@ def load_mcp_servers() -> list[dict]:
     if _mcp_servers_cache is not None:
         return _mcp_servers_cache
     try:
-        with open(MCP_SERVERS_CONFIG_PATH, "r") as f:
+        with open(MCP_SERVERS_CONFIG_PATH, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
-        _mcp_servers_cache = data.get("mcp_servers", []) if data else []
+    except FileNotFoundError:
+        # MCP is optional: a missing config simply means no servers are set up.
+        # Do not raise, otherwise an optional feature blocks startup.
+        print(f"[WARNING] MCP servers config not found at {MCP_SERVERS_CONFIG_PATH}; MCP disabled")
+        _mcp_servers_cache = []
         return _mcp_servers_cache
     except Exception as e:
         raise MCPError(f"Failed to load MCP servers config: {e}")
+    _mcp_servers_cache = data.get("mcp_servers", []) if data else []
+    return _mcp_servers_cache
 
 
 def get_mcp_server(name: str) -> Optional[dict]:

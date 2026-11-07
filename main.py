@@ -54,12 +54,6 @@ from data_access.report_log import create_report_log_table, get_generated_files
 _ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
 _ENABLE_EDIT = config_data.get('enable_edit', True)
 
-# Paths whose JSON body is a plain payload (no {meta, data} envelope). These
-# endpoints do not trigger an LLM call, so they neither need nor accept the
-# unified request envelope enforced by ``unified_request_envelope``.
-_ENVELOPE_EXEMPT_PREFIXES = ("/api/models/",)
-
-
 def _require_edit_enabled():
     if not _ENABLE_EDIT:
         raise HTTPException(status_code=403, detail="Editing is disabled by configuration")
@@ -179,31 +173,32 @@ def _dataframe_to_records(df):
 
 @app.middleware("http")
 async def unified_request_envelope(request: Request, call_next):
-    """解析 {meta, data} 信封：meta 用于本次 LLM 调用，data 原样交给原有接口。"""
+    """解析 {meta, data} 信封，兼容普通 JSON 主体。
+
+    携带信封的请求（``{"meta": {...}, "data": ...}``）会被解包：meta 用于本次
+    LLM 调用（模型/Depth/Style/图片），data 作为新主体转发给原接口。
+
+    未携带信封的 JSON 主体原样透传。非 LLM 接口（如 sys-knowledge CRUD、
+    doc-workspace、/api/models/* 等）直接发送普通 JSON，不应被强制要求信封；
+    同时外部调用方既可以用普通 JSON，也可以用信封，两种方式都可用。
+    """
     content_type = request.headers.get("content-type", "").lower()
     if request.method in ("POST", "PUT", "PATCH") and content_type.startswith("application/json"):
-        if not request.url.path.startswith(_ENVELOPE_EXEMPT_PREFIXES):
-            body = await request.body()
-            try:
-                payload = json.loads(body) if body else None
-            except (TypeError, ValueError):
-                payload = None
-            if not (
-                isinstance(payload, dict)
-                and isinstance(payload.get("meta"), dict)
-                and "data" in payload
-            ):
-                return JSONResponse(
-                    status_code=400,
-                    content={
-                        "detail": 'Request body must be JSON: {"meta": {...}, "data": {...}}'
-                    },
-                )
+        body = await request.body()
+        try:
+            payload = json.loads(body) if body else None
+        except (TypeError, ValueError):
+            payload = None
+        if (
+            isinstance(payload, dict)
+            and isinstance(payload.get("meta"), dict)
+            and "data" in payload
+        ):
             _apply_meta(payload["meta"])
             data = payload["data"]
             if isinstance(data, dict) and isinstance(data.get("conversation_history"), list):
                 data["conversation_history"] = ingest_uploaded_images(data["conversation_history"])
-            inner = json.dumps(payload["data"], ensure_ascii=False).encode("utf-8")
+            inner = json.dumps(data, ensure_ascii=False).encode("utf-8")
             request._body = inner
             headers = [
                 (k, v) for k, v in request.scope["headers"]
@@ -710,16 +705,12 @@ async def db_slice(request: Request):
         None,
         5
     )
-    from datetime import date, datetime
-    def convert_date(obj):
-        if isinstance(obj, (date, datetime)):
-            return obj.isoformat()
-        return obj
-
+    # 用 _json_scalar 归一化每个单元格：NaN/NaT/numpy 标量/Decimal/datetime
+    # 等都无法被 JSONResponse 的 json.dumps(allow_nan=False) 序列化，直接输出会 500。
     first_five_rows_json = {
         table_name: {
             "columns": rows.columns.tolist(),
-            "data": [[convert_date(item) for item in row] for row in rows.values.tolist()]
+            "data": [[_json_scalar(item) for item in row] for row in rows.values.tolist()]
         }
         for table_name, rows in first_five_rows.items()
     }
@@ -1032,7 +1023,11 @@ async def list_custom_functions():
 async def list_mcp_tools():
     from agent.tools.mcp_client import load_mcp_servers, MCPClient
 
-    servers = load_mcp_servers()
+    try:
+        servers = load_mcp_servers()
+    except Exception as e:
+        print(f"[WARNING] Failed to load MCP servers: {e}")
+        return JSONResponse(content=[])
     results = []
 
     async def _fetch(srv):
@@ -1085,28 +1080,30 @@ def _check_mcp_servers():
     try:
         from agent.tools.mcp_client import load_mcp_servers
         servers = load_mcp_servers()
-        if not servers:
-            return
-        import socket
-        for srv in servers:
-            name = srv.get("name", "?")
-            transport = srv.get("transport", "stdio")
-            if transport != "sse":
-                continue
-            url = srv.get("url", "")
-            if not url:
-                continue
-            host, port = _parse_host_port(url)
-            if host and port:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(2)
-                try:
-                    s.connect((host, port))
-                    s.close()
-                except Exception:
-                    print(f"[WARNING] MCP server '{name}' ({url}) is not running")
-    except ImportError:
-        pass
+    except Exception as e:
+        # MCP is optional; a missing/invalid config must never block startup.
+        print(f"[WARNING] Skipping MCP server check: {e}")
+        return
+    if not servers:
+        return
+    import socket
+    for srv in servers:
+        name = srv.get("name", "?")
+        transport = srv.get("transport", "stdio")
+        if transport != "sse":
+            continue
+        url = srv.get("url", "")
+        if not url:
+            continue
+        host, port = _parse_host_port(url)
+        if host and port:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2)
+            try:
+                s.connect((host, port))
+                s.close()
+            except Exception:
+                print(f"[WARNING] MCP server '{name}' ({url}) is not running")
 
 
 def _parse_host_port(url: str):

@@ -71,41 +71,70 @@ def _insert_rows_bulk(df, table_name):
     df.to_sql(name=table_name, con=engine, index=False, if_exists='append')
 
 
-def _validate_rows(df, column_types):
+# Cap the number of reported validation errors so a large broken CSV cannot
+# produce an unbounded error string that is then returned to the client.
+_MAX_VALIDATION_ERRORS = 100
+
+
+def _validate_rows(df, column_types, max_errors=_MAX_VALIDATION_ERRORS):
+    """Validate column types with vectorized per-column checks.
+
+    The previous implementation iterated every cell with ``df.iloc[i][col]``,
+    which builds a whole Series per row (O(rows * columns) Series allocations)
+    and was very slow on large uploads. Each dtype is now checked once with a
+    vectorized mask over the entire column.
+    """
     errors = []
+    row_count = len(df)
+
     for col in df.columns:
         dtype = column_types[col]
-        for i in range(len(df)):
-            val = df.iloc[i][col]
-            line_no = i + 2
-            if pd.isna(val):
-                continue
-            if isinstance(dtype, Integer):
-                try:
-                    if not isinstance(val, (int, float, np.integer, np.floating)):
-                        int(val)
-                    elif isinstance(val, float) and np.isnan(val):
-                        raise ValueError
-                except (ValueError, TypeError):
-                    errors.append(f"Row {line_no}, column '{col}': Cannot convert '{val}' to integer")
-            elif isinstance(dtype, Float):
-                try:
-                    float(val)
-                except (ValueError, TypeError):
-                    errors.append(f"Row {line_no}, column '{col}': Cannot convert '{val}' to number")
-            elif isinstance(dtype, DateTime):
-                try:
-                    pd.to_datetime(val)
-                except (ValueError, TypeError):
-                    errors.append(f"Row {line_no}, column '{col}': Cannot convert '{val}' to datetime")
-            elif isinstance(dtype, Boolean):
-                if str(val).lower() not in ('true', 'false', '1', '0', 'yes', 'no'):
-                    errors.append(f"Row {line_no}, column '{col}': Cannot convert '{val}' to boolean")
-            elif isinstance(dtype, VARCHAR):
-                max_len = dtype.length
-                str_val = str(val)
-                if len(str_val) > max_len:
-                    errors.append(f"Row {line_no}, column '{col}': Value too long ({len(str_val)} chars, max {max_len})")
+        series = df[col]
+        not_null = series.notna()
+        if not not_null.any():
+            continue
+
+        message = None
+        max_len = None
+
+        if isinstance(dtype, Integer):
+            mask = not_null & pd.to_numeric(series, errors="coerce").isna()
+            message = "Cannot convert to integer"
+        elif isinstance(dtype, Float):
+            mask = not_null & pd.to_numeric(series, errors="coerce").isna()
+            message = "Cannot convert to number"
+        elif isinstance(dtype, DateTime):
+            mask = not_null & pd.to_datetime(series, errors="coerce").isna()
+            message = "Cannot convert to datetime"
+        elif isinstance(dtype, Boolean):
+            allowed = ("true", "false", "1", "0", "yes", "no")
+            normalized = series.astype(str).str.strip().str.lower()
+            mask = not_null & ~normalized.isin(allowed)
+            message = "Cannot convert to boolean"
+        elif isinstance(dtype, VARCHAR):
+            max_len = dtype.length
+            mask = not_null & (series.astype(str).str.len() > max_len)
+        else:
+            continue
+
+        for i in np.flatnonzero(mask.to_numpy()):
+            if len(errors) >= max_errors:
+                errors.append(
+                    f"... more validation errors omitted ({row_count} rows checked)"
+                )
+                return errors
+            i = int(i)
+            value = series.iat[i]
+            if max_len is not None:
+                errors.append(
+                    f"Row {i + 2}, column '{col}': Value too long "
+                    f"({len(str(value))} chars, max {max_len})"
+                )
+            else:
+                errors.append(
+                    f"Row {i + 2}, column '{col}': {message} (value: {value!r})"
+                )
+
     return errors
 
 
