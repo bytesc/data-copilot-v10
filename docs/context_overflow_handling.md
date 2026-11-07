@@ -33,7 +33,7 @@
 1. **常态化 vs 反应式**：`prepare_trimmed_context(..., level=0)` 与 `save_session_step` 每步都调用；本机制只有 `is_context_length_error` 为真才进入。
 2. **同一函数、不同 level**：`trim_conversation_history(history, level)` 常规用 level 0，本机制用 1→4。
 3. **只有本机制会“按字符切块”和“动 blackboard”**：常规 Trim 不截断单条内容，也不截断 blackboard 的大字段。
-4. **只有本机制覆盖无对话上下文的调用**（`sql_code`、`python_code`、`data_explanation`、`get_function_info`、`plain_chat`、`data_comment`、`llm_predict_hdb`、`base_knowledge` get/set），方式是按块截断。
+4. **只有本机制覆盖无对话上下文的调用**（`sql_code`、`data_explanation`、`get_function_info`、`plain_chat`、`data_comment`、`llm_predict_hdb`、`base_knowledge` get/set），方式是按块截断。
 5. **写库边界**：常规 Trim 结果持久化；本机制 level>0 结果绝不落库，下一轮仍从库里的 level 0 历史重建。
 
 ---
@@ -135,7 +135,6 @@ N = min(base_limit, cap, round(base_limit * factor))   # 且不小于 1
 
 | 调用点 | 削减的块 | 方式 |
 |--------|----------|------|
-| `python_code.get_py_code_with_data_dict` / `get_py_code_with_data` / `get_py_code` | 只截 `question`；数据已是 `head(3)` 切片，不动 | 非流式 |
 | `sql_code.get_sql_code` | 截 `data_prompt`（库表结构）+ `question` | 非流式 |
 | `sql_code.filter_db_fields` / `filter_db_fields_stream` | `_build_filter_prompt(level)` 内截 schema + question | 非流式 / 流式 |
 | `data_explanation.get_llm_data_explanation_func` | 只截 `question`；data 已按 `max_length` 采样，不重复采样 | 非流式 |
@@ -149,7 +148,7 @@ N = min(base_limit, cap, round(base_limit * factor))   # 且不小于 1
 
 要点：
 
-- **已采样/已切片的数据不再二次采样**（如 `data_explanation`、`python_code` 的 df `head`），避免改变分析语义，只裁文本部分。
+- **已采样/已切片的数据不再二次采样**（如 `data_explanation` 的采样），避免改变分析语义，只裁文本部分。
 - **按块独立截断**，不是“把整个 prompt 砍中间”，因此函数选择类 prompt 的格式约束仍在末尾、不会被切掉。
 - level 0 时输出与改动前完全一致。
 
@@ -203,6 +202,6 @@ N = min(base_limit, cap, round(base_limit * factor))   # 且不小于 1
 - `utils/blackboard.py`：`blackboard_to_text(section)` 的分级字段截断。
 - `agent/think.py` / `observe.py` / `action.py` / `act.py` / `agent.py` / `document_generator.py` / `plain_chat.py` / `data_comment.py`
 - `agent/tools/get_function_info.py`
-- `agent/tools/copilot/python_code.py` / `sql_code.py` / `data_explanation.py`
+- `agent/tools/copilot/sql_code.py` / `data_explanation.py`
 - `agent/tools/base_knowledge/get_base_knowledge.py` / `set_base_knowledge.py` / `set_code_guide.py` / `set_think_guide.py`
 - `agent/tools/llm_analysis/llm_predict_hdb.py`

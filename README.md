@@ -78,7 +78,7 @@
 
 ### 工具函数
 
-以下为 `agent/tools/get_function_info.py` 的 `FUNCTION_DICT` 实际暴露给 LLM 的函数（`query_database`、`draw_graph`、`draw_compare_graph`、`search_web`、`fetch_webpage` 等已在字典中被注释禁用）：
+以下为 `agent/tools/get_function_info.py` 的 `FUNCTION_DICT` 实际暴露给 LLM 的函数（`query_database`、`search_web`、`fetch_webpage` 等已在字典中被注释禁用）：
 
 | 函数 | 功能 |
 |------|------|

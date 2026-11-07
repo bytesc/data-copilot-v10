@@ -157,7 +157,7 @@ VITE_SERVER_URL=http://127.0.0.1:8008
   "question": "分析上个月销售趋势",
   "tables": ["orders", "products"],
   "selected_fields": {"orders": ["amount", "date"]},
-  "selected_functions": ["query_database", "draw_graph"],
+  "selected_functions": ["exe_sql", "get_save_image_path"],
   "session_id": "xxx"
 }
 ```
@@ -171,18 +171,6 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 | `session_id` | string | 否 | 会话 ID |
 
 **用于**: `POST /api/generate-and-execute/stream/`、`POST /api/plain-chat/stream/`、`POST /api/filter-db-fields/stream/`、`POST /api/filter-functions/stream/`、`POST /api/exe-sql/`
-
-### AgentInputDict
-
-```json
-{
-  "question": "画柱状图展示每月销售额",
-  "data": {"month": ["1月","2月"], "sales": [100, 200]},
-  "session_id": "xxx"
-}
-```
-
-**用于**: `POST /api/get-graph/`
 
 ### ThinkInput
 

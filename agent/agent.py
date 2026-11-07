@@ -9,7 +9,6 @@ from .tools.base_knowledge.get_base_knowledge import BASE, TARGET, get_code_guid
 from .tools.copilot.utils.code_insert import insert_lines_into_function
 from .tools.tools_def import engine, llm, query_database, exe_sql
 
-from .tools.copilot.python_code import get_py_code
 from .tools.copilot.utils.code_executor import execute_py_code
 from .tools.copilot.sql_code import get_db_info_prompt, filter_db_fields
 from .tools.copilot.utils.parse_output import parse_generated_python_code

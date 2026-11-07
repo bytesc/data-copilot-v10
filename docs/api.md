@@ -551,28 +551,6 @@ data: {"type":"done","content":""}
 }
 ```
 
-### POST `/api/get-graph/`
-
-基于数据生成图表。
-
-**请求体**
-```json
-{
-  "question": "画柱状图展示每月销售额",
-  "data": {"month": ["1月","2月"], "sales": [100, 200]},
-  "session_id": "xxx"
-}
-```
-
-**响应** `200`
-```json
-{
-  "question": "画柱状图展示每月销售额",
-  "ans": "/tmp_imgs/chart_abc123.png",
-  "type": "success"
-}
-```
-
 ### POST `/api/db-slice/`
 
 获取所有表的前 5 行数据。
