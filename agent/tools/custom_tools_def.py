@@ -540,47 +540,57 @@ yield img_path
     from matplotlib.dates import AutoDateLocator, ConciseDateFormatter
 
     history_df = pd.DataFrame(hdb_price_history)
-    history_df['month'] = pd.to_datetime(history_df['month'])
-    predict_df['month'] = pd.to_datetime(predict_df['month'])
+    predict_df = pd.DataFrame(predict_df) if predict_df is not None else pd.DataFrame()
+
+    if 'month' in history_df.columns:
+        history_df['month'] = pd.to_datetime(history_df['month'])
+    if 'month' in predict_df.columns:
+        predict_df['month'] = pd.to_datetime(predict_df['month'])
+
+    price_col = None
+    if 'avg_resale_price' in history_df.columns:
+        price_col = 'avg_resale_price'
+    elif 'resale_price' in history_df.columns:
+        price_col = 'resale_price'
+
+    has_history = bool(price_col) and 'month' in history_df.columns and len(history_df) > 0
+    has_prediction = (
+        len(predict_df) > 0
+        and 'month' in predict_df.columns
+        and 'predicted_price' in predict_df.columns
+    )
 
     plt.figure(figsize=(12, 6))
     ax = plt.gca()
 
-    if 'avg_resale_price' in history_df.columns:
-        plt.scatter(history_df['month'], history_df['avg_resale_price'],
+    if has_history:
+        plt.scatter(history_df['month'], history_df[price_col],
                     label='Historical Data Points', color='blue', alpha=0.6)
-        y_values = history_df['avg_resale_price']
-    elif 'resale_price' in history_df.columns:
-        plt.scatter(history_df['month'], history_df['resale_price'],
-                    label='Historical Data Points', color='blue', alpha=0.6)
-        y_values = history_df['resale_price']
 
-    if len(history_df) > 1:
+    if has_history and len(history_df) > 1:
         history_df = history_df.sort_values('month')
         window_size = max(2, min(6, len(history_df) // 3))
         smooth_df = history_df.copy()
-        if 'avg_resale_price' in smooth_df.columns:
-            smooth_df['smoothed'] = smooth_df['avg_resale_price'].rolling(window=window_size, center=True).mean()
-        else:
-            smooth_df['smoothed'] = smooth_df['resale_price'].rolling(window=window_size, center=True).mean()
-
+        smooth_df['smoothed'] = smooth_df[price_col].rolling(window=window_size, center=True).mean()
         smooth_df['smoothed'] = smooth_df['smoothed'].interpolate()
 
         plt.plot(smooth_df['month'], smooth_df['smoothed'],
                  label='Historical Trend', color='green', linewidth=2)
 
-        last_historical_date = smooth_df['month'].iloc[-1]
-        last_historical_price = smooth_df['smoothed'].iloc[-1]
+        if has_prediction:
+            last_historical_date = smooth_df['month'].iloc[-1]
+            last_historical_price = smooth_df['smoothed'].iloc[-1]
 
-        first_predicted_date = predict_df['month'].iloc[0]
-        first_predicted_price = predict_df['predicted_price'].iloc[0]
+            first_predicted_date = predict_df['month'].iloc[0]
+            first_predicted_price = predict_df['predicted_price'].iloc[0]
 
-        plt.plot([last_historical_date, first_predicted_date],
-                 [last_historical_price, first_predicted_price],
-                 color='green', linestyle='--', alpha=0.5)
+            plt.plot([last_historical_date, first_predicted_date],
+                     [last_historical_price, first_predicted_price],
+                     color='green', linestyle='--', alpha=0.5)
 
-    plt.plot(predict_df['month'], predict_df['predicted_price'],
-             label='Predicted Price', linestyle='-', color='red')
+    if has_prediction:
+        plt.plot(predict_df['month'], predict_df['predicted_price'],
+                 label='Predicted Price', linestyle='-', color='red')
 
     locator = AutoDateLocator()
     formatter = ConciseDateFormatter(locator)

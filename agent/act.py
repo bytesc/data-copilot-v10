@@ -664,8 +664,8 @@ def _act_web_search(full_question: str, session_id: str, params: dict, request_j
 
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
-        json.dumps({"query": query, "count": result_data.get("count", 0)}, ensure_ascii=False),
-        "success", f"Web search: {query}",
+        ans=json.dumps({"query": query, "count": result_data.get("count", 0)}, ensure_ascii=False),
+        result_type="success", msg=f"Web search: {query}",
     )
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'done', 'content': display_content, 'result': {'search_results': result_data, 'query': query}}, ensure_ascii=False)}\n\n"
@@ -717,8 +717,8 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
 
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
-        json.dumps({"urls": urls, "count": len(pages)}, ensure_ascii=False),
-        "success", f"Fetch webpages: {len(urls)}",
+        ans=json.dumps({"urls": urls, "count": len(pages)}, ensure_ascii=False),
+        result_type="success", msg=f"Fetch webpages: {len(urls)}",
     )
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'done', 'content': display_content, 'result': {'urls': urls, 'url': urls[0] if urls else '', 'pages': pages, 'content': display_content[:10000]}}, ensure_ascii=False)}\n\n"
@@ -842,8 +842,8 @@ If no tools are needed, return {{"selected_tools": [], "plan": "No MCP tools nee
 
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
-        json.dumps({"servers_count": len(all_servers_config), "tools_count": len(all_tools), "selected_count": len(selected_tools)}, ensure_ascii=False),
-        "success", f"Explore MCP: {len(all_tools)} tools from {len(all_servers_config)} servers",
+        ans=json.dumps({"servers_count": len(all_servers_config), "tools_count": len(all_tools), "selected_count": len(selected_tools)}, ensure_ascii=False),
+        result_type="success", msg=f"Explore MCP: {len(all_tools)} tools from {len(all_servers_config)} servers",
     )
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'done', 'content': tool_detail, 'result': {'selected_tools': selected_tools, 'catalog': catalog, 'explore_plan': explore_plan}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
@@ -916,8 +916,8 @@ def _act_select_images(session_id: str, params: dict, request_json: str = ""):
                       token_estimate=0)
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
-        json.dumps({"images": images}, ensure_ascii=False),
-        "success", f"Selected images: {len(images)}",
+        ans=json.dumps({"images": images}, ensure_ascii=False),
+        result_type="success", msg=f"Selected images: {len(images)}",
     )
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'select_images', 'type': 'chunk', 'content': display_content}, ensure_ascii=False)}\n\n"
@@ -993,8 +993,8 @@ def _act_exe_mcp(full_question: str, session_id: str, params: dict, request_json
     status = "success" if not has_error else "partial"
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
-        json.dumps({"tools_count": len(tools_list), "results": [{"server": r.get("server"), "tool": r.get("tool")} for r in all_results]}, ensure_ascii=False),
-        status, f"Execute MCP: {log_text}",
+        ans=json.dumps({"tools_count": len(tools_list), "results": [{"server": r.get("server"), "tool": r.get("tool")} for r in all_results]}, ensure_ascii=False),
+        result_type=status, msg=f"Execute MCP: {log_text}",
     )
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'exe_mcp', 'type': 'done', 'content': combined_display, 'result': {'results': all_results, 'combined_display': combined_display}}, ensure_ascii=False)}\n\n"
