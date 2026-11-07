@@ -10,7 +10,6 @@ from .copilot.examples.path_tools import generate_img_path
 from .copilot.utils.read_db import execute_select
 from .data_trans.download_csv_to_pd import download_csv_to_dataframe, extract_csv_filename_from_url, read_csv_from_local
 from .copilot.sql_code import query_database_func
-from .copilot.python_code import draw_graph_func, draw_compare_graph_func
 from .web_search.web_search import search_web, fetch_webpage
 from .mcp_client import load_mcp_servers, get_mcp_server, MCPClient, MCPError
 
@@ -62,114 +61,6 @@ def query_database(question: str, df_cols: str | list = None) -> pd.DataFrame:
     """
 
     result = query_database_func(question, df_cols, llm, engine)
-    return result
-
-
-def draw_graph(question: str, data: pd.DataFrame, col_explanation: str = None) -> str:
-    """
-    draw_graph(question: str, data: pd.DataFrame, col_explanation: str = None) -> str:
-    Draw graph based on natural language graph description and data provided in a pandas DataFrame.
-    Returns an url path string of the graph.
-
-    Args:
-    - question (str): Natural language graph type and other requirements.
-    - data (pd.DataFrame): A pandas DataFrame for providing drawing data.
-    - col_explanation (str, optional): Natural language to describe the meanings of columns.
-
-    Returns:
-    - str: url path string of the output graph.(e.g. "./tmp_imgs/mlkjcvep.png").
-    returns None in case of error
-
-    Example:
-    ```python
-        data = pd.DataFrame({
-            '月份': ['1月', '2月', '3月', '4月', '5月'],
-            '销售额': [200, 220, 250, 210, 230]
-        })
-        graph_url = draw_graph("draw line graph, use red line", data)
-        # Output(str):
-        # "./tmp_imgs/ekhidpcl.png"
-
-        data = pd.DataFrame({
-            'Gender': [1, 2, 3],
-            'Sales Percentage': [35, 45, 20]
-        })
-        graph_url = draw_graph("draw pie chart", data, "Gender: 1 means male, 2 means female, 3 means not known;")
-        # Output(str):
-        # "./tmp_imgs/ewcdkdkl.png"
-
-        data = pd.DataFrame({
-            'Month': ['January', 'February', 'March', 'April', 'May', 'June'],
-            'Sales Revenue (USD)': [12000, 15000, 18000, 13500, 16500, 19500]
-        })
-        graph_url = draw_graph("draw bar chart, use different color for each bar", data)
-        # Output(str):
-        # "./tmp_imgs/glddvysc.png"
-    ```
-    """
-    result = draw_graph_func(question, data, llm, col_explanation)
-    result = STATIC_URL + result[2:]
-    return result
-
-
-def draw_compare_graph(question: str, data_dict: dict, col_explanation: str = None) -> str:
-    """
-    draw_compare_graph(question: str, data_dict: dict, col_explanation: str = None) -> str:
-    Draw graph to compare something based on natural language graph description and data provided in a dictionary of pandas DataFrames.
-    Returns an url path string of the graph.
-
-    Args:
-    - question (str): Natural language graph type and other requirements.
-    - data_dict (dict): A dictionary with string keys and pandas DataFrame values for providing drawing data. The key can only be a string and the value can only be a pandas DataFrame.
-    - col_explanation (str, optional): Natural language to describe the meanings of columns.
-
-    Returns:
-    - str: url path string of the output graph.(e.g. "./tmp_imgs/mlkjcvep.png").
-    returns None in case of error
-
-    Example:
-    ```python
-        data_dict = {
-            'sales_data': pd.DataFrame({
-                '月份': ['1月', '2月', '3月', '4月', '5月'],
-                '销售额': [200, 220, 250, 210, 230]
-            }),
-            'inventory_data': pd.DataFrame({
-                '月份': ['1月', '2月', '3月', '4月', '5月'],
-                '库存量': [100, 90, 80, 95, 85]
-            })
-        }
-        graph_url = draw_compare_graph("draw line graph", data_dict)
-        # Output(str):
-        # "./tmp_imgs/ekhidpcl.png"
-
-        data_dict = {
-            'group A': pd.DataFrame({
-                'Gender': [1, 2, 3],
-                'Sales Percentage': [35, 45, 20]
-            }),
-            'group B': pd.DataFrame({
-                'Gender': [1, 2, 3],
-                'Sales Percentage': [31, 59, 3]
-            })
-        }
-        graph_url = draw_compare_graph("draw pie chart", data_dict, "use blend bar layers to compare two groups. Gender: 1 means male, 2 means female, 3 means not known;")
-        # Output(str):
-        # "./tmp_imgs/ewcdkdkl.png"
-
-        data_dict = {
-            'monthly_sales': pd.DataFrame({
-                'Month': ['January', 'February', 'March', 'April', 'May', 'June'],
-                'Sales Revenue (USD)': [12000, 15000, 18000, 13500, 16500, 19500]
-            })
-        }
-        graph_url = draw_compare_graph("draw bar chart, use different color for each bar", data_dict)
-        # Output(str):
-        # "./tmp_imgs/glddvysc.png"
-    ```
-    """
-    result = draw_compare_graph_func(question, data_dict, llm, col_explanation)
-    result = STATIC_URL + result[2:]
     return result
 
 

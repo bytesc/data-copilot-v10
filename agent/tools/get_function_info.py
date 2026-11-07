@@ -1,12 +1,10 @@
 from utils.context_trim import call_with_context_retry, stream_with_context_retry, cap_text
-from .tools_def import draw_graph, query_database, explain_data, exe_sql, draw_compare_graph, load_data, \
+from .tools_def import query_database, explain_data, exe_sql, load_data, \
     get_save_image_path, search_web, fetch_webpage, exe_mcp
 from .custom_tools_def import get_onemap_minimap, get_onemap_static_map, predict_hdb_price, get_osm_minimap, get_osm_static_map, get_streetdirectory_minimap, get_streetdirectory_static_map, search_streetdirectory, search_osm
 
 FUNCTION_DICT = {
     # "query_database": query_database,
-    # "draw_graph": draw_graph,
-    # "draw_compare_graph": draw_compare_graph,
     "explain_data": explain_data,
     "exe_sql": exe_sql,
     "load_data": load_data,
@@ -28,8 +26,6 @@ FUNCTION_DICT = {
 FUNCTION_IMPORT = {
     query_database: "from agent.tools.tools_def import query_database",
     explain_data: "from agent.tools.tools_def import explain_data",
-    draw_graph: "from agent.tools.tools_def import draw_graph",
-    draw_compare_graph: "from agent.tools.tools_def import draw_compare_graph",
     exe_sql: "from agent.tools.tools_def import exe_sql",
     load_data: "from agent.tools.tools_def import load_data",
     get_save_image_path: "from agent.tools.tools_def import get_save_image_path",

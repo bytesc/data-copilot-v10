@@ -78,7 +78,7 @@ if __name__=="__main__":
     original_code = """
 def func(data: pd):
     import pandas as pd
-    from agent.tools.tools_def import query_database, draw_graph
+    from agent.tools.tools_def import query_database
     import math
 
     yield "正在查询LORONG 7 TOA PAYOH的位置信息..."

@@ -1,10 +1,10 @@
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect
 
 from .tools.copilot.sql_code import get_db_info_prompt
 from .tools.tools_def import engine, llm
+from utils.column_ddl import build_column_comment_sql, build_table_comment_sql
 from utils.context_trim import call_with_context_retry, cap_text
 from utils.json_parse import parse_json
-from utils.sql_safety import quote_ident, escape_string
 
 
 def get_llm_data_comment_func(txt, table):
@@ -51,14 +51,15 @@ def _apply_table_comments(engine, table_name, data):
     """Apply LLM-produced comments using schema-validated, server-built DDL.
 
     Only the target table is touched, column names are whitelisted against the
-    real schema, and comment values are escaped. Unknown columns are dropped.
+    real schema, and the column definition is taken from ``SHOW CREATE TABLE``
+    so charset/collation/default/auto_increment/generated attributes are kept.
     """
     inspector = inspect(engine)
     if table_name not in inspector.get_table_names():
         print(f"[WARNING] Table '{table_name}' not found; skipping comment update.")
         return False
 
-    cols_info = {c["name"]: c for c in inspector.get_columns(table_name)}
+    valid_columns = {c["name"] for c in inspector.get_columns(table_name)}
     table_comment = data.get("table_comment")
     comments = data.get("columns")
     if not isinstance(comments, dict):
@@ -66,25 +67,13 @@ def _apply_table_comments(engine, table_name, data):
 
     with engine.connect() as conn:
         if table_comment and str(table_comment).strip():
-            conn.execute(text(
-                f"ALTER TABLE {quote_ident(table_name)} "
-                f"COMMENT = '{escape_string(table_comment)}'"
-            ))
+            conn.exec_driver_sql(build_table_comment_sql(conn, table_name, table_comment))
         for col_name, comment in comments.items():
-            if col_name not in cols_info:
+            if col_name not in valid_columns:
                 continue
             if comment is None or not str(comment).strip():
                 continue
-            col_info = cols_info[col_name]
-            col_type = col_info["type"]
-            nullable = "NULL" if col_info.get("nullable", True) else "NOT NULL"
-            default = col_info.get("default")
-            default_str = f"DEFAULT {default}" if default is not None else ""
-            conn.execute(text(
-                f"ALTER TABLE {quote_ident(table_name)} MODIFY COLUMN "
-                f"{quote_ident(col_name)} {col_type} {nullable} {default_str} "
-                f"COMMENT '{escape_string(comment)}'"
-            ))
+            conn.exec_driver_sql(build_column_comment_sql(conn, table_name, col_name, comment))
         conn.commit()
     return True
 

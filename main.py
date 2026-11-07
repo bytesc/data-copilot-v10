@@ -27,6 +27,7 @@ from data_access.read_db import get_all_comments_from_table
 from data_access.db_conn import engine
 from utils.get_config import config_data
 from utils.image_ingest import ingest_uploaded_images
+from utils.column_ddl import build_column_comment_sql, build_table_comment_sql
 
 from agent.agent import  generate_and_execute_stream, get_db
 from utils.process_file import process_file_content
@@ -66,18 +67,6 @@ def _quote_ident(name):
     if not isinstance(name, str) or not name:
         raise HTTPException(status_code=400, detail="Invalid SQL identifier")
     return "`" + name.replace("`", "``") + "`"
-
-
-def _escape_sql_string(value):
-    """Escape a value for use inside a single-quoted MySQL string literal.
-
-    DDL such as ``ALTER TABLE ... COMMENT '<x>'`` cannot use bound parameters,
-    so backslashes (MySQL's default escape character) and single quotes must be
-    escaped explicitly. The backslash must be escaped first.
-    """
-    if value is None:
-        return ""
-    return str(value).replace("\\", "\\\\").replace("'", "''")
 
 
 def _require_table(inspector, table_name):
@@ -216,12 +205,6 @@ class AgentInput(BaseModel):
     session_id: Optional[str] = None
     selected_fields: Optional[Dict[str, Any]] = None
     selected_functions: Optional[List[str]] = None
-
-
-class AgentInputDict(BaseModel):
-    question: str
-    data: dict
-    session_id: Optional[str] = None
 
 
 class ReviewInput(BaseModel):
@@ -509,13 +492,12 @@ async def import_comments_csv(table_name: str, file: UploadFile = File(...)):
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
     def _import(bytes_content):
-        from sqlalchemy import inspect, text
+        from sqlalchemy import inspect
         from sqlalchemy.exc import SQLAlchemyError
         try:
             inspector = inspect(engine)
             if table_name not in inspector.get_table_names():
                 return {"success": False, "error": f"Table '{table_name}' not found"}
-            safe_table = _quote_ident(table_name)
             df = pd.read_csv(io.BytesIO(bytes_content))
             if "column_name" not in df.columns or "comment" not in df.columns:
                 return {"success": False, "error": "CSV must contain 'column_name' and 'comment' columns"}
@@ -537,19 +519,9 @@ async def import_comments_csv(table_name: str, file: UploadFile = File(...)):
                     if not col_name:
                         continue
                     if col_name == "__table_comment__":
-                        escaped = _escape_sql_string(comment)
-                        conn.execute(text(f"ALTER TABLE {safe_table} COMMENT = '{escaped}'"))
+                        conn.exec_driver_sql(build_table_comment_sql(conn, table_name, comment))
                     elif col_name in columns_info:
-                        col_info = columns_info[col_name]
-                        safe_col = _quote_ident(col_info["name"])
-                        col_type = col_info["type"]
-                        nullable = col_info.get("nullable", True)
-                        default = col_info.get("default")
-                        escaped = _escape_sql_string(comment)
-                        nullable_str = "NULL" if nullable else "NOT NULL"
-                        default_str = f"DEFAULT {default}" if default is not None else ""
-                        sql = f"ALTER TABLE {safe_table} MODIFY COLUMN {safe_col} {col_type} {nullable_str} {default_str} COMMENT '{escaped}'"
-                        conn.execute(text(sql))
+                        conn.exec_driver_sql(build_column_comment_sql(conn, table_name, col_name, comment))
                 conn.commit()
             return {
                 "success": True,
@@ -567,12 +539,11 @@ async def import_comments_csv(table_name: str, file: UploadFile = File(...)):
 async def update_table_comment(table_name: str, entry: CommentUpdate):
     _require_edit_enabled()
     def _update():
-        from sqlalchemy import inspect, text
+        from sqlalchemy import inspect
         inspector = inspect(engine)
         safe_table = _require_table(inspector, table_name)
-        escaped = _escape_sql_string(entry.comment)
         with engine.connect() as conn:
-            conn.execute(text(f"ALTER TABLE {_quote_ident(safe_table)} COMMENT = '{escaped}'"))
+            conn.exec_driver_sql(build_table_comment_sql(conn, safe_table, entry.comment))
             conn.commit()
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(executor, _update)
@@ -583,23 +554,15 @@ async def update_table_comment(table_name: str, entry: CommentUpdate):
 async def update_column_comment(table_name: str, column_name: str, entry: CommentUpdate):
     _require_edit_enabled()
     def _update():
-        from sqlalchemy import inspect, text
+        from sqlalchemy import inspect
         inspector = inspect(engine)
         safe_table = _require_table(inspector, table_name)
         columns = inspector.get_columns(safe_table)
         col_info = next((c for c in columns if c["name"] == column_name), None)
         if not col_info:
             raise HTTPException(status_code=404, detail=f"Column '{column_name}' not found in '{table_name}'")
-        safe_column = col_info["name"]
-        col_type = col_info["type"]
-        nullable = col_info.get("nullable", True)
-        default = col_info.get("default")
-        escaped = _escape_sql_string(entry.comment)
-        nullable_str = "NULL" if nullable else "NOT NULL"
-        default_str = f"DEFAULT {default}" if default is not None else ""
-        sql = f"ALTER TABLE {_quote_ident(safe_table)} MODIFY COLUMN {_quote_ident(safe_column)} {col_type} {nullable_str} {default_str} COMMENT '{escaped}'"
         with engine.connect() as conn:
-            conn.execute(text(sql))
+            conn.exec_driver_sql(build_column_comment_sql(conn, safe_table, col_info["name"], entry.comment))
             conn.commit()
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(executor, _update)
@@ -667,43 +630,11 @@ async def exe_sql(request: Request, user_input: AgentInput):
     return JSONResponse(content=processed_data)
 
 
-@app.post("/api/get-graph/")
-async def get_graph_api(request: Request, user_input: AgentInputDict):
-    df = pd.DataFrame.from_dict(user_input.data)
-    loop = asyncio.get_event_loop()
-    ans = await loop.run_in_executor(executor, _run_in_llm_context, draw_graph, user_input.question, df)
-    if ans:
-        processed_data = {
-            "question": user_input.question,
-            "ans": ans,
-            "type": "success",
-"msg": "Processed successfully",
-            "session_id": user_input.session_id or ""
-        }
-        record_session_operation(
-            user_input.session_id, request.url.path,
-            user_input.model_dump_json(), ans, "", "success", "处理成功"
-        )
-    else:
-        processed_data = {
-            "question": user_input.question,
-            "ans": "",
-            "type": "error",
-            "msg": "Processing failed, please rephrase your question",
-            "session_id": user_input.session_id or ""
-        }
-        record_session_operation(
-            user_input.session_id, request.url.path,
-            user_input.model_dump_json(), "", "", "error", "处理失败，请换个问法吧"
-        )
-    return JSONResponse(content=processed_data)
-
-
 from agent.tools.copilot.utils.read_db import get_rows_from_all_tables, get_table_comments_dict, execute_select, \
     get_all_comments, is_read_only_sql
 from agent.tools.copilot.sql_code import filter_db_fields, filter_db_fields_stream
 from agent.tools.get_function_info import filter_functions_stream
-from agent.tools.tools_def import engine, read_engine, llm, draw_graph
+from agent.tools.tools_def import engine, read_engine, llm
 
 
 @app.post("/api/db-slice/")

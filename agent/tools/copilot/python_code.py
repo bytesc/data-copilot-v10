@@ -1,10 +1,5 @@
-from .utils.code_insert import insert_lines_into_function
-
 from .utils.parse_output import parse_generated_python_code
 
-from .utils.code_executor import execute_py_code_with_data
-from .utils.parse_output import assert_png_file
-from .examples.ask_ai_for_graph import get_ask_graph_prompt, get_ask_compare_graph_prompt
 
 from utils.context_trim import call_with_context_retry, cap_text
 
@@ -175,48 +170,3 @@ without any additional comments, explanations or cmds !!!
             logging.error(str(ans.content) + "No code was generated.")
             print("No code was generated.")
             continue
-
-
-def draw_graph_func(question, data, llm, col_explanation=None, retries=2):
-    exp = None
-    for i in range(retries):
-        question = get_ask_graph_prompt(question, col_explanation)
-        err_msg = ""
-        for j in range(retries):
-            code = get_py_code_with_data(question + err_msg, data, llm)
-            if code is None:
-                continue
-            try:
-                code = insert_lines_into_function(code, IMPORTANT_MODULE)
-                code = insert_lines_into_function(code, THIRD_MODULE)
-                result = execute_py_code_with_data(code, data, assert_png_file)
-                return result
-            except Exception as e:
-                err_msg = "\n" + str(e) + "\n```python\n" + code + "\n```\n"
-                print(e)
-                exp = e
-                continue
-    return None
-
-
-def draw_compare_graph_func(question, data_dict, llm, col_explanation=None, retries=2):
-    exp = None
-    for i in range(retries):
-        question = get_ask_compare_graph_prompt(question, col_explanation)
-        err_msg = ""
-        for j in range(retries):
-            code = get_py_code_with_data_dict(question + err_msg, data_dict, llm)
-            if code is None:
-                continue
-            try:
-                code = insert_lines_into_function(code, IMPORTANT_MODULE)
-                code = insert_lines_into_function(code, THIRD_MODULE)
-                print(code)
-                result = execute_py_code_with_data(code, data_dict, assert_png_file)
-                return result
-            except Exception as e:
-                err_msg = "\n" + str(e) + "\n```python\n" + code + "\n```\n"
-                print(e)
-                exp = e
-                continue
-    return None
