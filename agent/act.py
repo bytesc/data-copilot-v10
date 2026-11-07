@@ -565,6 +565,10 @@ def _act_generate_and_execute(build_question, session_id: str, tables, selected_
             full_ans += event.get("content", "")
         if event.get("sub_type") == "code_exe_error":
             exec_error = event.get("content", "")
+        if event.get("sub_type") == "code_gen_error":
+            exec_error = event.get("content", "")
+        if event.get("type") == "error":
+            exec_error = event.get("content", exec_error or "code generation/execution failed")
 
         if event.get("type") == "done" and event.get("sub_phase") == "exec":
             full_code = event.get("code", full_code)

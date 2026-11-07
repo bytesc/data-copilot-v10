@@ -230,8 +230,15 @@ executor = ThreadPoolExecutor(max_workers=10)
 
 
 def _run_in_llm_context(func, *args):
-    """把请求上下文（模型/Depth/Style）带入线程池中的 LLM 调用。"""
-    return contextvars.copy_context().run(func, *args)
+    """把请求上下文（模型/Depth/Style）带入线程池中的 LLM 调用。
+
+    必须在事件循环中调用：``contextvars.copy_context()`` 只会在事件循环任务里
+    快照到本次请求的上下文；若在 executor 线程内调用，拷贝到的是该线程的空上
+    下文，请求级模型/Depth/Style 选择会丢失。此函数返回一个无参可调用对象，
+    在 worker 线程中通过 ``ctx.run`` 进入快照上下文执行 ``func``。
+    """
+    ctx = contextvars.copy_context()
+    return lambda: ctx.run(func, *args)
 
 STATIC_FOLDER = "tmp_imgs"
 STATIC_PATH = f"/{STATIC_FOLDER}"
@@ -766,12 +773,13 @@ async def filter_db_fields_api(request: Request, user_input: AgentInput):
 
     selected_fields = await loop.run_in_executor(
         executor,
-        _run_in_llm_context,
-        _timed_filter_db_fields,
-        user_input.question,
-        engine,
-        llm,
-        user_input.tables
+        _run_in_llm_context(
+            _timed_filter_db_fields,
+            user_input.question,
+            engine,
+            llm,
+            user_input.tables,
+        ),
     )
     if selected_fields is not None:
         processed_data = {
@@ -885,7 +893,10 @@ async def upload_txt(
             with perf_context("/upload-txt/"):
                 return get_llm_data_comment(text, table)
 
-        result = await loop.run_in_executor(executor, _run_in_llm_context, _timed_data_comment, extracted_text, table_name)
+        result = await loop.run_in_executor(
+            executor,
+            _run_in_llm_context(_timed_data_comment, extracted_text, table_name),
+        )
 
         result = {
             "status": "success",

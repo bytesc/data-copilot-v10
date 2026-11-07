@@ -62,11 +62,17 @@ def _get_entry_category(entry: dict) -> Optional[str]:
         if action == "explore_base_knowledge":
             return "act_explore_base_knowledge"
         if action == "generate_and_execute":
-            if entry.get("code"):
-                return "act_code"
+            # The execution result (and error) is kept nearly permanently, while
+            # the generated code is heavy and trimmed on its own; classify by
+            # result/error first so a result-bearing entry is not demoted to the
+            # short-lived "act_code" bucket.
             if entry.get("error"):
                 return "act_error"
-            return "act_result"
+            if entry.get("result"):
+                return "act_result"
+            if entry.get("code"):
+                return "act_code"
+            return "act_default"
         if action == "generate_document":
             return "act_generate_document"
         if action == "web_search":
@@ -117,17 +123,49 @@ def _get_retention_limit(category: str, level: int = 0) -> Optional[int]:
     return min(base, cap, effective)
 
 
+_GENERATE_ACTION = "generate_and_execute"
+
+
+def _strip_generated_code(entry: dict) -> dict:
+    """Return a copy of a generate_and_execute entry without its heavy ``code``.
+
+    ``code`` and the execution result share one history entry, so the result is
+    kept permanently while the generated code is only retained for the most
+    recent ``act_code`` window. Older entries keep their result but lose the
+    code, instead of being dropped entirely.
+    """
+    if entry.get("action") != _GENERATE_ACTION or "code" not in entry:
+        return entry
+    stripped = dict(entry)
+    stripped.pop("code", None)
+    return stripped
+
+
 def trim_conversation_history(history: List[dict], level: int = 0) -> List[dict]:
     keep_indices = set()
     from_end_counts = {}
 
+    # Generated code shares its entry with the permanently-kept execution
+    # result, so its retention is enforced by stripping the ``code`` field from
+    # older entries rather than dropping the whole entry (which would also lose
+    # the result). The result/error classifications are counted separately.
+    code_limit = _get_retention_limit("act_code", level)
+    code_seen = 0
+    strip_code_indices = set()
+
     for i in range(len(history) - 1, -1, -1):
-        if is_blackboard_entry(history[i]):
+        entry = history[i]
+        if is_blackboard_entry(entry):
             continue
-        cat = _get_entry_category(history[i])
+        cat = _get_entry_category(entry)
         if cat is None:
             keep_indices.add(i)
             continue
+
+        if cat in ("act_code", "act_result", "act_error") and entry.get("code"):
+            code_seen += 1
+            if code_limit is not None and code_seen > code_limit:
+                strip_code_indices.add(i)
 
         limit = _get_retention_limit(cat, level)
         if limit is None:
@@ -138,7 +176,14 @@ def trim_conversation_history(history: List[dict], level: int = 0) -> List[dict]
         if from_end_counts[cat] <= limit:
             keep_indices.add(i)
 
-    return [history[i] for i in sorted(keep_indices)]
+    trimmed = []
+    for i, entry in enumerate(history):
+        if i not in keep_indices:
+            continue
+        if i in strip_code_indices:
+            entry = _strip_generated_code(entry)
+        trimmed.append(entry)
+    return trimmed
 
 
 def prepare_trimmed_context(session_id: str, conversation_history: Optional[List[dict]],
