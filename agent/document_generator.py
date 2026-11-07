@@ -36,6 +36,23 @@ from utils.perf_log import perf_api
 
 DOC_WORKSPACE = "doc_workspace"
 os.makedirs(DOC_WORKSPACE, exist_ok=True)
+_DOC_WORKSPACE_REAL = os.path.realpath(DOC_WORKSPACE)
+
+
+def _sanitize_token(value: str, fallback: str = "") -> str:
+    """Reduce a client-supplied id to a safe filename token ([A-Za-z0-9_-])."""
+    if not isinstance(value, str):
+        return fallback
+    cleaned = re.sub(r'[^A-Za-z0-9_-]', '', value)[:64]
+    return cleaned or fallback
+
+
+def _safe_workspace_path(file_name: str) -> str:
+    """Resolve a workspace file name and reject anything escaping doc_workspace."""
+    candidate = os.path.realpath(os.path.join(DOC_WORKSPACE, file_name))
+    if candidate != _DOC_WORKSPACE_REAL and not candidate.startswith(_DOC_WORKSPACE_REAL + os.sep):
+        raise ValueError(f"Invalid workspace file name: {file_name!r}")
+    return candidate
 
 
 def _doc_context(conversation_history, session_id: str, level: int = 0):
@@ -472,18 +489,22 @@ def _parse_yaml_sections(yaml_str: str) -> dict:
 
 
 def _save_intermediate_yaml(yaml_str: str, base_name: str, session_id: str = "") -> str:
-    prefix = f"{session_id}_" if session_id else ""
-    file_name = f"outline_{prefix}{base_name}.yaml"
-    path = os.path.join(DOC_WORKSPACE, file_name)
+    session_token = _sanitize_token(session_id)
+    base_token = _sanitize_token(base_name, fallback=generate_random_string(8))
+    prefix = f"{session_token}_" if session_token else ""
+    file_name = f"outline_{prefix}{base_token}.yaml"
+    path = _safe_workspace_path(file_name)
     with open(path, "w", encoding="utf-8") as f:
         f.write(yaml_str)
     return file_name
 
 
 def _save_intermediate_markdown(markdown_text: str, base_name: str, session_id: str = "") -> str:
-    prefix = f"{session_id}_" if session_id else ""
-    file_name = f"draft_{prefix}{base_name}.md"
-    path = os.path.join(DOC_WORKSPACE, file_name)
+    session_token = _sanitize_token(session_id)
+    base_token = _sanitize_token(base_name, fallback=generate_random_string(8))
+    prefix = f"{session_token}_" if session_token else ""
+    file_name = f"draft_{prefix}{base_token}.md"
+    path = _safe_workspace_path(file_name)
     with open(path, "w", encoding="utf-8") as f:
         f.write(markdown_text)
     return file_name
@@ -909,7 +930,10 @@ def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outl
     document_parts = []
     section_files = []
     used_images: Set[str] = set()
-    base_name = yaml_base if yaml_base else f"{session_id}_{generate_random_string(8)}" if session_id else generate_random_string(8)
+    base_name = _sanitize_token(
+        yaml_base or (f"{session_id}_{generate_random_string(8)}" if session_id else ""),
+        fallback=generate_random_string(8),
+    )
 
     for i, section in enumerate(sections):
         actual_idx = section_index if section_index is not None else i
@@ -968,7 +992,7 @@ Write the content for the section "{heading}" in markdown format."""
         document_parts.append((heading, part_raw))
 
         sec_file = f"draft_{base_name}_s{actual_idx:02d}.md"
-        sec_path = os.path.join(DOC_WORKSPACE, sec_file)
+        sec_path = _safe_workspace_path(sec_file)
         with open(sec_path, "w", encoding="utf-8") as f:
             f.write(f"## {heading}\n\n{part_raw}")
         section_files.append({"name": sec_file, "heading": heading, "index": actual_idx})
@@ -1034,15 +1058,25 @@ async def generate_document_from_yaml_api(request: Request, user_input: YamlDocu
 # ── Finalize: convert edited Markdown to docx/pdf ────────────────────────
 
 
-def _cleanup_workspace_files(base_name: str):
+def _cleanup_workspace_files(base_name: str, session_id: str = ""):
     import glob
+    base_name = _sanitize_token(base_name)
+    if not base_name:
+        return
+    session_token = _sanitize_token(session_id)
     patterns = [
-        f"outline_{base_name}.yaml",
         f"draft_{base_name}.md",
         f"draft_{base_name}_s*.md",
+        f"outline_{base_name}.yaml",
     ]
+    # The outline file is written as ``outline_<session_id>_<base>.yaml`` when a
+    # session id is present, so clean that exact name as well.
+    if session_token:
+        patterns.append(f"outline_{session_token}_{base_name}.yaml")
     for pattern in patterns:
         for f in glob.glob(os.path.join(DOC_WORKSPACE, pattern)):
+            if os.path.dirname(os.path.realpath(f)) != _DOC_WORKSPACE_REAL:
+                continue
             try:
                 os.remove(f)
             except Exception:
@@ -1104,7 +1138,7 @@ def _event_stream_finalize(markdown_content: str, session_id: str, request_json:
     yield f"data: {json.dumps(_finalize_event, ensure_ascii=False)}\n\n"
 
     if yaml_base:
-        _cleanup_workspace_files(yaml_base)
+        _cleanup_workspace_files(yaml_base, session_id)
 
     record_session_operation(
         session_id, "/api/generate-document/finalize/",
@@ -1202,7 +1236,11 @@ async def save_workspace_file(filename: str, request: Request):
 
 @router.delete("/api/doc-workspace/drafts/{session_id}/{yaml_id}")
 async def delete_draft_files(session_id: str, yaml_id: str):
-    base = f"{session_id}_{yaml_id}"
+    session_token = _sanitize_token(session_id)
+    yaml_token = _sanitize_token(yaml_id)
+    if not session_token and not yaml_token:
+        return JSONResponse(content={"error": "Invalid session_id or yaml_id"}, status_code=400)
+    base = f"{session_token}_{yaml_token}"
     patterns = [
         f"draft_{base}.md",
         f"draft_{base}_s*.md",
@@ -1211,6 +1249,8 @@ async def delete_draft_files(session_id: str, yaml_id: str):
     import glob
     for pattern in patterns:
         for f in glob.glob(os.path.join(DOC_WORKSPACE, pattern)):
+            if os.path.dirname(os.path.realpath(f)) != _DOC_WORKSPACE_REAL:
+                continue
             try:
                 os.remove(f)
                 deleted.append(os.path.basename(f))
