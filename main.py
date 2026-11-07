@@ -159,24 +159,24 @@ def _run_in_llm_context(func, *args):
 
 STATIC_FOLDER = "tmp_imgs"
 STATIC_PATH = f"/{STATIC_FOLDER}"
-
+STATIC_DIR = os.path.realpath(STATIC_FOLDER)
 
 
 @app.get(f"/{STATIC_FOLDER}/{{filename}}")
 async def read_static_file(request: Request, filename: str, download: str = None):
-    filepath = os.path.join(STATIC_FOLDER, filename)
-    if os.path.isfile(filepath):
-        content_type, _ = mimetypes.guess_type(filepath)
-        if content_type is None:
-            content_type = "application/octet-stream"
-        headers = {}
-        if download is not None:
-            headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-        with open(filepath, "rb") as file:
-            file_content = file.read()
-        return Response(content=file_content, media_type=content_type, headers=headers)
-    else:
-        return {"error": "File not found"}
+    safe_name = os.path.basename(filename.replace("\\", "/"))
+    filepath = os.path.realpath(os.path.join(STATIC_FOLDER, safe_name))
+    if not filepath.startswith(STATIC_DIR + os.sep) or not os.path.isfile(filepath):
+        return JSONResponse(status_code=404, content={"error": "File not found"})
+    content_type, _ = mimetypes.guess_type(filepath)
+    if content_type is None:
+        content_type = "application/octet-stream"
+    headers = {}
+    if download is not None:
+        headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+    with open(filepath, "rb") as file:
+        file_content = file.read()
+    return Response(content=file_content, media_type=content_type, headers=headers)
 
 
 class AgentInput(BaseModel):

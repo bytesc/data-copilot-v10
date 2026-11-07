@@ -431,8 +431,9 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 | `title` | generate_document | 可选 | 由文档生成器自动生成标题 |
 | `query` | web_search | 建议必填 | 为空时回退使用当前完整上下文作为查询词 |
 | `max_results` | web_search | 可选 | 默认 10，超过 50 按 50 处理 |
-| `url` | fetch_webpage | 建议必填 | 为空时回退使用当前完整上下文作为地址 |
-| `max_length` | fetch_webpage | 可选 | 默认 10000，超过 50000 按 50000 处理 |
+| `urls` | fetch_webpage | 建议必填 | URL 数组（1-10 个），并行抓取；为空时回退到单个 `url`，再无则用当前完整上下文 |
+| `url` | fetch_webpage | 兼容字段 | 单个 URL 字符串；仅在 `urls` 为空时使用 |
+| `max_length` | fetch_webpage | 可选 | 每页默认 10000，超过 50000 按 50000 处理 |
 | `server` | exe_mcp | 单工具格式必填，与 `tool` 搭配 | 使用 `tools` 批量格式时忽略 |
 | `tool` | exe_mcp | 单工具格式必填，与 `server` 搭配 | 使用 `tools` 批量格式时忽略 |
 | `params` | exe_mcp | 可选 | 默认 `{}` |
@@ -566,12 +567,16 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 
 ### fetch_webpage
 
+并行抓取 `urls` 中每个 URL 的正文，**每个 URL 生成一条 act 条目**（按输入顺序）：
+
 ```json
 {"role":"assistant","type":"act","action":"fetch_webpage",
  "url":"...","page_content":"格式化后的 markdown 页面内容字符串"}
 ```
 
-上下文格式：
+抓取失败的页面 `page_content` 为 `[Error] <原因>`。
+
+上下文格式（逐条渲染）：
 
 ```
 [ACT fetch_webpage] page_content:
@@ -720,7 +725,8 @@ images:
 | explore_base_knowledge | 3 |
 | explore_mcp | 3 |
 | select_images | 3 |
-| web_search / fetch_webpage | 3 |
+| web_search | 3 |
+| fetch_webpage | 5 |
 | exe_mcp | 999（永久） |
 | ask_question / ask_choice / summary_and_pause / attempt_completion | 999（永久） |
 | generate_document | 1 |

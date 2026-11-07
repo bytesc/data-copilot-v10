@@ -151,15 +151,15 @@
 ### fetch_webpage
 
 ```
-成功：
-  {phase:"act", type:"msg",   sub_phase:"fetch_webpage", content:"Fetching page: {url}..."}
-  {phase:"act", type:"chunk", sub_phase:"fetch_webpage", content:"页面内容 markdown..."}
+成功（单页/多页统一；多页并行抓取后合并为一段 markdown）：
+  {phase:"act", type:"msg",   sub_phase:"fetch_webpage", content:"Fetching N page(s) in parallel..."}
+  {phase:"act", type:"chunk", sub_phase:"fetch_webpage", content:"## Page Content (N page(s))..."}
   {phase:"act", type:"done",  sub_phase:"fetch_webpage", content:"...",
-   result:{url:"...", content:"..."}}
+   result:{urls:["..."], url:"...", pages:[{url, content, error}, ...], content:"..."}}
   {type:"history", history:[...]}
 
-失败：
-  {phase:"act", type:"error", sub_phase:"fetch_webpage", content:"Fetch page failed: ..."}
+说明：抓取流程本身不再单独发送 error 事件；单个页面失败时该页在 `pages` 中带 `error`，
+并在合并内容中显示 "> Failed: ..."，其余页面照常返回。
 ```
 
 ### explore_mcp

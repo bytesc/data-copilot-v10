@@ -16,6 +16,16 @@ BACKEND_URL = os.getenv("BACKEND_URL", f"http://{_host}:{_port}")
 FRONT_HOST = os.getenv("FRONT_HOST", "0.0.0.0")
 FRONT_PORT = int(os.getenv("FRONT_PORT", "8010"))
 DIST_DIR = Path(__file__).parent / "vue-front" / "dist"
+DIST_ROOT = DIST_DIR.resolve()
+
+
+def _safe_dist_file(rel: str):
+    try:
+        candidate = (DIST_DIR / rel).resolve()
+        candidate.relative_to(DIST_ROOT)
+    except (ValueError, OSError):
+        return None
+    return candidate if candidate.is_file() else None
 
 app = FastAPI(title="front.py - Lightweight Frontend Proxy")
 client = httpx.AsyncClient(base_url=BACKEND_URL, timeout=600.0)
@@ -64,10 +74,10 @@ async def handler(full_path: str, request: Request):
             return await proxy_stream(path, request)
         return await proxy_request(path, request)
 
-    filepath = DIST_DIR / full_path
-    if filepath.is_file():
-        content_type, _ = mimetypes.guess_type(str(filepath))
-        return FileResponse(str(filepath), media_type=content_type or "application/octet-stream")
+    resolved = _safe_dist_file(full_path)
+    if resolved is not None:
+        content_type, _ = mimetypes.guess_type(str(resolved))
+        return FileResponse(str(resolved), media_type=content_type or "application/octet-stream")
 
     if full_path == "" or path == "/":
         index = DIST_DIR / "index.html"
@@ -76,10 +86,10 @@ async def handler(full_path: str, request: Request):
 
     ext = Path(full_path).suffix
     if ext in STATIC_EXTS or (ext and len(ext) <= 5):
-        filepath = DIST_DIR / full_path
-        if filepath.is_file():
-            content_type, _ = mimetypes.guess_type(str(filepath))
-            return FileResponse(str(filepath), media_type=content_type or "application/octet-stream")
+        resolved = _safe_dist_file(full_path)
+        if resolved is not None:
+            content_type, _ = mimetypes.guess_type(str(resolved))
+            return FileResponse(str(resolved), media_type=content_type or "application/octet-stream")
         return Response(status_code=404)
 
     index = DIST_DIR / "index.html"

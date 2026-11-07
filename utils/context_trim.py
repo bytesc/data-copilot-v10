@@ -23,7 +23,7 @@ HISTORY_RETENTION = {
     "act_explore_base_knowledge": 3, # explore_base_knowledge 的基础知识搜索结果
     "act_explore_mcp": 3,  # explore_mcp 的 MCP 工具列表
     "act_web_search": 3,               # web_search 的搜索结果
-    "act_fetch_webpage": 3,            # fetch_webpage 的页面内容
+    "act_fetch_webpage": 5,            # fetch_webpage 的页面内容（一次可并行多页）
     "act_exe_mcp": 999,                  # exe_mcp 的执行结果
     "act_select_images": 3,              # select_images 的选中图片列表
     "act_ask_question": 999,           # ask_question 动作的提问内容（永久保留）

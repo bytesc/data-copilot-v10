@@ -1,9 +1,16 @@
 
 import json
 from typing import Optional
-from urllib.request import Request, urlopen
-from urllib.error import URLError, HTTPError
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
+
+import httpx
+
+try:
+    import trafilatura
+    _HAS_TRAFILATURA = True
+except ImportError:
+    _HAS_TRAFILATURA = False
 
 
 def search_web(query: str, max_results: int = 10, region: str = "wt-wt") -> str:
@@ -134,17 +141,125 @@ class _HTMLTextExtractor(HTMLParser):
         return "\n".join(self._text_parts)
 
 
-def fetch_webpage(url: str, max_length: int = 10000) -> str:
-    """
-    fetch_webpage(url: str, max_length: int = 10000) -> str:
-    Fetch a webpage and extract its text content. Returns the extracted text as a string.
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
-    This function retrieves the HTML content of a given URL, strips out HTML tags,
-    scripts, styles, and other non-content elements, and returns the plain text.
-    It is useful for reading the content of a specific page discovered via search_web.
+DEFAULT_MAX_WORKERS = 5
+MAX_URLS = 10
+
+
+def _extract_text(html: str, url: str = "", max_length: int = 10000) -> str:
+    """Extract the main text content of an HTML document.
+
+    Uses trafilatura for main-content extraction (boilerplate removal) and falls
+    back to the lightweight ``_HTMLTextExtractor`` when trafilatura is missing or
+    returns nothing usable (e.g. non-article pages).
+    """
+    text = ""
+    if _HAS_TRAFILATURA:
+        try:
+            text = trafilatura.extract(
+                html,
+                url=url or None,
+                output_format="markdown",
+                include_links=False,
+                include_tables=True,
+                include_comments=False,
+                favor_recall=True,
+            ) or ""
+        except Exception:
+            text = ""
+    if not text.strip():
+        try:
+            extractor = _HTMLTextExtractor()
+            extractor.feed(html)
+            text = extractor.get_text()
+        except Exception:
+            text = ""
+    if len(text) > max_length:
+        text = text[:max_length] + "\n...[truncated]"
+    return text
+
+
+def _fetch_one(client: "httpx.Client", url: str, max_length: int) -> dict:
+    """Fetch a single URL and extract its text. Never raises; returns an error field."""
+    try:
+        resp = client.get(url, headers=_HEADERS)
+        resp.raise_for_status()
+        html = resp.text
+    except httpx.HTTPStatusError as e:
+        return {"url": url, "content": "", "error": f"HTTP {e.response.status_code}: {e.response.reason_phrase}"}
+    except httpx.HTTPError as e:
+        return {"url": url, "content": "", "error": f"Request error: {e}"}
+    except Exception as e:
+        return {"url": url, "content": "", "error": str(e)}
+
+    text = _extract_text(html, url=url, max_length=max_length)
+    if not text.strip():
+        return {"url": url, "content": "", "error": "No extractable text content found"}
+    return {"url": url, "content": text, "error": None}
+
+
+def fetch_webpages(urls, max_length: int = 10000, max_workers: int = DEFAULT_MAX_WORKERS) -> str:
+    """
+    fetch_webpages(urls, max_length: int = 10000, max_workers: int = 5) -> str:
+    Fetch and extract the text content of MULTIPLE webpages in parallel.
 
     Args:
-    - url (str): The full URL of the webpage to fetch (e.g., "https://example.com/article").
+    - urls (list[str]): The URLs to fetch (up to 10; extra entries are dropped).
+    - max_length (int): Max characters returned PER page (default 10000, capped at 50000).
+    - max_workers (int): Max concurrent fetches (default 5).
+
+    Returns:
+    - str: JSON string {"count": N, "results": [{"url", "content", "error"}, ...]}.
+      Results preserve the input URL order. A failing URL carries a non-null "error".
+      Returns a JSON error string only when the whole batch fails.
+    """
+    urls = [u.strip() for u in urls if isinstance(u, str) and u.strip()][:MAX_URLS]
+    if not urls:
+        return json.dumps({"error": "No valid URLs provided", "results": []}, ensure_ascii=False)
+    try:
+        max_length = min(int(max_length), 50000)
+    except (ValueError, TypeError):
+        max_length = 10000
+
+    results = [None] * len(urls)
+    try:
+        # httpx.Client is thread-safe and shared across the pool (one connection pool).
+        # http2 stays off to avoid an extra `h2` dependency.
+        with httpx.Client(follow_redirects=True, timeout=20.0, http2=False) as client:
+            with ThreadPoolExecutor(max_workers=min(max_workers, len(urls))) as pool:
+                futures = {pool.submit(_fetch_one, client, u, max_length): i
+                           for i, u in enumerate(urls)}
+                for fut in as_completed(futures):
+                    i = futures[fut]
+                    try:
+                        results[i] = fut.result()
+                    except Exception as e:
+                        results[i] = {"url": urls[i], "content": "", "error": str(e)}
+    except Exception as e:
+        return json.dumps({"error": str(e), "results": []}, ensure_ascii=False)
+
+    return json.dumps({"count": len(results), "results": results}, ensure_ascii=False)
+
+
+def fetch_webpage(url, max_length: int = 10000) -> str:
+    """
+    fetch_webpage(url, max_length: int = 10000) -> str:
+    Fetch a webpage and extract its text content. Returns the extracted text as a string.
+
+    This function retrieves the HTML content of a given URL, extracts the main text
+    (boilerplate/navigation removed via trafilatura), and returns it. Useful for
+    reading the content of a specific page discovered via search_web.
+
+    Args:
+    - url (str | list[str]): The full URL of the webpage to fetch
+      (e.g., "https://example.com/article"). A list is also accepted and delegated to
+      ``fetch_webpages`` (returned as a JSON batch string).
     - max_length (int): Maximum number of characters to return (default: 10000).
       This prevents excessively long responses from large pages.
 
@@ -161,39 +276,25 @@ def fetch_webpage(url: str, max_length: int = 10000) -> str:
         # Output(str): First 5000 characters of text content
     ```
     """
+    if isinstance(url, (list, tuple)):
+        return fetch_webpages(url, max_length=max_length)
+
+    url = (url or "").strip()
+    if not url:
+        return json.dumps({"error": "No URL provided", "url": url}, ensure_ascii=False)
+
+    raw = fetch_webpages([url], max_length=max_length)
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        req = Request(url, headers=headers)
-        with urlopen(req, timeout=15) as response:
-            charset = response.headers.get_content_charset() or "utf-8"
-            html = response.read().decode(charset, errors="replace")
-
-        extractor = _HTMLTextExtractor()
-        extractor.feed(html)
-        text = extractor.get_text()
-
-        if len(text) > max_length:
-            text = text[:max_length] + "\n...[truncated]"
-
-        return text
-
-    except HTTPError as e:
-        return json.dumps({
-            "error": f"HTTP {e.code}: {e.reason}",
-            "url": url
-        }, ensure_ascii=False)
-    except URLError as e:
-        return json.dumps({
-            "error": f"URL error: {e.reason}",
-            "url": url
-        }, ensure_ascii=False)
-    except Exception as e:
-        return json.dumps({
-            "error": str(e),
-            "url": url
-        }, ensure_ascii=False)
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    items = data.get("results") or []
+    if not items:
+        return json.dumps({"error": data.get("error", "fetch failed"), "url": url}, ensure_ascii=False)
+    item = items[0]
+    if item.get("error"):
+        return json.dumps({"error": item["error"], "url": url}, ensure_ascii=False)
+    return item.get("content", "")
 
 
 

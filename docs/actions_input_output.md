@@ -73,8 +73,9 @@ Group 1（`explore_*` / `select_images`）和 Group 2（`ask_question` / `ask_ch
 | `title` | generate_document | 可选 | 由文档生成器自动生成标题 |
 | `query` | web_search | 建议必填 | 为空时回退使用当前完整上下文作为查询词 |
 | `max_results` | web_search | 可选 | 默认 10，超过 50 按 50 处理 |
-| `url` | fetch_webpage | 建议必填 | 为空时回退使用当前完整上下文作为地址 |
-| `max_length` | fetch_webpage | 可选 | 默认 10000，超过 50000 按 50000 处理 |
+| `urls` | fetch_webpage | 建议必填 | URL 数组（1-10 个），并行抓取；为空时回退到单个 `url`，再无则用当前完整上下文 |
+| `url` | fetch_webpage | 兼容字段 | 单个 URL 字符串；仅在 `urls` 为空时使用 |
+| `max_length` | fetch_webpage | 可选 | 每页默认 10000，超过 50000 按 50000 处理 |
 | `server` | exe_mcp | 单工具格式必填，与 `tool` 搭配 | 使用 `tools` 批量格式时忽略 |
 | `tool` | exe_mcp | 单工具格式必填，与 `server` 搭配 | 使用 `tools` 批量格式时忽略 |
 | `params` | exe_mcp | 可选 | 默认 `{}` |
@@ -394,10 +395,12 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 **输入**
 ```json
-{"action": "fetch_webpage", "url": "...", "max_length": 10000}
+{"action": "fetch_webpage", "urls": ["https://a.com/1", "https://b.com/2"], "max_length": 10000}
 ```
 
-**输出**
+`urls` 为 URL 数组（1-10 个），并行抓取后合并为一段 markdown 正文返回到 `content`/`page_content`；单页失败会在合并内容中显示 `> Failed: ...`，不影响其他页面。仅传单个 `url` 字符串时也可用。
+
+**输出**（每个 URL 生成一条 act 条目，按输入顺序）
 ```json
 {"role":"assistant","type":"act","action":"fetch_webpage","url":"...","page_content":"..."}
 ```

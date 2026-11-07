@@ -411,12 +411,13 @@ created_at  DATETIME
 | `pydantic` | 请求/响应模型校验 |
 | `SQLAlchemy` + `PyMySQL` + `cryptography` | MySQL 数据库 ORM |
 | `openai` | LLM API 调用 |
-| `httpx` | HTTP 客户端（`front.py` 反向代理、文档图片下载；MCP 客户端使用标准库 `urllib.request`）|
+| `httpx` | HTTP 客户端（`front.py` 反向代理、文档图片下载、`fetch_webpage` 抓取；MCP 客户端使用标准库 `urllib.request`）|
 | `pandas` | 数据处理 |
 | `matplotlib` + `seaborn` | 图表绘制 |
 | `Pillow` | 图片处理 |
 | `PyPDF2` + `python-docx` | PDF/DOCX 文档解析 |
 | `beautifulsoup4` | HTML 解析 |
+| `trafilatura` | 网页正文抽取（`fetch_webpage` 主内容提取，去除导航/页脚等噪声，依赖 lxml）|
 | `ddgs` | DuckDuckGo 搜索 |
 | `mcp` | MCP 官方 SDK（测试服务器用）|
 | `PyYAML` | YAML 配置文件读取 |

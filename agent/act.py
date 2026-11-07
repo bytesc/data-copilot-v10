@@ -14,7 +14,7 @@ from agent.tools.copilot.sql_code import parse_selected_fields_json
 from agent.tools.search_db import get_db_overview_markdown, search_db_markdown, get_db_summary_for_agent
 from agent.tools.search_func import get_func_catalog_markdown, search_func_by_keyword, get_func_summary_for_agent, get_func_docs_for
 from agent.tools.get_function_info import FUNCTION_DICT
-from agent.tools.web_search.web_search import search_web, fetch_webpage
+from agent.tools.web_search.web_search import search_web, fetch_webpages
 from agent.tools.mcp_client import load_mcp_servers, get_mcp_server, MCPClient, MCPError
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
@@ -126,14 +126,22 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             entry["query"] = act_data["query"]
         entries.append(entry)
     elif action == "fetch_webpage":
-        entry = {"role": "assistant", "type": "act", "action": "fetch_webpage"}
-        if act_data.get("display_content"):
-            entry["page_content"] = act_data["display_content"]
-        elif act_data.get("content"):
-            entry["page_content"] = act_data["content"]
-        if act_data.get("url"):
-            entry["url"] = act_data["url"]
-        entries.append(entry)
+        pages = act_data.get("pages")
+        if pages:
+            for p in pages:
+                entry = {"role": "assistant", "type": "act", "action": "fetch_webpage",
+                         "url": p.get("url", "")}
+                entry["page_content"] = f"[Error] {p['error']}" if p.get("error") else p.get("content", "")
+                entries.append(entry)
+        else:
+            entry = {"role": "assistant", "type": "act", "action": "fetch_webpage"}
+            if act_data.get("display_content"):
+                entry["page_content"] = act_data["display_content"]
+            elif act_data.get("content"):
+                entry["page_content"] = act_data["content"]
+            if act_data.get("url"):
+                entry["url"] = act_data["url"]
+            entries.append(entry)
     elif action == "explore_mcp":
         entry = {"role": "assistant", "type": "act", "action": "explore_mcp"}
         if act_data.get("selected_tools") is not None:
@@ -666,46 +674,56 @@ def _act_web_search(full_question: str, session_id: str, params: dict, request_j
 
 
 def _act_fetch_webpage(full_question: str, session_id: str, params: dict, request_json: str = ""):
-    url = (params.get("url") or "").strip()
+    # Accept {"urls": [...]} (new, parallel) or {"url": "..."} (single / legacy).
+    raw_urls = params.get("urls")
+    urls = [u.strip() for u in raw_urls if isinstance(u, str) and u.strip()] if isinstance(raw_urls, list) else []
+    if not urls:
+        single = (params.get("url") or "").strip()
+        if single:
+            urls = [single]
+    if not urls:
+        urls = [full_question.strip()]
+    urls = urls[:10]
+
     max_length = params.get("max_length", 10000)
-    if not url:
-        url = full_question.strip()
-
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'msg', 'content': f'Fetching page: {url[:100]}...'}, ensure_ascii=False)}\n\n"
-
     try:
         max_length = min(int(max_length), 50000)
     except (ValueError, TypeError):
         max_length = 10000
 
-    content = fetch_webpage(url, max_length=max_length)
-    try:
-        parsed = json.loads(content)
-        if "error" in parsed:
-            error_msg = parsed.get("error", "unknown error")
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'error', 'content': f'Fetch page failed: {error_msg}'}, ensure_ascii=False)}\n\n"
-            return {"url": url, "content": content}
-    except json.JSONDecodeError:
-        pass
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'msg', 'content': f'Fetching {len(urls)} page(s) in parallel...'}, ensure_ascii=False)}\n\n"
 
-    display_content = f"## Page Content: {url}\n\n{content}\n\n---\n*Content length: {len(content)} characters*"
+    raw = fetch_webpages(urls, max_length=max_length)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        data = {"results": []}
+    pages = data.get("results") or []
+
+    sections = []
+    for p in pages:
+        if p.get("error"):
+            sections.append(f"## {p.get('url', '')}\n\n> Failed: {p.get('error')}")
+        else:
+            sections.append(f"## {p.get('url', '')}\n\n{p.get('content', '')}")
+    display_content = f"## Page Content ({len(pages)} page(s))\n\n" + "\n\n---\n\n".join(sections)
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'chunk', 'content': display_content}, ensure_ascii=False)}\n\n"
 
     log_observe_cycle(session_id, 0, "act", "fetch_webpage",
-                      prompt=full_question[:5000], response=content[:5000],
-                      exec_result=content[:10000],
+                      prompt=full_question[:5000], response=display_content[:5000],
+                      exec_result=display_content[:10000],
                       token_estimate=len(full_question))
 
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
-        json.dumps({"url": url, "length": len(content)}, ensure_ascii=False),
-        "success", f"Fetch webpage: {url[:100]}",
+        json.dumps({"urls": urls, "count": len(pages)}, ensure_ascii=False),
+        "success", f"Fetch webpages: {len(urls)}",
     )
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'done', 'content': display_content, 'result': {'url': url, 'content': content[:10000]}}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'done', 'content': display_content, 'result': {'urls': urls, 'url': urls[0] if urls else '', 'pages': pages, 'content': display_content[:10000]}}, ensure_ascii=False)}\n\n"
 
-    return {"url": url, "content": content, "display_content": display_content}
+    return {"pages": pages, "urls": urls, "display_content": display_content}
 
 
 def _act_explore_mcp(build_question, session_id: str, params: dict, request_json: str = "", build_blackboard=None, images=None):

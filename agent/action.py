@@ -81,8 +81,8 @@ if ENABLE_WEB_SEARCH:
   Search the web using DuckDuckGo. Use this when the user asks for real-time information, news, facts, or data not available in the local database. Returns a list of results with title, URL, and snippet. Optionally set max_results (default 10, max 50) to control how many results to return."""
 
 if ENABLE_FETCH_URL:
-    _ACTION_DESCRIPTIONS["fetch_webpage"] = """- fetch_webpage: {"action": "fetch_webpage", "url": "https://example.com/page", "max_length": 10000}
-   Fetch and extract the text content of a specific webpage. Use this after `web_search` to read the full content of a promising result. The url should be extracted from a previous search result. max_length controls max characters to return (default 10000)."""
+    _ACTION_DESCRIPTIONS["fetch_webpage"] = """- fetch_webpage: {"action": "fetch_webpage", "urls": ["https://example.com/a", "https://example.com/b"], "max_length": 10000}
+   Fetch and extract the main text content of one or more webpages IN PARALLEL. Use this after `web_search` to read the full content of promising results. `urls` is an array of 1-10 URLs from previous search results; a single "url" string is also accepted. max_length controls max characters returned per page (default 10000)."""
 
 if ENABLE_MCP:
     _ACTION_DESCRIPTIONS["explore_mcp"] = """- explore_mcp: {"action": "explore_mcp", "keyword": "..."}
@@ -148,7 +148,7 @@ if ENABLE_BASE_KNOWLEDGE:
 if ENABLE_WEB_SEARCH:
     _DECISION_RULES.append("`web_search` searches the web for real-time information. Use it when the user asks about current events, news, facts, or data that is unlikely to be in the local database.")
 if ENABLE_FETCH_URL:
-    _DECISION_RULES.append("`fetch_webpage` fetches and reads the full text content of a specific URL. Use it after `web_search` to get detailed information from a specific page. The URL should come from a previous search result.")
+    _DECISION_RULES.append("`fetch_webpage` fetches one or more URLs in parallel and returns their extracted main text. Pass multiple URLs via the `urls` array to read several pages at once; only fetch URLs that came from a previous search result.")
 if ENABLE_MCP:
     _DECISION_RULES.append("`explore_mcp` connects to an external MCP server to discover available tools. Use it when you need capabilities not available in the local system (e.g., send emails, query external APIs, access specialized services). First `explore_mcp` to see what's available, then `exe_mcp` to call a specific tool.")
     _DECISION_RULES.append("`exe_mcp` calls a specific tool on an MCP server. Use it after `explore_mcp` has shown you the available tools. The `server` field must match the server name used in `explore_mcp`.")
@@ -305,6 +305,7 @@ def _parse_action_json(raw: str) -> dict:
         "query": result.get("query"),
         "max_results": result.get("max_results"),
         "url": result.get("url"),
+        "urls": result.get("urls"),
         "max_length": result.get("max_length"),
         "server": result.get("server"),
         "tool": result.get("tool"),
@@ -327,6 +328,7 @@ def _build_multi_action_result(actions_list: list) -> dict:
                 "query": item.get("query"),
                 "max_results": item.get("max_results"),
                 "url": item.get("url"),
+                "urls": item.get("urls"),
                 "max_length": item.get("max_length"),
                 "server": item.get("server"),
                 "tool": item.get("tool"),
