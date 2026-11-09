@@ -50,8 +50,11 @@ def _ensure_column_exists(engine, table_name, column_name, column_def):
                 cursor.execute(f"ALTER TABLE {table_name} MODIFY COLUMN {column_name} {column_def}")
         conn.commit()
         conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        print(
+            f"[WARNING] Failed to ensure column '{column_name}' on table "
+            f"'{table_name}': {e}"
+        )
 
 
 def record_session_operation(

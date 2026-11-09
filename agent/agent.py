@@ -341,9 +341,8 @@ def generate_and_execute_stream(question, tables=None, retries=2,
             error_msg = """
         code should only be in a md code block: 
         ```python
-        def func(data_dict):
+        def func():
             # some python code
-            # access dataframes like: df1 = data_dict['key1']
         ```
         without any additional comments, explanations or cmds !!!
         DO NOT write any import statement in your code, all imports will be injected automatically.

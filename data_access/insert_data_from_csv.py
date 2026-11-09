@@ -6,7 +6,7 @@ from data_access.db_conn import engine
 import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine, MetaData, Table, Column, text, inspect
-from sqlalchemy.types import VARCHAR, Integer, Float, DateTime, Boolean, Text
+from sqlalchemy.types import VARCHAR, Integer, BigInteger, Float, DateTime, Boolean, Text
 from datetime import datetime
 
 
@@ -33,8 +33,12 @@ def sanitize_column_name(name: str, used_names: set) -> str:
 
 
 def pandas_type_to_sqlalchemy(dtype, max_length=None):
+    # pandas reads integer columns as int64, whose range exceeds MySQL INT
+    # (Integer -> INT is 32-bit). Creating the column as INT while pandas later
+    # appends as BIGINT made large ids/timestamps fail with "Out of range value".
+    # Use BigInteger so the created column matches the appended int64 data.
     if pd.api.types.is_integer_dtype(dtype):
-        return Integer()
+        return BigInteger()
     elif pd.api.types.is_float_dtype(dtype):
         return Float()
     elif pd.api.types.is_datetime64_any_dtype(dtype):
@@ -98,7 +102,10 @@ def _validate_rows(df, column_types, max_errors=_MAX_VALIDATION_ERRORS):
         max_len = None
 
         if isinstance(dtype, Integer):
-            mask = not_null & pd.to_numeric(series, errors="coerce").isna()
+            # A value must be numeric AND integral: a fractional value such as
+            # "3.5" passes to_numeric but cannot be stored in an integer column.
+            numeric = pd.to_numeric(series, errors="coerce")
+            mask = not_null & (numeric.isna() | (numeric % 1 != 0))
             message = "Cannot convert to integer"
         elif isinstance(dtype, Float):
             mask = not_null & pd.to_numeric(series, errors="coerce").isna()
@@ -138,6 +145,27 @@ def _validate_rows(df, column_types, max_errors=_MAX_VALIDATION_ERRORS):
     return errors
 
 
+def _coerce_booleans(df, column_types):
+    """Normalize boolean columns to real booleans before inserting.
+
+    Validation accepts ``true/false``, ``1/0`` and ``yes/no`` (case-insensitive),
+    but only actual booleans/NULLs persist into a BOOLEAN (TINYINT) column — the
+    accepted strings such as ``"yes"`` would otherwise fail on insert. Convert
+    each boolean column to the nullable ``boolean`` dtype so the token strings
+    become real booleans and ``to_sql`` writes them correctly.
+    """
+    mapping = {
+        "true": True, "1": True, "yes": True,
+        "false": False, "0": False, "no": False,
+    }
+    for col in df.columns:
+        if not isinstance(column_types[col], Boolean):
+            continue
+        normalized = df[col].astype("string").str.strip().str.lower()
+        df[col] = normalized.map(mapping).astype("boolean")
+    return df
+
+
 def process_csv_to_database(file_content: bytes, table_name: str = "uploaded_data"):
     try:
         df = pd.read_csv(io.BytesIO(file_content))
@@ -171,6 +199,7 @@ def process_csv_to_database(file_content: bytes, table_name: str = "uploaded_dat
                 "table_name": table_name
             }
 
+        _coerce_booleans(df, column_types)
         _create_table_from_df(df, table_name, column_types)
         _insert_rows_bulk(df, table_name)
         result_msg = f"Successfully created table '{table_name}' and inserted {len(df)} records."
