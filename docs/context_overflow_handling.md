@@ -7,7 +7,7 @@
 核心实现位于 `utils/context_trim.py`，所有 LLM 调用点通过两个包装器接入：
 
 - `stream_with_context_retry(build_prompt, llm, images=None, max_level=4, on_retry=None)`：流式，逐块 `yield (chunk, reasoning)`。
-- `call_with_context_retry(build_prompt, llm, images=None, max_level=4, on_retry=None)`：非流式，返回原始 response 对象。
+- `call_with_context_retry(build_prompt, llm, images=None, max_level=4, on_retry=None)`：非流式，返回消息对象（内部 `call_llm` 返回 `response.choices[0].message`，取 `.content` 得到文本）。
 
 两者都需要一个 `build_prompt(level) -> str` 闭包：level 决定裁剪强度。
 
@@ -43,9 +43,9 @@
 `is_context_length_error(exc)` 对异常做 best-effort 判定：读取 `str(exc)` 以及 `message/body/code` 属性，按关键字（中英文）匹配，例如：
 
 - `context_length`、`context length`、`context window`
-- `maximum context`、`maximum number of tokens`、`too many tokens`
+- `maximum context`、`max context`、`maximum number of tokens`、`too many tokens`、`token limit`、`tokens exceed`
 - `prompt is too long`、`input is too long`、`request too large`、`reduce the length`
-- `上下文长度`、`上下文过长`、`超过最大`、`输入过长`、`长度超`
+- `上下文长度`、`上下文过长`、`超过最大上下文`、`输入过长`、`长度超`
 
 只有判定为超长错误时才触发重试；其它异常直接抛出。
 
@@ -125,7 +125,7 @@ N = min(base_limit, cap, round(base_limit * factor))   # 且不小于 1
   - `agent/observe.py` → `_build_observe_prompt(context, blackboard_text)`
   - `agent/action.py` → `_build_action_prompt(..., level)`
   - `agent/act.py` → 子函数接收 `build_question` / `build_blackboard` 闭包
-- 代码生成还会额外按块截断（见情况二的代码生成行）。
+- 代码生成还会额外按块截断：`get_cot_code_prompt` 在 level>0 时对 `function_info` / `database` / `knowledge` / `question` 四个块应用 `cap_text`（`agent/agent.py`）。这属于上方「情况一」有对话上下文的路径；下方情况二表中没有代码生成行。
 
 ---
 

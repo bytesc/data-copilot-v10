@@ -65,7 +65,7 @@ Group 1（`explore_*` / `select_images`）和 Group 2（`ask_question` / `ask_ch
 | --- | --- | --- | --- |
 | `action` | 全部 | 单动作格式必填，与 `actions` 二选一 | 缺少 `actions` 时决策无效 |
 | `actions` | 全部 | 多动作格式必填，与 `action` 二选一 | 与 `action` 同时出现时优先使用 `actions` |
-| `keyword` | 任意单动作均可解析；仅 explore_schema / explore_functions / explore_base_knowledge / explore_mcp 会消费 | 可选 | 其他 action 携带时被忽略；explore_* 中为空则不附加关注提示，不用于过滤数据 |
+| `keyword` | 任意单动作均可解析；仅 explore_schema / explore_functions / explore_base_knowledge / explore_mcp 会消费 | 可选 | 其他 action 携带时被忽略；explore_* 中为空则不附加关注提示，不用于过滤数据。act 层参数名：决策层字段为 `keyword`，前端会把 `actionResult.keyword` 映射为 `params.search_keyword` 再调用 `/api/act/stream/`；act 层同时接受 `search_keyword` 与 `keyword` 两个名字（`agent/act.py`） |
 | ~~`funcs`~~ | generate_and_execute | 已移除 | 函数名统一从 blackboard 的 `functions.selected_functions` 读取 |
 | `research_guide` | generate_and_execute | 可选 | 为空，不提供额外研究提示 |
 | `text` | ask_question / ask_choice / summary_and_pause / attempt_completion | 前端交互必填 | 缺少时前端无可展示/提问的内容 |
@@ -179,7 +179,11 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 [ACT explore_functions] selected_functions: ["func1",...]
 [ACT explore_functions] explore_plan:
 {explore_plan}
+[ACT explore_functions] error:
+{error}
 ```
+
+解析失败时 act 条目会写入 `"error": "explore_functions parse failed; previous selection preserved"`，渲染为上面的 error 行；此时不覆盖 blackboard，沿用上一次的函数选择。
 
 完整 `func_docs` 只保存在 blackboard。
 
@@ -234,8 +238,10 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 **输出（成功）**
 ```json
-{"role":"assistant","type":"act","action":"generate_and_execute","code":"...","result":"...","images":["xxx.png"]}
+{"role":"assistant","type":"act","action":"generate_and_execute","exec_ok":true,"code":"...","result":"...","images":["xxx.png"]}
 ```
+
+成功条目始终携带 `"exec_ok": true`，且 `result` 字段始终存在（可能为空字符串）；`code` 与 `images` 仅在非空时写入。`exec_ok` 由历史截断分类（`utils/context_trim.py`）和前端渲染（`utils/front_utils.py`）用来把"执行成功但无文本输出"的条目识别为真实执行结果。
 
 **输出（失败）**
 ```json
@@ -251,6 +257,8 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 [ACT generate_and_execute] result:
 {result}
 ```
+
+执行成功但没有文本输出时，`result` 为空，上下文渲染为 `[ACT generate_and_execute] result: (executed successfully; no textual output)`（依据条目的 `exec_ok` 标记）。
 
 **上下文（失败）**
 ```
@@ -357,7 +365,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
  "download_url_md":"...","download_url_docx":"...","download_url_pdf":"..."}
 ```
 
-文档始终生成 `.md`；`.docx` 与 `.pdf` 在转换成功时生成，失败时对应的 `download_url_docx` / `download_url_pdf` 为空字符串（`download_url_md` 始终非空）。
+文档始终生成 `.md`；`.docx` 与 `.pdf` 在转换成功时生成。失败时两个字段的表现取决于读取位置：SSE `done` 事件把转换失败的 `download_url_docx` / `download_url_pdf` 置为空字符串（`agent/document_generator.py`，`download_url_md` 始终非空）；而写入 `conversation_history` 的 act 条目则由 `agent/act.py` 仅按 `file_name` 重新拼出全部三个 URL，只要 `file_name` 存在即非空——即使转换失败，对应的 `.docx` / `.pdf` URL 也可能是指向不存在文件的死链。
 
 **上下文**
 ```
@@ -500,8 +508,10 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 
 **输出**
 ```json
-{"role":"assistant","type":"observe","content":{"description":"...","todo":["..."]}}
+{"role":"assistant","type":"observe","content":{"description":"...","todo":["..."]},"action":"generate_and_execute"}
 ```
+
+条目可携带可选的顶层 `action` 键（`agent/observe.py` 取最近一条 act 条目的 action），用于历史截断按 `observe_<action>` 分类保留（`utils/context_trim.py`）；本轮没有前置 act 条目时省略该键。
 
 **上下文**
 ```

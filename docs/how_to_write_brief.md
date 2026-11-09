@@ -10,11 +10,15 @@ Brief 是注入 LLM prompt 的概览性知识，帮助 LLM 理解数据库、业
 
 | Brief | MD 文件 | `brief_info` attr | 注入阶段 | 标签 |
 |-------|---------|-------------------|----------|------|
-| DB_BRIEF | `agent/tools/base_knowledge/knowledge_docs/db_brief.md` | `db_brief` | think / explore_schema | `DataBase Brief` |
-| BASE_KNOWLEDGE_BRIEF | `agent/tools/base_knowledge/knowledge_docs/base_knowledge_brief.md` | `base_knowledge_brief` | think / explore_base_knowledge | `Domain Knowledge Brief` |
-| MCP_BRIEF | `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md` | `mcp_brief` | think / explore_mcp | `MCP Brief` |
-| FUNCTION_BRIEF | 代码硬编码 | 无 | think | `Function Brief` |
-| CUSTOM_FUNC_BRIEF | `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md` | `custom_func_brief` | think / explore_functions | `Custom Function Brief` |
+| DB_BRIEF | `agent/tools/base_knowledge/knowledge_docs/db_brief.md` | `db_brief` | think + action / explore_schema | `DataBase Brief` |
+| BASE_KNOWLEDGE_BRIEF | `agent/tools/base_knowledge/knowledge_docs/base_knowledge_brief.md` | `base_knowledge_brief` | think + action / explore_base_knowledge | `Domain Knowledge Brief` |
+| MCP_BRIEF | `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md` | `mcp_brief` | think + action / explore_mcp | `MCP Brief` |
+| FUNCTION_BRIEF | 代码硬编码 | 无 | think + action | `Function Brief` |
+| CUSTOM_FUNC_BRIEF | `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md` | `custom_func_brief` | think + action / explore_functions | `Custom Function Brief` |
+
+> 注：五种 Brief 全部通过 `BRIEF_INFO` 同时注入 think 与 action 两个阶段（`agent/think.py`、`agent/action.py`）；表中 "explore_*" 表示还会额外注入对应 act 提示词。其中 BASE_KNOWLEDGE_BRIEF / CUSTOM_FUNC_BRIEF 注入各自 act 提示词时**不带** `Domain Knowledge Brief` / `Custom Function Brief` 标签——这两个标签只存在于 `BRIEF_INFO` 的渲染中（DB_BRIEF / MCP_BRIEF 自带 `DataBase Brief:` / `MCP Brief:` 标签，随注入位置始终显示）。
+>
+> 另注：`knowledge_docs/` 下的 MD 文件（含表中列出的三个 brief 文件，以及 `base_knowledge.md`、`target_knowledge.md`、`db_query_guide.md`、`doc_guide.md`、`think_guide.md`）当前均为 0 字节空占位文件；Brief 实际内容来自 `brief_info` 表的对应行，MD 文件只是可选的合并来源（`_read_doc()` 对空/缺失文件返回空串，`_get_brief_value()` 把 `brief_info` 的值追加到 MD 内容之后）。
 
 ---
 
@@ -52,7 +56,7 @@ CREATE TABLE brief_info (
 
 ### DB_BRIEF — 数据库概览
 
-**注入位置**：think 阶段 + `explore_schema` action。
+**注入位置**：think + action 阶段（`BRIEF_INFO`）+ `explore_schema` act 提示词。
 
 **作用**：说明数据库的整体领域和它能回答哪些类型的问题。
 
@@ -63,7 +67,7 @@ CREATE TABLE brief_info (
 
 ### BASE_KNOWLEDGE_BRIEF — 基础业务知识摘要
 
-**注入位置**：think 阶段（`Domain Knowledge Brief` 区段）+ `explore_base_knowledge` action。
+**注入位置**：think + action 阶段（`BRIEF_INFO`，带 `Domain Knowledge Brief` 标签）+ `explore_base_knowledge` act 提示词（不带该标签）。
 
 **作用**：说明业务领域的范围和能分析哪些业务问题。
 
@@ -72,7 +76,7 @@ CREATE TABLE brief_info (
 
 ### MCP_BRIEF — MCP 服务器摘要
 
-**注入位置**：think 阶段（`MCP Brief` 区段）+ `explore_mcp` action。
+**注入位置**：think + action 阶段（`BRIEF_INFO`，带 `MCP Brief` 标签）+ `explore_mcp` act 提示词。
 
 **作用**：说明有哪些 MCP 外部工具服务器可用、每个服务器提供什么能力。
 
@@ -82,7 +86,7 @@ CREATE TABLE brief_info (
 
 ### FUNCTION_BRIEF — 函数摘要
 
-**注入位置**：think 阶段（`Function Brief` 区段）。
+**注入位置**：think + action 阶段（`BRIEF_INFO` 的 `Function Brief` 区段）。
 
 **作用**：说明有哪些类别的函数可用。
 
@@ -92,7 +96,7 @@ CREATE TABLE brief_info (
 
 ### CUSTOM_FUNC_BRIEF — 自定义函数摘要
 
-**注入位置**：think 阶段（`Custom Function Brief` 区段）+ `explore_functions` action。
+**注入位置**：think + action 阶段（`BRIEF_INFO`，带 `Custom Function Brief` 标签）+ `explore_functions` act 提示词（不带该标签）。
 
 **作用**：说明自定义/额外注册的函数的能力。
 
@@ -115,7 +119,7 @@ CREATE TABLE brief_info (
 
 ### db_brief.md 写法
 
-格式参考 `agent/tools/base_knowledge/knowledge_docs/db_brief.md`：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/db_brief.md`（当前为空占位文件，以下为推荐格式）：
 
 ```markdown
 DataBase:
@@ -137,7 +141,7 @@ What it can do:
 
 ### base_knowledge_brief.md 写法
 
-格式参考 `agent/tools/base_knowledge/knowledge_docs/base_knowledge_brief.md`：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/base_knowledge_brief.md`（当前为空占位文件，以下为推荐格式）：
 
 ```markdown
 Knowledge Base:
@@ -158,7 +162,7 @@ What it can do:
 
 ### mcp_brief.md 写法
 
-格式参考 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`（当前为空占位文件，以下为推荐格式）：
 
 ```markdown
 MCP Servers:
@@ -176,7 +180,7 @@ Server List:
 
 ### custom_func_brief.md 写法
 
-格式参考 `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md`：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md`（当前为空占位文件，以下为推荐格式）：
 
 ```markdown
 Custom Functions:

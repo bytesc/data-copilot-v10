@@ -18,6 +18,7 @@
 - **端点读取**：各处理函数通过 `_read_upload_limited(file, 上限)` 以 1 MiB 分块读取，累计超过该接口上限即 `413`。
   因此无 `Content-Length` 的分块传输也能按接口上限拦截，且不会把整包读入内存。
 - `front.py` 反向代理**不设限**，仅透传请求；限制一律以后端为准。
+- **编辑开关**：配置 `enable_edit: false` 时，涉及改库的接口一律返回 `403`（`main.py` 的 `_require_edit_enabled`），包括 `/upload-csv/`、`/upload-txt/`、数据/注释导出、注释导入与更新、`/api/db-overview/`、删除表；系统知识库路由同样受限。
 
 ## 1. 数据 CSV 导入 (`POST /upload-csv/`)
 
@@ -42,7 +43,7 @@ pandas 读取 CSV 后逐列推断：
 
 | pandas dtype | MySQL 类型 | 判断依据 |
 |---|---|---|
-| `int64` | `Integer` | pandas 自动推断 |
+| `int64` | `BigInteger` | pandas 自动推断（int64 范围超出 MySQL INT，避免大数值溢出报错） |
 | `float64` | `Float` | pandas 自动推断 |
 | `datetime64` | `DateTime` | pandas 自动推断 |
 | `bool` | `Boolean` | pandas 自动推断 |
@@ -70,6 +71,7 @@ pandas 读取 CSV 后逐列推断：
    - Boolean → 检查值是否在 `true/false/1/0/yes/no` 中
    - VARCHAR → 检查字符串长度是否超过 `max_length`
    - 校验失败返回格式：`{success: false, error: "Validation failed:\nRow {line_no}, column '{col_name}': 具体原因"}`
+   - 报错条数上限 100：超出后仅追加一行 `"... more validation errors omitted (N rows checked)"`，不再逐条列出
 2. **执行阶段** — 校验通过后先创建表，再 `df.to_sql()` 批量插入，**分为两个独立操作，非事务性**。如果插入阶段失败，已创建的表不会自动回滚。
    - 执行失败返回格式：`{success: false, error: "Import failed. The DB reports: MySQL错误信息（含行列号）"}`
 3. **成功返回**：
@@ -185,16 +187,16 @@ email,邮箱地址
 ### 处理流程
 
 ```
-上传文档 → 提取文本 → LLM 分析 → 生成 ALTER TABLE 注释 SQL → 执行写入
+上传文档 → 提取文本 → LLM 分析生成注释 JSON → 服务端构建注释 DDL → 执行写入
 ```
 
 1. **`process_file_content()`** — 按类型解析文本：
-   - `.txt`：UTF-8 解码
+   - `.txt`：容错解码（依次尝试 `utf-8-sig` → `gb18030` → `latin-1`，最终回退 `errors="replace"`）
    - `.docx`：python-docx 逐段落提取
-   - `.pdf`：PyPDF2 逐页提取
-   - `.doc`：尝试 UTF-8 解码（旧版二进制格式**不支持**）
-2. **`get_llm_data_comment()`** — 提取文本 + 目标表结构 → LLM 生成 ALTER TABLE SQL
-3. **`execute_sql_3()`** — 逐条执行生成的 SQL
+   - `.pdf`：PyPDF2 逐页提取（无可提取文本的扫描件返回 400）
+   - `.doc`：按文件头识别真实格式——旧版二进制（OLE2）返回 400；ZIP 头（改名为 .doc 的 .docx）交给 .docx 解析器；RTF 走 `_strip_rtf` 提取；其余按 .txt 方式容错解码
+2. **`get_llm_data_comment()`** — 提取文本 + 目标表结构 → LLM 仅返回 JSON `{"table_comment", "columns"}`（prompt 明确禁止输出任何 ALTER TABLE / DROP / DELETE / INSERT / UPDATE 语句）
+3. **`_apply_table_comments()`** — 服务端从 `SHOW CREATE TABLE` 取原始列定义、仅替换 COMMENT 子句构建 DDL（`utils/column_ddl.py` 的 `build_table_comment_sql` / `build_column_comment_sql`），列名对照真实 schema 白名单过滤后经 `exec_driver_sql` 执行
 
 ### 响应
 
@@ -213,7 +215,7 @@ email,邮箱地址
 
 > 接口会返回注释写入结果：若模型未返回有效注释 JSON 或注释未能写入目标表，仍返回 `200`，但 `success` 为 `false`、`status` 为 `"error"`，并在 `error` 字段给出原因。
 
-**失败**: 文件读取/解析异常返回 `HTTP 500`，detail 为错误信息。
+**失败**: 无效/不可读的 `.docx`、不可读的 PDF、无文本层（扫描件）的 PDF、旧版二进制 `.doc` 等解析失败返回 `HTTP 400`；其余非 HTTP 异常才返回 `HTTP 500`，detail 为错误信息。
 
 ### 前置条件
 
@@ -245,7 +247,7 @@ email,邮箱地址
 | 传输 | base64 data URL，位于 JSON 请求 `data.conversation_history[].uploaded`（`[{"name", "data"}]`） |
 | 保存 | `tmp_imgs/upload_<8位小写字母>.png`（扩展名与生成图片一致，非 RGB/RGBA 会转换） |
 | 落库 | `uploaded` 改写为文件名列表，并合并进 blackboard 的 `selected_images` 区域 |
-| 张数 | 前端最多 10 张；后端不限制 |
+| 张数 | 前端最多 10 张；后端每次请求同样最多处理 10 张（`MAX_IMAGES_PER_REQUEST`），且整包 base64 总量上限 50MB（`MAX_TOTAL_IMAGE_BYTES`），超限图片会被静默丢弃 |
 | 单张大小 | ≤ 20MB，超限或解码/保存失败会被跳过 |
 | 幂等 | `uploaded` 已是文件名字符串时不再处理、不重复合并 |
 | 实现 | `utils/image_ingest.py` 的 `ingest_uploaded_images`（经 `main.py` 的 `unified_request_envelope` 调用） |
@@ -262,8 +264,8 @@ email,邮箱地址
 | `data_access/insert_data_from_csv.py` | CSV 解析、类型推断、名称清洗、预校验、建表写入 |
 | `utils/process_file.py` | 文档格式解析（.txt / .docx / .pdf / .doc） |
 | `utils/image_ingest.py` | 用户上传图片：base64 解码、保存为 upload_*.png、写入 history/blackboard |
-| `agent/data_comment.py` | LLM 调用生成注释 SQL |
-| `agent/tools/copilot/utils/read_db.py` | SQL 执行器（`execute_sql_3`） |
+| `agent/data_comment.py` | LLM 生成注释 JSON + 服务端构建/执行注释 DDL（本流程实现） |
+| `utils/column_ddl.py` | 依据 `SHOW CREATE TABLE` 构建改注释 DDL（本流程实现） |
 | `agent/tools/copilot/sql_code.py` | 数据库结构信息获取 |
 | `vue-front/src/pages/DataUploadPage.vue` | 数据上传页 |
 | `vue-front/src/pages/CommentManagePage.vue` | 注释管理页 |

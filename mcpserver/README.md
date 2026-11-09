@@ -9,6 +9,7 @@
 ```
 mcpserver/
 ├── README.md                    # 本文件
+├── __init__.py                  # 包标记，使 python -m mcpserver.* 可用
 ├── calculator_server.py         # 计算器 MCP 服务器 (端口 8101)
 ├── datetime_server.py           # 日期时间 MCP 服务器 (端口 8103)
 └── run_all.py                   # 一键启动所有服务器
@@ -37,7 +38,11 @@ python3 -m mcpserver.datetime_server      # 端口 8103
 
 ```python
 # mcpserver/example_server.py
-from mcp.server import MCPServer
+try:
+    # mcp 2.x re-exports MCPServer at the package root.
+    from mcp.server import MCPServer
+except ImportError:  # 部分 mcp 2.x 构建仅在子模块中导出
+    from mcp.server.mcpserver import MCPServer
 
 mcp = MCPServer("example")
 
@@ -84,7 +89,7 @@ mcp_servers:
 
 ### 3. 更新 MCP Brief
 
-编辑 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`，在 Server List 中添加新服务器描述，以便 LLM 在 `explore_mcp` 时了解可用服务器。
+编辑 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`（当前为空文件，可自行创建 Server List 小节）或系统库 `brief_info` 表的 `mcp_brief` 行，添加新服务器描述（两者内容会合并），以便 LLM 在 `explore_mcp` 时了解可用服务器。
 
 ### 4. 添加到启动脚本（可选）
 
@@ -103,5 +108,5 @@ SERVERS = [
 - 工具函数类型注解中的参数名和类型会作为 `inputSchema` 自动生成，LLM 据此构造参数
 - 工具函数的 `"""docstring"""` 会作为工具的描述展示给 LLM，建议写清楚功能和参数含义
 - 支持 Python 原生类型：`str`, `int`, `float`, `bool`, `list[type]`, `dict` 等
-- 可通过 `config/mcp_servers.yaml` 中的 `enable_mcp` 开关控制是否启用 MCP 功能
+- 可通过 `config/config.yaml` 中的 `enable_mcp` 开关控制是否启用 MCP 功能（默认 `true`）
 - 启动时对 `sse` 传输的服务器进行端口可达性检查（`main.py`），不可达会输出 `[WARNING]`；`stdio` 服务器无端口检查

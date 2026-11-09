@@ -20,6 +20,10 @@ FLUSH PRIVILEGES;
 
 以下每个配置项均支持通过 **静态 MD 文件** 和/或 **数据库表** 配置，两者内容合并后一起注入提示词（并非二选一）。
 
+> 注：下文列出的 `knowledge_docs/` 下各 MD 文件目前均为**空占位文件**，实际内容来自对应的系统库表；当某个 MD 文件有内容时，会与表内容合并后一起注入。
+
+除直接改库外，系统自带知识管理接口：`/api/sys-knowledge/{base-knowledge|db-query-guide|code-guide|graph-code-guide|think-guide|doc-guide}/…` 与 `/api/sys-knowledge/brief-info/…`（增删改查，受 `enable_edit` 开关限制），前端管理页面位于 `/knowledge` 路由下，可直接在页面上维护这些配置。
+
 ### 3.1 DB_BRIEF — 数据库概览
 
 | 来源 | 路径/表 |
@@ -36,7 +40,7 @@ FLUSH PRIVILEGES;
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/base_knowledge_brief.md` |
 | 数据库表 | `brief_info` 中 `attr='base_knowledge_brief'` 的行 |
 
-用于 think 阶段的 `## Domain Knowledge Brief` 区段和 `explore_base_knowledge` action。**仅摘要**，完整业务知识（`base_knowledge` 表）通过 `explore_base_knowledge` action 按需获取。
+用于 think 阶段的 `### Domain Knowledge Brief` 区段和 `explore_base_knowledge` action。**仅摘要**，完整业务知识（`base_knowledge` 表）通过 `explore_base_knowledge` action 按需获取。
 
 ### 3.3 DB_QUERY_GUIDE — SQL 查询指南
 
@@ -53,7 +57,7 @@ FLUSH PRIVILEGES;
 |---|---|
 | 代码硬编码 | `agent/tools/base_knowledge/get_base_knowledge.py` |
 
-用于 think 阶段的 `## Function Brief` 区段。内容为代码中写死的静态摘要（仅 Database 与 Visualization 两大类）。
+用于 think 阶段的 `### Function Brief` 区段。内容为代码中写死的静态摘要（仅 Database 与 Visualization 两大类）。
 
 ### 3.5 MCP_BRIEF — MCP 服务器摘要
 
@@ -62,7 +66,7 @@ FLUSH PRIVILEGES;
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md` |
 | 数据库表 | `brief_info` 中 `attr='mcp_brief'` 的行 |
 
-用于 think 阶段的 `## MCP Brief` 区段和 `explore_mcp` action。
+用于 think 阶段的 `### MCP Brief` 区段和 `explore_mcp` action。
 
 ### 3.6 CUSTOM_FUNC_BRIEF — 自定义函数摘要
 
@@ -71,7 +75,7 @@ FLUSH PRIVILEGES;
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md` |
 | 数据库表 | `brief_info` 中 `attr='custom_func_brief'` 的行 |
 
-用于 think 阶段的 `## Custom Function Brief` 区段和 `explore_functions` action。描述自定义/额外注册的函数能力，与 Function Brief 互补。
+用于 think 阶段的 `### Custom Function Brief` 区段和 `explore_functions` action。描述自定义/额外注册的函数能力，与 Function Brief 互补。
 
 ### 3.7 BASE — 基础业务知识（完整）
 
@@ -137,4 +141,4 @@ FLUSH PRIVILEGES;
 
 ## 5. 验证
 
-启动后访问 `GET /api/db-overview/` 查看是否正确读取了表和字段注释。
+启动后访问 `GET /api/db-overview/` 查看是否正确读取了表和字段注释。注意：该接口受 `enable_edit` 开关限制，配置为 `false` 时返回 `403`。

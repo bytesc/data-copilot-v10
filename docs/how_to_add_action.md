@@ -109,15 +109,17 @@ elif action == "my_new_action":
 
 ### 3. 实现具体执行逻辑
 
-可以是新文件或现有文件中的函数。函数应为生成器（generator），yield SSE 事件字典。
+可以是新文件或现有文件中的函数。函数应为生成器（generator），SSE 事件格式统一为 `{phase, sub_phase, type, content, ...}`。现有代码有两种流式输出模式：
 
-SSE 事件格式统一为：
+- **预序列化 SSE 字符串（主流做法）**：绝大多数 `_act_*` 执行函数直接 yield 已序列化的 SSE 文本行（参照 `_act_explore_schema` / `_act_web_search` 等）：
 
 ```python
-yield {"phase": "act", "sub_phase": "my_new_action", "type": "msg", "content": "..."}
-yield {"phase": "act", "sub_phase": "my_new_action", "type": "chunk", "content": "..."}
-yield {"phase": "act", "sub_phase": "my_new_action", "type": "done", "content": "...", "key": "value"}
+yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'my_new_action', 'type': 'msg', 'content': '...'}, ensure_ascii=False)}\n\n"
+yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'my_new_action', 'type': 'chunk', 'content': '...'}, ensure_ascii=False)}\n\n"
+yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'my_new_action', 'type': 'done', 'content': '...', 'key': 'value'}, ensure_ascii=False)}\n\n"
 ```
+
+- **事件字典流（仅 generate_and_execute 使用）**：底层 `generate_and_execute_stream`（`agent/agent.py`）yield 事件字典，由 `_act_generate_and_execute` 消费后再包装成上述 `data: ...\n\n` 字符串转发。新增 action 建议直接采用第一种模式，不要新增 dict 流。
 
 ### 4. `utils/context_trim.py` — 历史截断策略
 
@@ -235,8 +237,8 @@ function subPhaseLabel(name) {
 
 ### 实现要点
 - **`action.py`**: `VALID_ACTIONS` 添加 `"fetch_webpage"`，`_ACTION_DESCRIPTIONS` 添加 `url`/`max_length` 参数描述，`_parse_action_json` 提取 `url`/`max_length`
-- **`act.py`**: 导入 `fetch_webpage`，`_event_stream_act_impl` 分发到 `_act_fetch_webpage`，`_build_act_entries` 保存 `url` 和 `content`（存入 `page_content` 字段）
-- **执行函数**: 直接调用 `fetch_webpage(url, max_length)`，返回内容 yield `chunk` 和 `done` 事件
+- **`act.py`**: 导入 `fetch_webpages`（复数，来自 `agent/tools/web_search/web_search.py`），`_event_stream_act_impl` 分发到 `_act_fetch_webpage`，`_build_act_entries` 保存 `url` 和 `content`（存入 `page_content` 字段）
+- **执行函数**: act 流程调用的是 `fetch_webpages(urls, max_length)`（URL 列表，最多 10 个，并行抓取）；单页版 `fetch_webpage(url, max_length)` 是同一文件中的另一个独立工具函数，act 流程不使用。返回内容 yield `chunk` 和 `done` 事件
 - **前端**: `useChat.js` params 传递 `url`/`max_length`，`ActMessage.vue` 添加 `fetch_webpage` 模板和 `subPhaseLabel`
 
 ### SSE 事件流
@@ -244,7 +246,7 @@ function subPhaseLabel(name) {
 成功：
   {type:"msg",     sub_phase:"fetch_webpage", content:"正在获取页面: {url}..."}
   {type:"chunk",   sub_phase:"fetch_webpage", content:"页面内容 markdown..."}
-  {type:"done",    sub_phase:"fetch_webpage", content:"...", result:{url:"...", content:"..."}}
+  {type:"done",    sub_phase:"fetch_webpage", content:"...", result:{urls:[...], url:"...", pages:[...], content:"..."}}
   {type:"history", history:[...]}
 
 失败：

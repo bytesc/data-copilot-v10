@@ -306,7 +306,7 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
 | `recent_generated_images` | `generate_and_execute` | `images` |
 | `selected_images` | `select_images` / 用户上传图片 | `images`（每项为 `{"path", "reason"}`） |
 
-`recent_generated_images` 区域保存最近一次代码执行生成的图片列表（本地图片通常只存文件名，如 `xxx.png`；本机静态地址或外部 http 图片保留完整 URL）：每次 `generate_and_execute` 执行完成后**覆盖更新**，会经 `blackboard_to_text` 渲染进 `## Blackboard` 提示词段喂给 LLM，前端 Blackboard 弹窗也从该区域读取展示。
+`recent_generated_images` 区域保存最近一次代码执行生成的图片列表（本地图片通常只存文件名，如 `xxx.png`；本机静态地址或外部 http 图片保留完整 URL）：每次 `generate_and_execute` 执行完成后**覆盖更新**，会经 `blackboard_to_text` 渲染进 `## Blackboard` 提示词段喂给 LLM，前端 Blackboard 弹窗也从该区域读取展示。新写入一律使用键名 `recent_generated_images`；读取时兼容历史持久化数据中的旧拼写键 `rencent_generated_images`（以及更早的 `images`）作为回退，避免旧历史中已生成的图片丢失。
 
 `selected_images` 区域由 `select_images` action 写入，每项为 `{"path": "...", "reason": "..."}`：`path` 是本地 `tmp_imgs` 文件名或完整 `http(s)` 图片链接，`reason` 是一句话选中原因。每次 `select_images` 执行后**整体覆盖**该区域；`images: []` 会清空。用户上传的图片不通过 `select_images`，而是在请求摄取时**追加合并**进该区域（`reason` 为 `"user uploaded image"`，按 `path` 去重，不覆盖已有项）。该区域同样会渲染进 `## Blackboard`，并且其中的图片会排在上一次代码执行生成的 `images` 之后提交给支持多模态的模型。
 
@@ -388,7 +388,7 @@ blackboard 由 `utils/blackboard.py` 维护：
 {"role":"user","type":"question","content":"分析这些图片","uploaded":["upload_abcd1234.png"]}
 ```
 
-保存规则：写入 `tmp_imgs/upload_<8位小写字母>.png`，扩展名与生成图片一致，进行格式归一（非 `RGB`/`RGBA` 会转换）。每个用户条目最多 10 张（仅前端卡控，后端不限制张数）；不变式是磁盘文件名。
+保存规则：写入 `tmp_imgs/upload_<8位小写字母>.png`，扩展名与生成图片一致，进行格式归一（非 `RGB`/`RGBA` 会转换）。后端按请求卡控：单个请求最多处理 10 张图片、原始 base64 总量不超过 50MB（`utils/image_ingest.py` 的 `MAX_IMAGES_PER_REQUEST` / `MAX_TOTAL_IMAGE_BYTES`），超出预算的项被静默丢弃（仅在服务端打印警告，前端不会收到错误）；不变式是磁盘文件名。
 
 摄取逻辑见 `utils/image_ingest.py`：
 
@@ -442,6 +442,7 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 | `params` | exe_mcp | 可选 | 默认 `{}` |
 | `tools` | exe_mcp | 批量格式必填 | 为空时回退到 `server` / `tool` 单工具格式 |
 | `images` | select_images | 必填（可为空数组） | 为空数组时清空 `selected_images` 区域；每项需包含 `path`，`reason` 可为空 |
+| `selected_images` | select_images | 可选回退字段 | 仅当 `images` 缺失（`null`/未传）时作为其回退读取；两者都缺失或不是数组时报错 `select_images requires an images array` |
 
 ## act
 
@@ -605,7 +606,7 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 | `paused: true` | summary_and_pause |
 | `completed: true` | attempt_completion |
 
-> 实时流程中，前端执行类动作通常只出现在 `action_decision.content` 里（带 `action` 与 `text`），不一定单独产生 `type:"act"` 条目；由日志重建时才会补成上述 `act` 条目。重建仅针对决策里带 `text` 的前端交互动作（ask_question / ask_choice / summary_and_pause / attempt_completion）；`generate_document` 决策携带的是 `title` 而非 `text`，因此重建逻辑不会为它补出 `act` 条目（示例中的 `completed: true` 只由 attempt_completion 触发）。
+> 实时流程中，前端执行类动作通常只出现在 `action_decision.content` 里（带 `action` 与 `text`），不一定单独产生 `type:"act"` 条目；由日志重建时才会补成上述 `act` 条目。重建仅针对决策里带非空 `text` 的前端交互动作——重建侧的 `FRONTEND_ACTIONS`（`data_access/observe_log.py`）除 ask_question / ask_choice / summary_and_pause / attempt_completion 外还包含 `generate_document`；`generate_document` 决策通常携带 `title` 而非 `text`，因此一般不会为它补出 `act` 条目，但一旦其决策带非空 `text`，重建同样会补出并置 `completed: true`（所以 `completed: true` 并非只由 attempt_completion 触发，只是实践中几乎总是来自 attempt_completion）。
 
 ## observe
 
@@ -733,11 +734,12 @@ images:
 | exe_mcp | 999（永久） |
 | ask_question / ask_choice / summary_and_pause / attempt_completion | 999（永久） |
 | generate_document | 1 |
-| observe（默认） | 5 |
+| observe_<action>（带 action 的 observe，已列出的动作：explore_schema / explore_functions / explore_base_knowledge / generate_and_execute / ask_question / ask_choice / summary_and_pause / attempt_completion） | 3 |
+| observe（无 action，或 action 未在上行列出，归入 `observe_default`） | 5 |
 | 未匹配类别 | 999（永久） |
 | blackboard | 不参与裁剪（不进入 trimmed_context） |
 
-> `generate_and_execute` 条目的分类顺序固定：先判 `code`（命中即 `act_code`，保留 1），其次判 `error`（`act_error`，保留 1），两者都无才算 `act_result`。落库的成功/失败条目都带 `code`，因此正常流程下 `act_result` 类别基本不会命中，`act_code`（保留 1）才是实际约束代码类条目数量的类别。
+> `generate_and_execute` 条目的分类顺序固定：先判 `error`（命中即 `act_error`，保留 1），其次判 `result` / `exec_ok`（命中即 `act_result`，保留 999，永久），最后才判 `code`（`act_code`，保留 1，只命中「有 code 但无 result/error」的条目）。落库的成功/失败条目都带 `result` 或 `error`，因此大多落入 `act_result` 被永久保留，`act_code`（保留 1）实际只约束「只有代码、没有执行结果」的条目；对更早的含 `code` 条目，裁剪不会丢弃整条，而是仅剥离其 `code` 字段（`_strip_generated_code`），条目本身和执行结果保留。
 
 ## 各阶段使用方式
 

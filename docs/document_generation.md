@@ -72,9 +72,11 @@ GET /api/doc-workspace/file/outline_{session_id}_{base}.yaml
 
 ```
 POST /api/generate-document/generate-yaml-outline/
-Body: { conversation_history, session_id }
+Body: { conversation_history, session_id, user_prompt? }
 ```
 SSE: `yaml_outline: msg → chunk×N → done { content, yaml_base, yaml_file }`
+
+`user_prompt` 为可选字段：非空时作为 "User Instructions (MUST follow…)" 注入大纲生成 prompt，并先推送一条 `Processing your instructions...` 的 SSE `msg`。
 
 **YAML 格式定义**:
 ```yaml
@@ -186,9 +188,11 @@ SSE: `finalize: done { download_url_md/docx/pdf }`
 | 路径 | 内容 | 命名 |
 |------|------|------|
 | `doc_workspace/` | YAML 大纲 | `outline_{sid}_{rand8}.yaml` |
-| `doc_workspace/` | 单节草稿 | `draft_{sid}_{base}_sNN.md` |
-| `doc_workspace/` | 合并草稿 | `draft_{sid}_{base}.md` |
+| `doc_workspace/` | 单节草稿 | `draft_{yaml_base}_sNN.md` |
+| `doc_workspace/` | 合并草稿 | `draft_{yaml_base}.md` |
 | `tmp_imgs/` | 最终文档 | `doc_{rand8}.md/.docx/.pdf` |
+
+> 草稿命名直接取请求中的 `yaml_base`，后端不再拼接 session_id；前端会把 sid 拼进 `yaml_base`（`{sid}_{base}`）后再传给后端，因此经页面操作得到 `draft_{sid}_{base}*.md`；直连 API 传裸 `base` 时得到 `draft_{base}_sNN.md`。
 
 ---
 

@@ -8,8 +8,8 @@
 Think → Action → Act(generate_and_execute) → Code Generation → Code Execution
 ```
 
-- **Think / Action** 阶段：LLM 通过 `get_func_summary_for_agent()` 看到函数摘要表，决定使用哪些函数。
-- **Act 阶段**：`act.py` 将 `selected_functions` 传递给 `agent.py` 中的 `generate_and_execute_stream()`。
+- **Think / Action** 阶段：`agent/think.py` 与 `agent/action.py` 中虽有 `get_func_summary_for_agent()` 调用，但其结果当前并未注入 Think / Action 的 prompt（死变量）；LLM 实际看到的函数目录来自 `explore_functions` act 提示词中的 `get_func_catalog_markdown()`（`agent/act.py`），以及 `BRIEF_INFO` 中硬编码的 Function Brief（`agent/tools/base_knowledge/get_base_knowledge.py`）。
+- **Act 阶段**：`act.py` 将 `selected_fields` 传递给 `agent.py` 中的 `generate_and_execute_stream()`；选中的函数通过 blackboard 的 `functions.selected_functions` 区域传递，由 `get_cot_code_prompt()` 读取（`agent/agent.py`）。
 - **Code Generation 阶段**：`agent.py` 中的 `get_cot_code_prompt()` 将选中函数的完整 docstring 注入 LLM prompt，LLM 生成带 `def func():` 的 Python 代码。
 - **Code Execution 阶段**：`code_executor.py` 通过 `exec()` 执行生成的代码，函数的 import 由 `code_insert.py` 自动注入。
 
@@ -62,6 +62,7 @@ def my_new_function(param1: str, param2: int = 10) -> pd.DataFrame:
 - 第二行是功能描述。
 - 必须包含 `Args`、`Returns`、`Example` 段落。
 - 返回值类型标注要准确，LLM 据此决定如何调用。
+- "返回 None 表示出错"（`returns None in case of error`）只是建议约定，**并非强制**：例如 `exe_sql`（`agent/tools/tools_def.py`）采用抛异常风格，docstring 中明确说明出错时不返回 None。各函数按实际行为如实书写即可；上述截取规则只依赖前几行的位置（签名/描述/Returns），不依赖 None 约定。
 
 ### docstring 前三行的特殊作用
 
@@ -69,10 +70,10 @@ def my_new_function(param1: str, param2: int = 10) -> pd.DataFrame:
 
 | 场景 | 代码位置 | 截取方式 | 用途 |
 |------|----------|----------|------|
-| 函数选择（`FUNCTION_DESCRIPTION`） | `get_function_info.py:67-69` | `splitlines()[1:4]`（docstring 以空行开头，故为签名行 + 描述行 + Returns 行） | LLM 选择函数时的简短描述 |
+| 函数选择（`FUNCTION_DESCRIPTION`） | `get_function_info.py:60-62` | `splitlines()[1:4]`（docstring 以空行开头，故为签名行 + 描述行 + Returns 行） | LLM 选择函数时的简短描述 |
 | 函数目录（`get_func_catalog_markdown` / `_get_func_desc`） | `search_func.py:25-26` | `splitlines()[1:4]`（同上） | 展示给 LLM 的函数目录 |
 | 函数摘要表（`Purpose` 列） | `search_func.py:60-61` | `splitlines()[3]`（第 4 行，即 Returns 描述行） | Think/Action 阶段函数摘要表的 Purpose 列 |
-| 代码生成（brief 模式） | `get_function_info.py:111,142` | `splitlines()[:3]`（第 1~3 行，即空行 + 签名行 + 描述行） | 代码生成 prompt 中的函数简介 |
+| 代码生成（brief 模式） | `get_function_info.py:104,135` | `splitlines()[:3]`（第 1~3 行，即空行 + 签名行 + 描述行） | 代码生成 prompt 中的函数简介。brief 模式当前未被调用：唯一的外部调用是 `agent/agent.py` 的 `get_function_info(question, llm, use_all_functions=True)`（brief 默认 False），代码生成实际注入的是完整 docstring |
 
 以 `exe_sql` 为例，其 docstring 各行的使用情况：
 
@@ -137,7 +138,7 @@ _CORE_CATEGORIES = {
 
 ### 4. `agent/tools/get_function_info.py` — 设为重要函数（可选）
 
-如果该函数应在每次代码生成时默认可用，添加到 `IMPORTANT_FUNC`（约第 60 行）：
+如果该函数应在每次代码生成时默认可用，添加到 `IMPORTANT_FUNC`（`get_function_info.py:53-55`）：
 
 ```python
 IMPORTANT_FUNC = ["load_data", "get_save_image_path", "my_new_function"]
@@ -150,7 +151,7 @@ IMPORTANT_FUNC = ["load_data", "get_save_image_path", "my_new_function"]
 通常不需要修改 `agent.py`，但以下情况需要检查：
 
 - **函数依赖第三方库**：如果新函数使用了 `tools_def.py` 之外的第三方模块，需要在 `agent/agent.py` 中将 import 语句添加到 `IMPORTANT_MODULE` 或 `THIRD_MODULE`（约第 31-40 行），确保生成代码时自动注入。
-- **函数需要数据库上下文**：如果函数涉及数据库查询，检查 `agent/agent.py` 中 `get_cot_code_prompt()` 的数据库上下文注入逻辑（约第 108-121 行）。
+- **函数需要数据库上下文**：如果函数涉及数据库查询，检查 `agent/agent.py` 中 `get_cot_code_prompt()` 的数据库上下文注入逻辑（`agent.py:115-128`）。
 
 ## 函数定义的完整格式规范
 
@@ -179,6 +180,8 @@ def function_name(param1: Type1, param2: Type2 = default) -> ReturnType:
     # 实现代码
     return result
 ```
+
+以上为推荐格式；其中 "returns None in case of error" 是建议约定而非强制（如 `exe_sql` 采用抛异常风格，出错时不返回 None，docstring 如实描述即可）。
 
 ## 相关文件索引
 

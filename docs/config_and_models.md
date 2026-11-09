@@ -76,6 +76,7 @@ llm_models:
 # 功能开关
 enable_mcp: true              # MCP 外部工具
 enable_base_knowledge: true   # 基础知识库检索
+enable_target_knowledge: false # 目标文档模板知识（target_knowledge.md）注入 Think/Observe/代码生成等提示词
 enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
 enable_edit: true             # 数据/知识编辑（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
@@ -124,7 +125,7 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 
 ### 统一请求信封
 
-所有 JSON `POST/PUT/PATCH` 的 HTTP 请求体必须为：
+JSON `POST/PUT/PATCH` 的 HTTP 请求体可选使用 `{meta, data}` 信封（模型调用选项只能通过信封传入）；不携带信封的普通 JSON 原样透传。携带信封时请求体为：
 
 ```json
 {
@@ -144,7 +145,7 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 - `meta` 只包含模型调用选择：`model`、`reasoning_effort`、`style`、`use_images`；为空字符串表示 `Default`。
 - `use_images` 控制是否随请求上传 blackboard 图片，仅对 `supports_images` 为 true 的模型生效；未携带时按模型能力取默认值（支持则为 true，不支持则为 false）。前端 Images 开关的状态会缓存在 localStorage 并随每次请求发送。
 - 后端中间件读取 `meta` 后只把 `data` 交给原 Pydantic 接口，因此下文各请求模型的示例均表示 `data` 内容。
-- 未使用信封的 JSON 请求返回 `400`；不再支持 header 回退。
+- 未使用信封的普通 JSON 请求原样透传（不会返回 `400`），但无法携带模型调用选项；也没有 header 回退。
 - 后端不保存用户选择；浏览器用 localStorage 的 `data-copilot-llm-config` 缓存模型配置列表和当前选择，并在每次请求中发送。
 - 启动时从后端动态获取配置列表；若与浏览器缓存不一致，或选择的模型/Depth/Style 已无效，则回退默认值（第一个模型、第一个 Depth、`Default` Style）。
 - GET/DELETE 没有请求体，不使用信封。
@@ -170,7 +171,7 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 | `selected_functions` | string[] | 否 | 限定的函数列表 |
 | `session_id` | string | 否 | 会话 ID |
 
-**用于**: `POST /api/generate-and-execute/stream/`、`POST /api/plain-chat/stream/`、`POST /api/filter-db-fields/stream/`、`POST /api/filter-functions/stream/`、`POST /api/exe-sql/`
+**用于**: `POST /api/generate-and-execute/stream/`、`POST /api/plain-chat/stream/`、`POST /api/filter-db-fields/stream/`、`POST /api/filter-db-fields/`、`POST /api/filter-functions/stream/`、`POST /api/exe-sql/`
 
 ### ThinkInput
 
@@ -198,7 +199,7 @@ VITE_SERVER_URL=http://127.0.0.1:8008
 }
 ```
 
-`action` 可选值: `explore_schema`, `explore_functions`, `explore_base_knowledge`, `generate_and_execute`, `generate_document`, `web_search`, `fetch_webpage`, `explore_mcp`, `exe_mcp`, `select_images`
+`action` 可选值: `explore_schema`, `explore_functions`, `explore_base_knowledge`, `generate_and_execute`, `ask_question`, `ask_choice`, `summary_and_pause`, `attempt_completion`, `generate_document`, `web_search`, `fetch_webpage`, `explore_mcp`, `exe_mcp`, `select_images`
 
 **用于**: `POST /api/act/stream/`
 
@@ -381,7 +382,7 @@ phase           VARCHAR(50)     -- think / execute / observe
 sub_phase       VARCHAR(100)    -- filter_db / filter_func / plan / gen_code / exec_code / result
 prompt          LONGTEXT        -- 发给 LLM 的 prompt
 response        LONGTEXT        -- LLM 回复
-user_decision   VARCHAR(50)     -- approve / reject / edit / skip
+user_decision   VARCHAR(2000)   -- approve / reject / edit / skip 或用户输入文本（最多 2000 字；旧表的 VARCHAR(50) 在启动时自动加宽）
 exec_code       LONGTEXT        -- 执行的代码
 exec_result     LONGTEXT        -- 执行结果
 exec_error      LONGTEXT        -- 执行错误
@@ -400,6 +401,10 @@ outline     LONGTEXT        -- 生成的大纲
 full_text   LONGTEXT        -- 生成的完整文本
 created_at  DATETIME
 ```
+
+### 系统库知识表
+
+系统库另含 6 张键值对知识表：`base_knowledge`、`db_query_guide`、`code_guide`、`graph_code_guide`、`think_guide`、`doc_guide`，结构均为 `id` INT 主键、`key` TEXT、`value` LONGTEXT（`graph_code_guide` 不在 `init.sql` 中，由启动时按 `enable_base_knowledge` 自动创建）。
 
 ---
 
@@ -465,7 +470,7 @@ created_at  DATETIME
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `BACKEND_URL` | 否 | 后端服务地址，默认由 `config/config.yaml` 的 `server_host`/`server_port` 推导为 `http://{server_host}:{server_port}` |
+| `BACKEND_URL` | 否 | 后端服务地址，默认由 `config/config.yaml` 的 `server_host`/`server_port` 推导（`0.0.0.0`/`::`/空 host 按 `127.0.0.1` 处理，即默认配置下为 `http://127.0.0.1:8008`） |
 | `FRONT_HOST` | 否 | 监听地址，默认 `0.0.0.0` |
 | `FRONT_PORT` | 否 | 监听端口，默认 `8010` |
 

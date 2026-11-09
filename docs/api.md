@@ -2,11 +2,11 @@
 
 Base URL: `http://<host>:8008`
 
-> **统一请求信封**：所有 JSON `POST/PUT/PATCH` 必须发送
+> **统一请求信封（可选）**：JSON `POST/PUT/PATCH` 可以发送
 > `{"meta": {"model": "...", "reasoning_effort": "...", "style": "...", "use_images": true}, "data": {...}}`。
-> 下文请求体示例若无特别说明，展示的是 `data` 内容；未使用信封会返回 `400`。
+> 下文请求体示例若无特别说明，展示的是 `data` 内容。信封为可选：中间件仅在请求同时携带 `meta` 与 `data` 时自动解包（`meta` 用于本次 LLM 调用，`data` 作为转发给接口的新请求体）；未携带信封的普通 JSON 主体原样透传，不会返回 `400`。
+> 模型选项（`model`/`reasoning_effort`/`style`/`use_images`）只能经信封（JSON）或 Multipart 的 `meta` 表单字段传入，后者目前仅 `/upload-txt/` 会读取。
 > `reasoning_effort` / `style` 为空字符串表示 `Default`。`use_images` 控制是否随请求上传 blackboard 图片，仅对 `supports_images=true` 的模型生效；未携带时按模型能力取默认值。后端不保存选择，GET/DELETE 不使用信封。
-> Multipart 上传使用 `meta` 表单字段，目前仅 `/upload-txt/` 会读取。
 > **用户上传图片**不走 Multipart、也没有独立接口：前端把图片以 base64 放进 `data.conversation_history` 的 user 条目的 `uploaded` 字段（`[{"name": "a.png", "data": "data:image/png;base64,..."}]`）。后端信封中间件会解码保存为 `tmp_imgs/upload_<8位小写字母>.png`，把 `uploaded` 改写为文件名列表，并追加合并进 blackboard 的 `selected_images` 区域。详见 [4. Agent 核心流程](#4-agent-核心流程-sse-流式) 的「用户上传图片」小节。
 
 ---
@@ -37,6 +37,7 @@ Base URL: `http://<host>:8008`
   "enable_base_knowledge": true,
   "enable_web_search": true,
   "enable_fetch_url": true,
+  "enable_target_knowledge": false,
   "enable_edit": true,
   "models": [
     {
@@ -83,83 +84,7 @@ Base URL: `http://<host>:8008`
 
 **响应** `200` — 结构同 `/api/config` 中的 `models`、`current_model`、`current_reasoning_effort`、`current_style`。
 
-### POST `/api/models/select/`
-
-返回目标模型的配置和默认 Depth/Style。后端不做全局切换，选择由前端保存并在后续请求的 `meta` 中发送。
-
-**请求体** `application/json`
-```json
-{
-  "meta": {
-    "model": "deepseek-v4.1-flash",
-    "reasoning_effort": "low",
-    "style": ""
-  },
-  "data": { "id": "glm-5.3-flash" }
-}
-```
-
-**响应** `200`
-```json
-{
-  "models": [
-    {
-      "id": "glm-5.3-flash",
-      "name": "glm5.3 flash",
-      "model": "glm-5.3-flash",
-      "url": "https://tokenhub.tencentmaas.com/v1",
-      "reasoning_effort_options": [],
-      "reasoning_effort_selected": "",
-      "style_options": ["Formal", "Casual", "Technical"],
-      "style_selected": "",
-      "supports_images": true
-    }
-  ],
-  "current_model": "glm-5.3-flash",
-  "current_reasoning_effort": "",
-  "current_style": ""
-}
-```
-
-> `models` 实际返回全部配置模型（此处仅列选中的一条）。
-
-> **错误**: 模型 id 不存在时返回 `404 {"detail": "Model '<id>' not found"}`。
-
-### POST `/api/models/reasoning-effort/`
-
-设置本次请求的 Depth 值；空字符串表示 `Default`。模型未配置 `reasoning_effort` 或值不在列表中时返回 `400`。
-
-**请求体** `application/json`
-```json
-{
-  "meta": {
-    "model": "glm-5.3-flashx",
-    "reasoning_effort": "max",
-    "style": ""
-  },
-  "data": { "value": "max" }
-}
-```
-
-**响应** `200` — 返回模型列表及更新后的 `current_model`、`current_reasoning_effort`、`current_style`。
-
-### POST `/api/models/style/`
-
-设置本次请求的 Style 名称；空字符串表示 `Default`。模型未配置 `style_temperature` 或样式不存在时返回 `400`。
-
-**请求体** `application/json`
-```json
-{
-  "meta": {
-    "model": "glm-5.3-flash",
-    "reasoning_effort": "low",
-    "style": "Casual"
-  },
-  "data": { "value": "Casual" }
-}
-```
-
-**响应** `200` — 结构同上。最终调用会把 Style 映射为 `temperature`，但 `extra_params.temperature` 优先。
+模型/Depth/Style 选择完全由前端本地保存与校验（localStorage `data-copilot-llm-config`），后端仅提供只读的 `GET /api/config` 与 `GET /api/models/`，不存在对应的 POST 选择端点。
 
 ### GET `/api/tools/functions`
 
@@ -370,6 +295,8 @@ data: {"type":"error","content":"..."}
 data: {"type":"done","content":""}
 ```
 
+> **Think / Action / Observe 三个流的完整事件集**：除 `chunk` 外，还会发出 `msg`（阶段提示）、`reasoning_chunk`、终态 `done`（Think/Observe 附带 `plan_result`，Action 附带 `action_result`）、收尾的 `history` 事件（携带保存后的会话历史），以及失败时的 `error`（Observe 流内部异常时额外带 `fatal: true`）。各事件的字段与顺序详见 `docs/sse_event_flow.md`。
+
 ### POST `/api/think/stream/`
 
 **请求体 — `ThinkInput`**
@@ -381,7 +308,7 @@ data: {"type":"done","content":""}
 }
 ```
 
-**事件**: `chunk` (type: chunk, phase: think)
+**事件**: `msg`、`chunk` (phase: think)、`reasoning_chunk`、`done`（含 `plan_result`）、`history`、`error`
 
 ### POST `/api/action/stream/`
 
@@ -395,7 +322,7 @@ data: {"type":"done","content":""}
 }
 ```
 
-**事件**: `chunk` (JSON 动作描述)
+**事件**: `msg`、`chunk` (JSON 动作描述)、`reasoning_chunk`、`done`（含 `action_result`）、`history`、`error`
 
 ### POST `/api/act/stream/`
 
@@ -428,7 +355,7 @@ data: {"type":"done","content":""}
 }
 ```
 
-**事件**: `chunk` (type: chunk, phase: observe)
+**事件**: `status`、`msg`、`chunk` (phase: observe)、`reasoning_chunk`、`done`（含 `plan_result`）、`history`、`error`（流崩溃时附带 `fatal: true`）
 
 ---
 
@@ -461,7 +388,7 @@ data: {"type":"done","content":""}
 
 处理发生在路由之前且**幂等**：后续阶段收到的 `conversation_history` 里 `uploaded` 已是文件名，不会再解码或重复合并；当前请求构建的 `## Context` 已能看到 `Uploaded images: ...` 文件名列表。文件名随会话历史持久化；若 `meta.use_images` 开启且模型 `supports_images=true`，图片会按 `selected_images` 规则作为 `image_url` 提交。
 
-> 前端卡控最多 10 张；后端不限制张数。图片保存失败或为空会被跳过，不影响其余消息。
+> 前端卡控最多 10 张；后端同样有硬性上限（`utils/image_ingest.py`）：单请求最多解码/保存 10 张（`MAX_IMAGES_PER_REQUEST`），总字节上限 50 MB（`MAX_TOTAL_IMAGE_BYTES`，按 base64 长度保守估算）。超限的图片会被静默丢弃（原始 base64 同时从历史中剔除），图片保存失败或为空也会被跳过，均不影响其余消息。
 
 ---
 
@@ -547,9 +474,12 @@ data: {"type":"done","content":""}
 {
   "ans": [{"id": 1, "amount": 100}],
   "type": "success",
+  "msg": "处理成功",
   "session_id": "xxx"
 }
 ```
+
+**错误** `503`: 未配置只读数据库（`mysql_readonly` 缺失/为空）时返回 `{"detail": "No read-only database is configured (mysql_readonly is missing)"}`——只读查询被禁用，不会回退到特权账号。
 
 ### POST `/api/db-slice/`
 
@@ -682,13 +612,15 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 ```json
 {
   "conversation_history": [...],
-  "yaml_outline": {...},
+  "yaml_outline": "title: 销售分析报告\nsections:\n  - heading: 概述\n    description: 报告背景与分析目标",
   "session_id": "xxx",
   "section_index": null,
   "confirmed_sections": [],
   "yaml_base": "outline_xxx"
 }
 ```
+
+> `yaml_outline` 为**必填的 YAML 字符串**（`YamlDocumentInput` 中声明为 `str`）；传 JSON 对象会因校验失败返回 `422`。
 
 `section_index` 为 `null` 时生成全部内容。
 
@@ -804,6 +736,8 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 
 **响应** `200` — 更新后的记录。
 
+**错误** `400`: 两个字段都未提供时返回 `{"detail": "No fields to update"}`。
+
 ### DELETE — `DELETE /api/sys-knowledge/{resource}/{item_id}`
 
 **响应** `200`
@@ -883,7 +817,10 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 }
 ```
 
-失败时（校验错误或导入异常）返回 `success:false` 与 `error`：
+失败分两类：
+
+- **HTTP `400`（请求级校验失败）**：非 `.csv` 文件返回 `{"detail": "Only CSV files are supported"}`；空文件返回 `{"detail": "Uploaded file is empty"}`。
+- **HTTP `200` + `success:false`（数据库侧失败）**：行校验错误或导入异常（`data_access/insert_data_from_csv.py`）返回 `success:false` 与 `error`：
 ```json
 {
   "success": false,
@@ -985,10 +922,11 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 
 | 状态码 | 含义 |
 |--------|------|
-| 400 | 请求参数错误；JSON POST/PUT/PATCH 未使用 `{meta, data}` 信封 |
+| 400 | 请求参数错误（如 sys-knowledge PUT 未提供任何字段、上传非 CSV/空文件）；缺省 `{meta, data}` 信封**不会**报 400（信封为可选，见文首说明） |
 | 403 | 功能被配置禁用（`enable_edit=false` 时数据/知识管理接口） |
 | 404 | 资源不存在 |
 | 409 | 资源冲突（如键已存在）|
 | 413 | 上传文件超过大小上限（见「文件上传」的「上传大小限制」） |
 | 500 | 服务器内部错误 |
 | 502 | 代理连接后端失败（仅 front.py） |
+| 503 | 只读数据库未配置（`mysql_readonly` 缺失时 `/api/exe-sql/`） |

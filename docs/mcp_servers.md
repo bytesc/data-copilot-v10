@@ -60,7 +60,11 @@ python3 -m mcpserver.datetime_server      # 端口 8103
 
 ```python
 # mcpserver/example_server.py
-from mcp.server import MCPServer
+try:
+    # mcp 2.x re-exports MCPServer at the package root.
+    from mcp.server import MCPServer
+except ImportError:  # 部分 mcp 2.x 构建仅在子模块中导出
+    from mcp.server.mcpserver import MCPServer
 
 mcp = MCPServer("example")
 
@@ -91,7 +95,7 @@ mcp_servers:
 
 ### 3.3 更新 MCP Brief
 
-编辑 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`，在 Server List 中添加新服务器描述，以便 LLM 在 `explore_mcp` 时了解可用服务器。
+编辑 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`（当前为空文件，可自行创建 Server List 小节）或系统库 `brief_info` 表的 `mcp_brief` 行，添加新服务器描述（两者内容会合并），以便 LLM 在 `explore_mcp` 时了解可用服务器。
 
 ### 3.4 添加到启动脚本（可选）
 

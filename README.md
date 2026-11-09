@@ -15,11 +15,11 @@
 - **自然语言驱动分析**：直接提问，自动生成并执行 SQL 和 Python 代码完成查询与可视化
 - **T-A-A-O 自主闭环**：Think（规划）→ Action（决策）→ Act（执行）→ Observe（审查），循环直到任务完成
 - **多智能体角色分工**：规划、执行、审查等角色分离，协同完成复杂任务流水线
-- **代码生成与执行**：动态生成 Python 代码，安全沙箱执行，支持 SQL 查询、图表绘制、数据变换
+- **代码生成与执行**：动态生成 Python 代码，后端进程内直接执行（导入范围由提示词约束），支持 SQL 查询、图表绘制、数据变换
 - **智能图表绘制**：自动选择图表类型（matplotlib/seaborn），支持对比图、数据标注
 - **知识蒸馏与检索**：多源知识库（业务规则、查询指南、思维策略、代码范例），动态注入上下文
 - **上下文智能裁剪**：按类别独立保留策略，避免长对话上下文溢出
-- **Blackboard 探索缓存**：explore_schema / explore_functions / explore_base_knowledge / explore_mcp 的完整结果存入 history 的 blackboard，独立注入所有 LLM 阶段，上下文只保留参数、计划和选中项；blackboard 另设 `recent_generated_images` 区域保存最近一次代码执行生成的图片列表，`selected_images` 区域通过 `select_images` action 保存人工/模型选中的图片（文件名或 URL）及一句话选中原因，随 `## Blackboard` 段喂给 LLM。支持图片多模态的模型还会把图片作为 `image_url` 内容随请求提交（前端 Images 开关控制），本地图片/本机静态 URL 转 base64，外部 URL 原样传递；聊天记录 act 条目的 `images` 字段仅前端展示
+- **Blackboard 探索缓存**：explore_schema / explore_functions / explore_base_knowledge / explore_mcp 的完整结果存入 history 的 blackboard，独立注入所有 LLM 阶段，上下文只保留参数、计划和选中项；blackboard 另设 `recent_generated_images` 区域（旧拼写 `rencent_generated_images` 仅作为已持久化历史的读取兼容别名保留）保存最近一次代码执行生成的图片列表，`selected_images` 区域通过 `select_images` action 保存人工/模型选中的图片（文件名或 URL）及一句话选中原因，随 `## Blackboard` 段喂给 LLM。支持图片多模态的模型还会把图片作为 `image_url` 内容随请求提交（前端 Images 开关控制），本地图片/本机静态 URL 转 base64，外部 URL 原样传递；聊天记录 act 条目的 `images` 字段仅前端展示
 - **文档自动生成**：一键生成 Markdown / DOCX / PDF 格式分析报告，含图表的智能排版
 - **任意 CSV 导入**：上传 CSV 自动建表，上传文档自动生成数据注释
 - **联网搜索**：支持 DuckDuckGo 联网搜索，结合外部信息分析
@@ -43,7 +43,7 @@
 
 每个阶段对应独立的 LLM 调用和专用提示词：
 
-1. **THINK（思考）**：LLM 接收用户问题、数据库结构、函数目录、知识库，输出 JSON 规划 `{"description": "...", "todo": ["task1", ...]}`
+1. **THINK（思考）**：LLM 接收用户问题、数据库/函数简况（Brief Info）、思维知识库、对话上下文与 Blackboard，输出 JSON 规划 `{"description": "...", "todo": ["task1", ...]}`
 2. **ACTION（决策）**：LLM 根据当前规划选择一个动作（探索表结构、生成代码、搜索知识库、搜索网页、反问用户、生成文档等）
 3. **ACT（执行）**：执行所选动作——生成并执行代码、查询数据库、绘制图表、搜索网页等
 4. **OBSERVE（审查）**：LLM 审查执行结果，更新任务列表，处理错误，决定继续或终止
@@ -57,7 +57,7 @@
 | **LLM 主干** | 支持 DeepSeek、Qwen、GLM、GPT-4o 等，通过 OpenAI 兼容接口接入 |
 | **函数图谱** | 预定义工具函数（SQL 查询、图表绘制、数据分析、网页搜索等），LLM 动态选择组合 |
 | **知识库** | 多源知识：业务规则（DB + 文件）、查询指南、思维策略、代码范例、数据库摘要 |
-| **代码引擎** | 生成 Python 代码 → 沙箱执行 → 结果流式返回 |
+| **代码引擎** | 生成 Python 代码 → 后端进程内直接执行 → 结果流式返回 |
 | **数据库层** | 用户数据 DB（MySQL）+ 系统 DB（会话日志、知识库、操作审计） |
 | **文档生成器** | 大纲规划 → 逐节生成 → 多格式导出（MD/DOCX/PDF） |
 | **前端** | Vue 3 + Vite，SSE 流式渲染，T-A-A-O 状态机 |
@@ -128,13 +128,13 @@ pip install -r requirement.txt
 
 ### 初始化系统数据库
 
-`init.sql` 只包含 `CREATE TABLE` 语句（不创建数据库），需在 `config/config.yaml` 里 `mysql_sys` 指定的系统库中执行，例如 `data_copilot_v10_land_sys`：
+`init.sql` 包含各系统表的 `CREATE TABLE` 语句（不创建数据库）以及 4 条 `brief_info` 初始化 `INSERT` 语句，需在 `config/config.yaml` 里 `mysql_sys` 指定的系统库中执行，例如 `data_copilot_v10_land_sys`：
 
 ```bash
 mysql -u root -p < init.sql
 ```
 
-`main.py` 启动时也会自动创建缺失的系统表，包括 `init.sql` 未包含的 `graph_code_guide`。
+`main.py` 启动时也会自动创建缺失的系统表，包括 `init.sql` 未包含的 `graph_code_guide`；其中 `base_knowledge`、`doc_guide`、`code_guide`、`graph_code_guide`、`think_guide` 这批知识表仅在 `enable_base_knowledge` 为 true 时创建。
 
 ### 配置文件
 
@@ -205,6 +205,7 @@ llm_models:
 # 功能开关（设为 false 关闭对应能力）
 enable_mcp: true              # MCP 外部工具集成
 enable_base_knowledge: true   # 基础知识库检索
+enable_target_knowledge: false # 目标文档模板知识（target_knowledge.md）注入 Think/Observe/代码生成等提示词
 enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
 enable_edit: true             # 数据/知识管理页（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
@@ -214,7 +215,7 @@ enable_perf_log: true         # 写接口性能指标到 perf_log.csv
 
 ### 请求格式（统一信封）
 
-所有 JSON `POST/PUT/PATCH` 请求必须使用 `{meta, data}` 信封；`meta` 放模型调用选项，`data` 放原接口参数：
+JSON `POST/PUT/PATCH` 请求可选使用 `{meta, data}` 信封（模型调用选项只能通过信封传入）：携带信封时，`meta` 放模型调用选项，`data` 放原接口参数，后端解包后把 `data` 转发给原接口；未携带信封的普通 JSON 请求原样透传：
 
 ```json
 {
@@ -281,7 +282,7 @@ FRONT_PORT=8010 python front.py
 | [`docs/actions_input_output.md`](docs/actions_input_output.md) | Action 的输入输出规范 |
 | [`docs/document_generation.md`](docs/document_generation.md) | 文档生成流程 |
 | [`docs/upload_csv_and_doc.md`](docs/upload_csv_and_doc.md) | CSV 和文档上传说明 |
-| [`docs/prompt_injection.md`](docs/prompt_injection.md) | 提示注入防护策略 |
+| [`docs/prompt_injection.md`](docs/prompt_injection.md) | 动态提示词注入机制（上下文注入说明） |
 | [`docs/how_to_add_action.md`](docs/how_to_add_action.md) | 新增 Action 开发指南 |
 | [`docs/how_to_add_function.md`](docs/how_to_add_function.md) | 新增 Function 开发指南 |
 | [`docs/how_to_write_brief.md`](docs/how_to_write_brief.md) | 编写 Brief Info 规范 |
