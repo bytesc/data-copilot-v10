@@ -662,10 +662,10 @@ async def log_user_input(request: Request, user_input: UserInputLog):
 
 @app.post("/api/exe-sql/")
 async def exe_sql(request: Request, user_input: AgentInput):
-    if not is_read_only_sql(user_input.question):
+    if read_engine is None:
         raise HTTPException(
-            status_code=400,
-            detail="Only single read-only statements (SELECT/SHOW/DESCRIBE/EXPLAIN/WITH) are allowed",
+            status_code=503,
+            detail="No read-only database is configured (mysql_readonly is missing)",
         )
     loop = asyncio.get_event_loop()
     ans = await loop.run_in_executor(executor, execute_select, read_engine, user_input.question)
@@ -689,7 +689,7 @@ async def exe_sql(request: Request, user_input: AgentInput):
 
 
 from agent.tools.copilot.utils.read_db import get_rows_from_all_tables, get_table_comments_dict, execute_select, \
-    get_all_comments, is_read_only_sql
+    get_all_comments
 from agent.tools.copilot.sql_code import filter_db_fields, filter_db_fields_stream
 from agent.tools.get_function_info import filter_functions_stream
 from agent.tools.tools_def import engine, read_engine, llm

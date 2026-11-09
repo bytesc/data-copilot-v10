@@ -1,5 +1,3 @@
-import re
-
 import pandas as pd
 from sqlalchemy import text, inspect
 from sqlalchemy.exc import SQLAlchemyError
@@ -358,103 +356,21 @@ def execute_sql_3(engine, sql):
         connection.commit()
         return executed_count
 
-_READ_ONLY_KEYWORDS = (
-    "SELECT", "SHOW", "DESCRIBE", "DESC", "EXPLAIN", "WITH", "TABLE", "VALUES",
-)
-_WRITE_KEYWORDS = (
-    "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE",
-    "REPLACE", "GRANT", "REVOKE", "MERGE", "RENAME", "CALL", "LOAD",
-    "INTO", "OUTFILE", "DUMPFILE", "LOCK", "UNLOCK",
-)
-
-
-def _strip_sql_literals(sql):
-    """Replace string/identifier literals and comments with spaces.
-
-    Keeps the statement's keyword and semicolon structure while hiding any
-    contents (quotes, comments) that could otherwise be mistaken for SQL.
-    """
-    out = []
-    i = 0
-    n = len(sql)
-    while i < n:
-        ch = sql[i]
-        nxt = sql[i + 1] if i + 1 < n else ""
-        if ch == "-" and nxt == "-":
-            i += 2
-            while i < n and sql[i] not in "\r\n":
-                i += 1
-            out.append(" ")
-        elif ch == "#":
-            i += 1
-            while i < n and sql[i] not in "\r\n":
-                i += 1
-            out.append(" ")
-        elif ch == "/" and nxt == "*":
-            i += 2
-            while i < n and not (sql[i] == "*" and i + 1 < n and sql[i + 1] == "/"):
-                i += 1
-            i += 2
-            out.append(" ")
-        elif ch in ("'", '"', "`"):
-            quote = ch
-            out.append(" ")
-            i += 1
-            while i < n:
-                c = sql[i]
-                if c == "\\" and quote != "`":
-                    i += 2
-                    continue
-                if c == quote:
-                    if i + 1 < n and sql[i + 1] == quote:
-                        i += 2
-                        continue
-                    i += 1
-                    break
-                i += 1
-            out.append(" ")
-        else:
-            out.append(ch)
-            i += 1
-    return "".join(out)
-
-
-def is_read_only_sql(sql):
-    """Best-effort check that ``sql`` is a single read-only statement.
-
-    Defense-in-depth so that a misconfigured read-only fallback (or a missing
-    read-only DB user) cannot be exploited to run writes/DDL: only a single
-    SELECT/SHOW/DESCRIBE/EXPLAIN/WITH/TABLE/VALUES statement is accepted.
-    """
-    if not isinstance(sql, str):
-        return False
-    cleaned = _strip_sql_literals(sql).strip()
-    if not cleaned:
-        return False
-    body = cleaned[:-1] if cleaned.endswith(";") else cleaned
-    if ";" in body:
-        return False  # multiple statements
-    match = re.match(r"[A-Za-z_]+", body)
-    if not match:
-        return False
-    first = match.group(0).upper()
-    if first not in _READ_ONLY_KEYWORDS:
-        return False
-    # SHOW/DESCRIBE/DESC cannot modify data; e.g. allow "SHOW CREATE TABLE".
-    if first in ("SHOW", "DESCRIBE", "DESC"):
-        return True
-    upper = body.upper()
-    for keyword in _WRITE_KEYWORDS:
-        if re.search(r"\b" + keyword + r"\b", upper):
-            return False
-    return True
-
-
 def execute_select(engine, sql):
-    if not is_read_only_sql(sql):
-        raise ValueError(
-            "Only single read-only statements "
-            "(SELECT/SHOW/DESCRIBE/EXPLAIN/WITH) are allowed"
+    """Execute a read-only query against the read-only engine.
+
+    Access control is enforced by the dedicated read-only database account
+    (``mysql_readonly``) instead of parsing the SQL text here: a correctly
+    scoped account (SELECT/SHOW only, no ``FILE`` privilege) cannot perform
+    writes/DDL or ``SELECT ... INTO OUTFILE`` regardless of the statement text.
+    A missing read-only account is a hard error so the privileged user is never
+    used as a fallback.
+    """
+    if engine is None:
+        raise RuntimeError(
+            "No read-only database is configured (mysql_readonly is missing); "
+            "refusing to execute SQL. Configure mysql_readonly instead of "
+            "falling back to the privileged database user."
         )
     try:
         with engine.connect() as connection:

@@ -71,7 +71,10 @@ class MCPClient:
         self._message_endpoint: Optional[str] = None
         self._request_id = 0
         self._responses: dict[int, dict] = {}
-        self._response_event = threading.Event()
+        # One Event per in-flight request id. A single shared Event would let a
+        # response for a *different* request wake the wrong waiter, and a late
+        # response (after a timeout) could be misread as the current reply.
+        self._events: dict[int, threading.Event] = {}
         self._closed = False
         self._lock = threading.Lock()
 
@@ -82,6 +85,7 @@ class MCPClient:
         # stdio transport resources
         self._process: Optional[subprocess.Popen] = None
         self._stdout_thread: Optional[threading.Thread] = None
+        self._stderr_thread: Optional[threading.Thread] = None
 
     def _next_id(self) -> int:
         self._request_id += 1
@@ -158,9 +162,7 @@ class MCPClient:
                         try:
                             msg = json.loads(event_data)
                             if "id" in msg:
-                                with self._lock:
-                                    self._responses[msg["id"]] = msg
-                                self._response_event.set()
+                                self._store_response(msg)
                         except json.JSONDecodeError:
                             pass
                     event_type = None
@@ -193,6 +195,8 @@ class MCPClient:
             )
             self._stdout_thread = threading.Thread(target=self._read_stdio_loop, daemon=True)
             self._stdout_thread.start()
+            self._stderr_thread = threading.Thread(target=self._read_stderr_loop, daemon=True)
+            self._stderr_thread.start()
 
             self._send_initialize()
         except Exception as e:
@@ -213,11 +217,28 @@ class MCPClient:
                 try:
                     msg = json.loads(line)
                     if "id" in msg:
-                        with self._lock:
-                            self._responses[msg["id"]] = msg
-                        self._response_event.set()
+                        self._store_response(msg)
                 except json.JSONDecodeError:
                     pass
+        except Exception:
+            pass
+
+    def _read_stderr_loop(self):
+        """Drain stderr so a chatty stdio server cannot block on a full pipe.
+
+        ``stderr=subprocess.PIPE`` with no reader is a classic deadlock: once the
+        OS pipe buffer fills, the child blocks on its next write and stops
+        serving requests (every call then times out). Reading stderr here keeps
+        the child unblocked.
+        """
+        try:
+            while not self._closed and self._process and self._process.stderr:
+                line = self._process.stderr.readline()
+                if not line:
+                    break
+                line = line.rstrip()
+                if line:
+                    print(f"[MCP {self.name} stderr] {line}")
         except Exception:
             pass
 
@@ -228,6 +249,17 @@ class MCPClient:
         return b""
 
     # ── shared JSON-RPC logic ────────────────────────────────────────
+
+    def _store_response(self, msg: dict):
+        """Record a JSON-RPC response and wake only its own waiter."""
+        req_id = msg.get("id")
+        if req_id is None:
+            return
+        with self._lock:
+            self._responses[req_id] = msg
+            event = self._events.get(req_id)
+        if event is not None:
+            event.set()
 
     def _send_initialize(self):
         result = self._dispatch_request("initialize", {
@@ -245,7 +277,11 @@ class MCPClient:
         if params is not None:
             body["params"] = params
 
-        self._response_event.clear()
+        # Register this request's own event before sending, so a response that
+        # arrives for a different id can never satisfy this waiter.
+        event = threading.Event()
+        with self._lock:
+            self._events[req_id] = event
 
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         try:
@@ -254,13 +290,24 @@ class MCPClient:
             elif self.transport == "stdio":
                 self._send_via_stdio(data)
         except Exception as e:
+            with self._lock:
+                self._events.pop(req_id, None)
+                self._responses.pop(req_id, None)
             raise MCPConnectionError(f"Failed to send request '{method}': {e}")
 
-        if not self._response_event.wait(timeout=30):
+        if not event.wait(timeout=30):
+            # Drop any late/partial state for this id so it cannot linger.
+            with self._lock:
+                self._events.pop(req_id, None)
+                self._responses.pop(req_id, None)
             raise MCPConnectionError(f"Timeout waiting for response to '{method}'")
 
         with self._lock:
+            self._events.pop(req_id, None)
             response = self._responses.pop(req_id, {})
+
+        if self._closed and not response:
+            raise MCPConnectionError(f"Connection closed while waiting for '{method}'")
         return response
 
     def _dispatch_notification(self, method: str, params: dict = None):
@@ -295,7 +342,12 @@ class MCPClient:
 
     def close(self):
         self._closed = True
-        self._response_event.set()
+        # Wake every in-flight waiter so none blocks the full timeout once the
+        # transport goes away.
+        with self._lock:
+            pending = list(self._events.values())
+        for event in pending:
+            event.set()
         if self._sse_resp is not None:
             try:
                 self._sse_resp.close()

@@ -21,9 +21,18 @@ DATABASE_URL = config_data['mysql']
 engine = sqlalchemy.create_engine(DATABASE_URL)
 
 # exe_sql uses the read-only user to run SELECT/SHOW. Mutating features keep using engine
-# (the first user). Falls back to mysql when mysql_readonly is not configured.
-READONLY_DATABASE_URL = config_data.get('mysql_readonly') or DATABASE_URL
-read_engine = sqlalchemy.create_engine(READONLY_DATABASE_URL)
+# (the first user). When mysql_readonly is not configured, read-only queries are disabled
+# rather than silently falling back to the privileged user: the SQL-text validation was
+# removed, so the read-only account is now the only access control for these queries.
+READONLY_DATABASE_URL = config_data.get('mysql_readonly') or ""
+if READONLY_DATABASE_URL:
+    read_engine = sqlalchemy.create_engine(READONLY_DATABASE_URL)
+else:
+    read_engine = None
+    print(
+        "[WARNING] mysql_readonly is not configured; read-only queries (exe_sql) "
+        "are disabled. A privileged fallback is intentionally not used."
+    )
 
 STATIC_URL = config_data['static_path']
 STATIC_FOLDER = "tmp_imgs"
@@ -60,7 +69,12 @@ def query_database(question: str, df_cols: str | list = None) -> pd.DataFrame:
     ```
     """
 
-    result = query_database_func(question, df_cols, llm, engine)
+    if read_engine is None:
+        raise RuntimeError(
+            "No read-only database is configured (mysql_readonly is missing); "
+            "query_database is disabled."
+        )
+    result = query_database_func(question, df_cols, llm, read_engine)
     return result
 
 
