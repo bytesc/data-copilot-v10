@@ -37,12 +37,9 @@ from agent.agent import  generate_and_execute_stream, get_db
 from utils.process_file import process_file_content
 from agent.utils.llm_access.LLM import (
     list_model_configs,
-    set_current_model,
     get_current_model_id,
     get_current_reasoning_effort,
-    set_current_reasoning_effort,
     get_current_style,
-    set_current_style,
     apply_request_selection,
 )
 from data_access.session_log import record_session_operation, create_session_log_table
@@ -304,69 +301,6 @@ async def get_models():
         "current_model": get_current_model_id(),
         "current_reasoning_effort": get_current_reasoning_effort(),
         "current_style": get_current_style(),
-    })
-
-
-class ModelSelectInput(BaseModel):
-    id: str
-
-
-@app.post("/api/models/select/")
-async def select_model(entry: ModelSelectInput):
-    cfg = set_current_model(entry.id)
-    if cfg is None:
-        raise HTTPException(status_code=404, detail=f"Model '{entry.id}' not found")
-    return JSONResponse(content={
-        "models": list_model_configs(),
-        "current_model": cfg["id"],
-        "current_reasoning_effort": get_current_reasoning_effort(),
-        "current_style": get_current_style(),
-    })
-
-
-class ReasoningEffortInput(BaseModel):
-    value: str = ""
-
-
-@app.post("/api/models/reasoning-effort/")
-async def select_reasoning_effort(entry: ReasoningEffortInput):
-    try:
-        effort = set_current_reasoning_effort(entry.value)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    if effort is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model '{get_current_model_id()}' does not support reasoning_effort",
-        )
-    return JSONResponse(content={
-        "models": list_model_configs(),
-        "current_model": get_current_model_id(),
-        "current_reasoning_effort": effort,
-        "current_style": get_current_style(),
-    })
-
-
-class StyleInput(BaseModel):
-    value: str = ""
-
-
-@app.post("/api/models/style/")
-async def select_style(entry: StyleInput):
-    try:
-        style = set_current_style(entry.value)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    if style is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model '{get_current_model_id()}' does not support style_temperature",
-        )
-    return JSONResponse(content={
-        "models": list_model_configs(),
-        "current_model": get_current_model_id(),
-        "current_reasoning_effort": get_current_reasoning_effort(),
-        "current_style": style,
     })
 
 

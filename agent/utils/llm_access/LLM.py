@@ -140,11 +140,6 @@ def _default_reasoning_effort(cfg):
     return options[0] if options else ""
 
 
-def _default_style(cfg):
-    """Style 默认使用 Default（不上传 temperature）。"""
-    return ""
-
-
 def list_model_configs():
     """供前端展示的模型列表（不暴露 key 文件等敏感信息）"""
     current_id = get_current_model_id()
@@ -190,41 +185,9 @@ def get_current_model_id():
     return _current_model_id_var.get()
 
 
-def set_current_model(model_id):
-    """为本次请求切换模型，返回新配置；无效 id 返回 None。"""
-    cfg = get_model_config(model_id)
-    if cfg is None:
-        return None
-    _current_model_id_var.set(cfg["id"])
-    _current_reasoning_effort_var.set(_default_reasoning_effort(cfg))
-    _current_style_var.set(_default_style(cfg))
-    _current_use_images_var.set(_default_use_images(cfg))
-    with _lock:
-        _clients.pop(cfg["id"], None)
-    return cfg
-
-
 def get_current_reasoning_effort():
     """当前 Depth 值；空字符串表示 Default（不上传该参数）"""
     return _current_reasoning_effort_var.get()
-
-
-def set_current_reasoning_effort(value):
-    """设置当前模型的 Depth；空值表示 Default。
-
-    返回新的值；当前模型不支持 reasoning_effort 时返回 None；
-    值不在配置列表内时抛出 ValueError。
-    """
-    cfg = get_model_config()
-    if cfg is None or not cfg["reasoning_effort"]:
-        return None
-    effort = "" if value is None else str(value).strip()
-    if effort and effort not in cfg["reasoning_effort"]:
-        raise ValueError(
-            f"reasoning_effort '{effort}' is not configured for model '{cfg['id']}'"
-        )
-    _current_reasoning_effort_var.set(effort)
-    return effort
 
 
 def get_current_style():
@@ -238,25 +201,6 @@ def get_current_use_images():
     if value is None:
         return model_supports_images()
     return bool(value)
-
-
-def set_current_style(value):
-    """设置当前模型的 Style；空值表示 Default。
-
-    返回新的值；当前模型不支持 style_temperature 时返回 None；
-    样式不在配置字典内时抛出 ValueError。
-    """
-    cfg = get_model_config()
-    styles = (cfg or {}).get("style_temperature") or {}
-    if not styles:
-        return None
-    style = "" if value is None else str(value).strip()
-    if style and style not in styles:
-        raise ValueError(
-            f"style '{style}' is not configured for model '{cfg['id']}'"
-        )
-    _current_style_var.set(style)
-    return style
 
 
 def get_extra_body(model_id=None):
