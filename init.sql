@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS `observe_cycle_log` (
   `sub_phase` VARCHAR(100) COMMENT '子阶段: filter_db/filter_func/plan/gen_code/exec_code/result',
   `prompt` LONGTEXT COMMENT '发送给LLM的prompt',
   `response` LONGTEXT COMMENT 'LLM返回的响应',
-  `user_decision` VARCHAR(50) COMMENT '用户决策: approve/reject/edit/skip',
+  `user_decision` VARCHAR(2000) COMMENT '用户决策/输入: approve/reject/edit/skip 或用户输入文本(最多2000字)',
   `exec_code` LONGTEXT COMMENT '执行的代码',
   `exec_result` LONGTEXT COMMENT '执行结果',
   `exec_error` LONGTEXT COMMENT '执行错误',
