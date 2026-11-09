@@ -228,11 +228,19 @@ def cap_text(text: str, level: int, base_cap: Optional[int] = None) -> str:
 
     ``level <= 0`` returns ``text`` unchanged.  ``base_cap`` lowers the cap for
     a specific section (e.g. a data sample that should stay small).
+
+    Non-``str`` inputs (e.g. the lazy ``_DynamicStr`` knowledge objects such as
+    ``BASE``/``DOC``/``TARGET``) are coerced with ``str()`` first so the cap is
+    actually applied. Previously the ``isinstance(text, str)`` guard silently
+    skipped truncation for those objects, so the context-length retry could not
+    shrink the sections that used them (notably document generation).
     """
+    if not isinstance(text, str):
+        text = str(text)
     cap = _LEVEL_CHAR_CAP.get(level, _LEVEL_CHAR_CAP[max(_LEVEL_CHAR_CAP)])
     if base_cap is not None:
         cap = base_cap if cap is None else min(base_cap, cap)
-    if cap and isinstance(text, str) and len(text) > cap:
+    if cap and len(text) > cap:
         return text[:cap] + "\n...[truncated]"
     return text
 

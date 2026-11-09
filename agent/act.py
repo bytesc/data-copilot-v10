@@ -95,6 +95,8 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             entry["selected_knowledge_ids"] = act_data["selected_knowledge_ids"]
         if act_data.get("summary"):
             entry["summary"] = act_data["summary"]
+        if act_data.get("parse_failed"):
+            entry["error"] = "explore_base_knowledge parse failed; previous selection preserved"
         entries.append(entry)
     elif action == "explore_functions":
         entry = {"role": "assistant", "type": "act", "action": "explore_functions"}
@@ -380,9 +382,10 @@ Example:
             selected_guide_keys = selected_fields.pop("selected_guides", []) or []
             tables_dict = selected_fields.pop("tables", selected_fields) if "tables" in selected_fields else selected_fields
 
-            if tables_dict and not tables_dict.get("__no_db__") and not selected_fields.get("__no_db__"):
+            no_db_needed = bool(tables_dict.get("__no_db__")) or bool(selected_fields.get("__no_db__"))
+            if tables_dict and not no_db_needed:
                 display_content = get_db_overview_markdown(engine, tables, include_samples=True, selected_fields=tables_dict)
-            elif tables_dict and tables_dict.get("__no_db__") or selected_fields.get("__no_db__"):
+            elif no_db_needed:
                 display_content = "*(No database tables needed)*"
             else:
                 display_content = full_schema
@@ -588,8 +591,11 @@ Example:
 
         error_msg = "\n\nPrevious attempt failed to produce valid JSON. Output ONLY a valid JSON object with 'selected_ids' and 'summary' fields.\n"
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'error', 'content': 'Failed to parse knowledge selection after retries'}, ensure_ascii=False)}\n\n"
-    return {"selected_knowledge_ids": [], "knowledge_content": knowledge_text, "summary": ""}
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'error', 'content': 'Failed to parse knowledge selection after retries; keeping previous selection'}, ensure_ascii=False)}\n\n"
+    # Parse failure: do NOT overwrite the KNOWLEDGE region with an empty
+    # selection, so a previously valid selection is preserved (mirrors the
+    # explore_schema / explore_functions behaviour).
+    return {"parse_failed": True, "selected_knowledge_ids": None, "knowledge_content": knowledge_text, "summary": ""}
 
 
 def _parse_base_knowledge_json(raw: str) -> dict | None:
@@ -872,17 +878,32 @@ If no tools are needed, return {{"selected_tools": [], "plan": "No MCP tools nee
     prompt = build_prompt(0)
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': 'Analyzing required MCP tools...'}, ensure_ascii=False)}\n\n"
 
+    # Parse-retry loop, matching the other explore_* actions: a single bad JSON
+    # reply previously ended the phase with no selection. ``stream_with_context_retry``
+    # still handles context-length overflow inside each attempt.
     raw = ""
-    for chunk, reasoning in stream_with_context_retry(build_prompt, llm, images=images):
-        if chunk:
-            raw += chunk
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
-        if reasoning:
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
+    selected_tools = []
+    explore_plan = ""
+    error_msg = ""
+    for attempt in range(2):
+        if attempt > 0:
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': 'Parsing failed, re-analyzing MCP tools...'}, ensure_ascii=False)}\n\n"
 
-    parsed = _parse_mcp_explore_json(raw)
-    selected_tools = parsed.get("selected_tools", []) if parsed else []
-    explore_plan = parsed.get("plan", "")
+        raw = ""
+        for chunk, reasoning in stream_with_context_retry(lambda lvl: build_prompt(lvl) + error_msg, llm, images=images):
+            if chunk:
+                raw += chunk
+                yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+            if reasoning:
+                yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
+
+        parsed = _parse_mcp_explore_json(raw)
+        if parsed is not None:
+            selected_tools = parsed.get("selected_tools", []) or []
+            explore_plan = parsed.get("plan", "")
+            break
+
+        error_msg = "\n\nPrevious attempt failed to produce valid JSON. Output ONLY a single JSON object with a 'selected_tools' array (objects with 'server' and 'name') and a 'plan' string. No markdown code block, no extra text.\n"
 
     if selected_tools:
         selected_lines = ["## Selected MCP Tools\n"]

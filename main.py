@@ -20,6 +20,7 @@ from fastapi import File, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 
 
@@ -204,6 +205,13 @@ async def unified_request_envelope(request: Request, call_next):
             ]
             headers.append((b"content-length", str(len(inner)).encode()))
             request.scope["headers"] = headers
+            # ``request.headers`` was read at the top of this middleware, which
+            # cached a ``Headers`` built from the *old* scope. Rebuild it so the
+            # rewritten content-length is visible downstream, and drop any cached
+            # parsed JSON so the new body is re-parsed.
+            request._headers = Headers(scope=request.scope)
+            if hasattr(request, "_json"):
+                del request._json
     return await call_next(request)
 
 

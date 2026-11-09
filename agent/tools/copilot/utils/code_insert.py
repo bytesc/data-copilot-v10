@@ -1,3 +1,4 @@
+import ast
 import re
 
 def insert_yield_statements(code):
@@ -51,26 +52,60 @@ def insert_yield_statements(code):
     return '\n'.join(new_lines)
 
 
-def insert_lines_into_function(code_str: str, lines_to_insert: list) -> str:
-    # 找到def func():的位置
-    func_start_index = code_str.find('def func(')
+_DEF_FUNC_LINE_RE = re.compile(r'^([ \t]*)def[ \t]+func[ \t]*\(')
 
-    # 如果没有找到def func()，则返回原字符串
-    if func_start_index == -1:
+
+def _body_insert_index(lines):
+    """Return ``(index, indent)`` for injecting lines at the top of ``func``'s body.
+
+    Injections go right at the start of the function body, but AFTER a leading
+    docstring so the docstring keeps its special meaning (a statement placed
+    before it turns the docstring into a no-op string literal).
+
+    The function is located structurally via ``ast`` (not by the first
+    substring match of ``'def func('``, which could land in a comment or
+    string). If the source cannot be parsed, fall back to the first line that
+    starts a top-level ``def func(`` definition.
+    """
+    try:
+        tree = ast.parse('\n'.join(lines))
+    except SyntaxError:
+        tree = None
+    if tree is not None:
+        for node in tree.body:
+            if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and node.name == 'func' and node.body):
+                first = node.body[0]
+                if (isinstance(first, ast.Expr)
+                        and isinstance(first.value, ast.Constant)
+                        and isinstance(first.value.value, str)):
+                    idx = first.end_lineno  # line after the docstring (1-based -> next index)
+                else:
+                    idx = first.lineno - 1
+                if 0 <= idx <= len(lines):
+                    indent_match = re.match(r'^[ \t]*', lines[first.lineno - 1])
+                    indent = indent_match.group(0) if indent_match else '    '
+                    return idx, indent
+
+    for i, line in enumerate(lines):
+        match = _DEF_FUNC_LINE_RE.match(line)
+        if match:
+            return i + 1, match.group(1) + '    '
+    return None, None
+
+
+def insert_lines_into_function(code_str: str, lines_to_insert: list) -> str:
+    if not lines_to_insert:
         return code_str
-    # 找到def func()后的第一个换行符
-    newline_index = code_str.find('\n', func_start_index)
-    # 如果没有找到换行符，则返回原字符串
-    if newline_index == -1:
+
+    lines = code_str.split('\n')
+    insert_index, indent = _body_insert_index(lines)
+    if insert_index is None:
+        # No `def func(` found: return the original string untouched.
         return code_str
-    # 在换行符后添加换行符，为插入代码做准备
-    code_str = code_str[:newline_index + 1] + '\n' + code_str[newline_index + 1:]
-    # 插入每一行代码，每行代码前添加四个空格作为缩进
-    insert_pos = newline_index + 2
-    for line in lines_to_insert:
-        code_str = code_str[:insert_pos] + '    ' + line + '\n' + code_str[insert_pos:]
-        insert_pos += len('    ' + line + '\n')
-    return code_str
+
+    injected = [indent + line for line in lines_to_insert]
+    return '\n'.join(lines[:insert_index] + injected + lines[insert_index:])
 
 
 if __name__=="__main__":

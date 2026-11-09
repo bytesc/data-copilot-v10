@@ -114,11 +114,18 @@ def perf_api(name):
             it = fn(*args, **kwargs)
             try:
                 while True:
-                    _current.set(state)
+                    # Bind the state for the duration of ``next(it)`` only and
+                    # reset it right after: the wrapper is a sync generator that
+                    # may be driven on reused threadpool threads, so leaving the
+                    # contextvar set would leak this request's perf state into a
+                    # later, unrelated task on the same thread.
+                    token = _current.set(state)
                     try:
                         item = next(it)
                     except StopIteration:
                         break
+                    finally:
+                        _current.reset(token)
                     yield item
             finally:
                 _write_row(state)

@@ -120,19 +120,21 @@ def ingest_uploaded_images(history: Any) -> Any:
 
     Enforces ``MAX_IMAGES_PER_REQUEST`` and ``MAX_TOTAL_IMAGE_BYTES`` across the
     whole request so a malicious client cannot flood ``tmp_imgs``. The base64
-    string length is used as a conservative upper bound on decoded bytes.
+    string length is used as a conservative upper bound on decoded bytes. Items
+    that are over budget are dropped from ``uploaded`` (replaced only by their
+    already-saved file names) so no raw base64 payload is ever left in the
+    history when the limits are exceeded.
     """
     if not isinstance(history, list):
         return history
 
     created: List[str] = []
     processed = 0
+    dropped = 0
     total_raw_bytes = 0
     budget_exhausted = False
 
     for entry in history:
-        if budget_exhausted:
-            break
         if not isinstance(entry, dict) or entry.get("role") != "user":
             continue
         uploaded = entry.get("uploaded")
@@ -140,35 +142,50 @@ def ingest_uploaded_images(history: Any) -> Any:
             continue
 
         names: List[str] = []
+        # Any non-string item is a staged base64 payload. The entry's ``uploaded``
+        # list is always rebuilt so a raw base64 string can never survive into
+        # the saved history / LLM context, even for entries that are skipped
+        # because the per-request budget was already exhausted. Previously the
+        # outer loop ``break``ed, leaving the remaining entries' base64 payloads
+        # untouched (and re-persisted) once the limits were hit.
+        changed = False
         for item in uploaded:
             if isinstance(item, str):
                 if item:
                     names.append(item)
                 continue
-            if processed >= MAX_IMAGES_PER_REQUEST:
+            changed = True
+            if budget_exhausted or processed >= MAX_IMAGES_PER_REQUEST:
                 budget_exhausted = True
-                break
+                dropped += 1
+                continue
             data = _item_data(item)
             if not data:
+                dropped += 1
+                continue
+            # The base64 string length is used as a conservative upper bound on
+            # the decoded byte size before spending budget on decoding.
+            if total_raw_bytes + len(data) > MAX_TOTAL_IMAGE_BYTES:
+                budget_exhausted = True
+                dropped += 1
                 continue
             processed += 1
             total_raw_bytes += len(data)
-            if total_raw_bytes > MAX_TOTAL_IMAGE_BYTES:
-                budget_exhausted = True
-                break
             filename = save_base64_image(data)
             if filename:
                 names.append(filename)
                 created.append(filename)
+            else:
+                dropped += 1
 
-        if names:
+        if changed:
             entry["uploaded"] = names
 
-    if budget_exhausted:
+    if budget_exhausted or dropped:
         print(
-            "[image_ingest] WARNING: upload limits exceeded "
-            f"(processed={processed}, raw_bytes={total_raw_bytes}); "
-            "extra images were ignored."
+            "[image_ingest] WARNING: some uploaded images were dropped "
+            f"(saved={processed}, dropped={dropped}, raw_bytes={total_raw_bytes}); "
+            "raw base64 payloads were stripped from the history."
         )
 
     if created:

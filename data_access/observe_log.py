@@ -479,7 +479,19 @@ def _rebuild_blackboard_region(board, sub_phase, response, exec_result, history)
     parsed = _parse_json_raw(response) if response else {}
 
     if sub_phase == "explore_schema":
-        selected_fields = parsed.get("tables", parsed) if "tables" in parsed else parsed
+        # Mirror the live path (agent/act.py `_act_explore_schema`): the logged
+        # response may carry ``tables`` plus ``plan``/``selected_guides`` at the
+        # top level, so only the table->columns mapping belongs in
+        # ``selected_fields``. Keeping ``plan``/``selected_guides`` inside it (as
+        # the previous ``parsed.get("tables", parsed)`` did when no ``tables``
+        # key was present) produced a blackboard that diverged from the live run.
+        if "tables" in parsed:
+            selected_fields = parsed.get("tables")
+        else:
+            selected_fields = {
+                k: v for k, v in parsed.items()
+                if k not in ("plan", "selected_guides")
+            }
         if not isinstance(selected_fields, dict):
             selected_fields = {}
         explore_plan = parsed.get("plan", "")

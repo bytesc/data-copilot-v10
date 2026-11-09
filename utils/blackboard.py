@@ -151,6 +151,12 @@ def _action_region_payload(action: str, act_data: dict) -> Optional[Dict[str, An
             "func_docs": act_data.get("func_docs", ""),
         }
     if action == "explore_base_knowledge":
+        # A failed parse must not overwrite the region with an empty selection;
+        # keep the previous KNOWLEDGE region (mirrors explore_schema /
+        # explore_functions) so later code generation still has the last good
+        # selection (returning None leaves history unchanged).
+        if act_data.get("parse_failed"):
+            return None
         return {
             "selected_knowledge_ids": act_data.get("selected_knowledge_ids", []),
             "knowledge_content": act_data.get("knowledge_content", ""),
