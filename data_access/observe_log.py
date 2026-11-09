@@ -423,9 +423,13 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
                     act_entry["code"] = exec_code
                 if exec_error:
                     act_entry["error"] = exec_error
-                elif exec_result:
+                elif exec_code:
+                    # Mark a successful execution even when it produced no
+                    # textual output, so the rebuilt history keeps the entry
+                    # instead of dropping it (keeps parity with the live path).
+                    act_entry["exec_ok"] = True
                     act_entry["result"] = exec_result
-                if act_entry.get("code") or act_entry.get("result") or act_entry.get("error"):
+                if act_entry.get("code") or act_entry.get("result") or act_entry.get("error") or act_entry.get("exec_ok"):
                     history.append(act_entry)
             elif phase == "user" and sub_phase == "input":
                 if user_decision:

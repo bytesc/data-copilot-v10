@@ -65,10 +65,12 @@ def _get_entry_category(entry: dict) -> Optional[str]:
             # The execution result (and error) is kept nearly permanently, while
             # the generated code is heavy and trimmed on its own; classify by
             # result/error first so a result-bearing entry is not demoted to the
-            # short-lived "act_code" bucket.
+            # short-lived "act_code" bucket. A successful run may have an empty
+            # result (no textual output), so also treat `exec_ok` as a result so
+            # such entries are kept instead of being trimmed as code-only.
             if entry.get("error"):
                 return "act_error"
-            if entry.get("result"):
+            if entry.get("result") or entry.get("exec_ok"):
                 return "act_result"
             if entry.get("code"):
                 return "act_code"

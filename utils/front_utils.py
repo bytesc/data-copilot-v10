@@ -71,6 +71,11 @@ def history_to_text(history: List[dict]) -> str:
                     lines.append(f"[ACT generate_and_execute] error:\n{entry['error']}")
                 elif entry.get("result"):
                     lines.append(f"[ACT generate_and_execute] result:\n{entry['result']}")
+                elif entry.get("exec_ok"):
+                    lines.append(
+                        "[ACT generate_and_execute] result: "
+                        "(executed successfully; no textual output)"
+                    )
             elif action == "generate_document":
                 if entry.get("file_name"):
                     lines.append(f"[ACT generate_document] file_name: {entry['file_name']}.md / {entry['file_name']}.docx")

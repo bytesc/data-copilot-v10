@@ -99,17 +99,25 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
         full_ans = act_data.get("full_ans", "")
         exec_error = act_data.get("exec_error")
         images = act_data.get("images") or []
-        if full_ans and not exec_error and full_code:
-            entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "code": full_code, "result": full_ans}
-            if images:
-                entry["images"] = images
-            entries.append(entry)
-        elif exec_error:
+        if exec_error:
             entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "error": exec_error}
             if full_code:
                 entry["code"] = full_code
             if full_ans:
                 entry["result"] = full_ans
+            if images:
+                entry["images"] = images
+            entries.append(entry)
+        else:
+            # Success: always record the entry even when the execution produced
+            # no textual output, otherwise Observe never sees that this action
+            # ran and the model may repeat the same action in a loop. The
+            # `exec_ok` marker lets downstream classification/rendering treat an
+            # empty result as a real (permanently kept) execution result.
+            entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "exec_ok": True}
+            if full_code:
+                entry["code"] = full_code
+            entry["result"] = full_ans
             if images:
                 entry["images"] = images
             entries.append(entry)

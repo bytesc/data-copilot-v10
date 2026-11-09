@@ -2,10 +2,6 @@ from .parse_output import assert_skip
 
 from agent.tools.tools_def import * #保留这一行，没错
 
-from utils.perf_log import record_code_exec
-
-import time as _time
-
 
 def execute_py_code(code, assert_func=assert_skip):
     """
@@ -14,8 +10,11 @@ def execute_py_code(code, assert_func=assert_skip):
     :param code: 生成的Python代码
     :param assert_func: 断言函数，用于验证结果
     :return: 执行结果，如果执行成功且通过断言则返回结果，否则返回None
+
+    注意：``func`` 是生成器，函数体在调用方迭代 ``result`` 时才真正执行，
+    因此执行耗时的统计放在调用方（``agent/agent.py`` 包住迭代的 ``finally``），
+    这里不再重复记录 ``code_exec_time``，否则会与调用方重复累加。
     """
-    _start = _time.monotonic()
     try:
         local_namespace = {'result': None}
         exec(code, globals(), local_namespace)
@@ -27,5 +26,3 @@ def execute_py_code(code, assert_func=assert_skip):
     except Exception as e:
         print(f"An error occurred while executing the code: {type(e).__name__}: {str(e)}")
         raise e
-    finally:
-        record_code_exec(_time.monotonic() - _start)
