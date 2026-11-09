@@ -272,15 +272,34 @@ def stream_with_context_retry(build_prompt: Callable[[int], str], llm, images=No
 
     ``build_prompt(level)`` must return the full prompt for the given trim level.
     The extra trimming is transient: callers keep persisting the level-0 history.
+
+    Retrying is only safe while nothing has been emitted downstream yet. A
+    context-length error raised at request time (before the first chunk) is
+    retried with a more aggressively trimmed prompt. A context-length error
+    raised *mid-stream*, after chunks were already forwarded to the consumer, is
+    re-raised instead of retried: replaying the whole response after a partial
+    one would duplicate the visible output and pollute the caller's accumulated
+    buffers, and the concatenated fragments can no longer be reparsed reliably.
     """
     level = 0
     prompt = build_prompt(level)
     while True:
+        emitted = False  # whether this attempt already yielded anything downstream
         try:
-            yield from _call_llm_stream_with_reasoning(prompt, llm, images=images)
+            for chunk, reasoning in _call_llm_stream_with_reasoning(prompt, llm, images=images):
+                if chunk or reasoning:
+                    emitted = True
+                yield chunk, reasoning
             return
         except Exception as exc:  # noqa: BLE001 - classified below
-            if level >= max_level or not is_context_length_error(exc):
+            if not is_context_length_error(exc):
+                raise
+            if emitted:
+                # Mid-stream failure: retrying would replay the full response
+                # after a partial one, so propagate and let the caller surface a
+                # terminal error instead of concatenating two attempts.
+                raise
+            if level >= max_level:
                 raise
             next_prompt = build_prompt(level + 1)
             if len(next_prompt) >= len(prompt):
