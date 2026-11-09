@@ -12,7 +12,7 @@ from agent.tools.tools_def import llm
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
-from utils.blackboard import blackboard_section, blackboard_input_images_from_history
+from utils.blackboard import blackboard_section, blackboard_input_images_from_history, last_act_action
 from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json, stream_with_context_retry
 from utils.get_config import config_data
 from utils.perf_log import perf_api
@@ -147,7 +147,11 @@ def _event_stream_observe_impl(
                               prompt=observe_prompt[:5000], response=raw[:5000],
                               token_estimate=prompt_length)
             record_session_operation(session_id, "/api/observe/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
-            history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "observe", "content": parse_json_raw(raw)}])
+            observe_entry = {"role": "assistant", "type": "observe", "content": parse_json_raw(raw)}
+            observe_action = last_act_action(conversation_history)
+            if observe_action:
+                observe_entry["action"] = observe_action
+            history = save_session_step(session_id, conversation_history, [observe_entry])
             if history:
                 yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
             return

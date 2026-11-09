@@ -41,6 +41,25 @@ def is_blackboard_entry(entry: Any) -> bool:
     return isinstance(entry, dict) and entry.get("type") == BLACKBOARD_TYPE
 
 
+def last_act_action(history: Optional[List[dict]]) -> str:
+    """Return the action of the most recent executed ``act`` history entry.
+
+    An ``observe`` entry is created right after the ``act`` it reviews, so the
+    last ``act`` entry's action identifies which action's result is being
+    reviewed. Storing that action on the observe entry lets the history
+    retention policy be applied per action (``observe_<action>``) instead of
+    always falling back to ``observe_default``.
+    """
+    for entry in reversed(history or []):
+        if not isinstance(entry, dict) or is_blackboard_entry(entry):
+            continue
+        if entry.get("type") == "act":
+            action = entry.get("action")
+            if isinstance(action, str) and action:
+                return action
+    return ""
+
+
 def get_blackboard(history: Optional[List[dict]]) -> Dict[str, Dict[str, Any]]:
     """Read the current blackboard out of the conversation history."""
     board = empty_blackboard()

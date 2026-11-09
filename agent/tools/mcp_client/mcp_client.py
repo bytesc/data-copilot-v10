@@ -5,7 +5,7 @@ import threading
 import urllib.request
 import subprocess
 import sys
-from urllib.parse import urlparse
+from urllib.parse import urljoin
 from typing import Optional
 
 
@@ -60,6 +60,63 @@ def get_mcp_server(name: str) -> Optional[dict]:
     return None
 
 
+def _iter_sse_events(resp):
+    """Yield ``(event_type, data)`` tuples parsed from an SSE response stream.
+
+    Full Server-Sent Events parsing: a field is ``name: value`` (the space after
+    the colon is optional), multiple ``data:`` lines within one event are joined
+    with newlines, a line without a colon is a field with an empty value, lines
+    starting with ``:`` are comments, and an event with no explicit ``event:``
+    field uses the default type ``message``. The previous hand-rolled loops only
+    matched ``event: ``/``data: `` (with a space) and required an ``event:``
+    line, so data-only messages (the common case) and space-less ``data:`` lines
+    were silently dropped.
+    """
+    event_type = None
+    data_lines = []
+    while True:
+        line_bytes = resp.readline()
+        if not line_bytes:
+            if data_lines:
+                yield event_type or "message", "\n".join(data_lines)
+            return
+        line = line_bytes.decode("utf-8", errors="replace").rstrip("\r\n")
+        if line == "":
+            if data_lines:
+                yield event_type or "message", "\n".join(data_lines)
+            event_type = None
+            data_lines = []
+            continue
+        if line.startswith(":"):
+            # Comment line; ignore.
+            continue
+        field, sep, value = line.partition(":")
+        if not sep:
+            field, value = line, ""
+        elif value.startswith(" "):
+            value = value[1:]
+        if field == "event":
+            event_type = value
+        elif field == "data":
+            data_lines.append(value)
+        # ``id``/``retry`` and unknown fields are intentionally ignored.
+
+
+def _summarize_content(result: dict) -> str:
+    """Join the text parts of an MCP result ``content`` list into one string."""
+    parts = []
+    for part in result.get("content", []) or []:
+        if isinstance(part, dict):
+            if part.get("type") == "text":
+                parts.append(str(part.get("text", "")))
+            elif part.get("type") == "resource":
+                resource = part.get("resource", {}) or {}
+                parts.append(str(resource.get("text", "")))
+        elif part is not None:
+            parts.append(str(part))
+    return "\n".join(p for p in parts if p).strip()
+
+
 class MCPClient:
     def __init__(self, server_config: dict):
         self.name = server_config.get("name", "")
@@ -108,31 +165,21 @@ class MCPClient:
             req = urllib.request.Request(self.url, headers={"Accept": "text/event-stream"})
             self._sse_resp = urllib.request.urlopen(req, timeout=30)
 
-            event_type = None
-            event_data = ""
-            while True:
-                line_bytes = self._sse_resp.readline()
-                if not line_bytes:
+            for event_type, event_data in _iter_sse_events(self._sse_resp):
+                if event_type == "endpoint":
+                    self._message_endpoint = event_data.strip()
                     break
-                line = line_bytes.decode("utf-8", errors="replace").strip("\r\n")
-                if line.startswith("event: "):
-                    event_type = line[7:]
-                elif line.startswith("data: "):
-                    event_data = line[6:]
-                elif line == "" and event_type is not None:
-                    if event_type == "endpoint":
-                        self._message_endpoint = event_data.strip()
-                        break
-                    event_type = None
-                    event_data = ""
 
             if not self._message_endpoint:
                 raise MCPConnectionError(f"Failed to get endpoint from SSE stream for server '{self.name}'")
 
-            if self._message_endpoint.startswith("/"):
-                parsed = urlparse(self.url)
-                base = f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"
-                self._message_endpoint = base + self._message_endpoint
+            # Resolve the endpoint relative to the SSE URL: ``urljoin`` handles
+            # absolute paths, relative paths and full URLs, and preserves the
+            # scheme/host/port (including default ports) and any base path. The
+            # previous ``f"{scheme}://{hostname}:{port}"`` string build dropped
+            # the port when it was the default, ignored any base path, and broke
+            # on IPv6 literals.
+            self._message_endpoint = urljoin(self.url, self._message_endpoint)
 
             self._read_thread = threading.Thread(target=self._read_sse_loop, args=(self._sse_resp,), daemon=True)
             self._read_thread.start()
@@ -146,27 +193,16 @@ class MCPClient:
 
     def _read_sse_loop(self, resp):
         try:
-            event_type = None
-            event_data = ""
-            while not self._closed:
-                line_bytes = resp.readline()
-                if not line_bytes:
+            for event_type, event_data in _iter_sse_events(resp):
+                if self._closed:
                     break
-                line = line_bytes.decode("utf-8", errors="replace").strip("\r\n")
-                if line.startswith("event: "):
-                    event_type = line[7:]
-                elif line.startswith("data: "):
-                    event_data = line[6:]
-                elif line == "" and event_type is not None and event_data:
-                    if event_type == "message":
-                        try:
-                            msg = json.loads(event_data)
-                            if "id" in msg:
-                                self._store_response(msg)
-                        except json.JSONDecodeError:
-                            pass
-                    event_type = None
-                    event_data = ""
+                if event_type == "message" and event_data:
+                    try:
+                        msg = json.loads(event_data)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(msg, dict) and "id" in msg:
+                        self._store_response(msg)
         except Exception:
             pass
 
@@ -361,7 +397,15 @@ class MCPClient:
         result = self._dispatch_request("tools/call", params)
         if "error" in result:
             raise MCPToolError(f"tools/call '{tool_name}' failed: {result['error']}")
-        return result.get("result", {})
+        tool_result = result.get("result", {})
+        # A tool can fail at the application level while the JSON-RPC call itself
+        # succeeds: the result then carries ``isError: true`` with the error text
+        # in ``content``. Raise here so every caller (act.py, tools_def) treats it
+        # as a failure instead of formatting the error as a normal result.
+        if isinstance(tool_result, dict) and tool_result.get("isError"):
+            detail = _summarize_content(tool_result) or "tool reported an error"
+            raise MCPToolError(f"tools/call '{tool_name}' failed: {detail}")
+        return tool_result
 
     def close(self):
         self._closed = True

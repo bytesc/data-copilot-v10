@@ -1,7 +1,6 @@
 import io
 import re
 
-from data_access.read_db import execute_sql, execute_select
 from data_access.db_conn import engine
 import pandas as pd
 import numpy as np

@@ -25,9 +25,11 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
   {"role": "assistant", "type": "think", "content": {"description": "...", "todo": ["..."]}},
   {"role": "assistant", "type": "action_decision", "content": {"action": "..."}},
   {"role": "assistant", "type": "act", "action": "...", "...": "..."},
-  {"role": "assistant", "type": "observe", "content": {"description": "...", "todo": ["..."]}}
+  {"role": "assistant", "type": "observe", "action": "被复盘动作", "content": {"description": "...", "todo": ["..."]}}
 ]
 ```
+
+> `observe` 条目的 `action` 字段记录本次复盘对应的上一个 `act` 动作名（未识别到动作时省略），用于按动作区分 Observe 历史的裁剪保留策略。
 
 ## 完整示例
 
@@ -217,6 +219,7 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
   {
     "role": "assistant",
     "type": "observe",
+    "action": "generate_and_execute",
     "content": {
       "description": "复盘与更新后的策略",
       "todo": ["剩余任务1"]

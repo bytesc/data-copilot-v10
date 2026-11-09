@@ -922,6 +922,11 @@ async def upload_txt(
                 "extracted_text_length": len(extracted_text),
                 "preview": preview,
             }
+    except HTTPException:
+        # Preserve client errors raised below (413 oversize, 400 empty file,
+        # 400 unsupported/unparseable document) instead of collapsing them all
+        # into an opaque 500.
+        raise
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail=f"File processing error: {str(e)}")

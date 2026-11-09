@@ -10,6 +10,7 @@ from data_access.session_log import session_operation_log
 from utils.blackboard import (
     SCHEMA, FUNCTIONS, KNOWLEDGE, MCP, SELECTED_IMAGES, REGIONS,
     empty_blackboard, normalize_selected_images, replace_blackboard,
+    last_act_action,
 )
 
 
@@ -411,7 +412,13 @@ def _rebuild_from_cycle_logs(conn, session_id, question):
                         history.append(act_entry)
             elif phase == "observe" and sub_phase == "review":
                 if response:
-                    history.append({"role": "assistant", "type": "observe", "content": _parse_json_raw(response)})
+                    observe_entry = {"role": "assistant", "type": "observe", "content": _parse_json_raw(response)}
+                    # The corresponding act entry has already been appended to
+                    # ``history``, so its action drives the observe retention.
+                    observe_action = last_act_action(history)
+                    if observe_action:
+                        observe_entry["action"] = observe_action
+                    history.append(observe_entry)
             elif phase == "act" and sub_phase in ("explore_schema", "explore_functions", "explore_base_knowledge", "explore_mcp"):
                 _rebuild_blackboard_region(board, sub_phase, response, exec_result, history)
             elif phase == "act" and sub_phase == "select_images":

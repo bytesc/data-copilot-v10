@@ -38,6 +38,15 @@ _ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
 _ENABLE_WEB_SEARCH = config_data.get('enable_web_search', True)
 _ENABLE_FETCH_URL = config_data.get('enable_fetch_url', True)
 
+# Group 2 ("user interaction") actions. The web frontend renders these locally
+# and normally does not call /api/act/stream/ for them, but they are declared in
+# `agent/action.py` VALID_ACTIONS and documented as act actions, so the endpoint
+# must execute them too (a direct API caller otherwise got "Unknown action" and
+# no history entry). Keep this list in sync with FRONTEND_ACTIONS.
+_USER_INTERACTION_ACTIONS = (
+    "ask_question", "ask_choice", "summary_and_pause", "attempt_completion",
+)
+
 _DISABLED_ACTIONS = {}
 if not _ENABLE_MCP:
     _DISABLED_ACTIONS["explore_mcp"] = "MCP support is disabled in config"
@@ -175,6 +184,15 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             "action": "select_images",
             "selected_images": normalize_selected_images(act_data.get("images")),
         })
+    elif action in _USER_INTERACTION_ACTIONS:
+        # Documented act entry for Group 2 actions (docs/actions_input_output.md
+        # sections 6-9): action + text, plus choices for ask_choice. The
+        # interaction semantics (needs_user_input / paused / completed) are
+        # carried on the SSE `done` result so the client can drive its loop.
+        entry = {"role": "assistant", "type": "act", "action": action, "text": act_data.get("text", "")}
+        if action == "ask_choice":
+            entry["choices"] = act_data.get("choices", [])
+        entries.append(entry)
     return entries
 
 
@@ -285,6 +303,9 @@ def _event_stream_act_impl(
             if history:
                 yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"
             return
+
+    elif action in _USER_INTERACTION_ACTIONS:
+        act_data = yield from _act_user_interaction(action, session_id, params, request_json)
 
     else:
         yield f"data: {json.dumps({'phase': 'act', 'type': 'error', 'content': f'Unknown action: {action}'}, ensure_ascii=False)}\n\n"
@@ -968,6 +989,55 @@ def _act_select_images(session_id: str, params: dict, request_json: str = ""):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'select_images', 'type': 'done', 'content': display_content, 'result': {'selected_images': images}}, ensure_ascii=False)}\n\n"
 
     return {"images": images}
+
+
+def _act_user_interaction(action: str, session_id: str, params: dict, request_json: str = ""):
+    """Execute a Group 2 (user interaction) action: ask_question / ask_choice /
+    summary_and_pause / attempt_completion.
+
+    These actions do not call any tool; they surface ``params["text"]`` (and
+    ``params["choices"]`` for ask_choice) to the user and stop the loop. They
+    were previously handled only in the web frontend, so calling
+    ``/api/act/stream/`` directly with one of them returned an "Unknown action"
+    error and wrote no history entry. Handling them here makes the endpoint match
+    ``agent/action.py`` / ``docs/actions_input_output.md`` and keeps a single
+    authoritative implementation.
+    """
+    text = params.get("text") or ""
+    if not isinstance(text, str):
+        text = str(text)
+    choices = params.get("choices") or []
+    if not isinstance(choices, list):
+        choices = []
+
+    needs_user_input = action in ("ask_question", "ask_choice")
+    paused = action == "summary_and_pause"
+    completed = action == "attempt_completion"
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': action, 'type': 'msg', 'content': f'Presenting {action}...'}, ensure_ascii=False)}\n\n"
+
+    result = {
+        "action": action,
+        "text": text,
+        "choices": choices,
+        "needs_user_input": needs_user_input,
+        "paused": paused,
+        "completed": completed,
+    }
+
+    log_observe_cycle(session_id, 0, "act", action,
+                      prompt="", response=json.dumps(result, ensure_ascii=False)[:5000],
+                      token_estimate=0)
+    record_session_operation(
+        session_id, "/api/act/stream/", request_json,
+        ans=json.dumps(result, ensure_ascii=False),
+        result_type="success", msg=f"{action}: {text[:100]}",
+    )
+
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': action, 'type': 'chunk', 'content': text}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': action, 'type': 'done', 'content': text, 'result': result}, ensure_ascii=False)}\n\n"
+
+    return {"action": action, "text": text, "choices": choices}
 
 
 def _act_exe_mcp(full_question: str, session_id: str, params: dict, request_json: str = ""):
