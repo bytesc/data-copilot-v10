@@ -5,7 +5,8 @@ mysql: "mysql+pymysql://root:123456@localhost:3306/singapore_land_2"
 
 # Read-only user for the main database: exe_sql uses it to run read-only SQL (SELECT/SHOW).
 # Features that modify the database (create table, edit comments, import, etc.) still use the first user above.
-# Leave empty or remove to fall back to mysql.
+# Leave empty or remove to DISABLE read-only queries (no fallback to the privileged 'mysql' user;
+# exe_sql/query_database will raise and be unavailable).
 mysql_readonly: "mysql+pymysql://readonly:123456@localhost:3306/singapore_land_2"
 
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"

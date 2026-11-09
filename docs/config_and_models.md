@@ -11,7 +11,7 @@ server_host: "0.0.0.0"
 mysql: "mysql+pymysql://root:123456@localhost:3306/singapore_land_2"
 
 # 业务数据库只读用户（可选）：exe_sql 执行 SELECT/SHOW 等只读 SQL 时使用该账号，
-# 仅需 SELECT、SHOW VIEW 权限（可 show 表与视图）；留空或删除则回退到 mysql。
+# 仅需 SELECT、SHOW VIEW 权限（可 show 表与视图）；留空或删除则不再启用只读查询（不会回退到 mysql，exe_sql 将被禁用）。
 mysql_readonly: "mysql+pymysql://readonly:123456@localhost:3306/singapore_land_2"
 
 # 系统数据库（会话日志、知识库、操作审计）

@@ -4,7 +4,7 @@
 
 `config/config.yaml` 中的 `mysql` 字段改为新数据库的连接地址，`mysql_sys` 通常无需修改。
 
-`mysql_readonly`（可选）为新数据库的只读账号，`exe_sql` 的 SELECT/SHOW 查询使用它；建表、改注释、导入等改库功能仍用 `mysql`。仅需 `SELECT`、`SHOW VIEW` 权限（可 show 表和视图）；留空或删除则回退到 `mysql`：
+`mysql_readonly`（可选）为新数据库的只读账号，`exe_sql` 的 SELECT/SHOW 查询使用它；建表、改注释、导入等改库功能仍用 `mysql`。仅需 `SELECT`、`SHOW VIEW` 权限（可 show 表和视图）；留空或删除则不再启用只读查询（不会回退到 `mysql`，`exe_sql` 将被禁用）：
 
 ```sql
 CREATE USER 'readonly'@'%' IDENTIFIED BY '123456';

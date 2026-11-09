@@ -116,6 +116,11 @@ def _action_region_payload(action: str, act_data: dict) -> Optional[Dict[str, An
             "schema_detail": act_data.get("schema_detail", ""),
         }
     if action == "explore_functions":
+        # A failed parse must not overwrite the region with an empty selection;
+        # keep the previous FUNC region so later code generation still has a
+        # usable function catalog (returning None leaves history unchanged).
+        if act_data.get("parse_failed"):
+            return None
         return {
             "selected_functions": act_data.get("selected_functions", []),
             "explore_plan": act_data.get("explore_plan", ""),

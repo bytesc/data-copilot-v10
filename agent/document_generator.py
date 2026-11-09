@@ -780,7 +780,7 @@ async def generate_document_unified_stream_api(request: Request, user_input: Doc
         generate_document_from_context(
             user_input.conversation_history,
             user_input.session_id or "",
-            user_input.model_dump_json(),
+            request_json=user_input.model_dump_json(),
         ),
         media_type="text/event-stream",
         headers={

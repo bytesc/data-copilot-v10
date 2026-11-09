@@ -91,6 +91,8 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             entry["selected_functions"] = act_data["selected_functions"]
         if act_data.get("explore_plan"):
             entry["explore_plan"] = act_data["explore_plan"]
+        if act_data.get("parse_failed"):
+            entry["error"] = "explore_functions parse failed; previous selection preserved"
         entries.append(entry)
     elif action == "generate_and_execute":
         full_code = act_data.get("full_code", "")
@@ -410,21 +412,43 @@ Example:
     prompt = build_prompt(0)
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'status', 'content': 'Analyzing required functions...'}, ensure_ascii=False)}\n\n"
 
-    raw = ""
-    for chunk, reasoning in stream_with_context_retry(build_prompt, llm, images=images):
-        if chunk:
-            raw += chunk
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
-        if reasoning:
-            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
-    raw_text = raw
-    parsed = _parse_function_explore_json(raw)
-    if parsed:
-        selected_functions = parsed.get("selected_functions", [])
-        explore_plan = parsed.get("plan", "")
-    else:
-        selected_functions = []
-        explore_plan = ""
+    error_msg = ""
+    raw_text = ""
+    selected_functions = None
+    explore_plan = ""
+    for attempt in range(2):
+        if attempt > 0:
+            yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'msg', 'content': 'Parsing failed, re-analyzing functions...'}, ensure_ascii=False)}\n\n"
+
+        raw = ""
+        for chunk, reasoning in stream_with_context_retry(lambda lvl: build_prompt(lvl) + error_msg, llm, images=images):
+            if chunk:
+                raw += chunk
+                yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
+            if reasoning:
+                yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'reasoning_chunk', 'content': reasoning}, ensure_ascii=False)}\n\n"
+        raw_text = raw
+
+        parsed = _parse_function_explore_json(raw)
+        if parsed is not None:
+            selected_functions = parsed.get("selected_functions", [])
+            explore_plan = parsed.get("plan", "")
+            break
+
+        error_msg = "\n\nPrevious attempt failed to produce valid JSON. Output ONLY a single JSON object with a 'selected_functions' array (names taken from the catalog above) and a 'plan' string. No markdown code block, no extra text.\n"
+
+    if selected_functions is None:
+        # Parse failure: do NOT overwrite the FUNC region with an empty list, so a
+        # previous valid selection is preserved and later code generation is not
+        # left without any functions or database schema.
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'error', 'content': 'Failed to parse function selection after retries; keeping previous selection'}, ensure_ascii=False)}\n\n"
+
+        log_observe_cycle(session_id, 0, "act", "explore_functions",
+                          prompt=prompt[:5000], response=raw_text[:5000],
+                          exec_result="*(parse failed; previous selection preserved)*",
+                          token_estimate=len(prompt))
+
+        return {"parse_failed": True, "selected_functions": None, "explore_plan": "", "func_docs": ""}
 
     if selected_functions:
         display_content = get_func_docs_for(selected_functions)
@@ -444,10 +468,18 @@ Example:
 def _parse_function_explore_json(raw: str) -> dict | None:
     from utils.context_trim import parse_json
     result = parse_json(raw)
-    if isinstance(result, dict) and "selected_functions" in result:
-        valid_func_names = [f.strip() for f in result["selected_functions"] if isinstance(f, str) and f.strip() in FUNCTION_DICT]
-        return {"selected_functions": valid_func_names, "plan": result.get("plan", "")}
-    return None
+    if not isinstance(result, dict) or "selected_functions" not in result:
+        return None
+    raw_funcs = result["selected_functions"]
+    if not isinstance(raw_funcs, list):
+        return None
+    valid_func_names = [f.strip() for f in raw_funcs if isinstance(f, str) and f.strip() in FUNCTION_DICT]
+    if raw_funcs and not valid_func_names:
+        # The model named functions but none exist in the catalog: an empty
+        # result here would overwrite the region and poison later code
+        # generation, so report a parse failure instead.
+        return None
+    return {"selected_functions": valid_func_names, "plan": result.get("plan", "")}
 
 
 def _act_explore_base_knowledge(build_question, session_id: str, search_keyword: Optional[str] = None, build_blackboard=None, images=None):

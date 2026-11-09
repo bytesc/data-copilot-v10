@@ -62,6 +62,8 @@ def history_to_text(history: List[dict]) -> str:
                     lines.append(f"[ACT explore_functions] selected_functions: {json.dumps(entry['selected_functions'], ensure_ascii=False)}")
                 if entry.get("explore_plan"):
                     lines.append(f"[ACT explore_functions] explore_plan:\n{entry['explore_plan']}")
+                if entry.get("error"):
+                    lines.append(f"[ACT explore_functions] error:\n{entry['error']}")
             elif action == "generate_and_execute":
                 if entry.get("code"):
                     lines.append(f"[ACT generate_and_execute] code:\n{entry['code']}")

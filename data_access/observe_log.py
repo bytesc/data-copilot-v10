@@ -486,11 +486,14 @@ def _rebuild_blackboard_region(board, sub_phase, response, exec_result, history)
     elif sub_phase == "explore_functions":
         selected_functions = parsed.get("selected_functions", []) or []
         explore_plan = parsed.get("plan", "")
-        board[FUNCTIONS] = {
-            "selected_functions": selected_functions,
-            "explore_plan": explore_plan,
-            "func_docs": exec_result,
-        }
+        if "selected_functions" in parsed:
+            # Only overwrite the region when the logged response really parsed
+            # into a selection; a failed run must not blank out the FUNC region.
+            board[FUNCTIONS] = {
+                "selected_functions": selected_functions,
+                "explore_plan": explore_plan,
+                "func_docs": exec_result,
+            }
         history.append({
             "role": "assistant", "type": "act", "action": "explore_functions",
             "selected_functions": selected_functions,

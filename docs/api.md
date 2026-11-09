@@ -843,6 +843,23 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 > 本节接口受 `enable_edit` 控制，设为 `false` 时返回 `403`。
 > 图片上传不在本节：图片以 base64 随 JSON 请求的 `conversation_history[].uploaded` 提交，见 [4. Agent 核心流程](#4-agent-核心流程-sse-流式) 的「用户上传图片」小节。
 
+### 上传大小限制
+
+各上传接口对上传体积设有硬性上限，超限返回 `413`。上限由后端常量定义（`main.py`）：
+
+| 接口 | 上限 | 常量 |
+|------|------|------|
+| `POST /upload-csv/` | 50 MB | `MAX_CSV_UPLOAD_BYTES` |
+| `POST /upload-txt/` | 20 MB | `MAX_DOC_UPLOAD_BYTES` |
+| `POST /api/comment-manage/{table_name}/import-csv` | 5 MB | `MAX_COMMENT_CSV_BYTES` |
+
+执行方式：
+
+1. **入口预检** — 中间件 `limit_multipart_upload_size` 在解析 `multipart/form-data` 之前读取 `Content-Length`，超过三者的最大值（50 MB，`MAX_MULTIPART_BYTES`）直接返回 `413`，避免超大请求体被解析/落盘。
+2. **端点读取** — 每个处理函数通过 `_read_upload_limited(file, 上限)` 以 1 MiB 分块读取，累计超过该接口上限立即返回 `413`。因此即使客户端未提供 `Content-Length`（分块传输）也能按接口上限拦截，且不会把整包读入内存。
+
+> `front.py` 反向代理不做大小限制，仅透传请求；限制一律以后端为准。
+
 ### POST `/upload-csv/`
 
 上传 CSV 文件并插入数据库。
@@ -853,6 +870,8 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 |------|------|--------|------|
 | `file` | File | — | CSV 文件 |
 | `table_name` | Form | `"uploaded_data"` | 目标表名 |
+
+> `file` 大小上限 **50 MB**，超限返回 `413`（见「上传大小限制」）。
 
 **响应** `200`（成功）
 ```json
@@ -885,6 +904,8 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 | `file` | File | — | 支持 `.txt`, `.doc`, `.docx`, `.pdf` |
 | `table_name` | Form | `"uploaded_data"` | 目标表名 |
 | `meta` | Form(string) | `null` | 模型调用选择 JSON，如 `{"model":"glm-5.3-flash","reasoning_effort":"max","style":"Casual","use_images":true}` |
+
+> `file` 大小上限 **20 MB**，超限返回 `413`（见「上传大小限制」）。
 
 **响应** `200`
 ```json
@@ -934,6 +955,8 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 
 通过 CSV 导入注释。CSV 需包含 `column_name` 和 `comment` 列。
 
+> CSV 大小上限 **5 MB**，超限返回 `413`（见「上传大小限制」）。
+
 ### PUT `/api/comment-manage/{table_name}/table-comment`
 
 更新表注释。
@@ -966,5 +989,6 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 | 403 | 功能被配置禁用（`enable_edit=false` 时数据/知识管理接口） |
 | 404 | 资源不存在 |
 | 409 | 资源冲突（如键已存在）|
+| 413 | 上传文件超过大小上限（见「文件上传」的「上传大小限制」） |
 | 500 | 服务器内部错误 |
 | 502 | 代理连接后端失败（仅 front.py） |

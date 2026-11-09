@@ -3,6 +3,22 @@
 > Multipart 接口无法使用 JSON 的 `{meta, data}` 信封。前端会在 `FormData` 中附加 `meta` 文本字段
 > （JSON 字符串），目前只有 `POST /upload-txt/` 会读取并用于后续 LLM 调用；其余上传接口会忽略它。
 
+## 上传大小限制
+
+各上传接口对上传体积设有硬性上限，超限返回 `HTTP 413`（上限为 `main.py` 中的常量）：
+
+| 接口 | 上限 | 常量 |
+|------|------|------|
+| `POST /upload-csv/` | 50 MB | `MAX_CSV_UPLOAD_BYTES` |
+| `POST /upload-txt/` | 20 MB | `MAX_DOC_UPLOAD_BYTES` |
+| `POST /api/comment-manage/{table_name}/import-csv` | 5 MB | `MAX_COMMENT_CSV_BYTES` |
+
+- **入口预检**：中间件 `limit_multipart_upload_size` 在解析 `multipart/form-data` 前按 `Content-Length` 判断，
+  超过三者最大值（50 MB，`MAX_MULTIPART_BYTES`）直接返回 `413`。
+- **端点读取**：各处理函数通过 `_read_upload_limited(file, 上限)` 以 1 MiB 分块读取，累计超过该接口上限即 `413`。
+  因此无 `Content-Length` 的分块传输也能按接口上限拦截，且不会把整包读入内存。
+- `front.py` 反向代理**不设限**，仅透传请求；限制一律以后端为准。
+
 ## 1. 数据 CSV 导入 (`POST /upload-csv/`)
 
 ### 功能
@@ -16,6 +32,9 @@
 | **URL** | `POST /upload-csv/` |
 | **请求格式** | `multipart/form-data` |
 | **字段** | `file`（CSV 文件，必填），`table_name`（表名，可选，默认 `uploaded_data`） |
+
+> `file` 大小上限 **50 MB**，超限返回 `413`。
+
 
 ### 数据类型推断
 
@@ -120,6 +139,9 @@ email,邮箱地址
 | **请求格式** | `multipart/form-data` |
 | **字段** | `file`（CSV 文件） |
 
+> CSV 大小上限 **5 MB**，超限返回 `413`。
+
+
 ### CSV 要求
 
 | 列头 | 说明 |
@@ -156,6 +178,9 @@ email,邮箱地址
 | **URL** | `POST /upload-txt/` |
 | **请求格式** | `multipart/form-data` |
 | **字段** | `file`（文档文件），`table_name`（目标表名，默认 `uploaded_data`），`meta`（模型选择 JSON，可选） |
+
+> `file` 大小上限 **20 MB**，超限返回 `413`。
+
 
 ### 处理流程
 

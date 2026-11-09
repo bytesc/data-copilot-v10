@@ -207,6 +207,34 @@ async def unified_request_envelope(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def limit_multipart_upload_size(request: Request, call_next):
+    """Reject oversized multipart uploads before the body is parsed.
+
+    Starlette's multipart parser spools uploads to disk, so a very large body is
+    a DoS vector even though each handler also caps its own read. When the client
+    provides a Content-Length, fail fast with HTTP 413 above the configured cap.
+    """
+    if request.method in ("POST", "PUT", "PATCH"):
+        content_type = request.headers.get("content-type", "").lower()
+        if content_type.startswith("multipart/form-data"):
+            content_length = request.headers.get("content-length")
+            if content_length is not None:
+                try:
+                    too_large = int(content_length) > MAX_MULTIPART_BYTES
+                except (TypeError, ValueError):
+                    too_large = False
+                if too_large:
+                    return JSONResponse(
+                        status_code=413,
+                        content={
+                            "error": "Uploaded file exceeds the maximum allowed "
+                            f"size of {MAX_MULTIPART_BYTES // (1024 * 1024)} MB"
+                        },
+                    )
+    return await call_next(request)
+
+
 import logging
 import traceback
 
@@ -232,6 +260,46 @@ def _run_in_llm_context(func, *args):
     """
     ctx = contextvars.copy_context()
     return lambda: ctx.run(func, *args)
+
+
+# Upload size caps (bytes). ``UploadFile.read()`` materializes the whole body in
+# memory, so every upload endpoint reads through ``_read_upload_limited``, which
+# stops at the cap and rejects larger requests with HTTP 413.
+MAX_CSV_UPLOAD_BYTES = 50 * 1024 * 1024      # /upload-csv/
+MAX_DOC_UPLOAD_BYTES = 20 * 1024 * 1024      # /upload-txt/
+MAX_COMMENT_CSV_BYTES = 5 * 1024 * 1024      # comment CSV import
+# Highest per-endpoint cap; used as an early Content-Length guard so oversized
+# multipart bodies are rejected before the parser spools them to disk.
+MAX_MULTIPART_BYTES = max(
+    MAX_CSV_UPLOAD_BYTES, MAX_DOC_UPLOAD_BYTES, MAX_COMMENT_CSV_BYTES
+)
+
+
+async def _read_upload_limited(file: UploadFile, max_bytes: int) -> bytes:
+    """Read an UploadFile in bounded chunks, rejecting bodies over ``max_bytes``.
+
+    A single ``await file.read()`` materializes the entire upload in memory, so
+    an oversized file could exhaust memory. This reads at most ``max_bytes + 1``
+    bytes across fixed-size chunks and raises HTTP 413 as soon as the cap is
+    exceeded.
+    """
+    chunk_size = 1024 * 1024  # 1 MiB
+    buffer = bytearray()
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        buffer.extend(chunk)
+        if len(buffer) > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    "Uploaded file exceeds the maximum allowed size of "
+                    f"{max_bytes // (1024 * 1024)} MB"
+                ),
+            )
+    return bytes(buffer)
+
 
 STATIC_FOLDER = "tmp_imgs"
 STATIC_PATH = f"/{STATIC_FOLDER}"
@@ -481,7 +549,7 @@ async def import_comments_csv(table_name: str, file: UploadFile = File(...)):
     _require_edit_enabled()
     if not file.filename.lower().endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
-    content = await file.read()
+    content = await _read_upload_limited(file, MAX_COMMENT_CSV_BYTES)
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
     def _import(bytes_content):
@@ -785,7 +853,7 @@ async def upload_csv(
     _require_edit_enabled()
     if not file.filename.lower().endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
-    content = await file.read()
+    content = await _read_upload_limited(file, MAX_CSV_UPLOAD_BYTES)
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
     loop = asyncio.get_event_loop()
@@ -811,7 +879,7 @@ async def upload_txt(
         )
 
     try:
-        content = await file.read()
+        content = await _read_upload_limited(file, MAX_DOC_UPLOAD_BYTES)
         if len(content) == 0:
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
 

@@ -52,8 +52,16 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
     board_functions = blackboard.get("functions") or {}
 
     board_selected_functions = board_functions.get("selected_functions")
-    if isinstance(board_selected_functions, list):
+    if isinstance(board_selected_functions, list) and board_selected_functions:
         selected_functions = board_selected_functions
+
+    # An empty selection (a failed explore_functions that wrote an empty list,
+    # or a legacy poisoned blackboard) must NOT blank out the function catalog
+    # and DB schema. Treat it as "no explicit selection" and fall back to the
+    # full function set, otherwise code generation runs with no tools and no
+    # database structure at all.
+    if selected_functions is not None and not selected_functions:
+        selected_functions = None
 
     rag_ans = ""
     knowledge = ""
