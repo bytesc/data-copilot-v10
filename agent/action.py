@@ -1,4 +1,5 @@
 import json
+import traceback
 from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, Request
@@ -195,6 +196,36 @@ Decision Rules:
 
 @perf_api("/api/action/stream/")
 def _event_stream_action(
+        question: str,
+        session_id: str,
+        conversation_history: Optional[List[dict]],
+        cycle_index: int,
+        request_json: str = "",
+):
+    """Action phase wrapper: turn unexpected errors into a terminal error event.
+
+    Without this guard an unhandled exception closes the SSE stream mid-flight
+    and skips the history update, so the caller sees no state change and retries
+    the same phase forever. Emitting a fatal error event lets the client stop.
+    """
+    try:
+        yield from _event_stream_action_impl(
+            question, session_id, conversation_history, cycle_index, request_json,
+        )
+    except Exception as e:
+        traceback.print_exc()
+        message = f"Internal error during `action`: {e}"
+        yield f"data: {json.dumps({'phase': 'action', 'type': 'error', 'content': message, 'fatal': True}, ensure_ascii=False)}\n\n"
+        try:
+            record_session_operation(
+                session_id, "/api/action/stream/", request_json,
+                ans="", result_type="error", msg=message[:500],
+            )
+        except Exception:
+            traceback.print_exc()
+
+
+def _event_stream_action_impl(
         question: str,
         session_id: str,
         conversation_history: Optional[List[dict]],

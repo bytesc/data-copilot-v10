@@ -365,6 +365,13 @@ def execute_select(engine, sql):
     writes/DDL or ``SELECT ... INTO OUTFILE`` regardless of the statement text.
     A missing read-only account is a hard error so the privileged user is never
     used as a fallback.
+
+    The statement is sent through ``exec_driver_sql`` so SQLAlchemy never parses
+    the raw SQL for ``:name`` bind parameters. ``text(sql)`` (or passing a plain
+    string to ``pd.read_sql_query``) treats any ``:identifier`` preceded by a
+    non-identifier character as a bind parameter (e.g. a literal like ``':x'``
+    or JSON content ``{"k": v}``), which raises "A value is required for bind
+    parameter" and makes the caller misread it as an execution failure.
     """
     if engine is None:
         raise RuntimeError(
@@ -374,8 +381,10 @@ def execute_select(engine, sql):
         )
     try:
         with engine.connect() as connection:
-            result_df = pd.read_sql_query(text(sql), connection)
-        return result_df
+            result = connection.exec_driver_sql(sql)
+            columns = list(result.keys())
+            rows = result.fetchall()
+        return pd.DataFrame(rows, columns=columns)
     except SQLAlchemyError as e:
         # 如果发生错误，打印错误信息
         print(f"An error occurred: {e}")
