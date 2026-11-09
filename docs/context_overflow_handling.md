@@ -135,7 +135,6 @@ N = min(base_limit, cap, round(base_limit * factor))   # 且不小于 1
 
 | 调用点 | 削减的块 | 方式 |
 |--------|----------|------|
-| `sql_code.get_sql_code` | 截 `data_prompt`（库表结构）+ `question` | 非流式 |
 | `sql_code.filter_db_fields` / `filter_db_fields_stream` | `_build_filter_prompt(level)` 内截 schema + question | 非流式 / 流式 |
 | `data_explanation.get_llm_data_explanation_func` | 只截 `question`；data 已按 `max_length` 采样，不重复采样 | 非流式 |
 | `get_function_info.get_function_info` / `filter_functions_stream` | `get_function_prompt(level)` 截 `FUNCTION_DESCRIPTION` + question | 非流式 / 流式 |

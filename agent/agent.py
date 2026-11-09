@@ -7,7 +7,7 @@ import pandas as pd
 
 from .tools.base_knowledge.get_base_knowledge import BASE, TARGET, get_code_guide_db, get_graph_code_guide_db, base_knowledge_to_str
 from .tools.copilot.utils.code_insert import insert_lines_into_function
-from .tools.tools_def import engine, llm, query_database, exe_sql
+from .tools.tools_def import engine, llm, exe_sql
 
 from .tools.copilot.utils.code_executor import execute_py_code
 from .tools.copilot.sql_code import get_db_info_prompt, filter_db_fields
@@ -118,7 +118,7 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
             selected_fields = board_selected_fields
 
     database = ""
-    if query_database in function_set or exe_sql in function_set:
+    if exe_sql in function_set:
         if selected_fields and selected_fields.get("__no_db__"):
             database = ""
         elif board_schema.get("schema_detail"):

@@ -169,9 +169,9 @@ Base URL: `http://<host>:8008`
 ```json
 [
   {
-    "name": "query_database",
-    "description": "使用自然语言查询数据库",
-    "doc": "query_database(question: str, ...)"
+    "name": "exe_sql",
+    "description": "执行 SQL 查询字符串，返回 pandas DataFrame",
+    "doc": "exe_sql(sql: str) -> pd.DataFrame"
   }
 ]
 ```
@@ -475,7 +475,7 @@ data: {"type":"done","content":""}
   "question": "计算每个月的总销售额",
   "tables": ["orders"],
   "selected_fields": {"orders": ["amount", "date"]},
-  "selected_functions": ["query_database"],
+  "selected_functions": ["exe_sql"],
   "session_id": "xxx"
 }
 ```

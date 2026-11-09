@@ -78,11 +78,11 @@ if __name__=="__main__":
     original_code = """
 def func(data: pd):
     import pandas as pd
-    from agent.tools.tools_def import query_database
+    from agent.tools.tools_def import exe_sql
     import math
 
     yield "正在查询LORONG 7 TOA PAYOH的位置信息..."
-    toa_payoh_location = query_database("查询LORONG 7 TOA PAYOH的经纬度", "latitude, longitude")
+    toa_payoh_location = exe_sql("SELECT latitude, longitude FROM toa_payoh LIMIT 1")
     """
     lines_to_insert = ["import pandas as pd", "import math"]
 

@@ -9,7 +9,6 @@ from .copilot.data_explanation import get_llm_data_explanation_func
 from .copilot.examples.path_tools import generate_img_path
 from .copilot.utils.read_db import execute_select
 from .data_trans.download_csv_to_pd import download_csv_to_dataframe, extract_csv_filename_from_url, read_csv_from_local
-from .copilot.sql_code import query_database_func
 from .web_search.web_search import search_web, fetch_webpage
 from .mcp_client import load_mcp_servers, get_mcp_server, MCPClient, MCPError
 
@@ -52,47 +51,6 @@ STATIC_FOLDER = "tmp_imgs"
 llm = get_llm_dynamic()
 
 
-
-
-def query_database(question: str, df_cols: str | list = None) -> pd.DataFrame:
-    """
-    query_database(question: str, df_cols: str | list = None) -> pd.DataFrame:
-    Query the database using natural language question. Can not query anything not included in the database content!!!
-    Returns the query results in pandas DataFrame.
-
-    Args:
-    - question (str): Natural language question, table names can be included in the question.
-    - df_cols (str|list): The columns' names of the DataFrame(e.g. "uid, username, stu_num").
-
-    Returns:
-    - pd.DataFrame: A DataFrame containing the results of the database query.
-        The DataFrame includes the columns provided in df_cols(the second args)
-    returns None in case of error
-
-    Raises:
-    - RuntimeError: If no read-only database is configured (mysql_readonly missing).
-      Query errors themselves are retried internally and finally returned as None
-      (this function does not raise on bad SQL).
-
-    Example:
-    ```python
-        ans_df = query_database('Select the grades of Jane Smith, use table stu_grade ,stu_info, class_info', df_cols='lesson_id, lesson_name, grade')
-        # Output(pd.DataFrame):
-        #        lesson_id lesson_name grade
-        # 0        001  Mathematics     99.00
-        # 1        002      English     88.50
-        # 2        003     Physics    65.00
-        # ... and so on(the structure of the output DataFrame id based on df_cols(the second input args))
-    ```
-    """
-
-    if read_engine is None:
-        raise RuntimeError(
-            "No read-only database is configured (mysql_readonly is missing); "
-            "query_database is disabled."
-        )
-    result = query_database_func(question, df_cols, llm, read_engine)
-    return result
 
 
 def explain_data(question: str, data: pd.DataFrame, col_explanation: str = None) -> str:
@@ -182,6 +140,8 @@ def load_data(url: str) -> pd.DataFrame:
     ```
     """
     file_name = extract_csv_filename_from_url(url)
+    if not file_name:
+        return None
     df = read_csv_from_local(f"./{STATIC_FOLDER}/"+file_name)
     return df
 
