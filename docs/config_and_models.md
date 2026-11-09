@@ -390,6 +390,8 @@ token_estimate  INT             -- token 估算
 created_at      DATETIME
 ```
 
+> 上表 `phase` / `sub_phase` 的注释为建表时的历史描述，实际写入值随实现演进：`phase` 实际为 `think` / `action` / `act` / `observe` / `execute`（`/api/exe-sql/`）以及 `generate_document` / `generate_document_unified` / `generate_yaml_outline` / `generate_from_yaml` / `user`；`sub_phase` 实际为 `plan` / `decide` / `review` / `explore_*` / `generate_and_execute` / `web_search` / `fetch_webpage` / `exe_mcp` / `select_images` / `ask_question` 等。
+
 ### report_generation_log — 文档生成日志
 
 ```sql

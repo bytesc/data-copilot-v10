@@ -84,10 +84,10 @@ CREATE TABLE IF NOT EXISTS `doc_guide` (
 
 CREATE TABLE IF NOT EXISTS `code_guide` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `key` TEXT NOT NULL COMMENT '图表代码指南键',
-  `value` LONGTEXT COMMENT '图表代码指南值',
+  `key` TEXT NOT NULL COMMENT '代码指南键',
+  `value` LONGTEXT COMMENT '代码指南值',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图表代码指南表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='代码指南表';
 
 CREATE TABLE IF NOT EXISTS `think_guide` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',

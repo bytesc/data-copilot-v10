@@ -31,11 +31,11 @@ static_path: "http://127.0.0.1:8008/"
 #                      Omit or use {} to disable the dropdown for that model.
 #                      When extra_params also contains temperature, extra_params wins when merged.
 #   supports_images  - boolean, whether the model accepts image (multimodal) input. When true,
-#                      images saved in the blackboard IMAGES region are attached to the user message.
+#                      images saved in the blackboard recent_generated_images / selected_images regions are attached to the user message.
 # Note: extra body params are now configured per model via the extra_params field in llm_models.
 # DeepSeek official docs (api-docs.deepseek.com/zh-cn/guides/thinking_mode):
 #   disable thinking  -> {"thinking": {"type": "disabled"}}
-#   effort control    -> reasoning_effort: "low" / "high" / "max" (default high)
+#   effort control    -> reasoning_effort: "none" / "low" / "high" / "max"
 # Other providers (may differ, tokenhub may normalize):
 #   GLM-5.3           -> use {"thinking": {"type": "enabled"}, "reasoning_effort": "low"|"high"|"max"} (default max)
 #   OpenAI gpt-5/o    -> cannot disable, use {"reasoning_effort": "low"}

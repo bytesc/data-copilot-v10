@@ -556,8 +556,7 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 ```json
 {"role":"assistant","type":"act","action":"exe_mcp",
  "results":[{"server":"server_name","tool":"tool_name","result":{...}},...],
- "display_content":"汇总展示文本",
- "error":null}
+ "display_content":"汇总展示文本"}
 ```
 
 上下文格式：
@@ -567,7 +566,7 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 {result_json}
 ```
 
-单次调用失败时 `results` 中对应项带 `error`；整体失败时使用顶层 `error`。
+`results`、`display_content`、`error` 三个字段仅在非空时写入条目：成功时没有 `error` 键（不是 `error:null`）；单次调用失败时 `results` 中对应项带 `error`，整体失败（如未提供可用工具）时才会出现顶层 `error`。
 
 ### fetch_webpage
 
@@ -719,11 +718,11 @@ images:
 
 | 类别 | 保留条数 |
 | --- | --- |
-| think | 3 |
-| action_decision | 3 |
-| generate_and_execute 含 `code`（`act_code`） | 1 |
-| generate_and_execute 仅含 `error`（`act_error`） | 1 |
-| generate_and_execute 既无 `code` 也无 `error`（`act_result`） | 999（永久） |
+| think（`think` 条目） | 3 |
+| action（`action_decision` 条目） | 3 |
+| generate_and_execute 含 `error`（`act_error`） | 1 |
+| generate_and_execute 含 `result` / `exec_ok`（`act_result`） | 999（永久） |
+| generate_and_execute 含 `code`（`act_code`，仅「有代码但无 `result`/`error`」的条目） | 1 |
 | explore_schema | 3 |
 | explore_functions | 3 |
 | explore_base_knowledge | 3 |

@@ -197,9 +197,21 @@
   # 所有服务器均无工具时，error 内容为二者之一（不是斜杠拼接的单一字符串）：
   {phase:"act", type:"error", sub_phase:"explore_mcp", content:"All MCP servers failed to connect: calculator(...), other(...)"}
   {phase:"act", type:"error", sub_phase:"explore_mcp", content:"No MCP servers provided any tools"}
+
+重试后成功：
+  ... → {phase:"act", type:"msg", sub_phase:"explore_mcp", content:"Parsing failed, re-analyzing MCP tools..."}
+  → 重新生成 → {type:"done", ...} → {type:"history", ...}
+
+重试耗尽（解析失败，与其它 explore_* 不同）：
+  ... → {phase:"act", type:"msg", sub_phase:"explore_mcp", content:"Parsing failed, re-analyzing MCP tools..."}
+  → {phase:"act", type:"done", sub_phase:"explore_mcp", content:"*(No tools selected)*",
+     result:{selected_tools:[], catalog:"...", explore_plan:""}}
+  → {type:"history", history:[...]}
 ```
 
 > 有失败的服务器时用 `"All MCP servers failed to connect: "` 拼接各服务器名（形如 `name(error)`）；没有任何服务器报告失败（即都连上但都没工具）时用 `"No MCP servers provided any tools"`。
+>
+> 与 explore_schema / explore_functions / explore_base_knowledge 不同：explore_mcp 解析重试耗尽时**不发 error 事件**，而是照常发出一个 `done`（`content:"*(No tools selected)*"`、`selected_tools:[]`），并用空选择**覆盖**黑板的 MCP 区域（`utils/blackboard.py::_action_region_payload` 的 explore_mcp 分支不检查 parse_failed），即不保留上一次的有效选择。
 
 ### exe_mcp
 
@@ -225,6 +237,10 @@
   {phase:"act", type:"error", sub_phase:"exe_mcp", content:"MCP call failed: calculator/calculate: ..."}
   # 服务器不存在同样走 "MCP call failed"，异常文本为 "MCP server not found: {server}"：
   {phase:"act", type:"error", sub_phase:"exe_mcp", content:"MCP call failed: {server}/{tool}: MCP server not found: {server}"}
+  # 整次执行未提供任何工具（既无 tools 数组也无 server/tool）：
+  {phase:"act", type:"error", sub_phase:"exe_mcp", content:"MCP tools are required: provide a tools array or server/tool/params fields"}
+  # 批量数组中某一项缺少 server 或 tool：
+  {phase:"act", type:"error", sub_phase:"exe_mcp", content:"Tool #{i} is missing server or tool name"}
 ```
 
 ### select_images
@@ -237,9 +253,11 @@
    result:{selected_images:[{path, reason}, ...]}}
   {type:"history", history:[...]}
 
-失败（params 缺少合法 `images` 数组，或数组中无有效条目）：
+失败（`images`/`selected_images` 缺失或不是数组）：
   {phase:"act", type:"error", sub_phase:"select_images", content:"select_images requires an `images` array"}
-  # 此时 act 条目只带 error 字段（不写 selected_images），随后仍会发出 {type:"history", ...}
+  # 数组非空但没有任何有效条目（每项缺少可用的 path）：
+  {phase:"act", type:"error", sub_phase:"select_images", content:"select_images received no valid image entries (each needs a path and reason)"}
+  # 两种失败下 act 条目都只带 error 字段（不写 selected_images），随后仍会发出 {type:"history", ...}
 ```
 
 ### 用户交互类（ask_question / ask_choice / summary_and_pause / attempt_completion）
@@ -372,7 +390,7 @@
 - `history` 的第一个元素是 blackboard 条目（`type:"blackboard"`），保存完整探索结果；普通 act 条目只保留参数、计划和选中项。前端从该条目读取 Blackboard 弹窗内容。
 - `generate_and_execute` 每次执行后会把本次生成的图片列表写入 blackboard 的 `recent_generated_images` 区域（覆盖更新；本地图片通常为文件名，本机静态地址或外部图片为完整 URL），该区域随 `## Blackboard` 段以文本喂给 LLM；模型 `supports_images=true` 且请求 `meta.use_images` 开启时，图片还会作为 `image_url` 内容随请求提交。`act` 条目中的 `images` 字段仅用于前端展示。
 - `select_images` 执行后会把 `{"path", "reason"}` 列表整体覆盖写入 blackboard 的 `selected_images` 区域，并返回含 `selected_images` 的 `act` 条目；这些图片会排在上一次代码执行生成的 `images` 之后提交给支持多模态的模型。该 action 属于 Group 1，可与 `explore_*` 在同一次 `actions` 数组中选择。
-- 用户上传的图片随本轮第一个请求（Think 模式的 `POST /api/think/stream/`，Chat 模式的 `POST /api/action/stream/`）以 base64 放在 user 条目的 `uploaded` 字段提交，无独立上传接口。请求信封中间件是 `main.py` 的 `unified_request_envelope`（由它调用 `utils/image_ingest.py` 的 `ingest_uploaded_images`），解码保存为 `tmp_imgs/upload_<8位小写字母>.png`，把 `uploaded` 改写为文件名列表，并**追加合并**进 blackboard 的 `selected_images` 区域；处理在路由前完成且幂等，因此该请求的 `## Context` 与随后的 `history` 事件都已是文件名版本。详见 `docs/api.md` 的「用户上传图片」。
+- 用户上传的图片随本轮第一个请求（Think 模式的 `POST /api/think/stream/`，Chat 模式的 `POST /api/action/stream/`）以 base64 放在 user 条目的 `uploaded` 字段提交，无独立上传接口。请求信封中间件是 `main.py` 的 `unified_request_envelope`（由它调用 `utils/image_ingest.py` 的 `ingest_uploaded_images`；仅在请求同时携带 `meta`(对象) 与 `data` 的 `{meta, data}` 信封时触发），解码保存为 `tmp_imgs/upload_<8位小写字母>.png`，把 `uploaded` 改写为文件名列表，并**追加合并**进 blackboard 的 `selected_images` 区域；处理在路由前完成且幂等，因此该请求的 `## Context` 与随后的 `history` 事件都已是文件名版本。详见 `docs/api.md` 的「用户上传图片」。
 - 所有 `chunk` 事件仅用于流式临时显示，最终显示由 `history` 决定。
 - 重试次数为 2（首次 + 1 次重试），explore_* 全部如此（含 explore_functions）；YAML Outline 生成也是 2 次重试。
 - generate_document_unified 的 done 事件会先发一个仅含 content 的 done，再发一个含完整文件元数据的 done。

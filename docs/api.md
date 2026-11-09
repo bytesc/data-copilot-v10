@@ -88,18 +88,20 @@ Base URL: `http://<host>:8008`
 
 ### GET `/api/tools/functions`
 
-列出所有内置 Python 函数（供 Agent 调用）。
+列出所有内置 Python 函数（排除自定义函数 `CUSTOM_FUNC_NAMES`；供 Agent 调用）。
 
 **响应** `200`
 ```json
 [
   {
     "name": "exe_sql",
-    "description": "执行 SQL 查询字符串，返回 pandas DataFrame",
-    "doc": "exe_sql(sql: str) -> pd.DataFrame"
+    "description": "exe_sql(sql: str) -> pd.DataFrame:\nExecute the sql query string. Must be used in case of data query with sql database.\nReturns the query results in pandas DataFrame.",
+    "doc": "exe_sql(sql: str) -> pd.DataFrame:\n..."
   }
 ]
 ```
+
+> `description` 由函数 docstring 的第 2–4 行拼接（`agent/tools/get_function_info.py` 的 `FUNCTION_DESCRIPTION`），`doc` 为完整 docstring；两者均取自代码，因此多为英文文本（上面的中文仅为示意，实际返回以 docstring 为准）。
 
 ### GET `/api/tools/custom-functions`
 
@@ -341,7 +343,7 @@ data: {"type":"done","content":""}
 
 `select_images` 的 `params` 形如 `{"images": [{"path": "xxx.png", "reason": "一句话选中原因"}]}`；`path` 为本地 `tmp_imgs` 文件名或完整 `http(s)` 链接，整体覆盖 blackboard 的 `selected_images` 区域，`images: []` 表示清空。用户上传的图片会**追加合并**进同一区域（不通过本 action），见「用户上传图片」小节。
 
-**事件**: `code_chunk`, `exec_chunk`, `code_gen_error`
+**事件**: 依 action 而定，完整清单见 `docs/sse_event_flow.md`。`generate_and_execute` 的典型事件为 `status`、`msg`、`chunk`（`sub_type` 为 `code_chunk` / `code_complete` / `exec_chunk` / `exec_complete` / `code_gen_error` / `code_exe_error`）、`reasoning_chunk`、`done`（带 `code` / `content` / `images` / `result`）、`error`；explore_* 及 `web_search` / `fetch_webpage` / `explore_mcp` / `exe_mcp` / `select_images` / 用户交互类各有自己的 `msg` / `status` / `chunk` / `done` / `error` 序列。除 action 被配置禁用（直接结束、不发 `history`）外，其余路径都会在末尾补一条 `history` 事件（未知 action 仅在传入的 `conversation_history` 非空时发出原历史）。
 
 ### POST `/api/observe/stream/`
 
@@ -386,7 +388,7 @@ data: {"type":"done","content":""}
 2. 把该条目的 `uploaded` 改写为文件名列表 `["upload_abcd1234.png"]`。
 3. 把这些文件名追加合并进 blackboard 的 `selected_images` 区域（每项 `{"path", "reason": "user uploaded image"}`，按 `path` 去重，不覆盖已有选中项）。
 
-处理发生在路由之前且**幂等**：后续阶段收到的 `conversation_history` 里 `uploaded` 已是文件名，不会再解码或重复合并；当前请求构建的 `## Context` 已能看到 `Uploaded images: ...` 文件名列表。文件名随会话历史持久化；若 `meta.use_images` 开启且模型 `supports_images=true`，图片会按 `selected_images` 规则作为 `image_url` 提交。
+处理发生在路由之前且**幂等**：后续阶段收到的 `conversation_history` 里 `uploaded` 已是文件名，不会再解码或重复合并；当前请求构建的 `## Context` 已能看到 `Uploaded images: ...` 文件名列表。文件名随会话历史持久化；若 `meta.use_images` 开启且模型 `supports_images=true`，图片会按 `selected_images` 规则作为 `image_url` 提交。该摄取只在请求携带 `{meta, data}` 信封（`meta` 为对象且请求体含 `data`）时发生——`unified_request_envelope` 仅在同时存在 `meta`(对象) 与 `data` 时解包；未使用信封的普通 JSON 请求即使带 `uploaded`，也不会被解码保存或合并进 blackboard。
 
 > 前端卡控最多 10 张；后端同样有硬性上限（`utils/image_ingest.py`）：单请求最多解码/保存 10 张（`MAX_IMAGES_PER_REQUEST`），总字节上限 50 MB（`MAX_TOTAL_IMAGE_BYTES`，按 base64 长度保守估算）。超限的图片会被静默丢弃（原始 base64 同时从历史中剔除），图片保存失败或为空也会被跳过，均不影响其余消息。
 

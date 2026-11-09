@@ -95,6 +95,8 @@ SSE `done` 事件的 `action_result` 只保留上述字段（由 `agent/action.p
 | fetch_webpage | `enable_fetch_url` |
 | explore_mcp / exe_mcp | `enable_mcp` |
 
+> 这些开关只作用于 **action 层**：关闭后该 action 会从 `VALID_ACTIONS` 移除，`act.py` 也会通过 `_DISABLED_ACTIONS` 直接拒绝。开关**不改变代码生成阶段可用的函数目录**：例如 `exe_mcp` 虽受 `enable_mcp` 门控，但 `agent/tools/get_function_info.py` 的 `FUNCTION_DICT` 中始终包含 `exe_mcp` 函数，因此它仍会出现在函数选择列表里、生成的代码也仍可调用它。
+
 ---
 
 ## 3. explore_schema

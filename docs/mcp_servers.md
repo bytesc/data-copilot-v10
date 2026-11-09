@@ -12,6 +12,8 @@ mcp_servers:
     description: "Math expression evaluator"  # 可选，展示给 LLM 的服务器描述
     transport: "sse"              # "sse"（远程 HTTP）或 "stdio"（本地子进程）
     url: "http://localhost:8101/sse"  # SSE 传输必填
+    # timeout: 30                 # 可选：握手/列表等一般请求的等待秒数，默认 30
+    # call_timeout: 120           # 可选：tools/call 的等待秒数，默认 120
 
   - name: "filesystem"
     description: "文件系统访问"
@@ -28,8 +30,12 @@ mcp_servers:
 | `url` | 仅 `sse` | SSE 端点地址 |
 | `command` | 仅 `stdio` | 启动命令 |
 | `args` | 否 | 参数列表 |
+| `timeout` | 否 | 握手 / 工具列表等一般请求的等待秒数；缺省 30 |
+| `call_timeout` | 否 | `tools/call`（实际调用工具）的等待秒数；缺省 120，慢速外部工具应调大 |
 
-> 功能总开关为 `config/config.yaml` 的 `enable_mcp`（默认 `true`），设为 `false` 时 `explore_mcp` / `exe_mcp` 被禁用。
+> `timeout` / `call_timeout` 由 `MCPClient` 读取（`agent/tools/mcp_client/mcp_client.py`）；非正数或缺省时回退到默认值（一般请求 30s，`tools/call` 120s）。`tools/call` 也可在代码中通过 `call_tool(..., timeout=...)` 逐次覆盖。
+
+> 功能总开关为 `config/config.yaml` 的 `enable_mcp`（默认 `true`），设为 `false` 时 `explore_mcp` / `exe_mcp` 两个 action 被禁用（注意：`enable_mcp` 只门控 action，`FUNCTION_DICT` 中的 `exe_mcp` 函数本身仍对代码生成可见）。
 
 ## 2. 启动 MCP 服务器
 
