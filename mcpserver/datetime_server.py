@@ -1,6 +1,12 @@
 import sys
 from datetime import datetime, timezone, timedelta
-from mcp.server import MCPServer
+
+try:
+    # mcp 2.x re-exports MCPServer at the package root.
+    from mcp.server import MCPServer
+except ImportError:  # pragma: no cover - layout compatibility across mcp 2.x builds
+    # Some mcp 2.x builds only expose the documented submodule path.
+    from mcp.server.mcpserver import MCPServer
 
 mcp = MCPServer("datetime")
 

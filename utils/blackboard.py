@@ -127,6 +127,11 @@ def _action_region_payload(action: str, act_data: dict) -> Optional[Dict[str, An
             ),
         }
     if action == "explore_schema":
+        # A failed parse must not overwrite the region with an empty selection;
+        # keep the previous SCHEMA region (mirrors explore_functions) so later
+        # code generation still has the last good table/column selection.
+        if act_data.get("parse_failed"):
+            return None
         return {
             "selected_fields": act_data.get("selected_fields"),
             "explore_plan": act_data.get("explore_plan", ""),

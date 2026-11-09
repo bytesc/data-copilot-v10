@@ -2,7 +2,6 @@
 import json
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from html.parser import HTMLParser
 
 import httpx
 
@@ -125,31 +124,6 @@ def search_web(query: str, max_results: int = 10, region: str = "wt-wt") -> str:
         }, ensure_ascii=False)
 
 
-class _HTMLTextExtractor(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self._text_parts = []
-        self._skip_tags = {"script", "style", "noscript", "head", "meta", "link"}
-        self._current_skip = False
-
-    def handle_starttag(self, tag, attrs):
-        if tag in self._skip_tags:
-            self._current_skip = True
-
-    def handle_endtag(self, tag):
-        if tag in self._skip_tags:
-            self._current_skip = False
-
-    def handle_data(self, data):
-        if not self._current_skip:
-            text = data.strip()
-            if text:
-                self._text_parts.append(text)
-
-    def get_text(self):
-        return "\n".join(self._text_parts)
-
-
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -162,11 +136,12 @@ MAX_URLS = 10
 
 
 def _extract_text(html: str, url: str = "", max_length: int = 10000) -> str:
-    """Extract the main text content of an HTML document.
+    """Extract the main text content of an HTML document using trafilatura.
 
-    Uses trafilatura for main-content extraction (boilerplate removal) and falls
-    back to the lightweight ``_HTMLTextExtractor`` when trafilatura is missing or
-    returns nothing usable (e.g. non-article pages).
+    trafilatura performs main-content extraction (boilerplate removal). When it
+    is not installed or returns nothing usable (e.g. non-article pages), an
+    empty string is returned so the caller reports "No extractable text
+    content found" instead of using a naive HTML parser.
     """
     text = ""
     if _HAS_TRAFILATURA:
@@ -180,13 +155,6 @@ def _extract_text(html: str, url: str = "", max_length: int = 10000) -> str:
                 include_comments=False,
                 favor_recall=True,
             ) or ""
-        except Exception:
-            text = ""
-    if not text.strip():
-        try:
-            extractor = _HTMLTextExtractor()
-            extractor.feed(html)
-            text = extractor.get_text()
         except Exception:
             text = ""
     if len(text) > max_length:

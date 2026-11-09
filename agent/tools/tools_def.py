@@ -5,6 +5,10 @@ import sqlalchemy
 
 from agent.utils.get_config import config_data
 from agent.utils.llm_access.LLM import get_llm_dynamic
+# Reuse the single user-database engine defined in ``data_access.db_conn`` so the
+# project does not open two independent connection pools (each 20+20) against the
+# same database, which doubled connections and split the transaction view.
+from data_access.db_conn import engine
 from .copilot.data_explanation import get_llm_data_explanation_func
 from .copilot.examples.path_tools import generate_img_path
 from .copilot.utils.read_db import execute_select
@@ -15,15 +19,6 @@ from .mcp_client import load_mcp_servers, get_mcp_server, MCPClient, MCPError
 from .copilot.utils.mpl_chinese_font import setup_chinese_font
 setup_chinese_font()
 
-
-DATABASE_URL = config_data['mysql']
-engine = sqlalchemy.create_engine(
-    DATABASE_URL,
-    pool_size=20,
-    max_overflow=20,
-    pool_pre_ping=True,
-    pool_recycle=3600,
-)
 
 # exe_sql uses the read-only user to run SELECT/SHOW. Mutating features keep using engine
 # (the first user). When mysql_readonly is not configured, read-only queries are disabled

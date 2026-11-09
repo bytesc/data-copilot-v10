@@ -86,6 +86,8 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             entry["explore_plan"] = act_data["explore_plan"]
         if act_data.get("selected_guides"):
             entry["selected_guides"] = act_data["selected_guides"]
+        if act_data.get("parse_failed"):
+            entry["error"] = "explore_schema parse failed; previous selection preserved"
         entries.append(entry)
     elif action == "explore_base_knowledge":
         entry = {"role": "assistant", "type": "act", "action": "explore_base_knowledge"}
@@ -404,8 +406,11 @@ Example:
 
         error_msg = "\n\nPrevious attempt failed to produce valid JSON. Output ONLY a valid JSON object with table names as keys and column lists as values.\n"
 
-    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'error', 'content': 'Failed to parse fields after retries'}, ensure_ascii=False)}\n\n"
-    return {"selected_fields": {}, "explore_plan": "", "schema_detail": full_schema}
+    yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'error', 'content': 'Failed to parse fields after retries; keeping previous selection'}, ensure_ascii=False)}\n\n"
+    # Parse failure: do NOT overwrite the SCHEMA region with an empty selection,
+    # so a previously valid table/column selection is preserved and later code
+    # generation is not degraded (mirrors the explore_functions behaviour).
+    return {"parse_failed": True, "selected_fields": None, "explore_plan": "", "schema_detail": full_schema}
 
 
 def _act_explore_functions(build_question, session_id: str, search_keyword: Optional[str] = None, build_blackboard=None, images=None):

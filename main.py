@@ -547,7 +547,7 @@ async def export_comments_csv(table_name: str):
 @app.post("/api/comment-manage/{table_name}/import-csv")
 async def import_comments_csv(table_name: str, file: UploadFile = File(...)):
     _require_edit_enabled()
-    if not file.filename.lower().endswith('.csv'):
+    if not file.filename or not file.filename.lower().endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
     content = await _read_upload_limited(file, MAX_COMMENT_CSV_BYTES)
     if len(content) == 0:
@@ -851,7 +851,7 @@ async def upload_csv(
         table_name: str = Form("uploaded_data")
 ):
     _require_edit_enabled()
-    if not file.filename.lower().endswith('.csv'):
+    if not file.filename or not file.filename.lower().endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
     content = await _read_upload_limited(file, MAX_CSV_UPLOAD_BYTES)
     if len(content) == 0:
@@ -870,7 +870,7 @@ async def upload_txt(
     _require_edit_enabled()
     _apply_meta_json(meta)
     allowed_extensions = {'.txt', '.doc', '.docx', '.pdf'}
-    file_extension = file.filename[file.filename.rfind('.'):].lower()
+    file_extension = os.path.splitext(file.filename or "")[1].lower()
 
     if file_extension not in allowed_extensions:
         raise HTTPException(

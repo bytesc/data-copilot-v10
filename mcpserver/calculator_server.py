@@ -2,7 +2,13 @@ import math
 import ast
 import operator
 import sys
-from mcp.server import MCPServer
+
+try:
+    # mcp 2.x re-exports MCPServer at the package root.
+    from mcp.server import MCPServer
+except ImportError:  # pragma: no cover - layout compatibility across mcp 2.x builds
+    # Some mcp 2.x builds only expose the documented submodule path.
+    from mcp.server.mcpserver import MCPServer
 
 _ALLOWED_OPERATORS = {
     ast.Add: operator.add,
@@ -12,6 +18,13 @@ _ALLOWED_OPERATORS = {
     ast.Pow: operator.pow,
     ast.USub: operator.neg,
     ast.Mod: operator.mod,
+}
+
+# Named math constants. These are parsed as ``ast.Name`` (not calls), so they
+# live in their own map instead of the callable map below.
+_ALLOWED_CONSTANTS = {
+    "pi": math.pi,
+    "e": math.e,
 }
 
 _ALLOWED_FUNCTIONS = {
@@ -35,8 +48,6 @@ _ALLOWED_FUNCTIONS = {
     "exp": math.exp,
     "ceil": math.ceil,
     "floor": math.floor,
-    "pi": math.pi,
-    "e": math.e,
 }
 
 mcp = MCPServer("calculator")
@@ -56,17 +67,25 @@ def _eval_expression(expr: str) -> float:
             if isinstance(node.value, (int, float)):
                 return node.value
             raise ValueError(f"Unsupported constant: {node.value}")
+        elif isinstance(node, ast.Name):
+            # Bare identifiers are only math constants (pi, e); a plain Name that
+            # is not a known constant is rejected so arbitrary names cannot be
+            # referenced.
+            if node.id in _ALLOWED_CONSTANTS:
+                return _ALLOWED_CONSTANTS[node.id]
+            raise ValueError(f"Unsupported name: {node.id}")
         elif isinstance(node, ast.BinOp):
             op_type = type(node.op)
             if op_type not in _ALLOWED_OPERATORS:
                 raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
             left = _eval(node.left)
             right = _eval(node.right)
-            op_func = _ALLOWED_OPERATORS[op_type]
-            result = op_func(left, right)
+            # Check BEFORE computing, otherwise the division itself raises
+            # ZeroDivisionError before this guard can return a clear error.
             if op_type is ast.Div and right == 0:
                 raise ValueError("Division by zero")
-            return result
+            op_func = _ALLOWED_OPERATORS[op_type]
+            return op_func(left, right)
         elif isinstance(node, ast.UnaryOp):
             if isinstance(node.op, ast.USub):
                 return -_eval(node.operand)

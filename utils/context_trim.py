@@ -205,13 +205,17 @@ def prepare_trimmed_context(session_id: str, conversation_history: Optional[List
 # memory and is never written back to the session history (``save_session_step``
 # keeps storing the level-0 result).
 
+# Only phrases that specifically identify an input/context length overflow.
+# Generic fragments such as "exceeds the maximum" or "length limit" were
+# removed: they also match unrelated runtime errors (e.g. row/column limits),
+# which made the retry-with-trimming path fire on errors that trimming cannot
+# fix.
 _CONTEXT_ERROR_KEYWORDS = (
     "context_length", "context length", "context window",
     "maximum context", "max context", "maximum number of tokens",
     "too many tokens", "token limit", "tokens exceed", "reduce the length",
     "prompt is too long", "input is too long", "request too large",
-    "exceeds the maximum", "length limit",
-    "上下文长度", "上下文过长", "超过最大", "输入过长", "长度超",
+    "上下文长度", "上下文过长", "超过最大上下文", "输入过长", "长度超",
 )
 
 # Per-level character cap used to shrink individual structured prompt sections

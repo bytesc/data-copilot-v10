@@ -96,9 +96,8 @@ def get_db_overview_markdown(engine, tables=None, include_samples=True, selected
             if col_name in pk_cols:
                 key = 'PK'
             if col_name in fk_map:
-                key = f'FK → {fk_map[col_name]}' if key else f'FK → {fk_map[col_name]}'
-            elif col_name in pk_cols and col_name in fk_map:
-                key = f'PK, FK → {fk_map[col_name]}'
+                fk_label = f'FK → {fk_map[col_name]}'
+                key = f'{key}, {fk_label}' if key else fk_label
             col_comment = col.get('comment') or ''
             lines.append(f"| `{col_name}` | {col_type} | {key} | {col_comment} |")
 
