@@ -7,6 +7,7 @@ from typing import List, Optional, Set
 import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -53,6 +54,12 @@ def _safe_workspace_path(file_name: str) -> str:
     if candidate != _DOC_WORKSPACE_REAL and not candidate.startswith(_DOC_WORKSPACE_REAL + os.sep):
         raise ValueError(f"Invalid workspace file name: {file_name!r}")
     return candidate
+
+
+def _write_workspace_file(path: str, content: str) -> None:
+    """Blocking file write, kept out of the event loop (called via threadpool)."""
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
 
 
 def _doc_context(conversation_history, session_id: str, level: int = 0):
@@ -1171,7 +1178,7 @@ async def finalize_document_api(request: Request, user_input: FinalizeInput):
 
 
 @router.get("/api/doc-workspace/files/")
-async def list_workspace_files():
+def list_workspace_files():
     try:
         files = os.listdir(DOC_WORKSPACE)
         yaml_files = sorted([f for f in files if f.endswith(".yaml")], reverse=True)
@@ -1186,7 +1193,7 @@ async def list_workspace_files():
 
 
 @router.get("/api/doc-workspace/file/{filename:path}")
-async def read_workspace_file(filename: str):
+def read_workspace_file(filename: str):
     import re as _re
     if _re.search(r'[/\\]|\.\.', filename):
         return JSONResponse(content={"error": "Invalid filename"}, status_code=400)
@@ -1202,7 +1209,7 @@ async def read_workspace_file(filename: str):
 
 
 @router.delete("/api/doc-workspace/outline/{filename:path}")
-async def delete_outline_file(filename: str):
+def delete_outline_file(filename: str):
     import re as _re
     if _re.search(r'[/\\]|\.\.', filename):
         return JSONResponse(content={"error": "Invalid filename"}, status_code=400)
@@ -1227,15 +1234,14 @@ async def save_workspace_file(filename: str, request: Request):
     content = body.get("content", "")
     path = os.path.join(DOC_WORKSPACE, filename)
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
+        await run_in_threadpool(_write_workspace_file, path, content)
         return JSONResponse(content={"saved": filename})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 @router.delete("/api/doc-workspace/drafts/{session_id}/{yaml_id}")
-async def delete_draft_files(session_id: str, yaml_id: str):
+def delete_draft_files(session_id: str, yaml_id: str):
     session_token = _sanitize_token(session_id)
     yaml_token = _sanitize_token(yaml_id)
     if not session_token and not yaml_token:

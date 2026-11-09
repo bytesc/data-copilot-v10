@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingRes
 from fastapi import File, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse
 
 
@@ -241,7 +242,7 @@ STATIC_DIR = os.path.realpath(STATIC_FOLDER)
 
 
 @app.get(f"/{STATIC_FOLDER}/{{filename}}")
-async def read_static_file(request: Request, filename: str, download: str = None):
+def read_static_file(request: Request, filename: str, download: str = None):
     safe_name = os.path.basename(filename.replace("\\", "/"))
     filepath = os.path.realpath(os.path.join(STATIC_FOLDER, safe_name))
     if not filepath.startswith(STATIC_DIR + os.sep) or not os.path.isfile(filepath):
@@ -370,7 +371,7 @@ async def select_style(entry: StyleInput):
 
 
 @app.get("/api/sessions/")
-async def get_sessions(request: Request, limit: int = 50):
+def get_sessions(request: Request, limit: int = 50):
     sessions = list_sessions(limit)
     return JSONResponse(content={"sessions": sessions})
 
@@ -628,7 +629,7 @@ async def update_column_comment(table_name: str, column_name: str, entry: Commen
 
 
 @app.get("/api/session/{session_id}/history")
-async def get_session_history(request: Request, session_id: str):
+def get_session_history(request: Request, session_id: str):
     result = reconstruct_conversation_history(session_id)
     if result is None:
         return JSONResponse(
@@ -639,13 +640,13 @@ async def get_session_history(request: Request, session_id: str):
 
 
 @app.get("/api/session/{session_id}/generated-files")
-async def get_session_generated_files(request: Request, session_id: str):
+def get_session_generated_files(request: Request, session_id: str):
     files = get_generated_files(session_id)
     return JSONResponse(content={"files": files})
 
 
 @app.post("/api/log-user-input/")
-async def log_user_input(request: Request, user_input: UserInputLog):
+def log_user_input(request: Request, user_input: UserInputLog):
     log_observe_cycle(
         user_input.session_id, user_input.cycle_index,
         "user", "input",
@@ -669,20 +670,23 @@ async def exe_sql(request: Request, user_input: AgentInput):
         )
     loop = asyncio.get_event_loop()
     ans = await loop.run_in_executor(executor, execute_select, read_engine, user_input.question)
+    ans_str = await run_in_threadpool(str, ans)
     processed_data = {
         "ans": _dataframe_to_records(ans),
         "type": "success",
         "msg": "处理成功",
         "session_id": user_input.session_id or ""
     }
-    record_session_operation(
+    await run_in_threadpool(
+        record_session_operation,
         user_input.session_id, request.url.path,
-        user_input.model_dump_json(), str(ans), "", "success", "处理成功"
+        user_input.model_dump_json(), ans_str, "", "success", "处理成功",
     )
-    log_observe_cycle(
+    await run_in_threadpool(
+        log_observe_cycle,
         user_input.session_id or "", 0, "execute", "exe_sql",
         exec_code=user_input.question,
-        exec_result=str(ans)[:10000],
+        exec_result=ans_str[:10000],
     )
 
     return JSONResponse(content=processed_data)

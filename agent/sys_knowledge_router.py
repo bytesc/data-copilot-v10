@@ -34,14 +34,14 @@ class KnowledgeUpdate(BaseModel):
 # ---- base_knowledge CRUD ----
 
 @router.get("/api/sys-knowledge/base-knowledge/")
-async def list_base_knowledge():
+def list_base_knowledge():
     with sys_engine.connect() as conn:
         rows = conn.execute(select(base_knowledge).order_by(base_knowledge.c.id)).fetchall()
     return [{"id": r.id, "key": r.key, "value": r.value} for r in rows]
 
 
 @router.get("/api/sys-knowledge/base-knowledge/{item_id}")
-async def get_base_knowledge(item_id: int):
+def get_base_knowledge(item_id: int):
     with sys_engine.connect() as conn:
         row = conn.execute(select(base_knowledge).where(base_knowledge.c.id == item_id)).fetchone()
     if not row:
@@ -50,7 +50,7 @@ async def get_base_knowledge(item_id: int):
 
 
 @router.post("/api/sys-knowledge/base-knowledge/")
-async def create_base_knowledge(entry: KnowledgeEntry):
+def create_base_knowledge(entry: KnowledgeEntry):
     with sys_engine.connect() as conn:
         existing = conn.execute(select(base_knowledge).where(base_knowledge.c.key == entry.key)).fetchone()
         if existing:
@@ -62,7 +62,7 @@ async def create_base_knowledge(entry: KnowledgeEntry):
 
 
 @router.put("/api/sys-knowledge/base-knowledge/{item_id}")
-async def update_base_knowledge(item_id: int, entry: KnowledgeUpdate):
+def update_base_knowledge(item_id: int, entry: KnowledgeUpdate):
     with sys_engine.connect() as conn:
         existing = conn.execute(select(base_knowledge).where(base_knowledge.c.id == item_id)).fetchone()
         if not existing:
@@ -81,7 +81,7 @@ async def update_base_knowledge(item_id: int, entry: KnowledgeUpdate):
 
 
 @router.delete("/api/sys-knowledge/base-knowledge/{item_id}")
-async def delete_base_knowledge(item_id: int):
+def delete_base_knowledge(item_id: int):
     with sys_engine.connect() as conn:
         existing = conn.execute(select(base_knowledge).where(base_knowledge.c.id == item_id)).fetchone()
         if not existing:
@@ -94,14 +94,14 @@ async def delete_base_knowledge(item_id: int):
 # ---- db_query_guide CRUD ----
 
 @router.get("/api/sys-knowledge/db-query-guide/")
-async def list_db_query_guide():
+def list_db_query_guide():
     with sys_engine.connect() as conn:
         rows = conn.execute(select(db_query_guide).order_by(db_query_guide.c.id)).fetchall()
     return [{"id": r.id, "key": r.key, "value": r.value} for r in rows]
 
 
 @router.get("/api/sys-knowledge/db-query-guide/{item_id}")
-async def get_db_query_guide(item_id: int):
+def get_db_query_guide(item_id: int):
     with sys_engine.connect() as conn:
         row = conn.execute(select(db_query_guide).where(db_query_guide.c.id == item_id)).fetchone()
     if not row:
@@ -110,7 +110,7 @@ async def get_db_query_guide(item_id: int):
 
 
 @router.post("/api/sys-knowledge/db-query-guide/")
-async def create_db_query_guide(entry: KnowledgeEntry):
+def create_db_query_guide(entry: KnowledgeEntry):
     with sys_engine.connect() as conn:
         existing = conn.execute(select(db_query_guide).where(db_query_guide.c.key == entry.key)).fetchone()
         if existing:
@@ -122,7 +122,7 @@ async def create_db_query_guide(entry: KnowledgeEntry):
 
 
 @router.put("/api/sys-knowledge/db-query-guide/{item_id}")
-async def update_db_query_guide(item_id: int, entry: KnowledgeUpdate):
+def update_db_query_guide(item_id: int, entry: KnowledgeUpdate):
     with sys_engine.connect() as conn:
         existing = conn.execute(select(db_query_guide).where(db_query_guide.c.id == item_id)).fetchone()
         if not existing:
@@ -141,7 +141,7 @@ async def update_db_query_guide(item_id: int, entry: KnowledgeUpdate):
 
 
 @router.delete("/api/sys-knowledge/db-query-guide/{item_id}")
-async def delete_db_query_guide(item_id: int):
+def delete_db_query_guide(item_id: int):
     with sys_engine.connect() as conn:
         existing = conn.execute(select(db_query_guide).where(db_query_guide.c.id == item_id)).fetchone()
         if not existing:
@@ -165,13 +165,13 @@ def _register_guide_crud(guide_name: str, table):
     route_prefix = f"/api/sys-knowledge/{guide_name}"
 
     @router.get(f"{route_prefix}/")
-    async def list_guide():
+    def list_guide():
         with sys_engine.connect() as conn:
             rows = conn.execute(select(table).order_by(table.c.id)).fetchall()
         return [{"id": r.id, "key": r.key, "value": r.value} for r in rows]
 
     @router.get(f"{route_prefix}/{{item_id}}")
-    async def get_guide(item_id: int):
+    def get_guide(item_id: int):
         with sys_engine.connect() as conn:
             row = conn.execute(select(table).where(table.c.id == item_id)).fetchone()
         if not row:
@@ -179,7 +179,7 @@ def _register_guide_crud(guide_name: str, table):
         return {"id": row.id, "key": row.key, "value": row.value}
 
     @router.post(f"{route_prefix}/")
-    async def create_guide(entry: KnowledgeEntry):
+    def create_guide(entry: KnowledgeEntry):
         with sys_engine.connect() as conn:
             existing = conn.execute(select(table).where(table.c.key == entry.key)).fetchone()
             if existing:
@@ -190,7 +190,7 @@ def _register_guide_crud(guide_name: str, table):
         return {"id": new_id, "key": entry.key, "value": entry.value}
 
     @router.put(f"{route_prefix}/{{item_id}}")
-    async def update_guide(item_id: int, entry: KnowledgeUpdate):
+    def update_guide(item_id: int, entry: KnowledgeUpdate):
         with sys_engine.connect() as conn:
             existing = conn.execute(select(table).where(table.c.id == item_id)).fetchone()
             if not existing:
@@ -208,7 +208,7 @@ def _register_guide_crud(guide_name: str, table):
         return {"id": row.id, "key": row.key, "value": row.value}
 
     @router.delete(f"{route_prefix}/{{item_id}}")
-    async def delete_guide(item_id: int):
+    def delete_guide(item_id: int):
         with sys_engine.connect() as conn:
             existing = conn.execute(select(table).where(table.c.id == item_id)).fetchone()
             if not existing:
@@ -229,14 +229,14 @@ class BriefInfoUpdate(BaseModel):
 
 
 @router.get("/api/sys-knowledge/brief-info/")
-async def list_brief_info():
+def list_brief_info():
     with sys_engine.connect() as conn:
         rows = conn.execute(select(brief_info).order_by(brief_info.c.attr)).fetchall()
     return [{"attr": r.attr, "value": r.value or ""} for r in rows]
 
 
 @router.put("/api/sys-knowledge/brief-info/{attr}")
-async def update_brief_info(attr: str, entry: BriefInfoUpdate):
+def update_brief_info(attr: str, entry: BriefInfoUpdate):
     with sys_engine.connect() as conn:
         existing = conn.execute(select(brief_info).where(brief_info.c.attr == attr)).fetchone()
         if not existing:

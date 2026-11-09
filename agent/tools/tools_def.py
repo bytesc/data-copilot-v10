@@ -18,7 +18,13 @@ setup_chinese_font()
 
 
 DATABASE_URL = config_data['mysql']
-engine = sqlalchemy.create_engine(DATABASE_URL)
+engine = sqlalchemy.create_engine(
+    DATABASE_URL,
+    pool_size=20,
+    max_overflow=20,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+)
 
 # exe_sql uses the read-only user to run SELECT/SHOW. Mutating features keep using engine
 # (the first user). When mysql_readonly is not configured, read-only queries are disabled
@@ -26,7 +32,13 @@ engine = sqlalchemy.create_engine(DATABASE_URL)
 # removed, so the read-only account is now the only access control for these queries.
 READONLY_DATABASE_URL = config_data.get('mysql_readonly') or ""
 if READONLY_DATABASE_URL:
-    read_engine = sqlalchemy.create_engine(READONLY_DATABASE_URL)
+    read_engine = sqlalchemy.create_engine(
+        READONLY_DATABASE_URL,
+        pool_size=20,
+        max_overflow=20,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )
 else:
     read_engine = None
     print(
