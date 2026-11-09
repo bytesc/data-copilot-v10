@@ -45,13 +45,28 @@ def _quote_ident(name):
     return "`" + str(name).replace("`", "``") + "`"
 
 
-def get_rows_from_all_tables(engine, tables, num=3, selected_fields=None):
-    inspector = inspect(engine)
+def _filter_real_tables(inspector, tables):
+    """Intersect a caller-supplied table list with the real database tables.
+
+    User/LLM-supplied table lists may contain names that do not exist (typos,
+    hallucinated names). Querying metadata for a missing table raises
+    NoSuchTableError and would abort prompt building, so every schema-prompt
+    helper must filter through this first. Returns all real tables when
+    ``tables`` is empty/None (same convention as before).
+    """
     real_tables = set(inspector.get_table_names())
     if not tables:
-        table_names = list(real_tables)
-    else:
-        table_names = [t for t in tables if t in real_tables]
+        return list(real_tables)
+    valid = [t for t in tables if t in real_tables]
+    skipped = [t for t in tables if t not in real_tables]
+    if skipped:
+        print(f"[WARNING] Requested tables not found in database (skipped): {skipped}")
+    return valid
+
+
+def get_rows_from_all_tables(engine, tables, num=3, selected_fields=None):
+    inspector = inspect(engine)
+    table_names = _filter_real_tables(inspector, tables)
 
     if selected_fields:
         table_names = [t for t in table_names if t in selected_fields]
@@ -90,10 +105,7 @@ def get_rows_from_all_tables(engine, tables, num=3, selected_fields=None):
 
 def get_foreign_keys(engine, tables):
     inspector = inspect(engine)
-    if not tables:
-        table_names = inspector.get_table_names()
-    else:
-        table_names = tables
+    table_names = _filter_real_tables(inspector, tables)
     foreign_keys = {}
     for table_name in table_names:
         fks = inspector.get_foreign_keys(table_name)
@@ -109,10 +121,7 @@ def get_foreign_keys(engine, tables):
 
 def get_table_and_column_comments(engine, tables, selected_fields=None):
     inspector = inspect(engine)
-    if not tables:
-        table_names = inspector.get_table_names()
-    else:
-        table_names = tables
+    table_names = _filter_real_tables(inspector, tables)
 
     if selected_fields:
         table_names = [t for t in table_names if t in selected_fields]
@@ -144,10 +153,7 @@ def get_table_and_column_comments(engine, tables, selected_fields=None):
 
 def get_table_creation_statements(engine, tables, simple=False, selected_fields=None):
     inspector = inspect(engine)
-    if not tables:
-        table_names = inspector.get_table_names()
-    else:
-        table_names = tables
+    table_names = _filter_real_tables(inspector, tables)
 
     if selected_fields:
         table_names = [t for t in table_names if t in selected_fields]
@@ -213,11 +219,8 @@ def get_table_creation_statements(engine, tables, simple=False, selected_fields=
 
 def get_all_comments(engine, tables=None):
     inspector = inspect(engine)
-    # 获取表名列表
-    if not tables:
-        table_names = inspector.get_table_names()
-    else:
-        table_names = tables
+    # 过滤掉不存在的表名，避免产生误导性的空表条目
+    table_names = _filter_real_tables(inspector, tables)
 
     all_comments = {}
 
@@ -252,10 +255,7 @@ def get_all_comments(engine, tables=None):
 
 def get_table_comments_dict(engine, tables=None):
     inspector = inspect(engine)
-    if not tables:
-        table_names = inspector.get_table_names()
-    else:
-        table_names = tables
+    table_names = _filter_real_tables(inspector, tables)
 
     table_comments = {}
 

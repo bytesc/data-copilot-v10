@@ -57,6 +57,11 @@ def query_database(question: str, df_cols: str | list = None) -> pd.DataFrame:
         The DataFrame includes the columns provided in df_cols(the second args)
     returns None in case of error
 
+    Raises:
+    - RuntimeError: If no read-only database is configured (mysql_readonly missing).
+      Query errors themselves are retried internally and finally returned as None
+      (this function does not raise on bad SQL).
+
     Example:
     ```python
         ans_df = query_database('Select the grades of Jane Smith, use table stu_grade ,stu_info, class_info', df_cols='lesson_id, lesson_name, grade')
@@ -118,7 +123,15 @@ def exe_sql(sql: str) -> pd.DataFrame:
 
     Returns:
     - pd.DataFrame: A DataFrame containing the results of the database query.
-    returns None in case of error
+      The result may still be EMPTY (0 rows), so always keep checking
+      `df is None or df.empty` after the call and handle that case.
+
+    Raises:
+    - RuntimeError: If no read-only database is configured (mysql_readonly missing).
+    - Exception: If the SQL statement fails (syntax error, unknown table/column,
+      timeout, ...). This function does NOT return None on error; the runtime
+      catches the exception and regenerates the code with the error message,
+      so you do NOT need to wrap this call in try/except.
 
     Example:
     ```python
@@ -129,6 +142,9 @@ def exe_sql(sql: str) -> pd.DataFrame:
         # 1        002      English     95.50
         # 2        005     Chemistry     92.00
         # ... and so on
+        if ans_df is None or ans_df.empty:
+            yield "No matching records were found in the database"
+            return
         ```
     """
     ans = execute_select(read_engine, sql)
