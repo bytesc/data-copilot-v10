@@ -18,6 +18,20 @@ def _require_edit_enabled():
         raise HTTPException(status_code=403, detail="Editing is disabled by configuration")
 
 
+def _ensure_key_unique(conn, table, key, exclude_id):
+    """Reject an update that would duplicate another row's key (409, not 500).
+
+    ``create`` already returns 409 for an existing key, so the column is meant
+    to be unique; without this guard the UPDATE hits the DB unique constraint
+    and surfaces as an unhandled 500.
+    """
+    existing = conn.execute(
+        select(table).where(table.c.key == key, table.c.id != exclude_id)
+    ).fetchone()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Key '{key}' already exists")
+
+
 router = APIRouter(dependencies=[Depends(_require_edit_enabled)])
 
 
@@ -69,6 +83,7 @@ def update_base_knowledge(item_id: int, entry: KnowledgeUpdate):
             raise HTTPException(status_code=404, detail="Not found")
         updates = {}
         if entry.key is not None:
+            _ensure_key_unique(conn, base_knowledge, entry.key, item_id)
             updates["key"] = entry.key
         if entry.value is not None:
             updates["value"] = entry.value
@@ -129,6 +144,7 @@ def update_db_query_guide(item_id: int, entry: KnowledgeUpdate):
             raise HTTPException(status_code=404, detail="Not found")
         updates = {}
         if entry.key is not None:
+            _ensure_key_unique(conn, db_query_guide, entry.key, item_id)
             updates["key"] = entry.key
         if entry.value is not None:
             updates["value"] = entry.value
@@ -197,6 +213,7 @@ def _register_guide_crud(guide_name: str, table):
                 raise HTTPException(status_code=404, detail="Not found")
             updates = {}
             if entry.key is not None:
+                _ensure_key_unique(conn, table, entry.key, item_id)
                 updates["key"] = entry.key
             if entry.value is not None:
                 updates["value"] = entry.value

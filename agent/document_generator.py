@@ -136,8 +136,7 @@ Rules:
 8. Keep the content focused on the section topic
 9. Be thorough but concise
 10. Use proper markdown headings, lists, and tables as needed. Do NOT use any fenced code blocks. Heading depth is limited to `###` (H3) — do NOT use `####`, `#####`, or `######`. Use `###` for sub-headings and plain bold text or bullet points for deeper structure.
-11. ⚠️ Do NOT add numbers to sub-headings (e.g., avoid `### 1. xxx`, `### 2. xxx`). Use descriptive headings only, like `### Key Findings` or `### 核心发现`. Numbered lists in body text are allowed but use `-` bullet lists instead of `1.` numbered lists to avoid Word auto-numbering conflicts.
-11. Sub-headings within this section MAY use numbering (e.g., `### 1. xxx`), but the numbering MUST restart from 1 for THIS section only — do NOT continue numbering from previous sections. Each section is independent; its sub-heading numbers are scoped to this section alone.
+11. ⚠️ Do NOT add numbers to sub-headings (e.g., avoid `### 1. xxx`, `### 2. xxx`). Use descriptive headings only, like `### Key Findings` or `### 核心发现`, so sub-heading numbering never carries over between sections and does not conflict with Word auto-numbering. Numbered lists in body text are allowed but use `-` bullet lists instead of `1.` numbered lists to avoid Word auto-numbering conflicts.
 12. If this section is the final summary or conclusion: do NOT create sub-sections that mirror the earlier section headings. Do NOT structure the summary as a list of per-topic recaps. Instead, synthesize cross-cutting themes into a few concise, actionable recommendations. Answer "so what" and "what to do next." The summary should be shorter than the other sections, not longer.
 """
 
@@ -714,6 +713,11 @@ def _event_stream_generate_document_unified(conversation_history: List[dict], se
     context, blackboard_text = _doc_context(conversation_history, session_id, 0)
     images = blackboard_input_images_from_history(conversation_history)
     _target_section = str(TARGET) if _ENABLE_TARGET else ""
+    requested_title = title.strip() if isinstance(title, str) else ""
+    _title_section = (
+        f"\nDocument title — open the document with EXACTLY this top-level heading: `# {requested_title}`\n"
+        if requested_title else ""
+    )
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'msg', 'content': 'Generating document...'}, ensure_ascii=False)}\n\n"
 
@@ -726,7 +730,7 @@ def _event_stream_generate_document_unified(conversation_history: List[dict], se
 {cap_text(DOC, level)}
 
 {_target_section}
-
+{_title_section}
 Conversation History:
 {ctx}
 {bb}
@@ -751,7 +755,7 @@ Write the complete business summary document in markdown format. Start with `# T
     full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_raw, flags=re.DOTALL)
 
     title_match = re.search(r'^#\s+(.+)$', full_document, re.MULTILINE)
-    title = title_match.group(1).strip() if title_match else "Summary Document"
+    title = requested_title or (title_match.group(1).strip() if title_match else "Summary Document")
 
     file_name = f"doc_{generate_random_string(8)}"
     static_folder = "tmp_imgs"

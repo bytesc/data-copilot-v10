@@ -261,6 +261,28 @@ class MCPClient:
         if event is not None:
             event.set()
 
+    def _store_http_response_body(self, body):
+        """Store a JSON-RPC response delivered directly in the SSE POST body.
+
+        The MCP SSE transport has two valid reply paths: the server may return
+        the JSON-RPC response as the body of the POST to the message endpoint, or
+        push it later over the SSE stream. Only the stream path was handled
+        before, so a server that answers in the POST body left the waiter blocked
+        until the 30s timeout. Parsing the POST body here and storing it under
+        its id closes that gap; an empty/non-JSON body (e.g. a bare 202
+        Accepted) is ignored and the stream path still applies.
+        """
+        if not body:
+            return
+        try:
+            if isinstance(body, (bytes, bytearray)):
+                body = body.decode("utf-8", errors="replace")
+            msg = json.loads(body)
+        except (ValueError, TypeError, AttributeError):
+            return
+        if isinstance(msg, dict) and msg.get("id") is not None:
+            self._store_response(msg)
+
     def _send_initialize(self):
         result = self._dispatch_request("initialize", {
             "protocolVersion": "2024-11-05",
@@ -286,7 +308,8 @@ class MCPClient:
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         try:
             if self.transport == "sse":
-                self._send_via_sse(data)
+                post_body = self._send_via_sse(data)
+                self._store_http_response_body(post_body)
             elif self.transport == "stdio":
                 self._send_via_stdio(data)
         except Exception as e:
