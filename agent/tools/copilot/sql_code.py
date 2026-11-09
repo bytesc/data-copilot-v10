@@ -153,6 +153,8 @@ def filter_db_fields_stream(question, engine, llm, tables=None):
     full_content = ""
 
     for chunk, _ in stream_with_context_retry(lambda lvl: _build_filter_prompt(question, engine, tables, level=lvl), llm):
+        if not chunk:
+            continue
         full_content += chunk
         yield {"type": "chunk", "content": chunk}
 

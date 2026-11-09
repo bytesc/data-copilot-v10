@@ -25,6 +25,6 @@ def get_html(df: pd.DataFrame):
 def pd_to_walker(df: pd.DataFrame):
     file_path = f"./{STATIC_FOLDER}/" + generate_random_string(12)+".html"
     html = get_html(df)
-    with open(file_path, 'w') as file:
+    with open(file_path, 'w', encoding='utf-8') as file:
         file.write(html)
     return STATIC_URL + file_path[2:]

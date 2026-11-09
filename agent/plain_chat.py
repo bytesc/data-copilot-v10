@@ -34,4 +34,8 @@ def get_plain_chat_stream(question: str, tables=None, selected_fields=None):
     prompt = get_plain_chat_prompt(question, tables, selected_fields)
     yield {"prompt_length": len(prompt)}
     for chunk, _ in stream_with_context_retry(lambda lvl: get_plain_chat_prompt(question, tables, selected_fields, level=lvl), llm):
+        # reasoning-only deltas arrive as (None, reasoning); skip them so the
+        # caller never concatenates None into its content buffer.
+        if not chunk:
+            continue
         yield chunk

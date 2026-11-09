@@ -991,6 +991,8 @@ def _event_stream_plain_chat(question: str, tables=None, selected_fields=None, s
         if isinstance(chunk, dict) and "prompt_length" in chunk:
             prompt_length = chunk["prompt_length"]
             continue
+        if not chunk:
+            continue
         full_content += chunk
         yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
     yield f"data: {json.dumps({'type': 'done', 'content': ''}, ensure_ascii=False)}\n\n"

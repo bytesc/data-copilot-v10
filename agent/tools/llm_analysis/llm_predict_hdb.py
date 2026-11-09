@@ -123,19 +123,37 @@ def get_llm_predict_hdb_info(engine, plan_area=None, flat_type=None, blk_no=None
     }
     search_conditions = {k: v for k, v in search_conditions.items() if v is not None}
 
-    # Format month to YYYY-MM and sort chronologically
+    # Format month to YYYY-MM and sort chronologically while tolerating
+    # partially-populated / malformed rows: records without a usable month or a
+    # numeric resale_price are dropped instead of raising (an empty table or a
+    # row with a missing column previously crashed here).
+    cleaned_history = []
     for record in hdb_price_history:
-        if 'month' in record and record['month']:
-            if isinstance(record['month'], str):
+        if not isinstance(record, dict):
+            continue
+        month = record.get('month')
+        if month is None or month == '':
+            continue
+        if isinstance(month, str):
+            from datetime import datetime
+            normalized = None
+            for fmt in ('%Y-%m-%d', '%Y-%m'):
                 try:
-                    from datetime import datetime
-                    dt = datetime.strptime(record['month'], '%Y-%m-%d')
-                    record['month'] = dt.strftime('%Y-%m')
+                    normalized = datetime.strptime(month[:10], fmt).strftime('%Y-%m')
+                    break
                 except ValueError:
-                    pass
-            else:
-                record['month'] = record['month'].strftime('%Y-%m')
-    hdb_price_history = sorted(hdb_price_history, key=lambda x: x['month'])
+                    continue
+            if normalized is None:
+                continue
+            month = normalized
+        else:
+            try:
+                month = month.strftime('%Y-%m')
+            except (AttributeError, ValueError):
+                continue
+        record['month'] = month
+        cleaned_history.append(record)
+    hdb_price_history = sorted(cleaned_history, key=lambda x: x['month'])
     averaged_data = []
     sampled_data = None
 
@@ -143,7 +161,10 @@ def get_llm_predict_hdb_info(engine, plan_area=None, flat_type=None, blk_no=None
         monthly_data = {}
         for record in hdb_price_history:
             month = record['month']
-            price = record['resale_price']
+            try:
+                price = float(record.get('resale_price'))
+            except (TypeError, ValueError):
+                continue
             if month not in monthly_data:
                 monthly_data[month] = {
                     'total_price': 0,
@@ -250,7 +271,14 @@ def llm_predict_hdb_func(engine, llm, from_date: str = None, to_date: str = None
     )
 
     if from_date is None:
-        latest_month = query_latest_month(engine).strftime("%Y-%m")
+        latest_month_value = query_latest_month(engine)
+        if latest_month_value is None:
+            raise ValueError(
+                "No historical resale price data is available; cannot infer a "
+                "prediction start date. Provide an explicit from_date or import "
+                "history data into 'resale_flat_prices' first."
+            )
+        latest_month = latest_month_value.strftime("%Y-%m")
         year, month = map(int, latest_month.split('-'))
         if month == 12:
             year += 1

@@ -149,6 +149,8 @@ def filter_functions_stream(question, llm):
     full_content = ""
 
     for chunk, _ in stream_with_context_retry(lambda lvl: get_function_prompt(question, level=lvl), llm):
+        if not chunk:
+            continue
         full_content += chunk
         yield {"type": "chunk", "content": chunk}
 

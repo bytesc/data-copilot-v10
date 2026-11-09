@@ -69,6 +69,7 @@ def search_web(query: str, max_results: int = 10, region: str = "wt-wt") -> str:
     try:
         ddgs = DDGS()
         backends = ["api", "html", "lite"]
+        results = []
         last_error = None
 
         for backend in backends:
@@ -82,16 +83,24 @@ def search_web(query: str, max_results: int = 10, region: str = "wt-wt") -> str:
                 ))
                 if results:
                     break
-            except Exception:
-                last_error = None
+            except Exception as e:
+                # Keep the real failure so the caller learns why every backend
+                # was unusable, instead of the previous always-None placeholder.
+                last_error = e
                 continue
-        else:
-            results = []
 
-        if not results and last_error is None:
+        if not results:
+            if last_error is not None:
+                return json.dumps({
+                    "error": f"All search backends (api, html, lite) failed: {last_error}",
+                    "query": query
+                }, ensure_ascii=False)
+            # Backends responded but the query genuinely matched nothing: return
+            # an empty result set instead of a misleading "failed" error.
             return json.dumps({
-                "error": "All search backends (api, html, lite) failed or timed out. This is likely a network connectivity issue.",
-                "query": query
+                "query": query,
+                "count": 0,
+                "results": []
             }, ensure_ascii=False)
 
         formatted_results = []

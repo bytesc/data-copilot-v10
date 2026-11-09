@@ -118,6 +118,8 @@ def _llm_search_with_ids(build_prompt):
     yield {"type": "status", "content": "Analyzing knowledge base..."}
     full_content = ""
     for chunk, _ in stream_with_context_retry(build_prompt, llm):
+        if not chunk:
+            continue
         full_content += chunk
         yield {"type": "chunk", "content": chunk}
 

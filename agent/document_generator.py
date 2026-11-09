@@ -351,18 +351,37 @@ def _markdown_to_docx(markdown_text: str, output_path: str):
                 if re.match(r'^[\|\s\-:]+$', row_line):
                     i += 1
                     continue
-                cells = [c.strip() for c in row_line.split('|')[1:-1]]
+                # Tolerate rows without a trailing pipe: strip an optional
+                # leading/trailing '|' before splitting so no cell is dropped.
+                inner = row_line[1:] if row_line.startswith('|') else row_line
+                if inner.endswith('|'):
+                    inner = inner[:-1]
+                cells = [c.strip() for c in inner.split('|')]
                 table_rows.append(cells)
                 i += 1
+            # Drop blank rows and normalize to a rectangular shape. Rows whose
+            # cell count differs from the header previously caused an
+            # IndexError when indexing table.rows[ri].cells[ci]; pad them now.
+            table_rows = [r for r in table_rows if any(c for c in r)]
             if table_rows:
-                table = doc.add_table(rows=len(table_rows), cols=len(table_rows[0]))
-                table.style = 'Light Grid Accent 1'
+                ncols = max(len(r) for r in table_rows)
+                for r in table_rows:
+                    if len(r) < ncols:
+                        r.extend([""] * (ncols - len(r)))
+                table = doc.add_table(rows=len(table_rows), cols=ncols)
+                try:
+                    table.style = 'Light Grid Accent 1'
+                except KeyError:
+                    # Style may be absent from the default template; fall back
+                    # to the built-in grid style instead of failing the whole
+                    # document export.
+                    table.style = 'Table Grid'
                 for ri, row in enumerate(table_rows):
-                    for ci, cell_text in enumerate(row):
+                    for ci in range(ncols):
                         cell = table.rows[ri].cells[ci]
                         cell.text = ''
                         p = cell.paragraphs[0]
-                        _add_inline_runs(p, cell_text)
+                        _add_inline_runs(p, row[ci])
             continue
 
         p = doc.add_paragraph()
@@ -544,6 +563,8 @@ Conversation History:
 
     outline_raw = ""
     for chunk, _ in stream_with_context_retry(build_outline_prompt, llm, images=images):
+        if not chunk:
+            continue
         outline_raw += chunk
         yield f"data: {json.dumps({'phase': 'outline', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
@@ -600,6 +621,8 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
         part_prompt = build_part_prompt(0)
         part_raw = ""
         for chunk, _ in stream_with_context_retry(build_part_prompt, llm, images=images):
+            if not chunk:
+                continue
             part_raw += chunk
             yield f"data: {json.dumps({'phase': 'part', 'type': 'chunk', 'content': chunk, 'part_index': i}, ensure_ascii=False)}\n\n"
 
@@ -714,6 +737,8 @@ Write the complete business summary document in markdown format. Start with `# T
 
     full_raw = ""
     for chunk, _ in stream_with_context_retry(build_unified_prompt, llm, images=images):
+        if not chunk:
+            continue
         full_raw += chunk
         yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
@@ -830,6 +855,8 @@ Conversation History:
 
         raw = ""
         for chunk, _ in stream_with_context_retry(lambda lvl: build_yaml_outline_prompt(lvl) + error_hint, llm, images=images):
+            if not chunk:
+                continue
             raw += chunk
             yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
@@ -990,6 +1017,8 @@ Write the content for the section "{heading}" in markdown format."""
         section_prompt = build_section_prompt(0)
         part_raw = ""
         for chunk, _ in stream_with_context_retry(build_section_prompt, llm, images=images):
+            if not chunk:
+                continue
             part_raw += chunk
             yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'chunk', 'content': chunk, 'section_index': i}, ensure_ascii=False)}\n\n"
 

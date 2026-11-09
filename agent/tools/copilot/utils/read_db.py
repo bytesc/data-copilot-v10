@@ -313,49 +313,6 @@ from sqlalchemy import text, inspect
 from sqlalchemy.exc import SQLAlchemyError
 
 
-def execute_sql_2(engine, sql):
-    with engine.connect() as connection:
-        try:
-            # 分割SQL语句，移除空语句和空白
-            statements = [stmt.strip() for stmt in sql.split(';') if stmt.strip()]
-
-            executed_count = 0
-            for statement in statements:
-                if statement:  # 确保不是空字符串
-                    result = connection.execute(text(statement))
-                    executed_count += 1
-                    print(f"Executed statement {executed_count}: {statement[:100]}...")
-
-            # 提交所有更改
-            connection.commit()
-            return executed_count
-
-        except SQLAlchemyError as e:
-            # 如果发生错误，回滚事务
-            connection.rollback()
-            # 打印错误信息
-            print(f"An error occurred at statement {executed_count + 1}: {e}")
-            raise e
-
-
-def execute_sql_3(engine, sql):
-    with engine.connect() as connection:
-        statements = [stmt.strip() for stmt in sql.split(';') if stmt.strip()]
-
-        executed_count = 0
-        for statement in statements:
-            try:
-                result = connection.execute(text(statement))
-                executed_count += 1
-                print(f"Executed statement {executed_count}: {statement[:100]}...")
-            except SQLAlchemyError as e:
-                print(f"Error at statement {executed_count + 1}: {e}")
-                connection.rollback()
-                raise e  # 或 continue 跳过错误继续执行
-
-        connection.commit()
-        return executed_count
-
 def execute_select(engine, sql):
     """Execute a read-only query against the read-only engine.
 

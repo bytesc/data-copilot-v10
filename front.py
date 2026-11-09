@@ -8,9 +8,16 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
-with open("./config/config.yaml") as f:
-    _cfg = yaml.safe_load(f)
-_host = _cfg.get("server_host", "127.0.0.1")
+# Resolve the config relative to this file so the proxy can be started from any
+# working directory (a CWD-relative path broke startup when launched elsewhere).
+_CONFIG_PATH = Path(__file__).parent / "config" / "config.yaml"
+with open(_CONFIG_PATH, encoding="utf-8") as f:
+    _cfg = yaml.safe_load(f) or {}
+_bind_host = _cfg.get("server_host", "127.0.0.1")
+# "0.0.0.0"/"::" are listen addresses for the backend, not connectable
+# destinations. Dialing them works on Windows by luck but is refused on other
+# platforms, so the proxy always connects to the loopback address instead.
+_host = "127.0.0.1" if _bind_host in ("0.0.0.0", "::", "") else _bind_host
 _port = _cfg["server_port"]
 BACKEND_URL = os.getenv("BACKEND_URL", f"http://{_host}:{_port}")
 FRONT_HOST = os.getenv("FRONT_HOST", "0.0.0.0")
@@ -41,6 +48,15 @@ STREAM_PATHS = ("/api/generate-and-execute/stream/", "/api/plain-chat/stream/",
                 "/api/generate-document/finalize/")
 STATIC_EXTS = {".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg",
                ".ico", ".webp", ".woff", ".woff2", ".ttf", ".eot", ".json", ".map"}
+
+# Hop-by-hop and body-framing headers must not be copied from the backend
+# response: httpx already decodes the body, so forwarding the backend's original
+# content-encoding/content-length would corrupt the proxied response.
+_HOP_BY_HOP_HEADERS = {
+    "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
+    "te", "trailers", "transfer-encoding", "upgrade",
+    "content-encoding", "content-length",
+}
 
 
 def _is_api_path(path: str) -> bool:
@@ -113,7 +129,8 @@ async def proxy_request(path: str, request: Request) -> Response:
         return Response(
             content=resp.content,
             status_code=resp.status_code,
-            headers=dict(resp.headers),
+            headers={k: v for k, v in resp.headers.items()
+                     if k.lower() not in _HOP_BY_HOP_HEADERS},
         )
     except httpx.ConnectError:
         return Response(
