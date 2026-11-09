@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from agent.agent import generate_and_execute_stream
 from agent.document_generator import generate_document_from_context
 from agent.tools.base_knowledge.get_base_knowledge import DB_BRIEF, DB_QUERY_GUIDE, TARGET, MCP_BRIEF, CUSTOM_FUNC_BRIEF, BASE_KNOWLEDGE_BRIEF, get_db_query_guide_db, get_base_knowledge_db, base_knowledge_to_str
-from agent.tools.tools_def import engine, llm
+from agent.tools.tools_def import engine, llm, read_only_engine
 from agent.tools.copilot.sql_code import parse_selected_fields_json
 from agent.tools.search_db import get_db_overview_markdown, search_db_markdown, get_db_summary_for_agent
 from agent.tools.search_func import get_func_catalog_markdown, search_func_by_keyword, get_func_summary_for_agent, get_func_docs_for
@@ -246,7 +246,14 @@ def _event_stream_act_impl(
 
     full_question = build_question(0)
     params = params or {}
-    search_keyword = params.get("search_keyword")
+    # The action phase (agent/action.py) forwards the LLM's exploration hint as
+    # `keyword` (see the explore_* action descriptions). The bundled frontend
+    # renames it to `search_keyword` before calling this endpoint, so accept
+    # both names; otherwise a direct API caller that follows the docs would have
+    # its hint silently dropped.
+    search_keyword = params.get("search_keyword") or params.get("keyword")
+    if not isinstance(search_keyword, str):
+        search_keyword = None
     tables = params.get("tables")
     selected_fields = params.get("selected_fields")
     research_guide = params.get("research_guide")
@@ -328,7 +335,7 @@ def _event_stream_act_impl(
 def _act_explore_schema(build_question, session_id: str, tables, search_keyword: Optional[str] = None, build_blackboard=None, images=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'msg', 'content': 'Searching database information...'}, ensure_ascii=False)}\n\n"
 
-    full_schema = get_db_overview_markdown(engine, tables, include_samples=True)
+    full_schema = get_db_overview_markdown(read_only_engine, tables, include_samples=True)
 
     keyword_hint = f"\nFocus hint: {search_keyword.strip()}" if search_keyword and search_keyword.strip() else ""
 
@@ -384,7 +391,7 @@ Example:
 
             no_db_needed = bool(tables_dict.get("__no_db__")) or bool(selected_fields.get("__no_db__"))
             if tables_dict and not no_db_needed:
-                display_content = get_db_overview_markdown(engine, tables, include_samples=True, selected_fields=tables_dict)
+                display_content = get_db_overview_markdown(read_only_engine, tables, include_samples=True, selected_fields=tables_dict)
             elif no_db_needed:
                 display_content = "*(No database tables needed)*"
             else:
@@ -803,7 +810,9 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
 
 
 def _act_explore_mcp(build_question, session_id: str, params: dict, request_json: str = "", build_blackboard=None, images=None):
-    search_keyword = (params.get("search_keyword") or "").strip()
+    # Accept both `search_keyword` (frontend) and `keyword` (action phase / docs).
+    raw_keyword = params.get("search_keyword") or params.get("keyword")
+    search_keyword = raw_keyword.strip() if isinstance(raw_keyword, str) else ""
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_mcp', 'type': 'msg', 'content': 'Connecting to MCP servers to fetch tool list...'}, ensure_ascii=False)}\n\n"
 

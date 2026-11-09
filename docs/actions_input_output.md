@@ -5,7 +5,7 @@
 
 每个环节记录三项：**输入**（LLM 决策输出的 JSON / API 入参）、**输出**（写入 `conversation_history` 的条目）、**上下文**（`history_to_text` 转换后喂给 LLM 的文本）。
 
-> 除下文列出的上下文外，每个 LLM 阶段还会额外注入独立的 `## Blackboard` 段（`blackboard_section(conversation_history)`），用于提供完整的 DB schema、函数文档、业务知识和 MCP 工具详情。blackboard 不进入 `history_to_text`，详见 `docs/conversation_history_structure.md`。blackboard 的 `rencent_generated_images` 区域（最近一次代码执行生成的图片列表）和 `selected_images` 区域（`select_images` 选中或用户上传的图片及原因）也随该段以文本注入；当模型 `supports_images=true` 且请求 `meta.use_images` 开启时，两处图片会按 `rencent_generated_images` 在前、`selected_images` 在后的顺序以 `image_url` 内容数组的形式随请求提交（本地文件/本机静态 URL 转 base64，外部 URL 原样传递，详见 `docs/conversation_history_structure.md`）。
+> 除下文列出的上下文外，每个 LLM 阶段还会额外注入独立的 `## Blackboard` 段（`blackboard_section(conversation_history)`），用于提供完整的 DB schema、函数文档、业务知识和 MCP 工具详情。blackboard 不进入 `history_to_text`，详见 `docs/conversation_history_structure.md`。blackboard 的 `recent_generated_images` 区域（最近一次代码执行生成的图片列表）和 `selected_images` 区域（`select_images` 选中或用户上传的图片及原因）也随该段以文本注入；当模型 `supports_images=true` 且请求 `meta.use_images` 开启时，两处图片会按 `recent_generated_images` 在前、`selected_images` 在后的顺序以 `image_url` 内容数组的形式随请求提交（本地文件/本机静态 URL 转 base64，外部 URL 原样传递，详见 `docs/conversation_history_structure.md`）。
 
 ---
 
@@ -195,7 +195,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 ]}
 ```
 
-`path` 为本地 `tmp_imgs` 下的图片文件名，或完整的 `http(s)` 图片链接；`reason` 为每个图片的一句话选中原因。可选图片包括当前 `rencent_generated_images` 区域中的图片、**本会话更早轮次生成过的图片**、会话附件图片和上下文中出现的图片 URL；`rencent_generated_images` 只保留最近一次代码执行的图片，因此更早生成的图片即使不在该区域中，也仍然可以被选中，不应据此判断图片已丢失。历史 `generate_and_execute` 结果中的 markdown 图片 URL（如 `.../tmp_imgs/xxx.png`）可用于提取文件名；用户按“第二张”等位置或描述指代旧图时，应从历史中解析对应文件名并直接选中，而不是要求用户重新生成。该 action 属于 Group 1，可与 `explore_*` 动作在同一次 `actions` 数组中批量执行，但不能与 `ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion` 混用。当前 `selected_images` 已经包含相同路径时不要重复调用；只有选中集合实际变化时才更新。重复执行会**整体覆盖** `selected_images` 区域；`images: []` 会清空该区域。当用户需求变化（新范围、新分析目标或纠正）时，应重新运行 `select_images` 更新该区域，而不是保留过期的选中图片。
+`path` 为本地 `tmp_imgs` 下的图片文件名，或完整的 `http(s)` 图片链接；`reason` 为每个图片的一句话选中原因。可选图片包括当前 `recent_generated_images` 区域中的图片、**本会话更早轮次生成过的图片**、会话附件图片和上下文中出现的图片 URL；`recent_generated_images` 只保留最近一次代码执行的图片，因此更早生成的图片即使不在该区域中，也仍然可以被选中，不应据此判断图片已丢失。历史 `generate_and_execute` 结果中的 markdown 图片 URL（如 `.../tmp_imgs/xxx.png`）可用于提取文件名；用户按“第二张”等位置或描述指代旧图时，应从历史中解析对应文件名并直接选中，而不是要求用户重新生成。该 action 属于 Group 1，可与 `explore_*` 动作在同一次 `actions` 数组中批量执行，但不能与 `ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion` 混用。当前 `selected_images` 已经包含相同路径时不要重复调用；只有选中集合实际变化时才更新。重复执行会**整体覆盖** `selected_images` 区域；`images: []` 会清空该区域。当用户需求变化（新范围、新分析目标或纠正）时，应重新运行 `select_images` 更新该区域，而不是保留过期的选中图片。
 
 **输出**
 ```json
@@ -219,7 +219,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 [ACT select_images] https://example.com/chart.png: 一句话说明为什么保留这张图
 ```
 
-`selected_images` 区域随 `## Blackboard` 段以文本注入所有 LLM 阶段；模型支持图片且 `meta.use_images` 开启时，这些图片会排在上一次代码执行生成的 `rencent_generated_images` 之后作为 `image_url` 内容提交。
+`selected_images` 区域随 `## Blackboard` 段以文本注入所有 LLM 阶段；模型支持图片且 `meta.use_images` 开启时，这些图片会排在上一次代码执行生成的 `recent_generated_images` 之后作为 `image_url` 内容提交。
 
 ---
 
@@ -260,7 +260,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 {error}
 ```
 
-`images` 为本次执行生成的图片列表（去重后；本地图片通常只存文件名，本机静态地址或外部 http 图片保留完整 URL）。`act` 条目的该字段仅用于前端展示，不进入 LLM 上下文（`history_to_text` 不渲染该字段）；同时会覆盖写入 blackboard 的 `rencent_generated_images` 区域，并随 `## Blackboard` 段以文本注入所有 LLM 阶段。若模型 `supports_images=true` 且请求 `meta.use_images` 开启，这些图片还会作为 `image_url` 内容数组附加到用户消息中，每张图片前带 `Image filename: ...` 标签。
+`images` 为本次执行生成的图片列表（去重后；本地图片通常只存文件名，本机静态地址或外部 http 图片保留完整 URL）。`act` 条目的该字段仅用于前端展示，不进入 LLM 上下文（`history_to_text` 不渲染该字段）；同时会覆盖写入 blackboard 的 `recent_generated_images` 区域，并随 `## Blackboard` 段以文本注入所有 LLM 阶段。若模型 `supports_images=true` 且请求 `meta.use_images` 开启，这些图片还会作为 `image_url` 内容数组附加到用户消息中，每张图片前带 `Image filename: ...` 标签。
 
 ---
 

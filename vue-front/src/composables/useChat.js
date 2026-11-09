@@ -771,7 +771,16 @@ function historyToText(history) {
 
   function getBlackboard(history) {
     const entry = (history || []).find(e => e.type === 'blackboard')
-    return entry?.regions || {}
+    const regions = { ...(entry?.regions || {}) }
+    // Backward compatibility: older persisted histories stored the generated
+    // images region under the misspelled key "rencent_generated_images" (or the
+    // even older "images"). Normalize it to the current key so consumers only
+    // need to read "recent_generated_images".
+    if (regions.recent_generated_images == null) {
+      const legacy = regions.rencent_generated_images ?? regions.images
+      if (legacy != null) regions.recent_generated_images = legacy
+    }
+    return regions
   }
 
   function rebuildMessagesFromHistory(history) {

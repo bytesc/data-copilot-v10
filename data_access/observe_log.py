@@ -1,9 +1,10 @@
+import json
+import threading
 from datetime import datetime
 from sqlalchemy import (
     Table, Column, Integer, String, DateTime, MetaData, insert, select, desc, func
 )
 from sqlalchemy.dialects.mysql import LONGTEXT
-import json
 
 from data_access.sys_db_conn import sys_engine
 from data_access.session_log import session_operation_log
@@ -51,6 +52,14 @@ observe_session_log = Table(
     Column("created_at", DateTime, comment="创建时间"),
     Column("updated_at", DateTime, comment="更新时间"),
 )
+
+
+# Serializes the check-then-create write of a session row so concurrent phase
+# logs (think/action/act/observe) cannot both INSERT and create a duplicate
+# session row, and so per-session aggregates (total_cycles/total_tokens) are
+# read and written from a consistent view. Logging is low volume, so a single
+# process-wide lock is enough and avoids per-session bookkeeping.
+_session_lock = threading.RLock()
 
 
 def create_observe_log_tables():
@@ -113,36 +122,40 @@ def log_observe_cycle(
         return
     try:
         with sys_engine.connect() as conn:
-            conn.execute(
-                insert(observe_cycle_log).values(
-                    session_id=session_id,
-                    cycle_index=cycle_index,
-                    phase=phase,
-                    sub_phase=sub_phase,
-                    prompt=prompt[:10000] if prompt else "",
-                    response=response[:10000] if response else "",
-                    user_decision=user_decision[:2000] if user_decision else "",
-                    exec_code=exec_code[:10000] if exec_code else "",
-                    exec_result=exec_result[:10000] if exec_result else "",
-                    exec_error=exec_error[:2000] if exec_error else "",
-                    token_estimate=token_estimate,
-                    created_at=datetime.now(),
+            # Hold the session lock across insert + count + update so the cycle
+            # count is computed from a consistent view and cannot be clobbered by
+            # a concurrent writer of the same session row.
+            with _session_lock:
+                conn.execute(
+                    insert(observe_cycle_log).values(
+                        session_id=session_id,
+                        cycle_index=cycle_index,
+                        phase=phase,
+                        sub_phase=sub_phase,
+                        prompt=prompt[:10000] if prompt else "",
+                        response=response[:10000] if response else "",
+                        user_decision=user_decision[:2000] if user_decision else "",
+                        exec_code=exec_code[:10000] if exec_code else "",
+                        exec_result=exec_result[:10000] if exec_result else "",
+                        exec_error=exec_error[:2000] if exec_error else "",
+                        token_estimate=token_estimate,
+                        created_at=datetime.now(),
+                    )
                 )
-            )
-            cycle_count = conn.execute(
-                select(func.count()).select_from(observe_cycle_log).where(
-                    observe_cycle_log.c.session_id == session_id
+                cycle_count = conn.execute(
+                    select(func.count()).select_from(observe_cycle_log).where(
+                        observe_cycle_log.c.session_id == session_id
+                    )
+                ).scalar()
+                conn.execute(
+                    observe_session_log.update().where(
+                        observe_session_log.c.session_id == session_id
+                    ).values(
+                        total_cycles=cycle_count,
+                        updated_at=datetime.now(),
+                    )
                 )
-            ).scalar()
-            conn.execute(
-                observe_session_log.update().where(
-                    observe_session_log.c.session_id == session_id
-                ).values(
-                    total_cycles=cycle_count,
-                    updated_at=datetime.now(),
-                )
-            )
-            conn.commit()
+                conn.commit()
     except Exception as e:
         print(f"记录观察日志失败: {e}")
 
@@ -151,35 +164,45 @@ def log_observe_session(session_id, question="", status="active", total_tokens=0
     if not session_id:
         return
     try:
+        delta = int(total_tokens or 0)
+    except (TypeError, ValueError):
+        delta = 0
+    try:
         with sys_engine.connect() as conn:
-            existing = conn.execute(
-                select(observe_session_log).where(
-                    observe_session_log.c.session_id == session_id
-                )
-            ).fetchone()
-            if existing:
-                conn.execute(
-                    observe_session_log.update().where(
+            with _session_lock:
+                existing = conn.execute(
+                    select(observe_session_log.c.id).where(
                         observe_session_log.c.session_id == session_id
-                    ).values(
-                        status=status,
-                        total_tokens=total_tokens,
-                        updated_at=datetime.now(),
                     )
-                )
-            else:
-                conn.execute(
-                    insert(observe_session_log).values(
-                        session_id=session_id,
-                        question=question,
-                        status=status,
-                        total_cycles=0,
-                        total_tokens=total_tokens,
-                        created_at=datetime.now(),
-                        updated_at=datetime.now(),
+                ).fetchone()
+                if existing is None:
+                    conn.execute(
+                        insert(observe_session_log).values(
+                            session_id=session_id,
+                            question=question,
+                            status=status,
+                            total_cycles=0,
+                            total_tokens=delta,
+                            created_at=datetime.now(),
+                            updated_at=datetime.now(),
+                        )
                     )
-                )
-            conn.commit()
+                else:
+                    conn.execute(
+                        observe_session_log.update().where(
+                            observe_session_log.c.session_id == session_id
+                        ).values(
+                            status=status,
+                            # Accumulate instead of overwriting so concurrent /
+                            # successive phase updates do not lose the running
+                            # session token total.
+                            total_tokens=func.coalesce(
+                                observe_session_log.c.total_tokens, 0
+                            ) + delta,
+                            updated_at=datetime.now(),
+                        )
+                    )
+                conn.commit()
     except Exception as e:
         print(f"记录会话日志失败: {e}")
 
@@ -191,32 +214,33 @@ def save_session_context(session_id, conversation_history, trimmed_context):
         history_json = json.dumps(conversation_history or [], ensure_ascii=False)
         context_json = json.dumps(trimmed_context or [], ensure_ascii=False)
         with sys_engine.connect() as conn:
-            existing = conn.execute(
-                select(observe_session_log).where(
-                    observe_session_log.c.session_id == session_id
-                )
-            ).fetchone()
-            if existing:
-                conn.execute(
-                    observe_session_log.update().where(
+            with _session_lock:
+                existing = conn.execute(
+                    select(observe_session_log.c.id).where(
                         observe_session_log.c.session_id == session_id
-                    ).values(
-                        conversation_history=history_json,
-                        trimmed_context=context_json,
-                        updated_at=datetime.now(),
                     )
-                )
-            else:
-                conn.execute(
-                    insert(observe_session_log).values(
-                        session_id=session_id,
-                        conversation_history=history_json,
-                        trimmed_context=context_json,
-                        created_at=datetime.now(),
-                        updated_at=datetime.now(),
+                ).fetchone()
+                if existing is None:
+                    conn.execute(
+                        insert(observe_session_log).values(
+                            session_id=session_id,
+                            conversation_history=history_json,
+                            trimmed_context=context_json,
+                            created_at=datetime.now(),
+                            updated_at=datetime.now(),
+                        )
                     )
-                )
-            conn.commit()
+                else:
+                    conn.execute(
+                        observe_session_log.update().where(
+                            observe_session_log.c.session_id == session_id
+                        ).values(
+                            conversation_history=history_json,
+                            trimmed_context=context_json,
+                            updated_at=datetime.now(),
+                        )
+                    )
+                conn.commit()
     except Exception as e:
         print(f"保存会话上下文失败: {e}")
 

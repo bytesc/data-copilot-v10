@@ -28,7 +28,7 @@ llm_models:
     model: "deepseek-v4.1-flash"         # 实际调用的模型名称
     url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
     key_file: "api_key_openai.txt"       # key 文件名（agent/utils/llm_access/ 目录下），不填用默认 api_key_openai.txt
-    supports_images: true                # 是否支持图片多模态输入；为 true 时会把 blackboard rencent_generated_images / selected_images 区域的图片随请求上传
+    supports_images: true                # 是否支持图片多模态输入；为 true 时会把 blackboard recent_generated_images / selected_images 区域的图片随请求上传
     reasoning_effort: ["none", "low", "high", "max"]  # 前端 Depth 下拉选项，默认选中第一个；不填/[] 则该项不可用
     style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}  # 前端 Style 下拉，默认 Default；不填/{} 则该项不可用
     extra_params: {"max_tokens": 393216}  # 该模型专属额外请求参数
@@ -61,7 +61,7 @@ llm_models:
 # Depth 默认选中列表第一个，Style 默认选中 Default（不额外上传 reasoning_effort/temperature）。
 # extra_params 若也含 reasoning_effort 或 temperature，最终合并时以 extra_params 为准。
 # supports_images 未配置时默认 false；为 true 时前端 Images 开关可用且默认开启，
-# 请求会把 blackboard rencent_generated_images / selected_images 区域中的图片作为 image_url 内容提交给模型（rencent_generated_images 在前，selected_images 在后；selected_images 含 `select_images` 选中与用户上传的图片）。
+# 请求会把 blackboard recent_generated_images / selected_images 区域中的图片作为 image_url 内容提交给模型（recent_generated_images 在前，selected_images 在后；selected_images 含 `select_images` 选中与用户上传的图片）。
 # 请求 meta.use_images=false 可临时关闭图片提交；不支持的模型开关置灰且始终不提交图片。
 
 # extra_params 说明（各模型单独配置，透传给 OpenAI 兼容接口的扩展字段）：

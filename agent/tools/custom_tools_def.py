@@ -23,7 +23,7 @@ from .map.get_streetdirectory_minimap import (
 from .map.get_streetdirectory_staticmap import get_streetdirectory_static_map_func
 from .map.search_osm import search_osm_func
 from .llm_analysis.llm_predict_hdb import llm_predict_hdb_func, get_llm_predict_hdb_info
-from .tools_def import engine, STATIC_URL
+from .tools_def import engine, STATIC_URL, read_only_engine
 
 llm = get_llm_dynamic()
 
@@ -518,13 +518,13 @@ yield price_df
 yield img_path
 ```
     """
-    predict_df = llm_predict_hdb_func(engine=engine, llm=llm, from_date=from_date, to_date=to_date,
+    predict_df = llm_predict_hdb_func(engine=read_only_engine, llm=llm, from_date=from_date, to_date=to_date,
                                       plan_area=plan_area, blk_no=blk_no, street=street,
                                       flat_model=flat_model, flat_type=flat_type, storey_range=storey_range,
                                       floor_area_sqm_from=floor_area_sqm_from, floor_area_sqm_to=floor_area_sqm_to,
                                       lease_commence_date_from=lease_commence_date_from,
                                       lease_commence_date_to=lease_commence_date_to)
-    search_conditions, hdb_price_history, sample = get_llm_predict_hdb_info(engine,
+    search_conditions, hdb_price_history, sample = get_llm_predict_hdb_info(read_only_engine,
                                                                             plan_area=plan_area, blk_no=blk_no,
                                                                             street=street,
                                                                             flat_model=flat_model, flat_type=flat_type,

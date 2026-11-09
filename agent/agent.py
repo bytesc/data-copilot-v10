@@ -7,7 +7,7 @@ import pandas as pd
 
 from .tools.base_knowledge.get_base_knowledge import BASE, TARGET, get_code_guide_db, get_graph_code_guide_db, base_knowledge_to_str
 from .tools.copilot.utils.code_insert import insert_lines_into_function
-from .tools.tools_def import engine, llm, exe_sql
+from .tools.tools_def import engine, llm, exe_sql, read_only_engine
 
 from .tools.copilot.utils.code_executor import execute_py_code
 from .tools.copilot.sql_code import get_db_info_prompt, filter_db_fields
@@ -42,7 +42,7 @@ THIRD_MODULE = ["import pandas as pd", "import numpy as np",
 
 
 def get_db():
-    return get_db_info_prompt(engine, example=True, simple=True)
+    return get_db_info_prompt(read_only_engine, example=True, simple=True)
 
 
 def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_functions=None, research_guide=None,
@@ -124,7 +124,7 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
         elif board_schema.get("schema_detail"):
             database = ""
         else:
-            data_prompt = get_db_info_prompt(engine, tables=tables, simple=True, example=False, selected_fields=selected_fields)
+            data_prompt = get_db_info_prompt(read_only_engine, tables=tables, simple=True, example=False, selected_fields=selected_fields)
             database = "\nThe database content: \n" + data_prompt + "\n"
 
     pre_prompt = """ 

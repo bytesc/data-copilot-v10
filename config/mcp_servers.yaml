@@ -2,6 +2,8 @@
 # Supported transport: "sse" (remote) or "stdio" (local subprocess).
 #   SSE: requires "url", e.g. http://localhost:8101/sse
 #   stdio: requires "command" and optional "args", e.g. ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+# Optional timeouts (seconds): "timeout" for handshake/listing requests
+# (default 30) and "call_timeout" for tools/call (default 120).
 
 mcp_servers:
   - name: "calculator"

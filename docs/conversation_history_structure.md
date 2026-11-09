@@ -20,7 +20,7 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
 
 ```json
 [
-  {"role": "system", "type": "blackboard", "regions": {"schema": {}, "functions": {}, "knowledge": {}, "mcp": {}, "rencent_generated_images": {}, "selected_images": {}}},
+  {"role": "system", "type": "blackboard", "regions": {"schema": {}, "functions": {}, "knowledge": {}, "mcp": {}, "recent_generated_images": {}, "selected_images": {}}},
   {"role": "user", "type": "question", "content": "..."},
   {"role": "assistant", "type": "think", "content": {"description": "...", "todo": ["..."]}},
   {"role": "assistant", "type": "action_decision", "content": {"action": "..."}},
@@ -68,7 +68,7 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
         "tool_detail": "工具详情",
         "catalog": "工具目录"
       },
-      "rencent_generated_images": {
+      "recent_generated_images": {
         "images": ["xxx.png"]
       }
     }
@@ -280,7 +280,7 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
       "tool_detail": "...",
       "catalog": "..."
     },
-    "rencent_generated_images": {
+    "recent_generated_images": {
       "images": [
         "xxx.png",
         "http://127.0.0.1:8008/tmp_imgs/yyy.png",
@@ -303,10 +303,10 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
 | `functions` | `explore_functions` | `selected_functions`, `explore_plan`, `func_docs` |
 | `knowledge` | `explore_base_knowledge` | `selected_knowledge_ids`, `summary`, `knowledge_content` |
 | `mcp` | `explore_mcp` | `selected_tools`, `explore_plan`, `tool_detail`, `catalog` |
-| `rencent_generated_images` | `generate_and_execute` | `images` |
+| `recent_generated_images` | `generate_and_execute` | `images` |
 | `selected_images` | `select_images` / 用户上传图片 | `images`（每项为 `{"path", "reason"}`） |
 
-`rencent_generated_images` 区域保存最近一次代码执行生成的图片列表（本地图片通常只存文件名，如 `xxx.png`；本机静态地址或外部 http 图片保留完整 URL）：每次 `generate_and_execute` 执行完成后**覆盖更新**，会经 `blackboard_to_text` 渲染进 `## Blackboard` 提示词段喂给 LLM，前端 Blackboard 弹窗也从该区域读取展示。
+`recent_generated_images` 区域保存最近一次代码执行生成的图片列表（本地图片通常只存文件名，如 `xxx.png`；本机静态地址或外部 http 图片保留完整 URL）：每次 `generate_and_execute` 执行完成后**覆盖更新**，会经 `blackboard_to_text` 渲染进 `## Blackboard` 提示词段喂给 LLM，前端 Blackboard 弹窗也从该区域读取展示。
 
 `selected_images` 区域由 `select_images` action 写入，每项为 `{"path": "...", "reason": "..."}`：`path` 是本地 `tmp_imgs` 文件名或完整 `http(s)` 图片链接，`reason` 是一句话选中原因。每次 `select_images` 执行后**整体覆盖**该区域；`images: []` 会清空。用户上传的图片不通过 `select_images`，而是在请求摄取时**追加合并**进该区域（`reason` 为 `"user uploaded image"`，按 `path` 去重，不覆盖已有项）。该区域同样会渲染进 `## Blackboard`，并且其中的图片会排在上一次代码执行生成的 `images` 之后提交给支持多模态的模型。
 
@@ -336,7 +336,7 @@ blackboard 是完整 history 的第一个元素，保存 explore 类动作选中
 blackboard 由 `utils/blackboard.py` 维护：
 
 - `update_blackboard()`：explore / `select_images` 动作完成后写入对应区域
-- `update_code_images()`：`generate_and_execute` 执行完成后覆盖写入 `rencent_generated_images` 区域
+- `update_code_images()`：`generate_and_execute` 执行完成后覆盖写入 `recent_generated_images` 区域
 - `normalize_selected_images()`：把 `select_images` 的输入规范为 `{"path", "reason"}` 列表并去重
 - `utils/image_ingest.py` 的 `ingest_uploaded_images()`：请求摄取时把 user 条目 `uploaded` 中的 base64 图片保存为 `upload_<8位小写字母>.png` 并**追加合并**进 `selected_images` 区域
 - `blackboard_input_images()`：按“`images` 在前、`selected_images` 在后”合并出提交给 LLM 的图片列表并去重
@@ -351,7 +351,7 @@ blackboard 由 `utils/blackboard.py` 维护：
 | `role` | `user`、`assistant` 或 `system`（仅 blackboard） |
 | `type` | 条目类型：`question` / `choice` / `response` / `input` / `think` / `action_decision` / `act` / `observe` / `document` / `blackboard` |
 | `content` | `think`、`action_decision`、`observe`、用户输入和 `document` 的载荷 |
-| `regions` | 仅 `type:"blackboard"` 使用，包含 `schema` / `functions` / `knowledge` / `mcp` / `rencent_generated_images` / `selected_images` 六个区域 |
+| `regions` | 仅 `type:"blackboard"` 使用，包含 `schema` / `functions` / `knowledge` / `mcp` / `recent_generated_images` / `selected_images` 六个区域 |
 | `action` | 仅 `type:"act"` 使用，表示具体动作名 |
 | `text` | 前端交互类动作的展示文本 |
 | `images` | 仅 `type:"act"` 且 `action:"generate_and_execute"` 使用，本次执行生成的图片文件名列表（本地图片仅存文件名，前端拼 `/tmp_imgs/` 展示；不喂给 LLM） |
@@ -705,7 +705,7 @@ images:
 [{"path": "xxx.png", "reason": "一句话选中原因"}, {"path": "upload_abcd1234.png", "reason": "user uploaded image"}]
 ```
 
-`rencent_generated_images` / `selected_images` 区域分别渲染为 `### RECENT_GENERATED_IMAGES` / `### SELECTED IMAGES` 段（字段 `images` 均为 JSON），并各自带一行 `note` 说明其含义与附带规则，随 `## Blackboard` 一起注入所有 LLM 阶段。聊天记录 `act` 条目里的 `images` 字段仍只用于前端展示，不进入 `history_to_text`。除文本注入外，图片还会按上文的规则在模型支持且 `use_images` 开启时作为 `image_url` 内容提交，顺序为 `rencent_generated_images` 在前、`selected_images` 在后。
+`recent_generated_images` / `selected_images` 区域分别渲染为 `### RECENT_GENERATED_IMAGES` / `### SELECTED IMAGES` 段（字段 `images` 均为 JSON），并各自带一行 `note` 说明其含义与附带规则，随 `## Blackboard` 一起注入所有 LLM 阶段。聊天记录 `act` 条目里的 `images` 字段仍只用于前端展示，不进入 `history_to_text`。除文本注入外，图片还会按上文的规则在模型支持且 `use_images` 开启时作为 `image_url` 内容提交，顺序为 `recent_generated_images` 在前、`selected_images` 在后。
 
 该段会注入到所有 LLM 阶段：Think、Action、Observe、Act explore_*、generate_and_execute、文档生成。
 

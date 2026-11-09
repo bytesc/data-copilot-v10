@@ -18,8 +18,14 @@ SCHEMA = "schema"
 FUNCTIONS = "functions"
 KNOWLEDGE = "knowledge"
 MCP = "mcp"
-RECENT_GENERATED_IMAGES = "rencent_generated_images"
+RECENT_GENERATED_IMAGES = "recent_generated_images"
+# Legacy region keys kept for backward compatibility with already-persisted
+# histories: this region used to be stored under the misspelled key
+# ``rencent_generated_images`` (and, even earlier, ``images``). Both are read as
+# fallbacks so previously generated images are not lost after the rename. New
+# writes always use ``RECENT_GENERATED_IMAGES``.
 LEGACY_IMAGES = "images"
+LEGACY_GENERATED_IMAGES = "rencent_generated_images"
 SELECTED_IMAGES = "selected_images"
 
 REGIONS = (SCHEMA, FUNCTIONS, KNOWLEDGE, MCP, RECENT_GENERATED_IMAGES, SELECTED_IMAGES)
@@ -72,7 +78,9 @@ def get_blackboard(history: Optional[List[dict]]) -> Dict[str, Dict[str, Any]]:
         for region in REGIONS:
             value = regions.get(region)
             if region == RECENT_GENERATED_IMAGES and not isinstance(value, dict):
-                value = regions.get(LEGACY_IMAGES)
+                value = regions.get(LEGACY_GENERATED_IMAGES)
+                if not isinstance(value, dict):
+                    value = regions.get(LEGACY_IMAGES)
             if isinstance(value, dict):
                 board[region].update(value)
     return board

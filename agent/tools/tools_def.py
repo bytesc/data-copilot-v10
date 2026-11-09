@@ -40,6 +40,14 @@ else:
         "are disabled. A privileged fallback is intentionally not used."
     )
 
+# Engine for the agent's read-only schema/metadata/sample queries
+# (explore_schema, field filtering, structure/data-sample prompts, plain chat,
+# predict_hdb_price). Prefer the dedicated read-only account so these reads use
+# the same access path as exe_sql; fall back to the primary engine only when no
+# read-only account is configured, so exploration still works without
+# mysql_readonly. Mutating flows (upload/comment/edit) keep using ``engine``.
+read_only_engine = read_engine if read_engine is not None else engine
+
 STATIC_URL = config_data['static_path']
 STATIC_FOLDER = "tmp_imgs"
 

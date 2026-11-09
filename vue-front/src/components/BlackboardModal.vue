@@ -162,7 +162,9 @@ const functions = computed(() => props.board?.functions || {})
 const knowledge = computed(() => props.board?.knowledge || {})
 const mcp = computed(() => props.board?.mcp || {})
 const images = computed(() => {
-  const list = props.board?.rencent_generated_images?.images ?? props.board?.images?.images
+  const list = props.board?.recent_generated_images?.images
+    ?? props.board?.rencent_generated_images?.images
+    ?? props.board?.images?.images
   return Array.isArray(list) ? list : []
 })
 
@@ -190,7 +192,7 @@ function imageName(src) {
   return parts[parts.length - 1] || src
 }
 
-const filledRegions = computed(() => [schema, functions, knowledge, mcp, props.board?.rencent_generated_images || props.board?.images || {}, props.board?.selected_images || {}].filter(r => has(r.value ?? r)).length)
+const filledRegions = computed(() => [schema, functions, knowledge, mcp, props.board?.recent_generated_images || props.board?.rencent_generated_images || props.board?.images || {}, props.board?.selected_images || {}].filter(r => has(r.value ?? r)).length)
 
 function has(region) {
   return !!region && Object.keys(region).some(k => {

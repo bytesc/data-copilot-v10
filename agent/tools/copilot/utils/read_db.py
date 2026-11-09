@@ -290,29 +290,6 @@ def get_table_comments_dict(engine, tables=None):
 #     return creation_statements
 
 
-def execute_sql(engine, sql):
-    # 使用连接执行SQL语句
-    with engine.connect() as connection:
-        try:
-            # 执行SQL语句
-            result = connection.execute(text(sql))
-            # 提交事务（对于INSERT、UPDATE、DELETE等操作）
-            connection.commit()
-            # 返回影响的行数
-            return result.rowcount
-        except SQLAlchemyError as e:
-            # 如果发生错误，回滚事务
-            connection.rollback()
-            # 打印错误信息
-            print(f"An error occurred: {e}")
-            raise e
-
-
-import pandas as pd
-from sqlalchemy import text, inspect
-from sqlalchemy.exc import SQLAlchemyError
-
-
 def execute_select(engine, sql):
     """Execute a read-only query against the read-only engine.
 
@@ -346,16 +323,3 @@ def execute_select(engine, sql):
         # 如果发生错误，打印错误信息
         print(f"An error occurred: {e}")
         raise e
-
-
-if __name__ == "__main__":
-    # data = get_data_from_db()
-    # print(type(data), "\n")
-    # print(data[2][1])
-    print("###########################################\n\n")
-    print(get_table_creation_statements())
-
-    # for table_name, table_df in mdata.items():
-    #     print(f"Table: {table_name}")
-    #     print(table_df)
-    #     print(type(table_df))

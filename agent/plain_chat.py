@@ -1,6 +1,6 @@
 import logging
 
-from .tools.tools_def import engine, llm
+from .tools.tools_def import engine, llm, read_only_engine
 
 from .tools.copilot.sql_code import get_db_info_prompt
 
@@ -15,7 +15,7 @@ def get_plain_chat_prompt(question, tables=None, selected_fields=None, level=0):
     function_prompt = """
 You can use the following functions:
 """
-    data_prompt = get_db_info_prompt(engine, simple=True, example=False, tables=tables, selected_fields=selected_fields)
+    data_prompt = get_db_info_prompt(read_only_engine, simple=True, example=False, tables=tables, selected_fields=selected_fields)
     database = "\nThe database content: \n" + cap_text(data_prompt, level) + "\n"
 
     pre_prompt = """

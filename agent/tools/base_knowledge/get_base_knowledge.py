@@ -10,7 +10,7 @@ from data_access.code_guide_db import code_guide
 from data_access.graph_code_guide_db import graph_code_guide
 from data_access.think_guide_db import think_guide
 from data_access.brief_info_db import brief_info
-from agent.tools.tools_def import llm, engine
+from agent.tools.tools_def import llm, engine, read_only_engine
 from agent.tools.search_db import get_db_structure_markdown
 from utils.context_trim import stream_with_context_retry, cap_text
 from utils.get_config import config_data
@@ -163,7 +163,7 @@ def get_base_knowledge_db_llm(context="", key=None):
         return
 
     knowledge_text = base_knowledge_to_str(knowledge)
-    db_structure_text = get_db_structure_markdown(engine)
+    db_structure_text = get_db_structure_markdown(read_only_engine)
 
     def build_prompt(level):
         return _build_knowledge_context(

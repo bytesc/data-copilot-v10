@@ -117,6 +117,25 @@ def _summarize_content(result: dict) -> str:
     return "\n".join(p for p in parts if p).strip()
 
 
+# Request wait budgets (seconds). Handshake/listing calls are expected to be
+# quick, but ``tools/call`` may legitimately run long (external services), so a
+# single hardcoded 30s timeout made every slow tool fail. Both budgets can be
+# overridden per server in ``mcp_servers.yaml`` (``timeout`` for general
+# requests, ``call_timeout`` for ``tools/call``) and per call via
+# ``call_tool(..., timeout=...)``.
+DEFAULT_REQUEST_TIMEOUT = 30
+DEFAULT_CALL_TIMEOUT = 120
+
+
+def _coerce_timeout(value, default):
+    """Return a positive float timeout from config, else ``default``."""
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return default
+    return seconds if seconds > 0 else default
+
+
 class MCPClient:
     def __init__(self, server_config: dict):
         self.name = server_config.get("name", "")
@@ -135,6 +154,12 @@ class MCPClient:
         self._closed = False
         self._lock = threading.Lock()
 
+        # Per-request wait budgets; see DEFAULT_REQUEST_TIMEOUT / DEFAULT_CALL_TIMEOUT.
+        self._request_timeout = _coerce_timeout(
+            server_config.get("timeout"), DEFAULT_REQUEST_TIMEOUT)
+        self._call_timeout = _coerce_timeout(
+            server_config.get("call_timeout"), DEFAULT_CALL_TIMEOUT)
+
         # SSE transport resources
         self._sse_resp = None
         self._read_thread: Optional[threading.Thread] = None
@@ -147,6 +172,13 @@ class MCPClient:
     def _next_id(self) -> int:
         self._request_id += 1
         return self._request_id
+
+    def _timeout_for(self, method: str, override: float = None) -> float:
+        """Wait budget for a request: explicit override > tools/call > default."""
+        default = self._call_timeout if method == "tools/call" else self._request_timeout
+        if override is None:
+            return default
+        return _coerce_timeout(override, default)
 
     def connect(self):
         if self.transport == "sse":
@@ -206,12 +238,12 @@ class MCPClient:
         except Exception:
             pass
 
-    def _send_via_sse(self, data: bytes) -> bytes:
+    def _send_via_sse(self, data: bytes, timeout: float = None) -> bytes:
         req = urllib.request.Request(
             self._message_endpoint, data=data,
             headers={"Content-Type": "application/json"}, method="POST",
         )
-        resp = urllib.request.urlopen(req, timeout=30)
+        resp = urllib.request.urlopen(req, timeout=timeout or self._request_timeout)
         body = resp.read()
         resp.close()
         return body
@@ -227,7 +259,16 @@ class MCPClient:
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                # JSON-RPC over stdio is UTF-8 by spec. Without an explicit
+                # encoding, ``text=True`` uses the locale codec (e.g. GBK on a
+                # Chinese Windows), so non-ASCII tool arguments were written in
+                # the wrong codec and a UTF-8 reply raised UnicodeDecodeError in
+                # the read loop, silently killing it (every later call then hit
+                # the timeout). ``errors="replace"`` keeps one malformed byte
+                # from taking the reader down.
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             self._stdout_thread = threading.Thread(target=self._read_stdio_loop, daemon=True)
             self._stdout_thread.start()
@@ -329,11 +370,13 @@ class MCPClient:
             raise MCPConnectionError(f"Initialize failed: {result['error']}")
         self._dispatch_notification("notifications/initialized", {})
 
-    def _dispatch_request(self, method: str, params: dict = None) -> dict:
+    def _dispatch_request(self, method: str, params: dict = None, timeout: float = None) -> dict:
         req_id = self._next_id()
         body = {"jsonrpc": "2.0", "id": req_id, "method": method}
         if params is not None:
             body["params"] = params
+
+        wait_timeout = self._timeout_for(method, timeout)
 
         # Register this request's own event before sending, so a response that
         # arrives for a different id can never satisfy this waiter.
@@ -344,7 +387,7 @@ class MCPClient:
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         try:
             if self.transport == "sse":
-                post_body = self._send_via_sse(data)
+                post_body = self._send_via_sse(data, timeout=wait_timeout)
                 self._store_http_response_body(post_body)
             elif self.transport == "stdio":
                 self._send_via_stdio(data)
@@ -354,12 +397,14 @@ class MCPClient:
                 self._responses.pop(req_id, None)
             raise MCPConnectionError(f"Failed to send request '{method}': {e}")
 
-        if not event.wait(timeout=30):
+        if not event.wait(timeout=wait_timeout):
             # Drop any late/partial state for this id so it cannot linger.
             with self._lock:
                 self._events.pop(req_id, None)
                 self._responses.pop(req_id, None)
-            raise MCPConnectionError(f"Timeout waiting for response to '{method}'")
+            raise MCPConnectionError(
+                f"Timeout waiting for response to '{method}' after {wait_timeout:g}s"
+            )
 
         with self._lock:
             self._events.pop(req_id, None)
@@ -390,11 +435,11 @@ class MCPClient:
             raise MCPToolError(f"tools/list failed: {result['error']}")
         return result.get("result", {}).get("tools", [])
 
-    def call_tool(self, tool_name: str, arguments: dict = None) -> dict:
+    def call_tool(self, tool_name: str, arguments: dict = None, timeout: float = None) -> dict:
         params = {"name": tool_name}
         if arguments is not None:
             params["arguments"] = arguments
-        result = self._dispatch_request("tools/call", params)
+        result = self._dispatch_request("tools/call", params, timeout=timeout)
         if "error" in result:
             raise MCPToolError(f"tools/call '{tool_name}' failed: {result['error']}")
         tool_result = result.get("result", {})

@@ -12,7 +12,7 @@ from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.tools_def import llm
 from data_access.observe_log import log_observe_cycle, log_observe_session
 from data_access.session_log import record_session_operation
-from agent.tools.tools_def import engine
+from agent.tools.tools_def import engine, read_only_engine
 from utils.front_utils import history_to_text
 from utils.blackboard import blackboard_section, blackboard_input_images_from_history
 from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json, stream_with_context_retry
@@ -169,7 +169,7 @@ def _build_action_prompt(
         context = history_to_text(trimmed)
     blackboard_text = blackboard_section(conversation_history, level=level)
 
-    db_summary = get_db_summary_for_agent(engine)
+    db_summary = get_db_summary_for_agent(read_only_engine)
     func_catalog = get_func_summary_for_agent()
 
     return f"""You are an action decision maker. Given the current context, decide the next action(s) to execute.

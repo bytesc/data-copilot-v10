@@ -706,7 +706,7 @@ from agent.tools.copilot.utils.read_db import get_rows_from_all_tables, get_tabl
     get_all_comments
 from agent.tools.copilot.sql_code import filter_db_fields, filter_db_fields_stream
 from agent.tools.get_function_info import filter_functions_stream
-from agent.tools.tools_def import engine, read_engine, llm
+from agent.tools.tools_def import engine, read_engine, read_only_engine, llm
 
 
 @app.post("/api/db-slice/")
@@ -715,7 +715,7 @@ async def db_slice(request: Request):
     first_five_rows = await loop.run_in_executor(
         executor,
         get_rows_from_all_tables,
-        engine,
+        read_only_engine,
         None,
         5
     )
@@ -741,7 +741,7 @@ async def db_slice(request: Request):
 @app.post("/api/db-comments/")
 async def db_comments(request: Request):
     loop = asyncio.get_event_loop()
-    all_comments = await loop.run_in_executor(executor, get_all_comments, engine, None)
+    all_comments = await loop.run_in_executor(executor, get_all_comments, read_only_engine, None)
     comments_json = {}
     for table_name, comments in all_comments.items():
         comments_json[table_name] = {
@@ -759,7 +759,7 @@ async def db_comments(request: Request):
 @app.post("/api/table-comments/")
 async def table_comments(request: Request):
     loop = asyncio.get_event_loop()
-    table_comments = await loop.run_in_executor(executor, get_table_comments_dict, engine, None)
+    table_comments = await loop.run_in_executor(executor, get_table_comments_dict, read_only_engine, None)
     processed_data = {
         "ans": table_comments,
         "type": "success",
@@ -781,7 +781,7 @@ async def filter_db_fields_api(request: Request, user_input: AgentInput):
         _run_in_llm_context(
             _timed_filter_db_fields,
             user_input.question,
-            engine,
+            read_only_engine,
             llm,
             user_input.tables,
         ),
@@ -805,7 +805,7 @@ async def filter_db_fields_api(request: Request, user_input: AgentInput):
 def _event_stream_filter_db_fields(question: str, tables: Optional[List[str]], session_id: str = "", request_url: str = "", request_json: str = ""):
     full_content = ""
     prompt_length = 0
-    for event in filter_db_fields_stream(question, engine, llm, tables):
+    for event in filter_db_fields_stream(question, read_only_engine, llm, tables):
         if event.get("type") == "chunk":
             full_content += event.get("content", "")
         if event.get("type") in ("done", "error"):
