@@ -136,6 +136,8 @@ mysql -u root -p < init.sql
 
 `main.py` 启动时也会自动创建缺失的系统表，包括 `init.sql` 未包含的 `graph_code_guide`；其中 `base_knowledge`、`doc_guide`、`code_guide`、`graph_code_guide`、`think_guide` 这批知识表仅在 `enable_base_knowledge` 为 true 时创建。
 
+> Docker Compose 部署使用 `docker/docker-init.sql`（它会建库并创建系统表，库名与 `config/config.yaml` 一致）；上面的 `init.sql` 仅用于非容器的手动部署。
+
 ### 配置文件
 
 `./config/config.yaml`
@@ -263,11 +265,16 @@ VITE_API_BASE=/api
 python main.py
 ```
 
-也可通过 `front.py` 部署（替代 nginx，提供前端静态服务 + API 反向代理 + SSE 流式支持）：
+也可通过 `front.py` 部署（替代 nginx，提供前端静态服务 + API 反向代理 + SSE 流式支持）。先构建前端产物，再启动：
 
 ```bash
+cd vue-front && npm install && npm run build && cd ..
 FRONT_PORT=8010 python front.py
 ```
+
+`front.py` 从 `vue-front/dist/` 提供静态文件，必须先 `npm run build`，否则页面为 404。
+
+Docker 部署请见 [`docs/deployment.md`](docs/deployment.md)。
 
 ## 文档索引
 
@@ -275,6 +282,7 @@ FRONT_PORT=8010 python front.py
 |------|------|
 | [`docs/api.md`](docs/api.md) | 全部 API 端点说明、统一请求信封、请求/响应格式、错误码 |
 | [`docs/config_and_models.md`](docs/config_and_models.md) | 配置格式（config.yaml / .env）、Pydantic 请求模型、日志表结构、依赖说明、前端构建配置 |
+| [`docs/deployment.md`](docs/deployment.md) | 部署指南：Docker Compose 与 front.py，端口、环境变量、数据库初始化、故障排查 |
 | [`docs/mcp_servers.md`](docs/mcp_servers.md) | MCP 服务器配置与启动指南（mcp_servers.yaml、测试服务器、新增步骤） |
 | [`docs/sse_event_flow.md`](docs/sse_event_flow.md) | SSE 流式事件类型与数据格式 |
 | [`docs/context_overflow_handling.md`](docs/context_overflow_handling.md) | 上下文超长（Context Overflow）处理机制 |

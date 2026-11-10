@@ -1,5 +1,18 @@
+# Build the Vue SPA inside the image so `docker compose build` works on a clean
+# checkout (the `dist/` directory is gitignored and must not be a build prerequisite).
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+COPY vue-front/package.json vue-front/package-lock.json ./
+RUN npm ci
+
+COPY vue-front/ ./
+RUN npm run build
+
+
 FROM nginx:alpine
 
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 
-COPY vue-front/dist /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html

@@ -1,5 +1,6 @@
 node_modules
 vue-front/node_modules
+vue-front/dist
 .git
 __pycache__
 *.pyc

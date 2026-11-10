@@ -1,5 +1,6 @@
 import os
 import mimetypes
+from contextlib import asynccontextmanager
 
 import httpx
 import uvicorn
@@ -34,18 +35,27 @@ def _safe_dist_file(rel: str):
         return None
     return candidate if candidate.is_file() else None
 
-app = FastAPI(title="front.py - Lightweight Frontend Proxy")
 client = httpx.AsyncClient(base_url=BACKEND_URL, timeout=600.0)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await client.aclose()
+
+
+app = FastAPI(title="front.py - Lightweight Frontend Proxy", lifespan=lifespan)
+
 PROXY_PATHS = ("/api", "/upload-csv", "/upload-txt", "/tmp_imgs")
-STREAM_PATHS = ("/api/generate-and-execute/stream/", "/api/plain-chat/stream/",
-                "/api/filter-db-fields/stream/", "/api/filter-functions/stream/",
-                "/api/think/stream/", "/api/act/stream/", "/api/observe/stream/",
-                "/api/action/stream/", "/api/generate-document/stream/",
-                "/api/generate-document/generate-yaml-outline/",
-                "/api/generate-document/stream/from-yaml/",
-                "/api/generate-document/stream/unified/",
-                "/api/generate-document/finalize/")
+# All backend SSE (text/event-stream) routes end in "/stream/" (for example
+# "/api/think/stream/" and "/api/generate-document/stream/unified/"), so they
+# are detected structurally instead of via a hardcoded allowlist that has to be
+# kept in sync with the routers. Only the few streaming routes that do NOT end
+# in "/stream/" are listed here as exceptions.
+_EXTRA_STREAM_PATHS = (
+    "/api/generate-document/generate-yaml-outline/",
+    "/api/generate-document/finalize/",
+)
 STATIC_EXTS = {".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg",
                ".ico", ".webp", ".woff", ".woff2", ".ttf", ".eot", ".json", ".map"}
 
@@ -64,7 +74,7 @@ def _is_api_path(path: str) -> bool:
 
 
 def _is_streaming_path(path: str) -> bool:
-    return any(path.startswith(p) for p in STREAM_PATHS)
+    return "/stream/" in path or path.startswith(_EXTRA_STREAM_PATHS)
 
 
 def _build_target(path: str, request: Request) -> str:
@@ -175,11 +185,6 @@ async def proxy_stream(path: str, request: Request) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         }
     )
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await client.aclose()
 
 
 if __name__ == "__main__":

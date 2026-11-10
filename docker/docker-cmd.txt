@@ -3,12 +3,22 @@
 #   1. config/config.yaml         — mysql / mysql_readonly / mysql_sys 连接串
 #   2. docker/docker-compose.yml  — MYSQL_ROOT_PASSWORD
 #   3. docker/docker-init.sql     — CREATE DATABASE 语句、只读用户 readonly（密码与 mysql_readonly 一致）
+# 也可不改配置，直接用环境变量覆盖（存在时优先于 config.yaml）：
+#   MYSQL_URL / MYSQL_READONLY_URL / MYSQL_SYS_URL
+# 注意：业务库只建空库，业务数据需自行导入；系统库只建表 + brief_info 空占位，均不导入数据。
 # ============================================================
 # ============================================================
-# 修改 static_folder 时需要同步修改以下 2 个地方：
-#   1. config/config.yaml         — static_folder 字段
-#   2. docker/docker-compose.yml  — volumes 挂载路径
-#   3. docker/nginx.conf          — location 路径
+# 静态文件目录固定为 tmp_imgs（代码中硬编码，config.yaml 不支持配置）：
+#   1. docker/docker-compose.yml  — backend.volumes 挂载 ../tmp_imgs
+#   2. docker/nginx.conf          — location /tmp_imgs/ 反代后端
+#   3. front.py                   — PROXY_PATHS 含 /tmp_imgs
+#   如确需改目录名，需同时改以上几处以及 main.py / utils/image_ingest.py /
+#   agent/document_generator.py 中硬编码的 "tmp_imgs"。
+# ============================================================
+# ============================================================
+# 下载链接前缀由 config.yaml 的 static_path 决定，Docker 部署用环境变量覆盖：
+#   docker/docker-compose.yml — backend.environment STATIC_PATH（默认 http://localhost:8038/）
+#   局域网/公网访问时设为 http://<服务器地址>:8038/
 # ============================================================
 # ============================================================
 # doc_workspace/（YAML 大纲和草稿）已挂载为 volume：

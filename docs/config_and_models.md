@@ -17,7 +17,8 @@ mysql_readonly: "mysql+pymysql://readonly:123456@localhost:3306/singapore_land_2
 # 系统数据库（会话日志、知识库、操作审计）
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
 
-# 静态文件 URL 前缀（部署时改为服务器实际地址，如 http://your-server-ip:8008/）
+# 静态文件 URL 前缀（部署时改为服务器实际地址，如 http://your-server-ip:8038/）
+# 也可在运行时用环境变量 STATIC_PATH 覆盖（Docker Compose 已使用该变量）。
 static_path: "http://127.0.0.1:8008/"
 # 静态文件固定存储在项目根目录 tmp_imgs/ 下（不可配置）
 
@@ -96,6 +97,8 @@ enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 > FLUSH PRIVILEGES;
 > ```
 > `SELECT` 覆盖查询与 `SHOW TABLES/COLUMNS`，`SHOW VIEW` 覆盖视图定义（`SHOW CREATE VIEW`）。
+
+**环境变量覆盖**：以下环境变量在存在时优先于 `config.yaml`（便于容器化部署，无需重新构建镜像）：`STATIC_PATH`→`static_path`、`SERVER_HOST`→`server_host`、`SERVER_PORT`→`server_port`、`MYSQL_URL`→`mysql`、`MYSQL_READONLY_URL`→`mysql_readonly`、`MYSQL_SYS_URL`→`mysql_sys`。
 
 ---
 
@@ -468,6 +471,13 @@ created_at  DATETIME
 
 替代 nginx 的开发/生产部署方案，详见 `front.py`。
 
+**前置条件**：必须先构建前端产物，否则 `vue-front/dist/` 不存在、页面返回 404：
+
+```bash
+cd vue-front && npm install && npm run build && cd ..
+FRONT_PORT=8010 python front.py
+```
+
 **环境变量**:
 
 | 变量 | 必填 | 说明 |
@@ -476,8 +486,10 @@ created_at  DATETIME
 | `FRONT_HOST` | 否 | 监听地址，默认 `0.0.0.0` |
 | `FRONT_PORT` | 否 | 监听端口，默认 `8010` |
 
+> 文档下载链接由后端 `static_path` 生成。用 `front.py` 部署时应把 `config/config.yaml` 的 `static_path`（或环境变量 `STATIC_PATH`）设为 `http://<本机地址>:<FRONT_PORT>/`，否则下载链接指向后端 8008 端口。
+
 **功能**:
 - 从 `vue-front/dist/` 提供静态文件
 - 代理 `/api`、`/upload-csv`、`/upload-txt`、`/tmp_imgs` 到后端
-- SSE 流式响应透传（`/api/*/stream/`）
+- SSE 流式响应透传：凡是路径含 `/stream/` 的都按流式转发；文档生成中不以 `/stream/` 结尾的流式路由（`generate-yaml-outline`、`finalize`）在 `front.py` 显式列出
 - SPA fallback 到 `index.html`
