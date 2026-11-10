@@ -274,10 +274,11 @@ python main.py
 
 ```bash
 cd vue-front && npm install && npm run build && cd ..
-FRONT_PORT=8010 python front.py
+python front.py
 ```
 
 `front.py` 从 `vue-front/dist/` 提供静态文件，必须先 `npm run build`，否则页面为 404。
+监听地址/端口、后端地址、超时等直接改 `front.py` 文件开头的常量（不读取环境变量）。
 
 Docker 部署请见 [`docs/deployment.md`](docs/deployment.md)。
 
@@ -287,7 +288,7 @@ Docker 部署请见 [`docs/deployment.md`](docs/deployment.md)。
 |------|------|
 | [`docs/api.md`](docs/api.md) | 全部 API 端点说明、统一请求信封、请求/响应格式、错误码 |
 | [`docs/config_and_models.md`](docs/config_and_models.md) | 配置格式（config.yaml / .env）、Pydantic 请求模型、日志表结构、依赖说明、前端构建配置 |
-| [`docs/deployment.md`](docs/deployment.md) | 部署指南：Docker Compose 与 front.py，端口、环境变量、数据库初始化、故障排查 |
+| [`docs/deployment.md`](docs/deployment.md) | 部署指南：Docker Compose 与 front.py，端口、配置、数据库初始化、故障排查 |
 | [`docs/mcp_servers.md`](docs/mcp_servers.md) | MCP 服务器配置与启动指南（mcp_servers.yaml、测试服务器、新增步骤） |
 | [`docs/sse_event_flow.md`](docs/sse_event_flow.md) | SSE 流式事件类型与数据格式 |
 | [`docs/context_overflow_handling.md`](docs/context_overflow_handling.md) | 上下文超长（Context Overflow）处理机制 |

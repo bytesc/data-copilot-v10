@@ -3,11 +3,10 @@ set -e
 
 cd /app
 
-# Read the database URL through the application's config loader so that the
-# environment overrides (MYSQL_URL / MYSQL_READONLY_URL / MYSQL_SYS_URL) apply
-# here too. Reading config.yaml directly would ignore them and the readiness
-# probe could wait on a different database than the one the app actually uses.
-echo "Reading database config (config/config.yaml + environment overrides)..."
+# Read the database URL through the application's config loader so the readiness
+# probe waits on exactly the database the app uses. config/config.yaml is the
+# single source of truth; there are no environment overrides.
+echo "Reading database config (config/config.yaml)..."
 # Print only host:port/database. The full DSN contains the password and must
 # never be echoed (it would leak into `docker compose logs backend`).
 DB_TARGET=$(python -c "

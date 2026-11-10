@@ -18,7 +18,7 @@ mysql_readonly: "mysql+pymysql://readonly:123456@localhost:3306/singapore_land_2
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
 
 # 静态文件 URL 前缀（部署时改为服务器实际地址，如 http://your-server-ip:8038/）
-# 也可在运行时用环境变量 STATIC_PATH 覆盖（Docker Compose 已使用该变量）。
+# 以本文件为唯一来源，不读取任何环境变量。
 static_path: "http://127.0.0.1:8008/"
 # 静态文件固定存储在项目根目录 tmp_imgs/ 下（不可配置）
 
@@ -98,7 +98,7 @@ enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 > ```
 > `SELECT` 覆盖查询与 `SHOW TABLES/COLUMNS`，`SHOW VIEW` 覆盖视图定义（`SHOW CREATE VIEW`）。
 
-**环境变量覆盖**：以下环境变量在存在时优先于 `config.yaml`（便于容器化部署，无需重新构建镜像）：`STATIC_PATH`→`static_path`、`SERVER_HOST`→`server_host`、`SERVER_PORT`→`server_port`、`MYSQL_URL`→`mysql`、`MYSQL_READONLY_URL`→`mysql_readonly`、`MYSQL_SYS_URL`→`mysql_sys`。
+**单一来源**：以上配置项**只**来自本文件，程序不读取任何环境变量；`static_path`、`server_host`/`server_port`、`mysql*` 等如需变更，请直接修改本文件并重启（Docker 部署需重建镜像）。
 
 ---
 
@@ -118,8 +118,8 @@ DEV_PROXY_TARGET=http://127.0.0.1:8008
 指定的后端。生产环境由 `front.py` 或 nginx 承担相同代理职责，浏览器端一律使用**同源相对
 地址**（`window.location.origin`），因此**不会把后端地址固化进产物**，无需为不同服务器重新构建。
 后端生成的绝对 URL（文档下载链接、聊天正文中的图表图片、交互图/CSV 链接、静态地图等）由后端
-`static_path` 拼接、经 SSE 下发后由前端渲染，部署时须把 `static_path`/`STATIC_PATH` 设为浏览器
-可达的前端地址（nginx 与 front.py 均透传 `/tmp_imgs/`）。
+`static_path` 拼接、经 SSE 下发后由前端渲染，部署时须把 `config/config.yaml` 的 `static_path` 设为
+浏览器可达的前端地址（nginx 与 front.py 均透传 `/tmp_imgs/`）。
 
 ---
 
@@ -480,19 +480,19 @@ created_at  DATETIME
 
 ```bash
 cd vue-front && npm install && npm run build && cd ..
-FRONT_PORT=8010 python front.py
+python front.py
 ```
 
-**环境变量**:
+**配置**（直接修改 `front.py` 文件开头的常量，不读取环境变量）：
 
-| 变量 | 必填 | 说明 |
+| 常量 | 默认 | 说明 |
 |------|------|------|
-| `BACKEND_URL` | 否 | 后端服务地址，默认由 `config/config.yaml` 的 `server_host`/`server_port` 推导（遵循 `SERVER_HOST`/`SERVER_PORT` 环境变量覆盖；`0.0.0.0`/`::`/空 host 按 `127.0.0.1` 处理，即默认配置下为 `http://127.0.0.1:8008`） |
-| `FRONT_HOST` | 否 | 监听地址，默认 `0.0.0.0` |
-| `FRONT_PORT` | 否 | 监听端口，默认 `8010` |
-| `PROXY_TIMEOUT` | 否 | 反代到后端的超时秒数（含 SSE 流），默认 `600` |
+| `BACKEND_URL` | `""` | 后端服务地址；留空则按 `config/config.yaml` 的 `server_host`/`server_port` 推导（`0.0.0.0`/`::`/空 host 按 `127.0.0.1` 处理，即默认配置下为 `http://127.0.0.1:8008`） |
+| `FRONT_HOST` | `"0.0.0.0"` | 监听地址 |
+| `FRONT_PORT` | `8010` | 监听端口 |
+| `PROXY_TIMEOUT` | `600.0` | 反代到后端的超时秒数（含 SSE 流） |
 
-> 文档下载链接由后端 `static_path` 生成。用 `front.py` 部署时应把 `config/config.yaml` 的 `static_path`（或环境变量 `STATIC_PATH`）设为 `http://<本机地址>:<FRONT_PORT>/`，否则下载链接指向后端 8008 端口。
+> 文档下载链接由后端 `static_path` 生成。用 `front.py` 部署时应把 `config/config.yaml` 的 `static_path` 设为 `http://<本机地址>:<FRONT_PORT>/`（端口与 `front.py` 的 `FRONT_PORT` 一致），否则下载链接指向后端 8008 端口。
 
 **功能**:
 - 从 `vue-front/dist/` 提供静态文件

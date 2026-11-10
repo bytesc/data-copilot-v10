@@ -36,7 +36,7 @@ docker run -p 5173:5173 -v ${PWD}/src:/app/src vue-front-dev
 
 > 前端产物使用**同源相对地址**访问 API，构建时**不固化后端地址**，换服务器部署无需重新构建前端。
 > 后端生成的绝对 URL（文档下载链接、聊天正文中的图表图片、交互图/CSV 链接、静态地图等）由
-> `STATIC_PATH` 决定，跨机访问时必须设为浏览器可达的前端地址，详见
+> `config/config.yaml` 的 `static_path` 决定，跨机访问时必须设为浏览器可达的前端地址，详见
 > [`../docs/deployment.md`](../docs/deployment.md)。
 
 ```bash

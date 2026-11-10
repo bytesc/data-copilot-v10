@@ -1,4 +1,3 @@
-import os
 import mimetypes
 from contextlib import asynccontextmanager
 
@@ -8,11 +7,21 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
-# Use the same canonical config object as the backend (config/config.yaml plus
-# the SERVER_HOST / SERVER_PORT environment overrides), so the proxy follows the
-# backend when it is re-pointed via env vars. Reading config.yaml directly would
-# ignore those overrides and the proxy would dial a stale port.
+# Same canonical config object as the backend (config/config.yaml). The proxy
+# follows the backend's configured host/port; env vars are not consulted.
 from config.get_config import config_data
+
+# ============================================================================
+# front.py 配置：直接修改下面这几个常量即可（不读取任何环境变量）。
+# ============================================================================
+# 后端地址。留空则按 config/config.yaml 的 server_host / server_port 推导
+# （"0.0.0.0"/"::"/空 host 会按 127.0.0.1 处理，因为那是监听地址而非可连接目标）。
+# 需要指向另一台机器/端口时才填写，例如 "http://10.0.0.5:8008"。
+BACKEND_URL = ""
+FRONT_HOST = "0.0.0.0"     # 反代监听地址
+FRONT_PORT = 8010          # 反代监听端口
+PROXY_TIMEOUT = 600.0      # 反代到后端的超时秒数（含 SSE 流；长任务可调大）
+# ============================================================================
 
 _bind_host = config_data.get("server_host", "127.0.0.1")
 # "0.0.0.0"/"::" are listen addresses for the backend, not connectable
@@ -20,12 +29,8 @@ _bind_host = config_data.get("server_host", "127.0.0.1")
 # platforms, so the proxy always connects to the loopback address instead.
 _host = "127.0.0.1" if _bind_host in ("0.0.0.0", "::", "") else _bind_host
 _port = config_data["server_port"]
-BACKEND_URL = os.getenv("BACKEND_URL", f"http://{_host}:{_port}")
-FRONT_HOST = os.getenv("FRONT_HOST", "0.0.0.0")
-FRONT_PORT = int(os.getenv("FRONT_PORT", "8010"))
-# Upstream timeout in seconds, covering proxied requests and SSE streams (time
-# between reads). Raise via env when long generations exceed the 600s default.
-PROXY_TIMEOUT = float(os.getenv("PROXY_TIMEOUT", "600"))
+if not BACKEND_URL:
+    BACKEND_URL = f"http://{_host}:{_port}"
 DIST_DIR = Path(__file__).parent / "vue-front" / "dist"
 DIST_ROOT = DIST_DIR.resolve()
 

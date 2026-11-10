@@ -11,7 +11,8 @@ from utils.get_config import config_data
 
 ENABLED = config_data.get("enable_perf_log", False)
 
-PERF_LOG_PATH = os.environ.get("PERF_LOG_PATH", "perf_log.csv")
+# perf log file path, relative to the process working directory (no env vars)
+PERF_LOG_PATH = "perf_log.csv"
 FIELDS = [
     "time",
     "api_name",

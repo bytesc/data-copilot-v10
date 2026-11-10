@@ -1,12 +1,9 @@
 # ============================================================
 # 修改数据库配置时需要同步修改以下 3 个地方：
 #   1. config/config.yaml         — mysql / mysql_readonly / mysql_sys 连接串
-#   2. docker/docker-compose.yml  — MYSQL_ROOT_PASSWORD（可用环境变量 MYSQL_ROOT_PASSWORD 覆盖；
-#                                    改口令需同步用 MYSQL_URL / MYSQL_SYS_URL / MYSQL_READONLY_URL
-#                                    覆盖后端连接串）
+#   2. docker/docker-compose.yml  — MYSQL_ROOT_PASSWORD（写死在本文件，无环境变量替换）
 #   3. docker/docker-init.sql     — CREATE DATABASE 语句、只读用户 readonly（密码与 mysql_readonly 一致）
-# 也可不改配置，直接用环境变量覆盖（存在时优先于 config.yaml）：
-#   MYSQL_URL / MYSQL_READONLY_URL / MYSQL_SYS_URL
+# 配置只来自 config/config.yaml，程序不读取任何环境变量；改配置后需 --build 重建 backend 镜像。
 # 注意：业务库只建空库，业务数据需自行导入；系统库只建表 + brief_info 空占位，均不导入数据。
 # ============================================================
 # ============================================================
@@ -18,11 +15,11 @@
 #   agent/document_generator.py 中硬编码的 "tmp_imgs"。
 # ============================================================
 # ============================================================
-# 后端生成的绝对 URL 前缀由 config.yaml 的 static_path 决定，Docker 部署用环境变量覆盖：
-#   docker/docker-compose.yml — backend.environment STATIC_PATH（默认 http://localhost:8038/）
-#   局域网/公网访问时设为 http://<服务器地址>:8038/
+# 后端生成的绝对 URL 前缀由 config/config.yaml 的 static_path 决定（无环境变量）：
+#   局域网/公网访问时把 static_path 设为 http://<服务器地址>:8038/（结尾斜杠不能省），然后
+#   docker compose up -d --build 重建 backend 镜像。
 #   影响文档下载链接、聊天正文中的图表图片、交互图/CSV 链接、静态地图等（均为绝对地址）；
-#   默认 localhost 仅本机浏览器可用，跨机访问必须修改。nginx/front.py 均透传 /tmp_imgs/。
+#   默认 127.0.0.1:8008 仅本机浏览器可用，跨机访问必须修改。nginx/front.py 均透传 /tmp_imgs/。
 # ============================================================
 # ============================================================
 # 前端不固化后端地址：构建用同源相对地址（由 nginx 反代），换服务器无需重建前端。
