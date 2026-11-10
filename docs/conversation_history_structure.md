@@ -37,7 +37,7 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
 
 - 每个 `action_decision` 只携带当前 action 对应的字段，不会同时出现所有可选字段。
 - 同一决策使用多动作时，用 `{"actions":[{...}, ...]}` 代替 `action`。
-- 前端交互类动作在实时流程中通常只出现在 `action_decision.content`；由日志重建时才会补成独立的 `act` 条目并带状态标记。
+- 前端交互类动作在实时流程中通常只出现在 `action_decision.content`（网页前端本地渲染，不调用 `/api/act/stream/`）；API 调用方直接对这类动作请求 `/api/act/stream/` 时，`agent/act.py` 也会写出一条独立的 `act` 条目，但**不带** `needs_user_input`/`paused`/`completed` 等状态标记（这些标记只在由日志重建时补出，见「纯前端执行」）。
 
 ```json
 [
@@ -525,6 +525,8 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
  "query":"..."}
 ```
 
+成功时 `search_result` 为格式化后的 markdown 搜索结果字符串；搜索失败（`search_web` 返回 error）时该条目的 `search_result` 写入的是结果字典（形如 `{"error": "..."}`），并非字符串。
+
 上下文格式：
 
 ```
@@ -596,7 +598,7 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 {"role":"assistant","type":"act","action":"ask_choice","text":"...","choices":["A","B"]}
 ```
 
-从日志重建历史时，会额外补充状态标记：
+下表状态标记只在**从日志重建历史**（`data_access/observe_log.py`）时补充；网页前端本地渲染这类动作通常不调用 `/api/act/stream/`，而 API 调用方直接调用 `/api/act/stream/` 时 `agent/act.py` 也会写出一条独立 `act` 条目，但**不带**这些状态标记：
 
 | 标记 | 适用 action |
 | --- | --- |
@@ -605,7 +607,7 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 | `paused: true` | summary_and_pause |
 | `completed: true` | attempt_completion |
 
-> 实时流程中，前端执行类动作通常只出现在 `action_decision.content` 里（带 `action` 与 `text`），不一定单独产生 `type:"act"` 条目；由日志重建时才会补成上述 `act` 条目。重建仅针对决策里带非空 `text` 的前端交互动作——重建侧的 `FRONTEND_ACTIONS`（`data_access/observe_log.py`）除 ask_question / ask_choice / summary_and_pause / attempt_completion 外还包含 `generate_document`；`generate_document` 决策通常携带 `title` 而非 `text`，因此一般不会为它补出 `act` 条目，但一旦其决策带非空 `text`，重建同样会补出并置 `completed: true`（所以 `completed: true` 并非只由 attempt_completion 触发，只是实践中几乎总是来自 attempt_completion）。
+> 实时流程中，前端执行类动作通常只出现在 `action_decision.content` 里（带 `action` 与 `text`），不一定单独产生 `type:"act"` 条目；由日志重建时才会补成带上述状态标记的 `act` 条目。重建仅针对决策里带非空 `text` 的前端交互动作——重建侧的 `FRONTEND_ACTIONS`（`data_access/observe_log.py`）除 ask_question / ask_choice / summary_and_pause / attempt_completion 外还包含 `generate_document`；`generate_document` 决策通常携带 `title` 而非 `text`，因此一般不会为它补出 `act` 条目，但一旦其决策带非空 `text`，重建同样会补出并置 `completed: true`（所以 `completed: true` 并非只由 attempt_completion 触发，只是实践中几乎总是来自 attempt_completion）。
 
 ## observe
 

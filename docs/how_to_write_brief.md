@@ -18,7 +18,7 @@ Brief 是注入 LLM prompt 的概览性知识，帮助 LLM 理解数据库、业
 
 > 注：五种 Brief 全部通过 `BRIEF_INFO` 同时注入 think 与 action 两个阶段（`agent/think.py`、`agent/action.py`）；表中 "explore_*" 表示还会额外注入对应 act 提示词。其中 BASE_KNOWLEDGE_BRIEF / CUSTOM_FUNC_BRIEF 注入各自 act 提示词时**不带** `Domain Knowledge Brief` / `Custom Function Brief` 标签——这两个标签只存在于 `BRIEF_INFO` 的渲染中（DB_BRIEF / MCP_BRIEF 自带 `DataBase Brief:` / `MCP Brief:` 标签，随注入位置始终显示）。
 >
-> 另注：`knowledge_docs/` 下的 MD 文件（含表中列出的三个 brief 文件，以及 `base_knowledge.md`、`target_knowledge.md`、`db_query_guide.md`、`doc_guide.md`、`think_guide.md`）当前均为 0 字节空占位文件；Brief 实际内容来自 `brief_info` 表的对应行，MD 文件只是可选的合并来源（`_read_doc()` 对空/缺失文件返回空串，`_get_brief_value()` 把 `brief_info` 的值追加到 MD 内容之后）。
+> 另注：`knowledge_docs/` 下的 MD 文件（含表中列出的三个 brief 文件，以及 `base_knowledge.md`、`target_knowledge.md`、`db_query_guide.md`、`doc_guide.md`、`think_guide.md`）为**可选的合并来源**，仓库默认不提供（该目录被 `.gitignore` 忽略，仅保留 `.gitkeep`），需自行创建；Brief 实际内容来自 `brief_info` 表的对应行（`_read_doc()` 对空/缺失文件返回空串，`_get_brief_value()` 把 `brief_info` 的值追加到 MD 内容之后）。
 
 ---
 
@@ -119,7 +119,7 @@ CREATE TABLE brief_info (
 
 ### db_brief.md 写法
 
-格式参考 `agent/tools/base_knowledge/knowledge_docs/db_brief.md`（当前为空占位文件，以下为推荐格式）：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/db_brief.md`（默认不存在，需自行创建；以下为推荐格式）：
 
 ```markdown
 DataBase:
@@ -141,7 +141,7 @@ What it can do:
 
 ### base_knowledge_brief.md 写法
 
-格式参考 `agent/tools/base_knowledge/knowledge_docs/base_knowledge_brief.md`（当前为空占位文件，以下为推荐格式）：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/base_knowledge_brief.md`（默认不存在，需自行创建；以下为推荐格式）：
 
 ```markdown
 Knowledge Base:
@@ -162,7 +162,7 @@ What it can do:
 
 ### mcp_brief.md 写法
 
-格式参考 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`（当前为空占位文件，以下为推荐格式）：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`（默认不存在，需自行创建；以下为推荐格式）：
 
 ```markdown
 MCP Servers:
@@ -180,7 +180,7 @@ Server List:
 
 ### custom_func_brief.md 写法
 
-格式参考 `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md`（当前为空占位文件，以下为推荐格式）：
+格式参考 `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md`（默认不存在，需自行创建；以下为推荐格式）：
 
 ```markdown
 Custom Functions:

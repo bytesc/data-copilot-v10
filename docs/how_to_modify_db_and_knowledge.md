@@ -20,7 +20,7 @@ FLUSH PRIVILEGES;
 
 以下每个配置项均支持通过 **静态 MD 文件** 和/或 **数据库表** 配置，两者内容合并后一起注入提示词（并非二选一）。
 
-> 注：下文列出的 `knowledge_docs/` 下各 MD 文件目前均为**空占位文件**，实际内容来自对应的系统库表；当某个 MD 文件有内容时，会与表内容合并后一起注入。
+> 注：下文列出的 `knowledge_docs/` 下各 MD 文件为**可选的合并来源**，仓库默认不提供（该目录被 `.gitignore` 忽略，仅保留 `.gitkeep`），需自行创建；实际内容默认来自对应的系统库表；当某个 MD 文件存在且有内容时，会与表内容合并后一起注入。
 
 除直接改库外，系统自带知识管理接口：`/api/sys-knowledge/{base-knowledge|db-query-guide|code-guide|graph-code-guide|think-guide|doc-guide}/…` 与 `/api/sys-knowledge/brief-info/…`（增删改查，受 `enable_edit` 开关限制），前端管理页面位于 `/knowledge` 路由下，可直接在页面上维护这些配置。
 

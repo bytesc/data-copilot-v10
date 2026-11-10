@@ -1,6 +1,6 @@
 # SSE 事件流
 
-大多数事件包含 `phase` 字段标识当前阶段，前端据此分发显示。**例外**：终态 `{type:"history"}` 事件没有 `phase` 字段（think/action/observe/act/document_generator 均如此）；plain-chat `/api/plain-chat/stream/` 的 `chunk`/`done` 也没有 `phase`。
+大多数事件包含 `phase` 字段标识当前阶段，前端据此分发显示。**例外**：终态 `{type:"history"}` 事件没有 `phase` 字段（think/action/observe/act 均如此）；文档生成 `/api/generate-document/*` 的各流**不发出** `history` 事件，其完整历史随终态 `done` 的 `conversation_history` 字段下发（只有经 act 的 `generate_document` action 路径才会在末尾补发一条 `history`）；plain-chat `/api/plain-chat/stream/` 的 `chunk`/`done` 也没有 `phase`。
 
 除 `chunk` 外，仅 Think/Action/Observe/Act（explore_* 与代码生成）这些主流程 LLM 流式阶段会发出 `reasoning_chunk` 事件，携带模型推理增量；文档生成（outline/part/unified/YAML outline/from-yaml）、plain-chat 与字段筛选等其余流式调用不发出 `reasoning_chunk`：
 

@@ -221,13 +221,13 @@ function subPhaseLabel(name) {
 ### SSE 事件流
 ```
 成功：
-  {type:"msg",     sub_phase:"web_search", content:"正在搜索: {query}..."}
+  {type:"msg",     sub_phase:"web_search", content:"Searching: {query}..."}
   {type:"chunk",   sub_phase:"web_search", content:"搜索结果 markdown..."}
   {type:"done",    sub_phase:"web_search", content:"...", result:{search_results:{...}, query:"..."}}
   {type:"history", history:[...]}
 
 失败：
-  {type:"error",   sub_phase:"web_search", content:"搜索失败: ..."}
+  {type:"error",   sub_phase:"web_search", content:"Search failed: ..."}
 ```
 
 ## 完整示例：`fetch_webpage` 动作
@@ -244,13 +244,13 @@ function subPhaseLabel(name) {
 ### SSE 事件流
 ```
 成功：
-  {type:"msg",     sub_phase:"fetch_webpage", content:"正在获取页面: {url}..."}
-  {type:"chunk",   sub_phase:"fetch_webpage", content:"页面内容 markdown..."}
+  {type:"msg",     sub_phase:"fetch_webpage", content:"Fetching {N} page(s) in parallel..."}
+  {type:"chunk",   sub_phase:"fetch_webpage", content:"## Page Content ({N} page(s))..."}
   {type:"done",    sub_phase:"fetch_webpage", content:"...", result:{urls:[...], url:"...", pages:[...], content:"..."}}
   {type:"history", history:[...]}
 
-失败：
-  {type:"error",   sub_phase:"fetch_webpage", content:"获取页面失败: ..."}
+说明：抓取流程本身不单独发送 error 事件；单个页面失败时该页在 `pages` 中带 `error`，
+      并在合并内容中显示 "> Failed: ..."，其余页面照常返回。
 ```
 
 ## 完整示例：`generate_document` 动作

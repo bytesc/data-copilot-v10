@@ -1,7 +1,8 @@
 # Action 输入输出文档
 
-> 文中 API 入参示例展示的是统一请求信封中的 `data` 内容；实际发送到后端的 JSON `POST/PUT/PATCH`
-> 请求体必须为 `{"meta": {"model": "...", "reasoning_effort": "...", "style": "...", "use_images": true}, "data": {...}}`。
+> 文中 API 入参示例展示的是统一请求信封中的 `data` 内容。请求体既可以使用信封
+> `{"meta": {"model": "...", "reasoning_effort": "...", "style": "...", "use_images": true}, "data": {...}}`，
+> 也可以直接发送普通 JSON（内容与信封中的 `data` 相同）。信封为**可选**：后端仅在请求同时携带 `meta`（对象）与 `data` 时解包，未携带信封的普通 JSON 原样透传（不会返回 `400`）。模型调用选项（`model`/`reasoning_effort`/`style`/`use_images`）只能经信封（或 Multipart 的 `meta` 表单字段）传入。
 
 每个环节记录三项：**输入**（LLM 决策输出的 JSON / API 入参）、**输出**（写入 `conversation_history` 的条目）、**上下文**（`history_to_text` 转换后喂给 LLM 的文本）。
 
@@ -391,6 +392,8 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 ```json
 {"role":"assistant","type":"act","action":"web_search","search_result":"...","query":"..."}
 ```
+
+> 成功时 `search_result` 为格式化后的 markdown 搜索结果字符串；搜索失败（`search_web` 返回 error）时该字段写入的是结果字典（形如 `{"error": "..."}`）而非字符串。
 
 **上下文**
 ```

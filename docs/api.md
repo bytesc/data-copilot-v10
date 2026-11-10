@@ -297,7 +297,7 @@ data: {"type":"error","content":"..."}
 data: {"type":"done","content":""}
 ```
 
-> **Think / Action / Observe 三个流的完整事件集**：除 `chunk` 外，还会发出 `msg`（阶段提示）、`reasoning_chunk`、终态 `done`（Think/Observe 附带 `plan_result`，Action 附带 `action_result`）、收尾的 `history` 事件（携带保存后的会话历史），以及失败时的 `error`（Observe 流内部异常时额外带 `fatal: true`）。各事件的字段与顺序详见 `docs/sse_event_flow.md`。
+> **Think / Action / Observe 三个流的完整事件集**：除 `chunk` 外，还会发出 `msg`（阶段提示）、`reasoning_chunk`、终态 `done`（Think/Observe 附带 `plan_result`，Action 附带 `action_result`）、收尾的 `history` 事件（携带保存后的会话历史），以及失败时的 `error`（Think/Action/Observe/Act 任一阶段捕获到未处理异常时都会额外带 `fatal: true`）。各事件的字段与顺序详见 `docs/sse_event_flow.md`。
 
 ### POST `/api/think/stream/`
 
@@ -495,7 +495,9 @@ data: {"type":"done","content":""}
       "columns": ["id", "amount"],
       "data": [[1, 100], [2, 200]]
     }
-  }
+  },
+  "type": "success",
+  "msg": "处理成功"
 }
 ```
 
@@ -511,7 +513,9 @@ data: {"type":"done","content":""}
       "table_comment": "订单表",
       "columns": {"id": "主键", "amount": "金额"}
     }
-  }
+  },
+  "type": "success",
+  "msg": "Table comments and column comments fetched successfully"
 }
 ```
 
@@ -563,7 +567,7 @@ data: {"phase":"document","type":"done","content":"...","title":"...","parts_cou
 
 ### POST `/api/generate-document/stream/unified/`
 
-单次通过的文档生成（统一提示）。走 `agent/act.py` 的 `generate_document` action 路径，事件带 `phase:"act"` 与 `sub_phase:"generate_document"`。
+单次通过的文档生成（统一提示）。由 `agent/document_generator.py` 的 `_event_stream_generate_document_unified` 实现（`agent/act.py` 的 `generate_document` action 复用同一实现），事件带 `phase:"act"` 与 `sub_phase:"generate_document"`。
 
 **请求体 — `DocumentInput`**
 

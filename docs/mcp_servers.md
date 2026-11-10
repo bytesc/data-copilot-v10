@@ -101,7 +101,7 @@ mcp_servers:
 
 ### 3.3 更新 MCP Brief
 
-编辑 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`（当前为空文件，可自行创建 Server List 小节）或系统库 `brief_info` 表的 `mcp_brief` 行，添加新服务器描述（两者内容会合并），以便 LLM 在 `explore_mcp` 时了解可用服务器。
+编辑 `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md`（默认不存在，可自行创建 Server List 小节；该目录被 `.gitignore` 忽略）或系统库 `brief_info` 表的 `mcp_brief` 行，添加新服务器描述（两者内容会合并），以便 LLM 在 `explore_mcp` 时了解可用服务器。
 
 ### 3.4 添加到启动脚本（可选）
 

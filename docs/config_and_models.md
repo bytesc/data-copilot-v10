@@ -88,7 +88,7 @@ enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 
 **DSN 格式**: `mysql+pymysql://用户名:密码@主机:端口/数据库名`
 
-> **只读用户说明**：`mysql_readonly` 仅被 `exe_sql` 用于执行只读 SQL（含 `SHOW`）；建表、改注释、导入等改库功能仍使用 `mysql`。
+> **只读用户说明**：`mysql_readonly` 用于**所有只读查询**——既包括 `exe_sql` 执行的 SELECT/SHOW，也包括探索类读取（`explore_schema` 的库结构/样例、字段筛选、`plain_chat`、`predict_hdb_price` 等，均通过 `read_only_engine` 走该账号）；建表、改注释、导入等改库功能仍使用 `mysql`。当 `mysql_readonly` 缺失时 `exe_sql` 被禁用（不回退特权账号），但 `read_only_engine` 会回退到主账号 `mysql` 以保证探索类读取仍可用。
 > 创建只读账号（仅需可 show 表和视图）：
 > ```sql
 > CREATE USER 'readonly'@'%' IDENTIFIED BY '123456';
@@ -199,7 +199,7 @@ JSON `POST/PUT/PATCH` 的 HTTP 请求体可选使用 `{meta, data}` 信封（模
 }
 ```
 
-`action` 可选值: `explore_schema`, `explore_functions`, `explore_base_knowledge`, `generate_and_execute`, `ask_question`, `ask_choice`, `summary_and_pause`, `attempt_completion`, `generate_document`, `web_search`, `fetch_webpage`, `explore_mcp`, `exe_mcp`, `select_images`
+`action` 可选值: `explore_schema`, `explore_functions`, `generate_and_execute`, `ask_question`, `ask_choice`, `summary_and_pause`, `attempt_completion`, `generate_document`, `select_images`；以及按配置开关追加的 `explore_base_knowledge`（`enable_base_knowledge`）、`web_search`（`enable_web_search`）、`fetch_webpage`（`enable_fetch_url`）、`explore_mcp` / `exe_mcp`（`enable_mcp`）。
 
 **用于**: `POST /api/act/stream/`
 
@@ -353,7 +353,7 @@ ans           LONGTEXT       -- 返回结果
 code          LONGTEXT       -- 生成的代码
 result_type   VARCHAR(50)    -- success / error
 msg           VARCHAR(512)   -- 结果描述
-prompt_length INT            -- prompt 长度（token）
+prompt_length INT            -- prompt 长度（字符数，作为 token 的粗略估算）
 created_at    DATETIME
 ```
 
