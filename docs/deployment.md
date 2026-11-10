@@ -37,6 +37,11 @@ docker compose up -d
 - 后端：<http://localhost:8008/>
 - MySQL：宿主机 `3307` → 容器 `3306`（容器内后端始终连 `mysql:3306`）
 
+> 前端产物通过**同源相对地址**访问 API（即浏览器当前地址），由 nginx 反向代理到后端。因此前端
+> 镜像**不固化后端地址**，不需要为前端配置服务器 IP。但后端生成的 URL（文档下载链接、聊天正文
+> 中的图表图片、交互图/CSV 链接、静态地图等）是基于 `static_path` 的**绝对地址**，跨机访问时必须
+> 把 `STATIC_PATH` 设为浏览器可达的前端地址，见下文。
+
 ### 数据库初始化
 
 `docker/docker-init.sql` 会在**首次**启动（`mysql_data` 卷为空时）自动执行，创建：
@@ -52,19 +57,34 @@ docker compose down -v   # 删除 mysql_data 卷
 docker compose up -d
 ```
 
-> 非容器部署使用仓库根目录的 `init.sql`（只建系统表、不建库），见下文与 `README.md`。
+> 非容器部署使用仓库根目录的 `init.sql`（只建系统表和 `brief_info` 初始数据、不建库），见下文与 `README.md`。
 
-### 下载链接前缀
+> MySQL root 口令默认 `123456`（与 `config/config.yaml` 中的连接串一致），可用环境变量
+> `MYSQL_ROOT_PASSWORD` 覆盖；改口令时必须同时用 `MYSQL_URL` / `MYSQL_SYS_URL` /
+> `MYSQL_READONLY_URL` 覆盖后端连接串。只读账号 `readonly` 的口令写在 `docker/docker-init.sql`
+> 中，改口令需同步修改该文件（或用 `MYSQL_READONLY_URL` 覆盖连接串）。
 
-后端生成的文档/图片下载链接由 `static_path` 决定。Compose 通过 `STATIC_PATH` 环境变量注入
-（默认 `http://localhost:8038/`）。局域网/公网访问时改成浏览器可访问的地址：
+### 后端 URL 前缀（STATIC_PATH）
+
+后端生成的**绝对 URL** 由 `static_path` 决定，包括：文档下载链接（MD/DOCX/PDF）、聊天正文中的
+图表图片（`/tmp_imgs/*.png`）、`Draw Graph With Data` 交互图、`Download Data CSV`、静态地图/
+预测图等。Compose 通过 `STATIC_PATH` 环境变量注入（默认 `http://localhost:8038/`）。局域网/公网
+访问时改成浏览器可访问的地址：
 
 ```bash
 # Windows PowerShell
-$env:STATIC_PATH="http://<服务器IP>:8038/"
+$env:STATIC_PATH="http://<服务器IP>:8038/"; docker compose up -d
 # Linux/macOS
 STATIC_PATH=http://<服务器IP>:8038/ docker compose up -d
 ```
+
+> 说明：nginx 透传 `/tmp_imgs/`（`docker/nginx.conf`），所以 `STATIC_PATH` 指向前端端口即可让上述
+> 所有链接在浏览器侧可用。默认 `http://localhost:8038/` 仅在本机浏览器有效，跨机访问**必须**修改，
+> 否则聊天里的图片和各类下载/交互链接会指向访问者自己的 localhost 而失效。
+>
+> 两个默认值的由来：`config/config.yaml` 的 `static_path` 默认 `http://127.0.0.1:8008/`（直连后端，
+> 适合非容器开发）；Compose 的 `STATIC_PATH` 默认 `http://localhost:8038/`（指向前端 nginx，容器内
+> 经 nginx 透传）。前端本身无需任何构建期地址配置。
 
 ### 前端构建
 
@@ -85,7 +105,9 @@ cd vue-front && npm install && npm run build && cd ..
 python main.py
 
 # 3) 启动前端反代
-FRONT_PORT=8010 python front.py
+FRONT_PORT=8010 python front.py     # Linux/macOS
+# Windows PowerShell:
+#   $env:FRONT_PORT="8010"; python front.py
 # 访问 http://localhost:8010/
 ```
 
@@ -93,12 +115,15 @@ FRONT_PORT=8010 python front.py
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `BACKEND_URL` | 由 `config.yaml` 的 `server_host`/`server_port` 推导 | 后端地址 |
+| `BACKEND_URL` | 由 `config.yaml` 的 `server_host`/`server_port` 推导（遵循 `SERVER_HOST`/`SERVER_PORT` 覆盖） | 后端地址 |
 | `FRONT_HOST` | `0.0.0.0` | 反代监听地址 |
 | `FRONT_PORT` | `8010` | 反代监听端口 |
+| `PROXY_TIMEOUT` | `600` | 反代到后端的超时秒数（含 SSE 流），长任务超过 10 分钟时可调大 |
 
-下载链接前缀同样由 `static_path` / `STATIC_PATH` 决定，front.py 部署时应设为
-`http://<地址>:<FRONT_PORT>/`。
+front.py 同样透传 `/tmp_imgs/`。后端生成的**绝对 URL**（文档下载链接、聊天正文中的图表图片、
+交互图/CSV 链接、静态地图等）由 `static_path` / `STATIC_PATH` 决定，front.py 部署时应设为
+`http://<地址>:<FRONT_PORT>/`（例如 `http://<地址>:8010/`），否则这些链接指向 `127.0.0.1:8008`
+（浏览器本机），跨机访问时不可用。
 
 ---
 
@@ -107,7 +132,7 @@ FRONT_PORT=8010 python front.py
 ```bash
 pip install -r requirement.txt
 python main.py            # 后端 :8008
-cd vue-front && npm install && npm run dev   # 前端 :5173，Vite 代理由 .env 的 VITE_SERVER_URL 决定
+cd vue-front && npm install && npm run dev   # 前端 :5173，Vite 代理由 .env 的 DEV_PROXY_TARGET 决定
 ```
 
 ---
@@ -120,7 +145,7 @@ cd vue-front && npm install && npm run dev   # 前端 :5173，Vite 代理由 .en
 |------|------|
 | `server_host` / `server_port` | 后端绑定地址/端口（默认 `0.0.0.0:8008`） |
 | `mysql` / `mysql_readonly` / `mysql_sys` | 业务库 / 只读账号 / 系统库 DSN |
-| `static_path` | 下载链接前缀 |
+| `static_path` | 后端生成的绝对 URL 前缀（文档下载链接、聊天正文中的图表图片、交互图/CSV 链接、静态地图等） |
 
 **环境变量覆盖**（存在时优先于 config.yaml，便于容器化）：`STATIC_PATH`、`SERVER_HOST`、
 `SERVER_PORT`、`MYSQL_URL`、`MYSQL_READONLY_URL`、`MYSQL_SYS_URL`。
@@ -135,6 +160,7 @@ cd vue-front && npm install && npm run dev   # 前端 :5173，Vite 代理由 .en
 | 后端 API | 8008 | 8008 |
 | MySQL | 3306 | 3307 |
 | Vite 开发服务器 | 5173 | 5173 |
+| front.py 反代 | 8010（`FRONT_PORT`） | 8010 |
 
 ---
 
@@ -142,9 +168,13 @@ cd vue-front && npm install && npm run dev   # 前端 :5173，Vite 代理由 .en
 
 | 现象 | 原因 / 处理 |
 |------|------|
-| 后端卡在 `Waiting for MySQL to be ready` | `config.yaml` 的库名与 `docker-init.sql` 不一致；改回 `singapore_land_2` / `data_copilot_v10_land_sys`，或 `docker compose down -v` 重初始化 |
 | 前端页面 404 / 空白 | `vue-front/dist` 未构建。Compose 走多阶段构建不受影响；front.py 需先 `npm run build` |
 | SSE 逐字输出卡顿/一次性出现 | 反向代理缓冲未关闭。nginx 需 `proxy_buffering off;`（`docker/nginx.conf` 已配置）；front.py 已设 `X-Accel-Buffering: no` |
-| 下载链接指向 `127.0.0.1` / 点不开 | 设置 `static_path` 或 `STATIC_PATH` 为浏览器可达地址 |
+| 聊天里的图片 / 下载 / 交互链接点不开（指向 `localhost` 或 `127.0.0.1`） | 后端生成的这些 URL 基于 `static_path`/`STATIC_PATH`，默认仅本机可用；设为浏览器可达的前端地址（如 `http://<服务器IP>:8038/`）即可 |
+| 上传 CSV/文档报 `413 Request Entity Too Large` | nginx 请求体上限。`docker/nginx.conf` 已设 `client_max_body_size 60m;`；若自定义过该值需 ≥ 后端上限（CSV 50MB / 文档 20MB） |
+| 上传文档长时间无响应 / 504 | `/upload-txt/` 会做 LLM 注释生成，耗时可能超过 nginx 默认 60s 读超时；`docker/nginx.conf` 的 `/upload-txt/` 已设 `proxy_read_timeout 600s` |
+| SSE / 长任务超过 10 分钟被中断（504 或流式报错） | nginx 各 location 的 `proxy_read_timeout 600s` 与 front.py 默认超时均为 600s 上限；nginx 可调大 `docker/nginx.conf` 中的 `proxy_read_timeout`，front.py 用环境变量 `PROXY_TIMEOUT`（秒）调整 |
+| 后端一直卡在 `Waiting for MySQL to be ready` | 入口脚本按 `config/config.yaml` + 环境变量（`MYSQL_URL` 等）解析库地址。确认库名与 `docker-init.sql` 一致（`singapore_land_2` / `data_copilot_v10_land_sys`），或 `docker compose down -v` 重初始化 |
 | LLM 调用报错/鉴权失败 | 缺少 `agent/utils/llm_access/<key_file>`；放入后重建镜像 |
-| 改了 `config.yaml` 后容器行为未变 | 容器用的是构建时打包的 config；改库地址等请用环境变量，或重建镜像 |
+| 改了 `config.yaml` 后容器行为未变 | 容器用的是构建时打包的 config；改库地址等请用环境变量（`MYSQL_URL`/`MYSQL_READONLY_URL`/`MYSQL_SYS_URL`/`STATIC_PATH`，入口脚本与应用均会读取），或重建镜像 |
+| 街景/静态地图截图失败 | 后端镜像中 `playwright install` 有 60s 超时，超时会被跳过（构建日志有 WARNING），此时该功能运行时不可用 |

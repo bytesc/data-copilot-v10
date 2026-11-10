@@ -44,7 +44,7 @@ import { showErrorToast } from '@/utils/toast.js'
 
 const props = defineProps({
   type: { type: String, required: true },
-  serverUrl: { type: String, default: import.meta.env.VITE_SERVER_URL || window.location.origin },
+  serverUrl: { type: String, default: window.location.origin },
 })
 
 const emit = defineEmits(['close'])

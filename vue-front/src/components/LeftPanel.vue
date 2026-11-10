@@ -109,7 +109,7 @@ import { configState, selectModel, selectReasoningEffort, selectStyle, restoreSa
 defineProps({
   sessionId: { type: String, required: true },
   isRunning: { type: Boolean, default: false },
-  serverUrl: { type: String, default: import.meta.env.VITE_SERVER_URL || window.location.origin },
+  serverUrl: { type: String, default: window.location.origin },
 })
 
 defineEmits(['resume-session', 'new-session'])

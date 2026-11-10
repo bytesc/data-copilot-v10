@@ -106,15 +106,20 @@ enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 
 ```env
 VITE_API_BASE=/api
-VITE_SERVER_URL=http://127.0.0.1:8008
+DEV_PROXY_TARGET=http://127.0.0.1:8008
 ```
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `VITE_API_BASE` | `/api` | API 路径前缀 |
-| `VITE_SERVER_URL` | `http://127.0.0.1:8008` | Vite 开发代理的后端目标地址 |
+| `VITE_API_BASE` | `/api` | API 路径前缀（`VITE_` 前缀会被注入到客户端产物） |
+| `DEV_PROXY_TARGET` | `http://127.0.0.1:8008` | **仅** `npm run dev` 的 Vite 反向代理目标；非 `VITE_` 前缀，不注入客户端 |
 
-`vite.config.js` 将 `/api`、`/upload-csv`、`/upload-txt`、`/tmp_imgs` 代理到 `VITE_SERVER_URL` 指定的后端。生产环境下由 `front.py` 或 nginx 承担相同代理职责，下载链接由后端 `static_path` 配置生成、经 SSE 下发后由前端透传渲染。
+`vite.config.js` 将 `/api`、`/upload-csv`、`/upload-txt`、`/tmp_imgs` 代理到 `DEV_PROXY_TARGET`
+指定的后端。生产环境由 `front.py` 或 nginx 承担相同代理职责，浏览器端一律使用**同源相对
+地址**（`window.location.origin`），因此**不会把后端地址固化进产物**，无需为不同服务器重新构建。
+后端生成的绝对 URL（文档下载链接、聊天正文中的图表图片、交互图/CSV 链接、静态地图等）由后端
+`static_path` 拼接、经 SSE 下发后由前端渲染，部署时须把 `static_path`/`STATIC_PATH` 设为浏览器
+可达的前端地址（nginx 与 front.py 均透传 `/tmp_imgs/`）。
 
 ---
 
@@ -458,7 +463,7 @@ created_at  DATETIME
 
 | 前缀 | 代理目标 |
 |------|----------|
-| `/api` | `VITE_SERVER_URL`（`vue-front/.env` 中配置为 `http://127.0.0.1:8008`）|
+| `/api` | `DEV_PROXY_TARGET`（`vue-front/.env` 中配置为 `http://127.0.0.1:8008`）|
 | `/upload-csv` | 同上 |
 | `/upload-txt` | 同上 |
 | `/tmp_imgs` | 同上 |
@@ -482,9 +487,10 @@ FRONT_PORT=8010 python front.py
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `BACKEND_URL` | 否 | 后端服务地址，默认由 `config/config.yaml` 的 `server_host`/`server_port` 推导（`0.0.0.0`/`::`/空 host 按 `127.0.0.1` 处理，即默认配置下为 `http://127.0.0.1:8008`） |
+| `BACKEND_URL` | 否 | 后端服务地址，默认由 `config/config.yaml` 的 `server_host`/`server_port` 推导（遵循 `SERVER_HOST`/`SERVER_PORT` 环境变量覆盖；`0.0.0.0`/`::`/空 host 按 `127.0.0.1` 处理，即默认配置下为 `http://127.0.0.1:8008`） |
 | `FRONT_HOST` | 否 | 监听地址，默认 `0.0.0.0` |
 | `FRONT_PORT` | 否 | 监听端口，默认 `8010` |
+| `PROXY_TIMEOUT` | 否 | 反代到后端的超时秒数（含 SSE 流），默认 `600` |
 
 > 文档下载链接由后端 `static_path` 生成。用 `front.py` 部署时应把 `config/config.yaml` 的 `static_path`（或环境变量 `STATIC_PATH`）设为 `http://<本机地址>:<FRONT_PORT>/`，否则下载链接指向后端 8008 端口。
 

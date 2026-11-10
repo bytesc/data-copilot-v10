@@ -4,25 +4,28 @@ from contextlib import asynccontextmanager
 
 import httpx
 import uvicorn
-import yaml
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
-# Resolve the config relative to this file so the proxy can be started from any
-# working directory (a CWD-relative path broke startup when launched elsewhere).
-_CONFIG_PATH = Path(__file__).parent / "config" / "config.yaml"
-with open(_CONFIG_PATH, encoding="utf-8") as f:
-    _cfg = yaml.safe_load(f) or {}
-_bind_host = _cfg.get("server_host", "127.0.0.1")
+# Use the same canonical config object as the backend (config/config.yaml plus
+# the SERVER_HOST / SERVER_PORT environment overrides), so the proxy follows the
+# backend when it is re-pointed via env vars. Reading config.yaml directly would
+# ignore those overrides and the proxy would dial a stale port.
+from config.get_config import config_data
+
+_bind_host = config_data.get("server_host", "127.0.0.1")
 # "0.0.0.0"/"::" are listen addresses for the backend, not connectable
 # destinations. Dialing them works on Windows by luck but is refused on other
 # platforms, so the proxy always connects to the loopback address instead.
 _host = "127.0.0.1" if _bind_host in ("0.0.0.0", "::", "") else _bind_host
-_port = _cfg["server_port"]
+_port = config_data["server_port"]
 BACKEND_URL = os.getenv("BACKEND_URL", f"http://{_host}:{_port}")
 FRONT_HOST = os.getenv("FRONT_HOST", "0.0.0.0")
 FRONT_PORT = int(os.getenv("FRONT_PORT", "8010"))
+# Upstream timeout in seconds, covering proxied requests and SSE streams (time
+# between reads). Raise via env when long generations exceed the 600s default.
+PROXY_TIMEOUT = float(os.getenv("PROXY_TIMEOUT", "600"))
 DIST_DIR = Path(__file__).parent / "vue-front" / "dist"
 DIST_ROOT = DIST_DIR.resolve()
 
@@ -35,7 +38,7 @@ def _safe_dist_file(rel: str):
         return None
     return candidate if candidate.is_file() else None
 
-client = httpx.AsyncClient(base_url=BACKEND_URL, timeout=600.0)
+client = httpx.AsyncClient(base_url=BACKEND_URL, timeout=PROXY_TIMEOUT)
 
 
 @asynccontextmanager

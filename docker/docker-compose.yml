@@ -3,7 +3,10 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: 123456
+      # Override with MYSQL_ROOT_PASSWORD; when you do, also override the
+      # backend DSNs (MYSQL_URL / MYSQL_SYS_URL / MYSQL_READONLY_URL), which
+      # still carry the default password from config/config.yaml.
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
       MYSQL_ROOT_HOST: '%'
     volumes:
       - mysql_data:/var/lib/mysql
@@ -14,7 +17,9 @@ services:
       - "3307:3306"
     command: --skip-ssl
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p123456"]
+      # $$ escapes compose interpolation; the container shell expands
+      # MYSQL_ROOT_PASSWORD at runtime, so this follows password overrides.
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -37,6 +42,14 @@ services:
       - PYTHONUNBUFFERED=1
       # 下载链接前缀：改成浏览器可访问的地址，例如局域网 http://<服务器IP>:8038/
       - STATIC_PATH=${STATIC_PATH:-http://localhost:8038/}
+    healthcheck:
+      # Backend readiness: /api/config is a cheap handler that does not touch
+      # the LLM. Used by the frontend service_healthy dependency below.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/api/config', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
   frontend:
     build:
@@ -46,7 +59,8 @@ services:
     ports:
       - "8038:8038"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   mysql_data:

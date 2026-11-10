@@ -1,10 +1,20 @@
 node_modules
 vue-front/node_modules
 vue-front/dist
+# Local frontend env: never bake a machine-specific dev proxy target into images.
+# The built app uses same-origin relative URLs; VITE_API_BASE defaults to /api.
+vue-front/.env
 .git
 __pycache__
 *.pyc
 tmp_imgs
 front_img
+# Runtime output directories (also mounted as volumes in docker-compose.yml).
+doc_workspace
+exports
+cache
+llmlog
+agent_log.txt
+perf_log.csv
 .kilo
 docker-cmd.txt

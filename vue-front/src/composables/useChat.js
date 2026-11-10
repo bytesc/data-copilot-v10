@@ -30,7 +30,7 @@ export function useChat() {
 
   const blackboard = computed(() => getBlackboard(conversationHistory.value))
 
-  const serverUrl = ref(import.meta.env.VITE_SERVER_URL || window.location.origin)
+  const serverUrl = ref(window.location.origin)
 
   function generateSessionId() {
     const now = new Date()

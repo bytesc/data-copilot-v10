@@ -64,7 +64,7 @@ import { ref } from 'vue'
 import DbOverview from '@/components/DbOverview.vue'
 import { showErrorToast } from '@/utils/toast.js'
 
-const serverUrl = import.meta.env.VITE_SERVER_URL || window.location.origin
+const serverUrl = window.location.origin
 
 const uploadType = ref('csv')
 const file = ref(null)

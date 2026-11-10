@@ -1,7 +1,9 @@
 # ============================================================
 # 修改数据库配置时需要同步修改以下 3 个地方：
 #   1. config/config.yaml         — mysql / mysql_readonly / mysql_sys 连接串
-#   2. docker/docker-compose.yml  — MYSQL_ROOT_PASSWORD
+#   2. docker/docker-compose.yml  — MYSQL_ROOT_PASSWORD（可用环境变量 MYSQL_ROOT_PASSWORD 覆盖；
+#                                    改口令需同步用 MYSQL_URL / MYSQL_SYS_URL / MYSQL_READONLY_URL
+#                                    覆盖后端连接串）
 #   3. docker/docker-init.sql     — CREATE DATABASE 语句、只读用户 readonly（密码与 mysql_readonly 一致）
 # 也可不改配置，直接用环境变量覆盖（存在时优先于 config.yaml）：
 #   MYSQL_URL / MYSQL_READONLY_URL / MYSQL_SYS_URL
@@ -16,9 +18,17 @@
 #   agent/document_generator.py 中硬编码的 "tmp_imgs"。
 # ============================================================
 # ============================================================
-# 下载链接前缀由 config.yaml 的 static_path 决定，Docker 部署用环境变量覆盖：
+# 后端生成的绝对 URL 前缀由 config.yaml 的 static_path 决定，Docker 部署用环境变量覆盖：
 #   docker/docker-compose.yml — backend.environment STATIC_PATH（默认 http://localhost:8038/）
 #   局域网/公网访问时设为 http://<服务器地址>:8038/
+#   影响文档下载链接、聊天正文中的图表图片、交互图/CSV 链接、静态地图等（均为绝对地址）；
+#   默认 localhost 仅本机浏览器可用，跨机访问必须修改。nginx/front.py 均透传 /tmp_imgs/。
+# ============================================================
+# ============================================================
+# 前端不固化后端地址：构建用同源相对地址（由 nginx 反代），换服务器无需重建前端。
+# nginx 上传相关配置（docker/nginx.conf）：
+#   client_max_body_size 60m       — 需 ≥ 后端上限（CSV 50MB / 文档 20MB）
+#   /upload-txt/ proxy_read_timeout 600s — LLM 注释生成可能超过默认 60s
 # ============================================================
 # ============================================================
 # doc_workspace/（YAML 大纲和草稿）已挂载为 volume：

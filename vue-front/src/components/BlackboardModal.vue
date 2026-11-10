@@ -177,7 +177,7 @@ const selectedImages = computed(() => {
 
 const hasSelectedImages = computed(() => selectedImages.value.length > 0)
 
-const IMAGE_BASE_URL = import.meta.env.VITE_SERVER_URL || window.location.origin
+const IMAGE_BASE_URL = window.location.origin
 
 function imageSrc(src) {
   if (!src) return ''

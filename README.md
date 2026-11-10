@@ -244,9 +244,14 @@ JSON `POST/PUT/PATCH` 请求可选使用 `{meta, data}` 信封（模型调用选
 `vue-front/.env`
 
 ```env
-VITE_SERVER_URL=http://127.0.0.1:8008
 VITE_API_BASE=/api
+# 仅 npm run dev 的 Vite 反向代理目标；非 VITE_ 前缀，不注入客户端产物
+DEV_PROXY_TARGET=http://127.0.0.1:8008
 ```
+
+> 前端通过**同源相对地址**访问后端 API，生产由 nginx / front.py 反向代理，无需（也不会）在构建时
+> 固化后端地址；换服务器部署不必重新构建前端。后端生成的绝对 URL（文档下载链接、聊天正文中的
+> 图表图片、交互图/CSV 链接、静态地图等）由 `static_path` 决定，部署时须设为浏览器可达地址。
 
 ### API Key 配置
 

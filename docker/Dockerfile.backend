@@ -8,8 +8,11 @@ RUN timeout 60 playwright install --with-deps chromium || echo "WARNING: playwri
 
 COPY . .
 
-# 将 config.yaml 中所有 localhost 替换为容器内 MySQL 服务名 mysql（同时覆盖 mysql_readonly）
-RUN sed -i 's/localhost/mysql/g' config/config.yaml
+# Point the SQLAlchemy DSNs (mysql / mysql_readonly / mysql_sys) at the compose
+# MySQL service. Only the `@localhost:` host part of the URLs is rewritten, so
+# other config values (static_path etc.) are left untouched; runtime env
+# overrides (MYSQL_URL / MYSQL_READONLY_URL / MYSQL_SYS_URL) still win.
+RUN sed -i -E 's/@localhost:/@mysql:/g' config/config.yaml
 
 EXPOSE 8008
 

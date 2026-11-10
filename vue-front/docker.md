@@ -25,7 +25,7 @@ docker build -f Dockerfile.dev -t vue-front-dev .
 docker run -p 5173:5173 -v ${PWD}/src:/app/src vue-front-dev
 ```
 
-挂载 `src` 目录可实现热更新。开发代理目标由 `.env` 的 `VITE_SERVER_URL` 决定。
+挂载 `src` 目录可实现热更新；`vite.config.js`、`index.html`、`public/` 等其它文件不在挂载范围内，这些改动需要重建镜像。开发代理目标由 `.env` 的 `DEV_PROXY_TARGET` 决定（非 `VITE_` 前缀，不会注入客户端产物）。
 
 ## 生产部署（Docker Compose）
 
@@ -33,6 +33,11 @@ docker run -p 5173:5173 -v ${PWD}/src:/app/src vue-front-dev
 `node:20-alpine` 阶段构建 `dist/`，再复制进 `nginx:alpine`，因此**不需要**预先在宿主机构建
 `dist/`（`dist/` 已被 gitignore）。前端容器监听 `8038`，由 `../docker/nginx.conf` 反向代理
 后端并透传 SSE。
+
+> 前端产物使用**同源相对地址**访问 API，构建时**不固化后端地址**，换服务器部署无需重新构建前端。
+> 后端生成的绝对 URL（文档下载链接、聊天正文中的图表图片、交互图/CSV 链接、静态地图等）由
+> `STATIC_PATH` 决定，跨机访问时必须设为浏览器可达的前端地址，详见
+> [`../docs/deployment.md`](../docs/deployment.md)。
 
 ```bash
 cd ../docker

@@ -18,6 +18,6 @@ npm run dev
 python main.py
 ```
 
-确保 `vue-front/.env` 已配置 `VITE_SERVER_URL`（开发代理目标，`vite.config.js` 读取，缺失时代理目标为 undefined），可选配置 `VITE_API_BASE`（API 请求基地址，默认 `/api`）。
+确保 `vue-front/.env` 已配置 `DEV_PROXY_TARGET`（`npm run dev` 的开发代理目标，`vite.config.js` 读取，缺失时代理目标为 undefined），可选配置 `VITE_API_BASE`（API 请求基地址，默认 `/api`）。生产构建不使用该目标，浏览器端走同源相对地址。
 
 Vite 开发服务器会自动将 `/api`、`/upload-csv`、`/upload-txt`、`/tmp_imgs` 代理到后端。

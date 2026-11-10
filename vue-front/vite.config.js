@@ -4,7 +4,10 @@ import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd())
-  const serverTarget = env.VITE_SERVER_URL
+  // Dev-only proxy target. Deliberately NOT a VITE_-prefixed variable so it is
+  // never injected into the client bundle; the built app always talks to its own
+  // origin and relies on nginx/front.py to proxy API and static file requests.
+  const serverTarget = env.DEV_PROXY_TARGET
 
   return {
     plugins: [vue()],
