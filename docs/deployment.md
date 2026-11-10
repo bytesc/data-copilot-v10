@@ -10,6 +10,40 @@
 
 ---
 
+## 部署前先分清 3 个值和 1 条链
+
+一次请求经过：**浏览器 → 前端服务 → 后端 → 数据库**。其中只有 3 个值和"你这台服务器"有关：
+
+| 编号 | 是什么 | 作用 |
+|------|--------|------|
+| **A** | 后端生成的链接前缀 `static_path` | 后端把图片 / 下载链接写成**绝对地址**时的前缀，必须是**浏览器能打开的地址** |
+| **B** | 代理目标 | 前端把 `/api` 等请求转发给后端的地址 |
+| **C** | 数据库连接串 | 后端连哪个库 |
+
+**逻辑：A 和 C 永远改 `config/config.yaml`；只有 B 的"位置"随部署方式变。**
+
+- **A（`static_path`）三种部署都改 `config/config.yaml`**（它属于后端，后端只读该文件）。填成"浏览器能访问到前端那个地址"，结尾带 `/`：
+  - Docker 前端 8038 → `http://<IP>:8038/`；改完必须 `--build` 重建
+  - front.py 前端 8010 → `http://<IP>:8010/`；重启 `python main.py`
+  - dev 前端 5173 → 本机用默认即可；跨机填 `http://<IP>:5173/`
+- **B（代理目标）**：
+  - Docker：写死在 `docker/nginx.conf`（`backend:8008`），**不用改**
+  - front.py：`front.py` 顶部常量 `BACKEND_URL`，**一般留空**（自动按 `config.yaml` 的 `server_host`/`server_port` 推导）
+  - dev：`vue-front/.env` 的 `DEV_PROXY_TARGET`，默认 `http://127.0.0.1:8008`，**后端不在本机才改**
+- **C（数据库）三种部署都改 `config/config.yaml` 的 `mysql*`**；**只有**库不在同一台机器或改了密码时才动（Docker 里 `localhost` 会被自动改成服务名 `mysql`，保持写 `localhost` 即可）。
+
+### 每种部署"最少改什么"
+
+| 部署 | 必改 | 生效方式 |
+|------|------|----------|
+| **Docker** | `config/config.yaml` 的 `static_path` = `http://<IP>:8038/` | `docker compose up -d --build`（改配置必须重建镜像） |
+| **front.py** | `config/config.yaml` 的 `static_path` = `http://<IP>:8010/` | 重启 `python main.py` |
+| **dev** | 后端不在本机时改 `vue-front/.env` 的 `DEV_PROXY_TARGET`（同机则不用改） | 重启 `npm run dev`；跨机访问加 `--host` |
+
+> 三者共同点：**只改文件，不碰宿主机环境变量**；前端产物用同源相对地址 `/api`，换服务器**不用重建前端**。
+
+---
+
 ## 通用前置条件
 
 1. **LLM API Key**：在 `agent/utils/llm_access/` 放好各模型 `key_file` 指定的密钥文件
