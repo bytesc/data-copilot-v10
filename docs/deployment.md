@@ -94,13 +94,7 @@ docker compose -f docker/docker-compose.app.yml -p docker-app down
 
 **逻辑**：后端单独跑 `python main.py`（`<后端端口>`）；`front.py` 从 `vue-front/dist/` 提供静态文件，并把 `/api`、`/upload-csv`、`/upload-txt`、`/tmp_imgs` 反代到后端，SSE 透传（路径含 `/stream/` 的按流式转发，`generate-yaml-outline`、`finalize` 显式列出）。`BACKEND_URL` 留空时按 `config.yaml` 的 `server_host`/`server_port` 推导（`0.0.0.0`/`::`/空 按 `127.0.0.1` 处理）。
 
-**前置：先构建前端产物**（否则页面 404）：
-
-```bash
-cd vue-front; npm install; npm run build; cd ..
-```
-
-> 前端的构建 / 开发服务器 / 前端镜像细节见 [`../vue-front/README.md`](../vue-front/README.md) 与 [`../vue-front/docker.md`](../vue-front/docker.md)。
+**前置：先构建前端产物**（否则页面 404）。构建 / 开发服务器 / 前端镜像的细节见 [`../vue-front/README.md`](../vue-front/README.md) 与 [`../vue-front/docker.md`](../vue-front/docker.md)。
 
 **改什么**
 
@@ -117,9 +111,8 @@ cd vue-front; npm install; npm run build; cd ..
 **命令**
 
 ```bash
-cd vue-front; npm install; npm run build; cd ..   # 1) 构建前端产物
-python main.py                                     # 2) 后端（另一个终端）
-python front.py                                    # 3) 前端反代 → http://localhost:<前端端口>/
+python main.py     # 1) 后端（另一个终端）
+python front.py    # 2) 前端反代 → http://localhost:<前端端口>/
 ```
 
 改 `config.yaml`（`static_path` / `mysql*`）后**重启 `python main.py`** 生效。
@@ -232,7 +225,7 @@ App 与 MySQL **互相独立**：后端连哪个库**只由 `config.yaml` 的 DS
 
 | 现象 | 原因 / 处理 |
 |------|------|
-| 前端页面 404 / 空白 | `vue-front/dist` 未构建。Docker 方式走多阶段构建不受影响；front.py + main.py 方式需先 `npm run build`（见 [`../vue-front/README.md`](../vue-front/README.md)） |
+| 前端页面 404 / 空白 | `vue-front/dist` 未构建。Docker 方式走多阶段构建不受影响；front.py + main.py 方式需先构建前端产物（见 [`../vue-front/README.md`](../vue-front/README.md)） |
 | SSE 逐字输出卡顿/一次性出现 | 反向代理缓冲未关闭。Docker 需 `proxy_buffering off;`（`docker/nginx.conf` 已配置）；front.py 已设 `X-Accel-Buffering: no` |
 | 聊天里的图片 / 下载 / 交互链接点不开（指向 `localhost` 或 `127.0.0.1`） | 后端生成的这些 URL 基于 `config.yaml` 的 `static_path`，默认仅本机可用；设为浏览器可达的前端地址（如 `http://<服务器IP>:<前端端口>/`）即可 |
 | 上传 CSV/文档报 `413 Request Entity Too Large` | nginx 请求体上限。`docker/nginx.conf` 已设 `client_max_body_size 60m;`；若自定义过该值需 ≥ 后端上限（CSV 50MB / 文档 20MB） |
