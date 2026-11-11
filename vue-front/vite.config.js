@@ -7,7 +7,10 @@ export default defineConfig(({ mode }) => {
   // Dev-only proxy target. Deliberately NOT a VITE_-prefixed variable so it is
   // never injected into the client bundle; the built app always talks to its own
   // origin and relies on nginx/front.py to proxy API and static file requests.
-  const serverTarget = env.DEV_PROXY_TARGET
+  // loadEnv() only returns VITE_* keys, so the containerized dev workflow
+  // (Dockerfile.dev) overrides the baked .env value through the process
+  // environment instead: `-e DEV_PROXY_TARGET=http://host.docker.internal:8008`.
+  const serverTarget = process.env.DEV_PROXY_TARGET || env.DEV_PROXY_TARGET
 
   return {
     plugins: [vue()],

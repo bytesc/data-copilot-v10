@@ -128,8 +128,12 @@ docker compose -f docker-compose.mysql.yml -p docker up -d
 > 非容器部署使用仓库根目录的 `init.sql`（只建系统表和 `brief_info` 初始数据、不建库），见下文与 `README.md`。
 
 > MySQL root 口令默认 `123456`，写死在 `docker/docker-compose.mysql.yml`（`MYSQL_ROOT_PASSWORD`）中。
-> 改口令需**同步修改三处**：`docker/docker-compose.mysql.yml`、`config/config.yaml` 的连接串、以及
-> `docker/docker-init.sql`（只读账号 `readonly` 的口令）。项目不读取任何环境变量。
+> root 与只读账号 `readonly` 的口令**互相独立**，改哪个只需同步改对应几处：
+> - **root 口令**：`docker/docker-compose.mysql.yml` 的 `MYSQL_ROOT_PASSWORD` + `config/config.yaml`
+>   的 `mysql`、`mysql_sys` 两条 DSN（`docker-init.sql` 里没有 root 口令）。
+> - **`readonly` 口令**：`docker/docker-init.sql` 的 `CREATE USER ... IDENTIFIED BY` +
+>   `config/config.yaml` 的 `mysql_readonly` DSN（`docker-compose.mysql.yml` 不受影响）。
+> 项目不读取任何环境变量。
 
 ### 后端 URL 前缀（config.yaml 的 static_path）
 

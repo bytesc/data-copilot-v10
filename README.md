@@ -128,10 +128,13 @@ pip install -r requirement.txt
 
 ### 初始化系统数据库
 
-`init.sql` 包含各系统表的 `CREATE TABLE` 语句（不创建数据库）以及 4 条 `brief_info` 初始化 `INSERT` 语句，需在 `config/config.yaml` 里 `mysql_sys` 指定的系统库中执行，例如 `data_copilot_v10_land_sys`：
+`init.sql` 包含各系统表的 `CREATE TABLE` 语句（不创建数据库）以及 4 条 `brief_info` 初始化 `INSERT` 语句，需在 `config/config.yaml` 里 `mysql_sys` 指定的系统库中执行，例如 `data_copilot_v10_land_sys`。注意 `init.sql` 本身不建库，需先创建该库，再用库名把表建到其中（否则会报 `No database selected`）：
 
 ```bash
-mysql -u root -p < init.sql
+# 1) 创建系统库（库名需与 config/config.yaml 的 mysql_sys 一致）
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS data_copilot_v10_land_sys DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+# 2) 在该库中建表并初始化 brief_info
+mysql -u root -p data_copilot_v10_land_sys < init.sql
 ```
 
 `main.py` 启动时也会自动创建缺失的系统表（`CREATE TABLE IF NOT EXISTS`，重复执行安全）；其中 `base_knowledge`、`doc_guide`、`code_guide`、`graph_code_guide`、`think_guide` 这批知识表仅在 `enable_base_knowledge` 为 true 时创建。

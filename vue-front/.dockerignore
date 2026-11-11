@@ -1,0 +1,12 @@
+# Build context for the standalone vue-front images (Dockerfile / Dockerfile.dev).
+# Keep host artifacts out so `COPY . .` does not overwrite the container's own
+# `npm ci` output with host node_modules / stale dist (which breaks
+# cross-platform builds, e.g. Windows/macOS host -> Linux container).
+# `.env` is intentionally NOT ignored: Dockerfile.dev needs DEV_PROXY_TARGET at
+# runtime, and that value is non-VITE so it is never baked into the client bundle.
+node_modules
+dist
+.vite
+npm-debug.log*
+.env.local
+.env.*.local

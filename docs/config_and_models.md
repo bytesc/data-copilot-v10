@@ -112,7 +112,7 @@ DEV_PROXY_TARGET=http://127.0.0.1:8008
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `VITE_API_BASE` | `/api` | API 路径前缀（`VITE_` 前缀会被注入到客户端产物） |
-| `DEV_PROXY_TARGET` | `http://127.0.0.1:8008` | **仅** `npm run dev` 的 Vite 反向代理目标；非 `VITE_` 前缀，不注入客户端 |
+| `DEV_PROXY_TARGET` | `http://127.0.0.1:8008` | **仅** `npm run dev` 的 Vite 反向代理目标；非 `VITE_` 前缀，不注入客户端。可用同名进程环境变量覆盖（容器内 dev 用，见 [`../vue-front/docker.md`](../vue-front/docker.md) 的 `Dockerfile.dev`） |
 
 `vite.config.js` 将 `/api`、`/upload-csv`、`/upload-txt`、`/tmp_imgs` 代理到 `DEV_PROXY_TARGET`
 指定的后端。生产环境由 `front.py` 或 nginx 承担相同代理职责，浏览器端一律使用**同源相对

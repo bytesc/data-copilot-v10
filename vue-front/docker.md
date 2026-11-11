@@ -22,10 +22,24 @@ docker rm vfb
 
 ```bash
 docker build -f Dockerfile.dev -t vue-front-dev .
-docker run -p 5173:5173 -v ${PWD}/src:/app/src vue-front-dev
+
+# Docker Desktop（Windows/macOS）：host.docker.internal 自带
+docker run -p 5173:5173 \
+  -e DEV_PROXY_TARGET=http://host.docker.internal:8008 \
+  -v ${PWD}/src:/app/src vue-front-dev
+
+# Linux：需要显式提供 host.docker.internal
+docker run -p 5173:5173 --add-host=host.docker.internal:host-gateway \
+  -e DEV_PROXY_TARGET=http://host.docker.internal:8008 \
+  -v ${PWD}/src:/app/src vue-front-dev
 ```
 
-挂载 `src` 目录可实现热更新；`vite.config.js`、`index.html`、`public/` 等其它文件不在挂载范围内，这些改动需要重建镜像。开发代理目标由 `.env` 的 `DEV_PROXY_TARGET` 决定（非 `VITE_` 前缀，不会注入客户端产物）。
+> 必须传 `-e DEV_PROXY_TARGET=http://host.docker.internal:8008`。镜像里烘焙的 `.env` 值是
+> `http://127.0.0.1:8008`，在容器内指向容器自身，`/api`、`/upload-*`、`/tmp_imgs` 都会代理失败。
+> `vite.config.js` 会优先读取进程环境变量（见该文件内注释），因此 `-e` 能覆盖 `.env`。
+> 后端需在宿主机（或可达地址）另行启动；Windows 下 `${PWD}` 为 PowerShell 写法，cmd 用 `%cd%`。
+
+挂载 `src` 目录可实现热更新；`vite.config.js`、`index.html`、`public/` 等其它文件不在挂载范围内，这些改动需要重建镜像。开发代理目标由 `DEV_PROXY_TARGET` 决定（来自 `.env` 或进程环境变量，非 `VITE_` 前缀，不会注入客户端产物）。
 
 ## 生产部署（Docker Compose）
 

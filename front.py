@@ -68,6 +68,33 @@ _EXTRA_STREAM_PATHS = (
 STATIC_EXTS = {".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg",
                ".ico", ".webp", ".woff", ".woff2", ".ttf", ".eot", ".json", ".map"}
 
+# Extensions whose MIME type must not depend on the host: on CPython <= 3.12 the
+# mimetypes module merges the Windows registry, which registers .js as text/plain
+# on some machines. Browsers refuse ES modules served with a non-JS MIME type and
+# show a blank page, so the types the built SPA relies on are pinned here.
+_MIME_OVERRIDES = {
+    ".html": "text/html",
+    ".js": "text/javascript",
+    ".mjs": "text/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".map": "application/json",
+    ".svg": "image/svg+xml",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".ttf": "font/ttf",
+    ".eot": "application/vnd.ms-fontobject",
+}
+
+
+def _guess_mime(path: str):
+    overridden = _MIME_OVERRIDES.get(Path(path).suffix.lower())
+    if overridden:
+        return overridden
+    content_type, _ = mimetypes.guess_type(str(path))
+    return content_type
+
+
 # Hop-by-hop and body-framing headers must not be copied from the backend
 # response: httpx already decodes the body, so forwarding the backend's original
 # content-encoding/content-length would corrupt the proxied response.
@@ -111,8 +138,7 @@ async def handler(full_path: str, request: Request):
 
     resolved = _safe_dist_file(full_path)
     if resolved is not None:
-        content_type, _ = mimetypes.guess_type(str(resolved))
-        return FileResponse(str(resolved), media_type=content_type or "application/octet-stream")
+        return FileResponse(str(resolved), media_type=_guess_mime(str(resolved)) or "application/octet-stream")
 
     if full_path == "" or path == "/":
         index = DIST_DIR / "index.html"
@@ -123,8 +149,7 @@ async def handler(full_path: str, request: Request):
     if ext in STATIC_EXTS or (ext and len(ext) <= 5):
         resolved = _safe_dist_file(full_path)
         if resolved is not None:
-            content_type, _ = mimetypes.guess_type(str(resolved))
-            return FileResponse(str(resolved), media_type=content_type or "application/octet-stream")
+            return FileResponse(str(resolved), media_type=_guess_mime(str(resolved)) or "application/octet-stream")
         return Response(status_code=404)
 
     index = DIST_DIR / "index.html"
