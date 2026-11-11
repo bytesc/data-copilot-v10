@@ -1,0 +1,59 @@
+# 独立部署之二：后端 + nginx 前端。
+# 数据库已从本 stack 拆出，单独用 docker-compose.mysql.yml 部署，多个前后端栈共用。
+#
+# 共享网络：后端额外接入 external 的 data-copilot-net，通过服务名 `mysql` 连库
+# （Dockerfile.backend 会把 config.yaml 的 @localhost: 改写成 @mysql:）。
+# 首次使用前必须先建网络：docker network create data-copilot-net
+# 不再有 depends_on mysql：后端入口脚本会自行等待 MySQL 就绪（docker-entrypoint.sh）。
+#
+# 同一台机器跑多个前后端栈时，用环境变量错开宿主机端口：
+#   BACKEND_PORT=8018 FRONTEND_PORT=8048 docker compose -f docker/docker-compose.app.yml -p docker-app-2 up -d
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    restart: unless-stopped
+    ports:
+      # 宿主机端口可用 BACKEND_PORT 覆盖，便于多栈共存（容器内始终 8008）。
+      - "${BACKEND_PORT:-8008}:8008"
+    volumes:
+      # 静态文件目录固定为 tmp_imgs，前后端共享
+      - ../tmp_imgs:/app/tmp_imgs
+      - ../doc_workspace:/app/doc_workspace
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      # Backend readiness: /api/config is a cheap handler that does not touch
+      # the LLM. Used by the frontend service_healthy dependency below.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/api/config', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      # 默认网络：让前端能用服务名 `backend` 反代到本后端（nginx.conf）。
+      - default
+      # 共享网络：连独立部署的 MySQL（服务名 `mysql`）。
+      - data-copilot-net
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    restart: unless-stopped
+    ports:
+      # 宿主机端口可用 FRONTEND_PORT 覆盖，便于多栈共存（容器内始终 8038）。
+      - "${FRONTEND_PORT:-8038}:8038"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      # 前端只需默认网络：nginx 反代目标 `backend:8008` 在本栈默认网络内解析。
+      - default
+
+networks:
+  # 与 MySQL stack 共享的 external 网络，需先 `docker network create data-copilot-net`。
+  data-copilot-net:
+    external: true
+    name: data-copilot-net

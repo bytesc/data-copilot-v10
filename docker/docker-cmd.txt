@@ -1,14 +1,19 @@
 # ============================================================
+# MySQL 与前后端已拆成两个独立部署（多个前后端栈可共用一个数据库）：
+#   docker/docker-compose.mysql.yml — 仅 MySQL（项目名固定 -p docker，沿用旧数据卷）
+#   docker/docker-compose.app.yml   — 后端 + nginx 前端（可多份，各自项目名/端口）
+# 两者通过外部共享网络 data-copilot-net 相连（服务名 `mysql`），首次需先建网络。
+# ============================================================
 # 修改数据库配置时需要同步修改以下 3 个地方：
-#   1. config/config.yaml         — mysql / mysql_readonly / mysql_sys 连接串
-#   2. docker/docker-compose.yml  — MYSQL_ROOT_PASSWORD（写死在本文件，无环境变量替换）
-#   3. docker/docker-init.sql     — CREATE DATABASE 语句、只读用户 readonly（密码与 mysql_readonly 一致）
+#   1. config/config.yaml              — mysql / mysql_readonly / mysql_sys 连接串
+#   2. docker/docker-compose.mysql.yml — MYSQL_ROOT_PASSWORD（写死在本文件，无环境变量替换）
+#   3. docker/docker-init.sql          — CREATE DATABASE 语句、只读用户 readonly（密码与 mysql_readonly 一致）
 # 配置只来自 config/config.yaml，程序不读取任何环境变量；改配置后需 --build 重建 backend 镜像。
 # 注意：业务库只建空库，业务数据需自行导入；系统库只建表 + brief_info 空占位，均不导入数据。
 # ============================================================
 # ============================================================
 # 静态文件目录固定为 tmp_imgs（代码中硬编码，config.yaml 不支持配置）：
-#   1. docker/docker-compose.yml  — backend.volumes 挂载 ../tmp_imgs
+#   1. docker/docker-compose.app.yml — backend.volumes 挂载 ../tmp_imgs
 #   2. docker/nginx.conf          — location /tmp_imgs/ 反代后端
 #   3. front.py                   — PROXY_PATHS 含 /tmp_imgs
 #   如确需改目录名，需同时改以上几处以及 main.py / utils/image_ingest.py /
@@ -17,7 +22,7 @@
 # ============================================================
 # 后端生成的绝对 URL 前缀由 config/config.yaml 的 static_path 决定（无环境变量）：
 #   局域网/公网访问时把 static_path 设为 http://<服务器地址>:8038/（结尾斜杠不能省），然后
-#   docker compose up -d --build 重建 backend 镜像。
+#   docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build 重建 backend 镜像。
 #   影响文档下载链接、聊天正文中的图表图片、交互图/CSV 链接、静态地图等（均为绝对地址）；
 #   默认 127.0.0.1:8008 仅本机浏览器可用，跨机访问必须修改。nginx/front.py 均透传 /tmp_imgs/。
 # ============================================================
@@ -29,16 +34,28 @@
 # ============================================================
 # ============================================================
 # doc_workspace/（YAML 大纲和草稿）已挂载为 volume：
-#   docker/docker-compose.yml  — backend.volumes
+#   docker/docker-compose.app.yml — backend.volumes
 # ============================================================
 
-docker compose -f docker/docker-compose.yml -p docker up -d 
-docker compose -f docker/docker-compose.yml -p docker up -d --build
-docker compose -f docker/docker-compose.yml -p docker up -d --build frontend
-docker compose -f docker/docker-compose.yml -p docker up -d --build backend
-docker compose -f docker/docker-compose.yml -p docker down
-docker compose -f docker/docker-compose.yml -p docker down -v
+# 0) 首次：创建前后端与 MySQL 共享的外部网络（两个 stack 都接入）
+docker network create data-copilot-net
 
-docker compose -f docker/docker-compose.yml -p docker logs mysql
-docker compose -f docker/docker-compose.yml -p docker logs backend
-docker compose -f docker/docker-compose.yml -p docker logs frontend
+# 1) 启动 MySQL（先起库；项目名固定 docker 以沿用既有数据卷 docker_mysql_data）
+docker compose -f docker/docker-compose.mysql.yml -p docker up -d
+docker compose -f docker/docker-compose.mysql.yml -p docker logs mysql
+docker compose -f docker/docker-compose.mysql.yml -p docker down
+# 重建空库（删数据卷，慎用）
+docker compose -f docker/docker-compose.mysql.yml -p docker down -v
+
+# 2) 启动前后端（可多份，用不同项目名/端口共存，共用一个库）
+docker compose -f docker/docker-compose.app.yml -p docker-app up -d
+docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build
+docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build frontend
+docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build backend
+docker compose -f docker/docker-compose.app.yml -p docker-app logs backend
+docker compose -f docker/docker-compose.app.yml -p docker-app logs frontend
+docker compose -f docker/docker-compose.app.yml -p docker-app down
+
+# 2b) 同机再起一套前后端（错开宿主机端口，共用同一个 MySQL）
+#     PowerShell: $env:BACKEND_PORT="8018"; $env:FRONTEND_PORT="8048"; docker compose -f docker/docker-compose.app.yml -p docker-app-2 up -d
+#     bash:       BACKEND_PORT=8018 FRONTEND_PORT=8048 docker compose -f docker/docker-compose.app.yml -p docker-app-2 up -d

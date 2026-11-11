@@ -36,7 +36,7 @@
 
 | 部署 | 必改 | 生效方式 |
 |------|------|----------|
-| **Docker** | `config/config.yaml` 的 `static_path` = `http://<IP>:8038/` | `docker compose up -d --build`（改配置必须重建镜像） |
+| **Docker** | `config/config.yaml` 的 `static_path` = `http://<IP>:8038/` | `docker compose -f docker-compose.app.yml -p docker-app up -d --build`（改配置必须重建镜像） |
 | **front.py** | `config/config.yaml` 的 `static_path` = `http://<IP>:8010/` | 重启 `python main.py` |
 | **dev** | 后端不在本机时改 `vue-front/.env` 的 `DEV_PROXY_TARGET`（同机则不用改） | 重启 `npm run dev`；跨机访问加 `--host` |
 
@@ -57,19 +57,48 @@
 
 ## A. Docker Compose
 
-编排文件：`docker/docker-compose.yml`。
+MySQL 与前后端**分为两个独立编排**，多个前后端栈可共用一个数据库：
+
+| 编排文件 | 组成 | 说明 |
+|------|------|------|
+| `docker/docker-compose.mysql.yml` | MySQL | 单独部署，供多个前后端共用 |
+| `docker/docker-compose.app.yml` | 后端 + nginx 前端 | 可起多份，各自项目名/端口 |
+
+两者通过 **外部共享网络 `data-copilot-net`** 相连：后端额外接入该网络，用服务名 `mysql`
+连库（`Dockerfile.backend` 把 `config.yaml` 的 `@localhost:` 改写成 `@mysql:`）。
 
 ### 一键启动
 
 ```bash
 cd docker
-docker compose build
-docker compose up -d
+# 0) 首次：创建共享网络（两个 stack 都接入，compose 不负责创建 external 网络）
+docker network create data-copilot-net
+
+# 1) 启动 MySQL（项目名固定 -p docker，沿用既有数据卷 docker_mysql_data）
+docker compose -f docker-compose.mysql.yml -p docker up -d
+
+# 2) 启动前后端（可多份，用不同 -p 项目名/端口共存，共用一个库）
+docker compose -f docker-compose.app.yml -p docker-app up -d --build
 ```
 
 - 前端：<http://localhost:8038/>（nginx，`docker/nginx.conf`，反向代理后端并透传 SSE）
 - 后端：<http://localhost:8008/>
 - MySQL：宿主机 `3307` → 容器 `3306`（容器内后端始终连 `mysql:3306`）
+
+> 前后端不再 `depends_on` MySQL，也不会启动数据库；后端入口脚本会自行等待 MySQL 就绪，
+> 因此请先起 MySQL stack（或确保数据库已可达）。
+>
+> **起第二套前后端**（共用同一个 MySQL，只需错开宿主机端口）：
+>
+> ```bash
+> # PowerShell
+> $env:BACKEND_PORT="8018"; $env:FRONTEND_PORT="8048"; docker compose -f docker-compose.app.yml -p docker-app-2 up -d --build
+> # bash
+> BACKEND_PORT=8018 FRONTEND_PORT=8048 docker compose -f docker-compose.app.yml -p docker-app-2 up -d --build
+> ```
+>
+> 端口默认 `8008`/`8038`，可用 `BACKEND_PORT`/`FRONTEND_PORT` 覆盖（容器内端口不变）。
+> 注意每套前后端是独立的前端地址，`config/config.yaml` 的 `static_path` 需指向**本套**的前端端口。
 
 > 前端产物通过**同源相对地址**访问 API（即浏览器当前地址），由 nginx 反向代理到后端。因此前端
 > 镜像**不固化后端地址**，不需要为前端配置服务器 IP。但后端生成的 URL（文档下载链接、聊天正文
@@ -87,14 +116,14 @@ docker compose up -d
 库名与 `config/config.yaml` 严格对应，**不要**手工改名。若需重新初始化：
 
 ```bash
-docker compose down -v   # 删除 mysql_data 卷
-docker compose up -d
+docker compose -f docker-compose.mysql.yml -p docker down -v   # 删除 mysql_data 卷
+docker compose -f docker-compose.mysql.yml -p docker up -d
 ```
 
 > 非容器部署使用仓库根目录的 `init.sql`（只建系统表和 `brief_info` 初始数据、不建库），见下文与 `README.md`。
 
-> MySQL root 口令默认 `123456`，写死在 `docker/docker-compose.yml`（`MYSQL_ROOT_PASSWORD`）中。
-> 改口令需**同步修改三处**：`docker/docker-compose.yml`、`config/config.yaml` 的连接串、以及
+> MySQL root 口令默认 `123456`，写死在 `docker/docker-compose.mysql.yml`（`MYSQL_ROOT_PASSWORD`）中。
+> 改口令需**同步修改三处**：`docker/docker-compose.mysql.yml`、`config/config.yaml` 的连接串、以及
 > `docker/docker-init.sql`（只读账号 `readonly` 的口令）。项目不读取任何环境变量。
 
 ### 后端 URL 前缀（config.yaml 的 static_path）
@@ -111,7 +140,7 @@ static_path: "http://<服务器IP>:8038/"
 
 ```bash
 cd docker
-docker compose up -d --build      # 改 config.yaml 后必须重建 backend 镜像才会生效
+docker compose -f docker-compose.app.yml -p docker-app up -d --build   # 改 config.yaml 后必须重建 backend 镜像才会生效
 ```
 
 > 说明：nginx 透传 `/tmp_imgs/`（`docker/nginx.conf`），所以 `static_path` 指向前端端口即可让上述
@@ -206,7 +235,7 @@ cd vue-front && npm install && npm run dev   # 前端 :5173，Vite 代理由 .en
 | 上传 CSV/文档报 `413 Request Entity Too Large` | nginx 请求体上限。`docker/nginx.conf` 已设 `client_max_body_size 60m;`；若自定义过该值需 ≥ 后端上限（CSV 50MB / 文档 20MB） |
 | 上传文档长时间无响应 / 504 | `/upload-txt/` 会做 LLM 注释生成，耗时可能超过 nginx 默认 60s 读超时；`docker/nginx.conf` 的 `/upload-txt/` 已设 `proxy_read_timeout 600s` |
 | SSE / 长任务超过 10 分钟被中断（504 或流式报错） | nginx 各 location 的 `proxy_read_timeout 600s` 与 front.py 默认超时均为 600s 上限；nginx 可调大 `docker/nginx.conf` 中的 `proxy_read_timeout`，front.py 改文件开头的 `PROXY_TIMEOUT`（秒） |
-| 后端一直卡在 `Waiting for MySQL to be ready` | 入口脚本按 `config/config.yaml` 解析库地址。确认库名与 `docker-init.sql` 一致（`singapore_land_2` / `data_copilot_v10_land_sys`），或 `docker compose down -v` 重初始化 |
+| 后端一直卡在 `Waiting for MySQL to be ready` | 入口脚本按 `config/config.yaml` 解析库地址。确认 MySQL stack 已启动（`docker compose -f docker-compose.mysql.yml -p docker up -d`）、两 stack 都接入了共享网络 `data-copilot-net`、库名与 `docker-init.sql` 一致（`singapore_land_2` / `data_copilot_v10_land_sys`），或 `docker compose -f docker-compose.mysql.yml -p docker down -v` 重初始化 |
 | LLM 调用报错/鉴权失败 | 缺少 `agent/utils/llm_access/<key_file>`；放入后重建镜像 |
-| 改了 `config.yaml` 后容器行为未变 | 容器用的是构建时打包的 config；改任何配置都需 `docker compose up -d --build` 重建 backend 镜像才会生效 |
+| 改了 `config.yaml` 后容器行为未变 | 容器用的是构建时打包的 config；改任何配置都需 `docker compose -f docker-compose.app.yml -p docker-app up -d --build` 重建 backend 镜像才会生效 |
 | 街景/静态地图截图失败 | 后端镜像中 `playwright install` 有 60s 超时，超时会被跳过（构建日志有 WARNING），此时该功能运行时不可用 |

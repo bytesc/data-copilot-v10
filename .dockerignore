@@ -9,7 +9,7 @@ __pycache__
 *.pyc
 tmp_imgs
 front_img
-# Runtime output directories (also mounted as volumes in docker-compose.yml).
+# Runtime output directories (also mounted as volumes in docker/docker-compose.app.yml).
 doc_workspace
 exports
 cache

@@ -41,7 +41,10 @@ docker run -p 5173:5173 -v ${PWD}/src:/app/src vue-front-dev
 
 ```bash
 cd ../docker
-docker compose build
-docker compose up -d
+# 数据库单独部署（多个前后端可共用）；首次先建共享网络
+docker network create data-copilot-net
+docker compose -f docker-compose.mysql.yml -p docker up -d
+# 前后端
+docker compose -f docker-compose.app.yml -p docker-app up -d --build
 # 前端 http://localhost:8038/ ，后端 http://localhost:8008/
 ```
