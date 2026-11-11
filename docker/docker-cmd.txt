@@ -1,8 +1,11 @@
 # ============================================================
-# MySQL 与前后端已拆成两个独立部署（多个前后端栈可共用一个数据库）：
-#   docker/docker-compose.mysql.yml — 仅 MySQL（项目名固定 -p docker，沿用旧数据卷）
-#   docker/docker-compose.app.yml   — 后端 + nginx 前端（可多份，各自项目名/端口）
-# 两者通过外部共享网络 data-copilot-net 相连（服务名 `mysql`），首次需先建网络。
+# MySQL 与前后端拆成两个完全独立的部署（多个前后端栈可共用一个库）：
+#   docker/docker-compose.mysql.yml — 仅 MySQL，把容器 3306 发布到宿主机 3307
+#   docker/docker-compose.app.yml   — 后端 + nginx 前端，不含数据库、无共享网络
+# 后端连库地址由 config/config.yaml 决定：连本机 docker 库写 localhost:<宿主发布端口>
+# （docker-compose.mysql.yml 默认发布在 3307，即 localhost:3307）。构建时只把主机名 localhost
+# 换成 host.docker.internal，端口沿用 config.yaml 里写的值 —— 改发布端口只改 config.yaml 一处。
+# 连外部库写它真实的 host:port（非 localhost 不会被改写）。
 # ============================================================
 # 修改数据库配置时需要同步修改以下 3 个地方：
 #   1. config/config.yaml              — mysql / mysql_readonly / mysql_sys 连接串
@@ -36,9 +39,6 @@
 # doc_workspace/（YAML 大纲和草稿）已挂载为 volume：
 #   docker/docker-compose.app.yml — backend.volumes
 # ============================================================
-
-# 0) 首次：创建前后端与 MySQL 共享的外部网络（两个 stack 都接入）
-docker network create data-copilot-net
 
 # 1) 启动 MySQL（先起库；项目名固定 docker 以沿用既有数据卷 docker_mysql_data）
 docker compose -f docker/docker-compose.mysql.yml -p docker up -d

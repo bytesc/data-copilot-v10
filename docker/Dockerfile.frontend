@@ -1,4 +1,4 @@
-# Build the Vue SPA inside the image so `docker compose build` works on a clean
+# Build the Vue SPA inside the image so `docker compose -f docker-compose.app.yml build` works on a clean
 # checkout (the `dist/` directory is gitignored and must not be a build prerequisite).
 FROM node:20-alpine AS build
 

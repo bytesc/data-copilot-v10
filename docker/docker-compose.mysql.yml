@@ -1,30 +1,26 @@
-# 独立部署之一：MySQL。
-# 与前后端（docker-compose.app.yml）分开部署，多个前后端栈可共用这一个数据库。
-#
-# 共享网络：两个 stack 都接入外部的 data-copilot-net，后端据此用服务名 `mysql`
-# 连库（Dockerfile.backend 会把 config.yaml 里的 @localhost: 改写成 @mysql:）。
-# 首次使用前必须先建网络（compose 不负责创建 external 网络）：
-#   docker network create data-copilot-net
-#
-# 项目名固定用 -p docker，保持既有数据卷名 docker_mysql_data 不变，避免升级即丢数据。
+# 独立部署之一：MySQL（只负责跑数据库）。
+# 与前后端（docker-compose.app.yml）完全独立：不含后端/前端，也不与任何 stack 共享网络。
+# 只把容器 3306 发布到宿主机 3307，供任意前端后端连接——本机其它 stack、其它机器、
+# 甚至非 docker 启动的进程都行。
 services:
   mysql:
     image: mysql:8.0
-    # 固定容器名，便于多个前后端栈共用时辨识；同时作为共享网络上的稳定别名。
+    # 固定容器名，便于多个前后端共用时在 `docker ps` 里辨识。
     container_name: data-copilot-mysql
     restart: unless-stopped
     environment:
-      # Root password for this MySQL container. Keep it in sync with the backend
-      # DSNs in config/config.yaml and with the readonly user in docker-init.sql.
-      # This is a literal value in this file (not a host-environment substitution).
+      # Root password. Keep it in sync with the backend DSNs in config/config.yaml
+      # and with the readonly user in docker-init.sql. Literal value (no host env).
       MYSQL_ROOT_PASSWORD: "123456"
+      # 允许从其它机器/容器用 root 连接（本库可能被远程前后端使用）。
       MYSQL_ROOT_HOST: '%'
     volumes:
       - mysql_data:/var/lib/mysql
       - ./docker-init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
-      # Host 3307 -> container 3306. Keep 3307 on the host to avoid clashing with
-      # a local MySQL; the backend always connects to `mysql:3306` internally.
+      # 宿主机 3307 -> 容器 3306。用 3307 避免与宿主机本地 MySQL(3306) 冲突；
+      # 改这里的发布端口时，只需同步改 config.yaml 里 DSN 的端口（构建时只换主机名
+      # localhost->host.docker.internal，端口沿用 config.yaml 的值，Dockerfile 不写死端口）。
       - "3307:3306"
     command: --skip-ssl
     healthcheck:
@@ -34,15 +30,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    networks:
-      - data-copilot-net
-
-networks:
-  # 与前后端共享的 external 网络，需先 `docker network create data-copilot-net`。
-  # 这里服务名 `mysql` 会成为该网络上的 DNS 别名，供各前后端栈的后端解析。
-  data-copilot-net:
-    external: true
-    name: data-copilot-net
 
 volumes:
   mysql_data:

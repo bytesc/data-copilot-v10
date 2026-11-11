@@ -8,11 +8,14 @@ RUN timeout 60 playwright install --with-deps chromium || echo "WARNING: playwri
 
 COPY . .
 
-# Point the SQLAlchemy DSNs (mysql / mysql_readonly / mysql_sys) at the compose
-# MySQL service. Only the `@localhost:` host part of the URLs is rewritten, so
-# other config values (static_path etc.) are left untouched. config/config.yaml
-# is the single source of truth at runtime (no environment overrides).
-RUN sed -i -E 's/@localhost:/@mysql:/g' config/config.yaml
+# Inside a container `localhost` is the container itself, so a DSN host of
+# `localhost` cannot reach a database published on the host. Rewrite ONLY the
+# host part `@localhost:` -> `@host.docker.internal:`; the PORT is taken verbatim
+# from config/config.yaml, so changing the published port never requires touching
+# this Dockerfile (set the DSN port in config.yaml to the host-published port).
+# Explicit non-localhost DSNs (an external / remote MySQL) are left untouched.
+# config/config.yaml remains the single source of truth at runtime (no env).
+RUN sed -i -E 's/@localhost:/@host.docker.internal:/g' config/config.yaml
 
 EXPOSE 8008
 
