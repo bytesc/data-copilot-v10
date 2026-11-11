@@ -476,10 +476,16 @@ created_at  DATETIME
 
 替代 nginx 的开发/生产部署方案，详见 `front.py`。
 
-**前置条件**：必须先构建前端产物，否则 `vue-front/dist/` 不存在、页面返回 404：
+**前置条件**：`front.py` 只提供静态文件与反向代理，后端必须另行启动；且必须先构建前端产物，否则 `vue-front/dist/` 不存在、页面返回 404：
 
 ```bash
+# 1) 构建前端产物
 cd vue-front && npm install && npm run build && cd ..
+
+# 2) 启动后端（另开一个终端）
+python main.py
+
+# 3) 启动前端反代
 python front.py
 ```
 

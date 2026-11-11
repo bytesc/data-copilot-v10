@@ -798,7 +798,7 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 1. **入口预检** — 中间件 `limit_multipart_upload_size` 在解析 `multipart/form-data` 之前读取 `Content-Length`，超过三者的最大值（50 MB，`MAX_MULTIPART_BYTES`）直接返回 `413`，避免超大请求体被解析/落盘。
 2. **端点读取** — 每个处理函数通过 `_read_upload_limited(file, 上限)` 以 1 MiB 分块读取，累计超过该接口上限立即返回 `413`。因此即使客户端未提供 `Content-Length`（分块传输）也能按接口上限拦截，且不会把整包读入内存。
 
-> `front.py` 反向代理不做大小限制，仅透传请求；限制一律以后端为准。
+> `front.py` 反向代理不做大小限制（请求体整体读入内存后转发，并非流式透传）；限制一律以后端为准。
 
 ### POST `/upload-csv/`
 

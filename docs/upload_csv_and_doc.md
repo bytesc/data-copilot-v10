@@ -17,7 +17,7 @@
   超过三者最大值（50 MB，`MAX_MULTIPART_BYTES`）直接返回 `413`。
 - **端点读取**：各处理函数通过 `_read_upload_limited(file, 上限)` 以 1 MiB 分块读取，累计超过该接口上限即 `413`。
   因此无 `Content-Length` 的分块传输也能按接口上限拦截，且不会把整包读入内存。
-- `front.py` 反向代理**不设限**，仅透传请求；限制一律以后端为准。
+- `front.py` 反向代理**不设大小上限**（它把请求体整体读入内存后转发，并非流式透传）；大小限制一律以后端为准。
 - **编辑开关**：配置 `enable_edit: false` 时，涉及改库的接口一律返回 `403`（`main.py` 的 `_require_edit_enabled`），包括 `/upload-csv/`、`/upload-txt/`、数据/注释导出、注释导入与更新、`/api/db-overview/`、删除表；系统知识库路由同样受限。
 
 ## 1. 数据 CSV 导入 (`POST /upload-csv/`)

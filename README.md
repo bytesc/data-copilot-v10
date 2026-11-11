@@ -270,11 +270,12 @@ DEV_PROXY_TARGET=http://127.0.0.1:8008
 python main.py
 ```
 
-也可通过 `front.py` 部署（替代 nginx，提供前端静态服务 + API 反向代理 + SSE 流式支持）。先构建前端产物，再启动：
+也可通过 `front.py` 部署（替代 nginx，提供前端静态服务 + API 反向代理 + SSE 流式支持）。`front.py` 只做静态服务与反向代理，后端需另行启动：
 
 ```bash
-cd vue-front && npm install && npm run build && cd ..
-python front.py
+cd vue-front && npm install && npm run build && cd ..   # 1) 构建前端产物
+python main.py                                          # 2) 启动后端（另开一个终端）
+python front.py                                         # 3) 启动前端反代
 ```
 
 `front.py` 从 `vue-front/dist/` 提供静态文件，必须先 `npm run build`，否则页面为 404。

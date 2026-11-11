@@ -1,3 +1,4 @@
+import json
 import mimetypes
 from contextlib import asynccontextmanager
 
@@ -164,34 +165,64 @@ async def proxy_request(path: str, request: Request) -> Response:
         )
 
 
-async def proxy_stream(path: str, request: Request) -> StreamingResponse:
+async def proxy_stream(path: str, request: Request) -> Response:
     target = _build_target(path, request)
     body = await request.body()
     headers = _forward_headers(request)
 
+    # Open the upstream stream before building the response so the backend's real
+    # status code and headers are propagated. Opening it lazily (inside the
+    # generator, as before) flattened every 4xx/5xx from a streaming route to
+    # 200 + text/event-stream, so the frontend (which checks response.ok) treated
+    # an error body as a live SSE stream and silently emitted nothing.
+    stream = client.stream(
+        method=request.method,
+        url=target,
+        headers=headers,
+        content=body,
+    )
+    try:
+        resp = await stream.__aenter__()
+    except httpx.ConnectError:
+        return Response(
+            content=f'{{"error":"Cannot connect to backend at {BACKEND_URL}{path}"}}',
+            status_code=502,
+            media_type="application/json",
+        )
+    except Exception as e:
+        return Response(
+            content=f'{{"error":"Proxy error: {str(e)}"}}',
+            status_code=500,
+            media_type="application/json",
+        )
+
     async def generate():
         try:
-            async with client.stream(
-                method=request.method,
-                url=target,
-                headers=headers,
-                content=body,
-            ) as resp:
-                async for chunk in resp.aiter_bytes():
-                    yield chunk
-        except httpx.ConnectError:
-            yield f'{{"error":"Cannot connect to backend at {BACKEND_URL}{path}"}}'.encode()
+            async for chunk in resp.aiter_bytes():
+                yield chunk
         except Exception as e:
-            yield f'{{"error":"Proxy stream error: {str(e)}"}}'.encode()
+            error = json.dumps(
+                {"type": "error", "content": f"Proxy stream error: {e}"},
+                ensure_ascii=False,
+            )
+            yield f"data: {error}\n\n".encode()
+        finally:
+            await stream.__aexit__(None, None, None)
+
+    # content-type is supplied through media_type; hop-by-hop and body-framing
+    # headers are dropped (httpx has already decoded the body).
+    out_headers = {
+        k: v for k, v in resp.headers.items()
+        if k.lower() not in _HOP_BY_HOP_HEADERS and k.lower() != "content-type"
+    }
+    out_headers.setdefault("Cache-Control", "no-cache")
+    out_headers.setdefault("X-Accel-Buffering", "no")
 
     return StreamingResponse(
         generate(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        }
+        status_code=resp.status_code,
+        media_type=resp.headers.get("content-type", "text/event-stream"),
+        headers=out_headers,
     )
 
 
