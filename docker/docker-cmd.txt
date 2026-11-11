@@ -47,7 +47,7 @@ docker compose -f docker/docker-compose.mysql.yml -p docker down
 # 重建空库（删数据卷，慎用）
 docker compose -f docker/docker-compose.mysql.yml -p docker down -v
 
-# 2) 启动前后端（可多份，用不同项目名/端口共存，共用一个库）
+# 2) 启动前后端
 docker compose -f docker/docker-compose.app.yml -p docker-app up -d
 docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build
 docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build frontend
@@ -55,7 +55,3 @@ docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build back
 docker compose -f docker/docker-compose.app.yml -p docker-app logs backend
 docker compose -f docker/docker-compose.app.yml -p docker-app logs frontend
 docker compose -f docker/docker-compose.app.yml -p docker-app down
-
-# 2b) 同机再起一套前后端（错开宿主机端口，共用同一个 MySQL）：
-#     端口写在 docker-compose.app.yml 的 ports 里；复制一份、改宿主机端口，再用不同项目名启动
-#     docker compose -f docker/docker-compose.app-2.yml -p docker-app-2 up -d

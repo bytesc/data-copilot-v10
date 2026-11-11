@@ -7,8 +7,6 @@
 # 默认发布在 3307，即 localhost:3307）。构建时只会把主机名 localhost 自动换成
 # host.docker.internal，**端口沿用你写的值** —— 所以改发布端口只改 config.yaml 一处。
 # 「连外部库」：直接在 config.yaml 写该库真实的 host:port（非 localhost），镜像不会改写。
-#
-# 同机跑多套前后端共用同一个库：复制本文件、错开宿主机端口，再用不同 -p 项目名启动。
 services:
   backend:
     build:
@@ -17,7 +15,6 @@ services:
     restart: unless-stopped
     ports:
       # 宿主机发布端口直接写在本文件（容器内始终 8008）。
-      # 多栈共存：复制本文件、改这里的宿主机端口，再用不同 -p 项目名启动。
       - "8008:8008"
     volumes:
       # 静态文件目录固定为 tmp_imgs，前后端共享
@@ -45,7 +42,6 @@ services:
     restart: unless-stopped
     ports:
       # 宿主机发布端口直接写在本文件（容器内始终 8038）。
-      # 多栈共存：复制本文件、改这里的宿主机端口，再用不同 -p 项目名启动。
       - "8038:8038"
     depends_on:
       backend:
