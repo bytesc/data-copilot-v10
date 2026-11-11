@@ -8,7 +8,7 @@
 # host.docker.internal，**端口沿用你写的值** —— 所以改发布端口只改 config.yaml 一处。
 # 「连外部库」：直接在 config.yaml 写该库真实的 host:port（非 localhost），镜像不会改写。
 #
-# 同机跑多套前后端共用同一个库：用不同 -p 项目名并错开宿主机端口即可（见下方端口覆盖）。
+# 同机跑多套前后端共用同一个库：复制本文件、错开宿主机端口，再用不同 -p 项目名启动。
 services:
   backend:
     build:
@@ -16,8 +16,9 @@ services:
       dockerfile: docker/Dockerfile.backend
     restart: unless-stopped
     ports:
-      # 宿主机端口可用 BACKEND_PORT 覆盖，便于多栈共存（容器内始终 8008）。
-      - "${BACKEND_PORT:-8008}:8008"
+      # 宿主机发布端口直接写在本文件（容器内始终 8008）。
+      # 多栈共存：复制本文件、改这里的宿主机端口，再用不同 -p 项目名启动。
+      - "8008:8008"
     volumes:
       # 静态文件目录固定为 tmp_imgs，前后端共享
       - ../tmp_imgs:/app/tmp_imgs
@@ -43,8 +44,9 @@ services:
       dockerfile: docker/Dockerfile.frontend
     restart: unless-stopped
     ports:
-      # 宿主机端口可用 FRONTEND_PORT 覆盖，便于多栈共存（容器内始终 8038）。
-      - "${FRONTEND_PORT:-8038}:8038"
+      # 宿主机发布端口直接写在本文件（容器内始终 8038）。
+      # 多栈共存：复制本文件、改这里的宿主机端口，再用不同 -p 项目名启动。
+      - "8038:8038"
     depends_on:
       backend:
         condition: service_healthy

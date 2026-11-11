@@ -1,250 +1,244 @@
 # 部署指南
 
-本项目提供三种部署方式：
+一次请求经过：**浏览器 → 前端服务 → 后端 → 数据库**。
 
-| 方式 | 组成 | 适用 |
-|------|------|------|
-| **A. Docker Compose** | MySQL（独立栈）+ 后端 + nginx 前端（可多份） | 推荐，一键起服务；多个前后端可共用一个库 |
-| **B. front.py** | Python 轻量反代 + 静态文件 | 无 Docker 的服务器 |
-| **C. 手动** | `python main.py` + `npm run dev`/`npm run build` | 开发 |
+本项目把两件事**拆开独立**，各自都有两种方式，可任意组合：
 
----
+- **App（前端 + 后端）两种部署方式**：`Docker` / `front.py + main.py`。
+- **MySQL 两种部署方式**：`Docker` / `非容器`。
 
-## 部署前先分清 3 个值和 1 条链
+> 前端自身的「构建产物 / 开发服务器 / 前端镜像」不属于部署，见
+> [`../vue-front/README.md`](../vue-front/README.md)（npm 方式）与
+> [`../vue-front/docker.md`](../vue-front/docker.md)（docker 方式）。
+> 本文件只讲把 **App 作为一个整体**怎么部署。
 
-一次请求经过：**浏览器 → 前端服务 → 后端 → 数据库**。其中只有 3 个值和"你这台服务器"有关：
-
-| 编号 | 是什么 | 作用 |
-|------|--------|------|
-| **A** | 后端生成的链接前缀 `static_path` | 后端把图片 / 下载链接写成**绝对地址**时的前缀，必须是**浏览器能打开的地址** |
-| **B** | 代理目标 | 前端把 `/api` 等请求转发给后端的地址 |
-| **C** | 数据库连接串 | 后端连哪个库 |
-
-**逻辑：A 和 C 永远改 `config/config.yaml`；只有 B 的"位置"随部署方式变。**
-
-- **A（`static_path`）三种部署都改 `config/config.yaml`**（它属于后端，后端只读该文件）。填成"浏览器能访问到前端那个地址"，结尾带 `/`：
-  - Docker 前端 8038 → `http://<IP>:8038/`；改完必须 `--build` 重建
-  - front.py 前端 8010 → `http://<IP>:8010/`；重启 `python main.py`
-  - dev 前端 5173 → 本机用默认即可；跨机填 `http://<IP>:5173/`
-- **B（代理目标）**：
-  - Docker：写死在 `docker/nginx.conf`（`backend:8008`），**不用改**
-  - front.py：`front.py` 顶部常量 `BACKEND_URL`，**一般留空**（自动按 `config.yaml` 的 `server_host`/`server_port` 推导）
-  - dev：`vue-front/.env` 的 `DEV_PROXY_TARGET`，默认 `http://127.0.0.1:8008`，**后端不在本机才改**
-- **C（数据库）三种部署都改 `config/config.yaml` 的 `mysql*`**，后端就按这里写的地址连库，**库在哪都行**：连本机 docker 库写 `localhost:<宿主发布端口>`（默认 `localhost:3307`；构建时只把主机名 `localhost` 换成 `host.docker.internal`，**端口沿用你写的值**）；连其它机器 / 外部 MySQL 直接写它的真实 `host:port`（非 localhost 不会被改写）。
-
-### 每种部署"最少改什么"
-
-| 部署 | 必改 | 生效方式 |
-|------|------|----------|
-| **Docker** | `config/config.yaml` 的 `static_path` = `http://<IP>:8038/` | `docker compose -f docker-compose.app.yml -p docker-app up -d --build`（改配置必须重建镜像） |
-| **front.py** | `config/config.yaml` 的 `static_path` = `http://<IP>:8010/` | 重启 `python main.py` |
-| **dev** | 后端不在本机时改 `vue-front/.env` 的 `DEV_PROXY_TARGET`（同机则不用改） | 重启 `npm run dev`；跨机访问加 `--host` |
-
-> 三者共同点：**只改文件，不碰宿主机环境变量**；前端产物用同源相对地址 `/api`，换服务器**不用重建前端**。
+> 文中端口都只是**默认值，均可修改**；一律用 `<前端端口>` / `<后端端口>` / `<宿主发布端口>` 占位，默认数字与修改位置见文末「端口与默认值」。
 
 ---
 
-## 通用前置条件
+## 0. 一条链和 3 个值
 
-1. **LLM API Key**：在 `agent/utils/llm_access/` 放好各模型 `key_file` 指定的密钥文件
-   （默认 `api_key_openai.txt`），否则所有 LLM 调用会失败。该目录下的密钥文件**不在仓库中**，
-   需自行创建；Docker 部署时必须在 `docker compose -f docker-compose.app.yml -p docker-app build` **之前**就位（否则不会被拷进镜像，
-   需 `docker compose -f docker-compose.app.yml -p docker-app up -d --build` 重建）。
-2. **业务数据库**：`config/config.yaml` 的 `mysql` 指向业务库（默认 `singapore_land_2`）。
-   容器会创建该空库，但**业务数据需要自行导入**。
+只有 3 个值和「你这台服务器」有关：
 
----
+| 值 | 是什么 | 放在哪 | 谁读它 |
+|----|--------|--------|--------|
+| **静态前缀** | `static_path`：后端生成的绝对 URL 前缀（文档下载链接、聊天正文中的图表图片、交互图/CSV 链接、静态地图等），必须是**浏览器能打开的地址**，结尾带 `/` | `config/config.yaml` | 后端 |
+| **代理目标** | 前端把 `/api`、`/upload-csv`、`/upload-txt`、`/tmp_imgs` 转给后端的地址 | **随 App 部署方式变** | 前端 |
+| **数据库连接串** | `mysql` / `mysql_readonly` / `mysql_sys` | `config/config.yaml` | 后端 |
 
-## A. Docker Compose
+**两条规则**：
 
-MySQL 与前后端是**两个互不依赖的独立部署**：不共享网络，前后端 stack 里也不含数据库。
+1. **静态前缀和数据库连接串，两种 App 部署都只改 `config/config.yaml`**（后端只读这个文件，程序不读任何环境变量）。改完的生效方式：Docker 需 `--build` 重建后端镜像；front.py + main.py 重启 `python main.py`。
+2. **代理目标的位置随 App 部署方式变**：
+   - Docker 方式 → 写死在 `docker/nginx.conf`（`backend:<后端端口>`），默认**不用改**；但如果你改了后端端口，要**同步改这里**。
+   - front.py + main.py 方式 → `front.py` 顶部常量 `BACKEND_URL`，**一般留空**（自动按 `config.yaml` 的 `server_host`/`server_port` 推导）。
 
-| 编排文件 | 组成 | 说明 |
-|------|------|------|
-| `docker/docker-compose.mysql.yml` | MySQL | 只把容器 3306 发布到宿主机 3307 |
-| `docker/docker-compose.app.yml` | 后端 + nginx 前端 | 可起多份，连哪个库由 `config.yaml` 决定 |
+> 前端产物一律用**同源相对地址** `/api`，不固化后端地址，所以**换服务器不用重建前端**。
 
-后端连库地址**完全由 `config/config.yaml` 的 DSN 决定**，所以两个 stack 可以任意搭配：
-既可以用本仓库 docker 起的库，也可以连其它机器、甚至非 docker 启动的 MySQL。
+**静态前缀（`static_path`）**：填一个**浏览器能访问、且 `/tmp_imgs/...` 能取到文件**的地址即可（前端各方式都反代 `/tmp_imgs/`，后端自己也提供，所以前端、后端地址**都满足**）。**推荐填前端地址**（对外入口、同源、无需额外暴露后端），写法 `http://<IP>:<前端端口>/`，结尾 `/` 不能省。
 
-### 一键启动
+**数据库连接串只写一处 `config/config.yaml` 的 `mysql*`**，填法见第 2 节：
 
-```bash
-cd docker
-# 1) 启动 MySQL（项目名固定 -p docker，沿用既有数据卷 docker_mysql_data）
-docker compose -f docker-compose.mysql.yml -p docker up -d
-
-# 2) 启动前后端（连库地址见 config.yaml，两个 stack 互不依赖、顺序可换）
-docker compose -f docker-compose.app.yml -p docker-app up -d --build
-```
-
-- 前端：<http://localhost:8038/>（nginx，`docker/nginx.conf`，反向代理后端并透传 SSE）
-- 后端：<http://localhost:8008/>
-- MySQL：宿主机 `3307` → 容器 `3306`
-
-> **后端连库规则**（`config/config.yaml` 的 `mysql` / `mysql_readonly` / `mysql_sys`）：
-> - **连本机 docker 起的库**：写 `localhost:<宿主发布端口>`，默认 `localhost:3307`
->   （`docker-compose.mysql.yml` 把库发布在宿主 `3307`）。构建镜像时**只会把主机名
->   `localhost` 自动换成 `host.docker.internal`，端口沿用你写的值**——因此换发布端口只改
->   `config.yaml` 一处，Dockerfile 无需改动。本 stack 已加
->   `extra_hosts: host.docker.internal:host-gateway`，Linux 上也能解析该名字。
-> - **连其它库**（外部 MySQL / 其它机器）：直接写它的真实地址，例如
->   `mysql+pymysql://root:123456@192.168.1.5:3306/singapore_land_2`；非 `localhost` 不会被改写。
->
-> 前后端 stack **不启动数据库**，请先确保目标 MySQL 已可达（后端入口脚本会自行等待就绪）。
->
-> **起第二套前后端**（共用同一个 MySQL，只需错开宿主机端口）：
->
-> ```bash
-> # PowerShell
-> $env:BACKEND_PORT="8018"; $env:FRONTEND_PORT="8048"; docker compose -f docker-compose.app.yml -p docker-app-2 up -d --build
-> # bash
-> BACKEND_PORT=8018 FRONTEND_PORT=8048 docker compose -f docker-compose.app.yml -p docker-app-2 up -d --build
-> ```
->
-> 端口默认 `8008`/`8038`，可用 `BACKEND_PORT`/`FRONTEND_PORT` 覆盖（容器内端口不变）。
-> 注意每套前后端是独立的前端地址，`config/config.yaml` 的 `static_path` 需指向**本套**的前端端口。
-
-> 前端产物通过**同源相对地址**访问 API（即浏览器当前地址），由 nginx 反向代理到后端。因此前端
-> 镜像**不固化后端地址**，不需要为前端配置服务器 IP。但后端生成的 URL（文档下载链接、聊天正文
-> 中的图表图片、交互图/CSV 链接、静态地图等）是基于 `static_path` 的**绝对地址**，跨机访问时必须
-> 把 `config/config.yaml` 的 `static_path` 设为浏览器可达的前端地址，见下文。
-
-### 数据库初始化
-
-`docker/docker-init.sql` 会在**首次**启动（`mysql_data` 卷为空时）自动执行，创建：
-
-- 业务库 `singapore_land_2`（与 `mysql` / `mysql_readonly` 一致）
-- 系统库 `data_copilot_v10_land_sys`（与 `mysql_sys` 一致）+ 全部系统表
-- 只读账号 `readonly`（`SELECT`、`SHOW VIEW`）
-
-库名与 `config/config.yaml` 严格对应，**不要**手工改名。若需重新初始化：
-
-```bash
-docker compose -f docker-compose.mysql.yml -p docker down -v   # 删除 mysql_data 卷
-docker compose -f docker-compose.mysql.yml -p docker up -d
-```
-
-> 非容器部署使用仓库根目录的 `init.sql`（只建系统表和 `brief_info` 初始数据、不建库），见下文与 `README.md`。
-
-> MySQL root 口令默认 `123456`，写死在 `docker/docker-compose.mysql.yml`（`MYSQL_ROOT_PASSWORD`）中。
-> root 与只读账号 `readonly` 的口令**互相独立**，改哪个只需同步改对应几处：
-> - **root 口令**：`docker/docker-compose.mysql.yml` 的 `MYSQL_ROOT_PASSWORD` + `config/config.yaml`
->   的 `mysql`、`mysql_sys` 两条 DSN（`docker-init.sql` 里没有 root 口令）。
-> - **`readonly` 口令**：`docker/docker-init.sql` 的 `CREATE USER ... IDENTIFIED BY` +
->   `config/config.yaml` 的 `mysql_readonly` DSN（`docker-compose.mysql.yml` 不受影响）。
-> 项目不读取任何环境变量。
-
-### 后端 URL 前缀（config.yaml 的 static_path）
-
-后端生成的**绝对 URL** 由 `config/config.yaml` 的 `static_path` 决定，包括：文档下载链接
-（MD/DOCX/PDF）、聊天正文中的图表图片（`/tmp_imgs/*.png`）、`Draw Graph With Data` 交互图、
-`Download Data CSV`、静态地图/预测图等。Docker 部署**直接使用镜像内打包的 `config.yaml`**（不再有
-环境变量注入），局域网/公网访问时把 `static_path` 改成浏览器可达的**前端**地址，然后重建镜像：
-
-```yaml
-# config/config.yaml
-static_path: "http://<服务器IP>:8038/"
-```
-
-```bash
-cd docker
-docker compose -f docker-compose.app.yml -p docker-app up -d --build   # 改 config.yaml 后必须重建 backend 镜像才会生效
-```
-
-> 说明：nginx 透传 `/tmp_imgs/`（`docker/nginx.conf`），所以 `static_path` 指向前端端口即可让上述
-> 所有链接在浏览器侧可用。默认 `http://127.0.0.1:8008/` 仅在本机浏览器有效，跨机访问**必须**修改，
-> 否则聊天里的图片和各类下载/交互链接会指向访问者自己的 localhost 而失效。结尾的 `/` 不能省略。
->
-> 前端本身无需任何构建期地址配置。
-
-### 前端构建
-
-前端镜像由 `docker/Dockerfile.frontend` **多阶段构建**（`node` 阶段 `npm run build` → `nginx`
-阶段），因此**不需要**预先构建 `vue-front/dist`。
+- 连本机 docker 库 → `localhost:<宿主发布端口>`。构建镜像时只把主机名 `localhost` 换成 `host.docker.internal`，**端口照抄你写的值**。
+- 连其它机器 / 外部 MySQL → 写它真实的 `host:port`（非 `localhost` 不会被改写）。
 
 ---
 
-## B. front.py（轻量反代）
+## 1. App（前端 + 后端）的两种部署方式
 
-用 Python 提供前端静态文件 + API 反向代理 + SSE 透传，替代 nginx。
+| 部署方式 | 组成 | 代理目标位置 |
+|----------|------|--------------|
+| **Docker** | nginx 前端容器（`<前端端口>`） + 后端容器（`<后端端口>`） | `docker/nginx.conf` |
+| **front.py + main.py** | `python front.py`（前端：静态 + 反代，`<前端端口>`） + `python main.py`（后端，`<后端端口>`） | `front.py` 的 `BACKEND_URL`（默认留空 → 按 `config.yaml` 的 `server_host`/`server_port` 推导） |
+
+### 通用前置条件
+
+1. **LLM API Key**：在 `agent/utils/llm_access/` 放好各模型 `key_file` 指定的密钥文件（默认 `api_key_openai.txt`），否则所有 LLM 调用失败。该目录下的密钥文件**不在仓库中**，需自行创建；Docker 部署必须在 `build` **之前**就位（否则不会被拷进镜像，需 `--build` 重建）。
+2. **数据库**：先按第 2 节准备好可用的 MySQL。
+
+### Docker 方式（`docker/docker-compose.app.yml`）
+
+**逻辑**：一个 compose 项目起两个容器。
+
+- 前端由 `docker/Dockerfile.frontend` **多阶段构建**（node 阶段 `npm run build` → 复制进 `nginx:alpine`），所以**不需要**预构建 `vue-front/dist`。容器内 nginx 监听 **`<前端端口>`**，用同源相对地址把 `/api`、`/upload-csv`、`/upload-txt`、`/tmp_imgs` 反代到 `backend:<后端端口>`，并关闭缓冲透传 SSE。
+- 后端由 `docker/Dockerfile.backend` 打包：`COPY . .` 把 `config/config.yaml` **烤进镜像**；构建时 `sed` 只把 DSN 里的主机名 `@localhost:` 换成 `@host.docker.internal:`；入口脚本 `docker-entrypoint.sh` 等数据库就绪后 `python main.py`。
+- 前后端 stack **不含数据库、无共享网络**，连哪个库完全由 `config.yaml` 决定。
+
+**改什么**
+
+- `config/config.yaml`
+  - `mysql` / `mysql_readonly` / `mysql_sys` → 指向你的库（本机 docker 库写 `localhost:<宿主发布端口>`；外部库写真实 `host:port`）
+  - `static_path` → `http://<浏览器可达IP>:<前端端口>/`
+- `docker/nginx.conf`：默认不用改。但**改过端口就要同步**——改前端端口改 `listen`；改后端端口改 `set $backend "http://backend:<后端端口>"`。
+- `docker/docker-compose.app.yml`：端口映射（前端、后端）。
+
+**命令**（仓库根目录）
 
 ```bash
-# 1) 构建前端产物（必须，否则页面 404）
-cd vue-front && npm install && npm run build && cd ..
+# 首次 / 改了 config.yaml 后（必须 --build，config 是构建时打进镜像的）
+docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build
 
-# 2) 启动后端（另开一个终端）
-python main.py
+# 只重建后端 / 只重建前端
+docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build backend
+docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build frontend
 
-# 3) 启动前端反代
-python front.py
-# 访问 http://localhost:8010/
+# 日志 / 停止
+docker compose -f docker/docker-compose.app.yml -p docker-app logs backend
+docker compose -f docker/docker-compose.app.yml -p docker-app logs frontend
+docker compose -f docker/docker-compose.app.yml -p docker-app down
 ```
 
-**配置**（直接修改 `front.py` 文件开头的常量，不读取环境变量）：
+
+
+### front.py + main.py 方式
+
+**逻辑**：后端单独跑 `python main.py`（`<后端端口>`）；`front.py` 从 `vue-front/dist/` 提供静态文件，并把 `/api`、`/upload-csv`、`/upload-txt`、`/tmp_imgs` 反代到后端，SSE 透传（路径含 `/stream/` 的按流式转发，`generate-yaml-outline`、`finalize` 显式列出）。`BACKEND_URL` 留空时按 `config.yaml` 的 `server_host`/`server_port` 推导（`0.0.0.0`/`::`/空 按 `127.0.0.1` 处理）。
+
+**前置：先构建前端产物**（否则页面 404）：
+
+```bash
+cd vue-front; npm install; npm run build; cd ..
+```
+
+> 前端的构建 / 开发服务器 / 前端镜像细节见 [`../vue-front/README.md`](../vue-front/README.md) 与 [`../vue-front/docker.md`](../vue-front/docker.md)。
+
+**改什么**
+
+- `config/config.yaml`：`mysql*` 指向你的库；`static_path` → `http://<IP>:<前端端口>/`
+- `front.py`（直接改文件开头的常量，不读取环境变量；一般不用改）：
 
 | 常量 | 默认 | 说明 |
 |------|------|------|
 | `BACKEND_URL` | `""` | 后端地址；留空则按 `config.yaml` 的 `server_host`/`server_port` 推导 |
 | `FRONT_HOST` | `"0.0.0.0"` | 反代监听地址 |
-| `FRONT_PORT` | `8010` | 反代监听端口 |
-| `PROXY_TIMEOUT` | `600.0` | 反代到后端的超时秒数（含 SSE 流），长任务超过 10 分钟时可调大 |
+| `FRONT_PORT` | `<前端端口>` | 反代监听端口（默认见文末，可改） |
+| `PROXY_TIMEOUT` | `600.0` | 反代到后端的超时秒数（含 SSE 流），长任务超过 10 分钟可调大 |
 
-front.py 同样透传 `/tmp_imgs/`。后端生成的**绝对 URL**（文档下载链接、聊天正文中的图表图片、
-交互图/CSV 链接、静态地图等）由 `config/config.yaml` 的 `static_path` 决定，front.py 部署时应设为
-`http://<地址>:<FRONT_PORT>/`（例如 `http://<地址>:8010/`），否则这些链接指向 `127.0.0.1:8008`
-（浏览器本机），跨机访问时不可用。
-
----
-
-## C. 手动 / 开发
+**命令**
 
 ```bash
-pip install -r requirement.txt
-python main.py            # 后端 :8008
-cd vue-front && npm install && npm run dev   # 前端 :5173，Vite 代理由 .env 的 DEV_PROXY_TARGET 决定
+cd vue-front; npm install; npm run build; cd ..   # 1) 构建前端产物
+python main.py                                     # 2) 后端（另一个终端）
+python front.py                                    # 3) 前端反代 → http://localhost:<前端端口>/
 ```
+
+改 `config.yaml`（`static_path` / `mysql*`）后**重启 `python main.py`** 生效。
 
 ---
 
-## 配置项
+## 2. MySQL 的两种部署方式
+
+| 部署方式 | 端口 | 初始化脚本 | 会建库？ | 会建只读账号？ |
+|----------|------|-----------|----------|----------------|
+| **Docker** | 容器默认 `3306` 发布到宿主 `<宿主发布端口>` | `docker/docker-init.sql` | 是 | 是 |
+| **非容器** | 数据库监听端口 `<端口>`（默认 `3306`） | 仓库根目录 `init.sql` | 否 | 否 |
+
+### Docker MySQL（`docker/docker-compose.mysql.yml`）
+
+**逻辑**：只跑数据库，固定容器名 `data-copilot-mysql`，把容器端口发布到宿主机 `<宿主发布端口>`（默认避开宿主机本地 MySQL 常用端口）；数据落在 `mysql_data` 卷；**首次启动**（卷为空）自动执行 `docker/docker-init.sql`：建业务库 `singapore_land_2`、系统库 `data_copilot_v10_land_sys` + 全部系统表 + 只读账号 `readonly`。库名/账号要与 `config.yaml` 对应。业务库只建空库，**业务数据需自行导入**。
+
+**改什么**
+
+- `docker/docker-compose.mysql.yml`：`MYSQL_ROOT_PASSWORD`（与 `config.yaml` 的 `mysql` / `mysql_sys` 同步）、端口映射（宿主发布端口可改）
+- `docker/docker-init.sql`：`CREATE DATABASE` 库名、`readonly` 密码（与 `config.yaml` 的 `mysql_readonly` 同步）
+- root 与 `readonly` 口令**互相独立**：改 root 只同步「compose 的 `MYSQL_ROOT_PASSWORD` + `config.yaml` 的 `mysql`/`mysql_sys`」（`docker-init.sql` 里没有 root 口令）；改 `readonly` 只同步「`docker-init.sql` + `config.yaml` 的 `mysql_readonly`」。
+
+**命令**
+
+```bash
+# 启动 / 看日志 / 停止
+docker compose -f docker/docker-compose.mysql.yml -p docker up -d
+docker compose -f docker/docker-compose.mysql.yml -p docker logs mysql
+docker compose -f docker/docker-compose.mysql.yml -p docker down
+
+# 重建空库（删数据卷，慎用）
+docker compose -f docker/docker-compose.mysql.yml -p docker down -v
+docker compose -f docker/docker-compose.mysql.yml -p docker up -d
+```
+
+### 非容器 MySQL
+
+**逻辑**：用宿主机 / 外部已装好的 MySQL。仓库根目录的 `init.sql` **只建系统表 + 4 条 `brief_info` 初始数据**，**不建库、不建只读账号**；必须先建库，再把表建进库里（否则报 `No database selected`）。
+
+**改什么 / 做什么**
+
+- `config/config.yaml`：`mysql` / `mysql_sys` 指向该库（如 `...@<host>:<端口>/...`）；`mysql_readonly` 指向只读账号
+- 手工建两个库：业务库 `singapore_land_2`、系统库 `data_copilot_v10_land_sys`（`utf8mb4`）
+- 用 `init.sql` 在系统库里建表
+- 若要启用只读查询（`exe_sql` 及探索类读取走 `read_only_engine`），**需自建 `readonly` 账号**（`init.sql` 不会建）
+
+**命令**
+
+```bash
+# 1) 建库（库名与 config.yaml 一致）
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS singapore_land_2 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS data_copilot_v10_land_sys DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+
+# 2) 系统库建表 + 初始化 brief_info
+mysql -u root -p data_copilot_v10_land_sys < init.sql
+
+# 3) （启用只读查询时）建只读账号
+mysql -u root -p -e "CREATE USER IF NOT EXISTS 'readonly'@'%' IDENTIFIED BY '123456'; GRANT SELECT, SHOW VIEW ON singapore_land_2.* TO 'readonly'@'%'; FLUSH PRIVILEGES;"
+```
+
+> `main.py` 启动时也会自动补建缺失的系统表（`CREATE TABLE IF NOT EXISTS`，重复执行安全）；其中 `base_knowledge`、`doc_guide`、`code_guide`、`graph_code_guide`、`think_guide` 仅在 `enable_base_knowledge` 为 true 时创建。
+
+---
+
+## 3. 组合搭配（App 两种 × MySQL 两种 = 4 种）
+
+App 与 MySQL **互相独立**：后端连哪个库**只由 `config.yaml` 的 DSN 决定**。
+
+| App 部署方式 \ MySQL 部署方式 | MySQL = Docker | MySQL = 非容器 / 外部 |
+|-------------------------------|----------------|------------------------|
+| **Docker** | DSN 写 `localhost:<宿主发布端口>`（`localhost` 会变 `host.docker.internal`，端口照抄）；改完必须 `--build` | DSN 写 `localhost:<端口>` 或真实 `host:port`（非 `localhost` 不改写）；后端容器靠 `extra_hosts` 访问宿主 |
+| **front.py + main.py** | DSN 按你的库写 `host:port` | 同上；front.py 不碰库，只反代 |
+
+**记忆要点**
+
+- 换 App 部署方式 → 只有**代理目标**的位置变（`nginx.conf` / `front.py`）；静态前缀和数据库连接串永远在 `config.yaml`。
+- 换 MySQL 部署方式 → 只有**数据库连接串的 `host:port`** 变；Docker 场景依赖「只换主机名、端口照抄」这条规则。
+- 每套 App 的 `static_path` 要指向**本套前端端口**。
+
+---
+
+## 4. 配置项汇总
 
 `config/config.yaml` 的关键字段（完整说明见 [`config_and_models.md`](config_and_models.md)）：
 
 | 字段 | 说明 |
 |------|------|
-| `server_host` / `server_port` | 后端绑定地址/端口（默认 `0.0.0.0:8008`） |
+| `server_host` / `server_port` | 后端绑定地址/端口 |
 | `mysql` / `mysql_readonly` / `mysql_sys` | 业务库 / 只读账号 / 系统库 DSN |
 | `static_path` | 后端生成的绝对 URL 前缀（文档下载链接、聊天正文中的图表图片、交互图/CSV 链接、静态地图等） |
 
-**单一来源**：上述配置项**只**来自 `config/config.yaml`，程序不读取任何环境变量；如需变更请直接
-修改该文件并重启（Docker 部署需 `--build` 重建镜像）。
+**单一来源**：上述配置项**只**来自 `config/config.yaml`，程序不读取任何环境变量；如需变更请直接修改该文件并重启（Docker 部署需 `--build` 重建后端镜像）。
 
 ---
 
-## 端口一览
+## 5. 端口与默认值（均可修改）
 
-| 服务 | 容器/进程端口 | 宿主机端口 |
-|------|------|------|
-| nginx 前端 | 8038 | 8038 |
-| 后端 API | 8008 | 8008 |
-| MySQL | 3306 | 3307 |
-| Vite 开发服务器 | 5173 | 5173 |
-| front.py 反代 | 8010（`front.py` 内 `FRONT_PORT`） | 8010 |
+| 端口 | 默认 | 改哪里 |
+|------|------|--------|
+| 后端端口 | `8008` | `config/config.yaml` 的 `server_port`（前端代理目标随之；Docker 还要同步 `docker/nginx.conf` 的 `$backend`） |
+| 前端端口（Docker） | `8038` | `docker/nginx.conf` 的 `listen` + `docker/docker-compose.app.yml` 的端口映射 |
+| 前端端口（front.py） | `8010` | `front.py` 的 `FRONT_PORT` |
+| MySQL 容器端口 | `3306` | `docker/docker-compose.mysql.yml` 的端口映射（容器内一般保持 `3306`） |
+| MySQL 宿主发布端口 | `3307` | `docker/docker-compose.mysql.yml` 的端口映射（同时把 `config.yaml` 的 DSN 端口改成一致） |
 
 ---
 
-## 故障排查
+## 6. 故障排查
 
 | 现象 | 原因 / 处理 |
 |------|------|
-| 前端页面 404 / 空白 | `vue-front/dist` 未构建。Compose 走多阶段构建不受影响；front.py 需先 `npm run build` |
-| SSE 逐字输出卡顿/一次性出现 | 反向代理缓冲未关闭。nginx 需 `proxy_buffering off;`（`docker/nginx.conf` 已配置）；front.py 已设 `X-Accel-Buffering: no` |
-| 聊天里的图片 / 下载 / 交互链接点不开（指向 `localhost` 或 `127.0.0.1`） | 后端生成的这些 URL 基于 `config.yaml` 的 `static_path`，默认仅本机可用；设为浏览器可达的前端地址（如 `http://<服务器IP>:8038/`）即可 |
+| 前端页面 404 / 空白 | `vue-front/dist` 未构建。Docker 方式走多阶段构建不受影响；front.py + main.py 方式需先 `npm run build`（见 [`../vue-front/README.md`](../vue-front/README.md)） |
+| SSE 逐字输出卡顿/一次性出现 | 反向代理缓冲未关闭。Docker 需 `proxy_buffering off;`（`docker/nginx.conf` 已配置）；front.py 已设 `X-Accel-Buffering: no` |
+| 聊天里的图片 / 下载 / 交互链接点不开（指向 `localhost` 或 `127.0.0.1`） | 后端生成的这些 URL 基于 `config.yaml` 的 `static_path`，默认仅本机可用；设为浏览器可达的前端地址（如 `http://<服务器IP>:<前端端口>/`）即可 |
 | 上传 CSV/文档报 `413 Request Entity Too Large` | nginx 请求体上限。`docker/nginx.conf` 已设 `client_max_body_size 60m;`；若自定义过该值需 ≥ 后端上限（CSV 50MB / 文档 20MB） |
 | 上传文档长时间无响应 / 504 | `/upload-txt/` 会做 LLM 注释生成，耗时可能超过 nginx 默认 60s 读超时；`docker/nginx.conf` 的 `/upload-txt/` 已设 `proxy_read_timeout 600s` |
 | SSE / 长任务超过 10 分钟被中断（504 或流式报错） | nginx 各 location 的 `proxy_read_timeout 600s` 与 front.py 默认超时均为 600s 上限；nginx 可调大 `docker/nginx.conf` 中的 `proxy_read_timeout`，front.py 改文件开头的 `PROXY_TIMEOUT`（秒） |
-| 后端一直卡在 `Waiting for MySQL to be ready` | 入口脚本按 `config/config.yaml` 的 DSN 解析库地址。确认目标 MySQL 已启动且可达：本机 docker 库需 MySQL stack 在跑（`docker compose -f docker-compose.mysql.yml -p docker up -d`，宿主 3307）；连外部库则确认地址/端口/防火墙。再核对库名与 `docker-init.sql` 一致（`singapore_land_2` / `data_copilot_v10_land_sys`），或 `docker compose -f docker-compose.mysql.yml -p docker down -v` 重初始化 |
-| LLM 调用报错/鉴权失败 | 缺少 `agent/utils/llm_access/<key_file>`；放入后重建镜像 |
-| 改了 `config.yaml` 后容器行为未变 | 容器用的是构建时打包的 config；改任何配置都需 `docker compose -f docker-compose.app.yml -p docker-app up -d --build` 重建 backend 镜像才会生效 |
+| 后端一直卡在 `Waiting for MySQL to be ready` | 入口脚本按 `config/config.yaml` 的 DSN 解析库地址。确认目标 MySQL 已启动且可达：本机 docker 库需 MySQL stack 在跑（`docker compose -f docker/docker-compose.mysql.yml -p docker up -d`），且 `config.yaml` 的 DSN 端口写成宿主发布端口；连外部库则确认地址/端口/防火墙。再核对库名与 `docker-init.sql` 一致（`singapore_land_2` / `data_copilot_v10_land_sys`），或 `docker compose -f docker/docker-compose.mysql.yml -p docker down -v` 重初始化 |
+| LLM 调用报错/鉴权失败 | 缺少 `agent/utils/llm_access/<key_file>`；放入后重建镜像（Docker）或重启后端 |
+| 改了 `config.yaml` 后容器行为未变 | 容器用的是构建时打包的 config；改任何配置都需 `docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build` 重建后端镜像才会生效 |
 | 街景/静态地图截图失败 | 后端镜像中 `playwright install` 有 60s 超时，超时会被跳过（构建日志有 WARNING），此时该功能运行时不可用 |
