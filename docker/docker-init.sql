@@ -110,6 +110,13 @@ CREATE TABLE IF NOT EXISTS `code_guide` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图表代码指南表';
 
+CREATE TABLE IF NOT EXISTS `graph_code_guide` (
+  `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `key` TEXT NOT NULL COMMENT '图表代码指南键',
+  `value` LONGTEXT COMMENT '图表代码指南值',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图谱代码指南表';
+
 CREATE TABLE IF NOT EXISTS `think_guide` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
   `key` TEXT NOT NULL COMMENT '思考指南键',

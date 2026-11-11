@@ -134,7 +134,7 @@ pip install -r requirement.txt
 mysql -u root -p < init.sql
 ```
 
-`main.py` 启动时也会自动创建缺失的系统表，包括 `init.sql` 未包含的 `graph_code_guide`；其中 `base_knowledge`、`doc_guide`、`code_guide`、`graph_code_guide`、`think_guide` 这批知识表仅在 `enable_base_knowledge` 为 true 时创建。
+`main.py` 启动时也会自动创建缺失的系统表（`CREATE TABLE IF NOT EXISTS`，重复执行安全）；其中 `base_knowledge`、`doc_guide`、`code_guide`、`graph_code_guide`、`think_guide` 这批知识表仅在 `enable_base_knowledge` 为 true 时创建。
 
 > Docker Compose 部署使用 `docker/docker-init.sql`（它会建库并创建系统表，库名与 `config/config.yaml` 一致）；上面的 `init.sql` 仅用于非容器的手动部署。
 

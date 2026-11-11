@@ -459,5 +459,5 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 | `data_access/think_guide_db.py` | `think_guide` 表定义 |
 | `data_access/sys_db_conn.py` | 系统数据库连接 |
 | `docker/docker-init.sql` | Docker 数据库初始化脚本（含业务库和系统库） |
-| `init.sql` | 系统数据库 `data_copilot_v10_land_sys` 的初始化脚本（不含 `graph_code_guide`） |
-| `main.py` | 启动时创建所有系统表（`graph_code_guide` 由启动时创建，不在 `init.sql` 中） |
+| `init.sql` | 系统数据库 `data_copilot_v10_land_sys` 的初始化脚本（含全部系统表） |
+| `main.py` | 启动时创建所有系统表（幂等，已存在的表跳过） |

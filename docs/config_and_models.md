@@ -414,7 +414,7 @@ created_at  DATETIME
 
 ### 系统库知识表
 
-系统库另含 6 张键值对知识表：`base_knowledge`、`db_query_guide`、`code_guide`、`graph_code_guide`、`think_guide`、`doc_guide`，结构均为 `id` INT 主键、`key` TEXT、`value` LONGTEXT（`graph_code_guide` 不在 `init.sql` 中，由启动时按 `enable_base_knowledge` 自动创建）。
+系统库另含 6 张键值对知识表：`base_knowledge`、`db_query_guide`、`code_guide`、`graph_code_guide`、`think_guide`、`doc_guide`，结构均为 `id` INT 主键、`key` TEXT、`value` LONGTEXT（`init.sql` 与 `docker/docker-init.sql` 均已包含这 6 张表）。
 
 ---
 
