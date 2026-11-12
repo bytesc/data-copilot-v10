@@ -27,15 +27,16 @@ from utils.context_trim import cap_text, stream_with_context_retry
 
 STATIC_URL = config_data['static_path']
 
-IMPORTANT_MODULE = ["import math",
-                    "from agent.tools.copilot.utils.mpl_chinese_font import setup_chinese_font",
-                    "setup_chinese_font()"]
+# `func` runs inside the sandbox subprocess, which already configures the Chinese
+# font and the Agg backend at startup, so no font import/setup is injected here and
+# `os` is intentionally NOT injected (it is blocked by the sandbox policy).
+IMPORTANT_MODULE = ["import math"]
 THIRD_MODULE = ["import pandas as pd", "import numpy as np",
                 "import PIL", "import matplotlib",
                 "matplotlib.use('Agg')",
                 "import matplotlib.pyplot as plt", "import seaborn as sns",
                 "import json", "import re", "import datetime",
-                "import textwrap", "import os", "import random",
+                "import textwrap", "import random",
                 "import collections", "import io", "import functools"]
 
 # print(get_db_info_prompt(engine, simple=True, example=False))
@@ -362,7 +363,9 @@ def generate_and_execute_stream(question, tables=None, retries=2,
         """
             continue
 
-        code = insert_lines_into_function(code, function_import)
+        # Privileged tool imports (`from agent.tools... import ...`) are no longer
+        # injected: the sandbox namespace already provides the whitelisted tool
+        # functions, and such imports are rejected by the sandbox policy anyway.
         code = insert_lines_into_function(code, IMPORTANT_MODULE)
         code = insert_lines_into_function(code, THIRD_MODULE)
         # code += " err test "

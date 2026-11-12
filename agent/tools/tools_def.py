@@ -211,17 +211,8 @@ def get_save_image_path() -> str:
        Example:
        ```python
         def func(data_dict):
-import json
-import pandas as pd
-            import math
-            import numpy as np
-            import PIL
-            import matplotlib
-            matplotlib.use('Agg')
-            import matplotlib.pyplot as plt
-            from agent.tools.copilot.utils.mpl_chinese_font import setup_chinese_font
-            setup_chinese_font()
-
+            # No import statements: pandas / numpy / matplotlib (Agg) and the
+            # Chinese font are all provided by the execution environment.
             # Data
             x = data_dict['x']
             y1 = data_dict['y1']
