@@ -353,12 +353,23 @@
   {type:"history", history:[...]}
 
 执行错误后重试成功：
-  ... → {sub_type:"code_exe_error", content:"..."}
+  ... → {sub_type:"code_exe_error", content:"...", error_kind:"runtime_error"}
   → {phase:"act", type:"msg", content:"Execution failed, regenerating code based on error..."}
   → 重新生成并执行 → {type:"done", ...} → {type:"history", ...}
 
 重试耗尽失败：
-  ... → {phase:"act", type:"error", content:"generate_and_execute_stream_error"}
+  ... → {phase:"act", type:"error", content:"generate_and_execute_stream_error",
+         error_kind:"runtime_error", error:"...", sub_phase:"exec"}
+  → {type:"history", ...}
+```
+
+> `code_gen_error` / `code_exe_error` chunk 与终端 `error` 事件都带一个机器可读的
+> `error_kind`，取值来自沙箱：`policy_violation` / `syntax_error` / `timeout` /
+> `resource_limit` / `no_func` / `runtime_error` / `environment_error` / `job_error` /
+> `config_error`，以及代码生成层的 `code_format_error`（未能解析出代码块）。
+> 终端错误的事件 `content` 仍是稳定的 `generate_and_execute_stream_error`，真实原因放在
+> `error` 字段；它带 `sub_phase:"exec"`，客户端据此判定为“动作级失败”而**继续**下一步
+> （Observe 从 history 读到该 act 条目的 `error`/`error_kind`），而不是当成传输失败中止会话。
 ```
 
 > 该 action 起始会先发一个 `sub_phase:"generate"` 的 `status` 事件（`content:"Generating and executing code..."`），随后子事件切到 `sub_phase:"code"` / `"exec"`。

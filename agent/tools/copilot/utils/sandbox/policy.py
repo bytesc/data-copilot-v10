@@ -72,7 +72,16 @@ BLOCKED_NAMES = {
 
 
 class PolicyViolation(Exception):
-    """Raised when a non-obvious policy failure should abort review."""
+    """Raised when a non-obvious policy failure should abort review.
+
+    ``kind`` is a stable machine-readable code (``syntax_error`` when the code
+    cannot even be parsed, ``policy_violation`` otherwise) so the caller can
+    record and act on the failure type instead of parsing the message text.
+    """
+
+    def __init__(self, message, kind="policy_violation"):
+        super().__init__(message)
+        self.kind = kind
 
 
 class _ViolationVisitor(ast.NodeVisitor):
@@ -132,7 +141,8 @@ def validate(code):
         tree = ast.parse(code)
     except SyntaxError as exc:
         raise PolicyViolation(
-            f"generated code is not valid Python (line {exc.lineno}): {exc.msg}"
+            f"generated code is not valid Python (line {exc.lineno}): {exc.msg}",
+            kind="syntax_error",
         ) from exc
 
     visitor = _ViolationVisitor()

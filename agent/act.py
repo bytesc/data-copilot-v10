@@ -76,6 +76,22 @@ def _build_context(question: str, conversation_history: Optional[List[dict]], se
     return question
 
 
+def _tag_error(kind, message):
+    """Prefix ``message`` with its ``[kind]`` tag exactly once.
+
+    The ``error_kind`` field is the structured source of truth; the tag is for
+    readability so logs, the LLM context and the UI all show the failure type
+    even where only the string is consumed. Idempotent, so an already-tagged
+    message (e.g. one that round-tripped from a chunk) is not double-prefixed.
+    """
+    if not kind:
+        return message
+    tag = f"[{kind}]"
+    if not message:
+        return tag
+    return message if message.startswith(tag) else f"{tag} {message}"
+
+
 def _build_act_entries(action: str, act_data: dict) -> List[dict]:
     entries = []
     if action == "explore_schema":
@@ -113,7 +129,11 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
         exec_error = act_data.get("exec_error")
         images = act_data.get("images") or []
         if exec_error:
-            entry = {"role": "assistant", "type": "act", "action": "generate_and_execute", "error": exec_error}
+            exec_error_kind = act_data.get("exec_error_kind")
+            entry = {"role": "assistant", "type": "act", "action": "generate_and_execute",
+                     "error": _tag_error(exec_error_kind, exec_error)}
+            if exec_error_kind:
+                entry["error_kind"] = exec_error_kind
             if full_code:
                 entry["code"] = full_code
             if full_ans:
@@ -622,6 +642,7 @@ def _act_generate_and_execute(build_question, session_id: str, tables, selected_
     full_code = ""
     full_ans = ""
     exec_error = None
+    exec_error_kind = ""
     generated_images = []
     for event in generate_and_execute_stream(
         full_question, tables, retries=2,
@@ -636,18 +657,21 @@ def _act_generate_and_execute(build_question, session_id: str, tables, selected_
                 full_code = ""
                 full_ans = ""
                 exec_error = None
+                exec_error_kind = ""
                 generated_images = []
             full_code += event.get("content", "")
         if event.get("sub_type") == "code_complete":
             full_code = event.get("content", "")
         if event.get("sub_type") == "exec_chunk":
             full_ans += event.get("content", "")
-        if event.get("sub_type") == "code_exe_error":
+        if event.get("sub_type") in ("code_exe_error", "code_gen_error"):
             exec_error = event.get("content", "")
-        if event.get("sub_type") == "code_gen_error":
-            exec_error = event.get("content", "")
+            if event.get("error_kind"):
+                exec_error_kind = event["error_kind"]
         if event.get("type") == "error":
-            exec_error = event.get("content", exec_error or "code generation/execution failed")
+            exec_error = event.get("error") or event.get("content", exec_error or "code generation/execution failed")
+            if event.get("error_kind"):
+                exec_error_kind = event["error_kind"]
 
         if event.get("type") == "done" and event.get("sub_phase") == "exec":
             full_code = event.get("code", full_code)
@@ -659,23 +683,25 @@ def _act_generate_and_execute(build_question, session_id: str, tables, selected_
                     "code": full_code,
                     "exec_result": full_ans,
                     "error": exec_error,
+                    "error_kind": exec_error_kind,
                     "images": generated_images,
                 }
             }
         yield f"data: {json.dumps({**event}, ensure_ascii=False)}\n\n"
     if exec_error:
-        record_session_operation(session_id, "/api/act/stream/", request_json, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500])
+        record_msg = _tag_error(exec_error_kind, exec_error)
+        record_session_operation(session_id, "/api/act/stream/", request_json, ans=full_ans, code=full_code, result_type="error", msg=record_msg[:500])
         log_observe_cycle(session_id, 0, "act", "generate_and_execute",
                           prompt=full_question[:10000], response=full_code[:10000],
                           exec_code=full_code[:10000], exec_result=full_ans[:10000],
-                          exec_error=exec_error[:2000])
+                          exec_error=record_msg[:2000])
     else:
         record_session_operation(session_id, "/api/act/stream/", request_json, ans=full_ans, code=full_code, result_type="success")
         log_observe_cycle(session_id, 0, "act", "generate_and_execute",
                           prompt=full_question[:10000], response=full_code[:10000],
                           exec_code=full_code[:10000], exec_result=full_ans[:10000])
 
-    return {"full_code": full_code, "full_ans": full_ans, "exec_error": exec_error, "images": generated_images}
+    return {"full_code": full_code, "full_ans": full_ans, "exec_error": exec_error, "exec_error_kind": exec_error_kind, "images": generated_images}
 
 
 def _act_generate_document(conversation_history, session_id, title: str = "", request_json: str = ""):

@@ -320,6 +320,11 @@ def generate_and_execute_stream(question, tables=None, retries=2,
         return cot
 
     error_msg = ""
+    # Machine-readable failure code and its raw detail, carried out of the retry
+    # loop so the terminal error event can record and forward exactly what failed
+    # (instead of a generic "generate_and_execute_stream_error").
+    error_kind = ""
+    error_detail = ""
 
     for i in range(retries):
         if i > 0:
@@ -338,7 +343,9 @@ def generate_and_execute_stream(question, tables=None, retries=2,
 
         code = parse_generated_python_code(raw_content)
         if code is None:
-            yield {"type": "chunk", "sub_type": "code_gen_error", "content": "code generation error", "phase": "act", "sub_phase": "code"}
+            error_kind = "code_format_error"
+            error_detail = "code generation error"
+            yield {"type": "chunk", "sub_type": "code_gen_error", "content": "code generation error", "error_kind": error_kind, "phase": "act", "sub_phase": "code"}
             error_msg = """
         code should only be in a md code block: 
         ```python
@@ -351,7 +358,9 @@ def generate_and_execute_stream(question, tables=None, retries=2,
             continue
 
         if 'def func(' not in code:
-            yield {"type": "chunk", "sub_type": "code_gen_error", "content": "def func not found", "phase": "act", "sub_phase": "code"}
+            error_kind = "no_func"
+            error_detail = "def func not found"
+            yield {"type": "chunk", "sub_type": "code_gen_error", "content": "def func not found", "error_kind": error_kind, "phase": "act", "sub_phase": "code"}
             error_msg = """
         The code must define a function named `func`, i.e. contain `def func():`. 
         Do NOT write any code, text, or explanation outside the function.
@@ -396,9 +405,11 @@ def generate_and_execute_stream(question, tables=None, retries=2,
                         images.extend(re.findall(r'https?://[^\s"\'<>]+\.png', item))
                 yield {"type": "chunk", "sub_type": "exec_chunk", "content": formatted, "phase": "act", "sub_phase": "exec"}
         except Exception as e:
-            error_msg = str(e)
-            print(f"Execution error: {e}")
-            yield {"type": "chunk", "sub_type": "code_exe_error", "content": error_msg, "phase": "act", "sub_phase": "exec"}
+            error_kind = getattr(e, "kind", "execution_error")
+            error_detail = str(e)
+            error_msg = f"[{error_kind}] {e}"
+            print(f"Execution error ({error_kind}): {e}")
+            yield {"type": "chunk", "sub_type": "code_exe_error", "content": error_detail, "error_kind": error_kind, "phase": "act", "sub_phase": "exec"}
             continue
         finally:
             record_code_exec(_time.monotonic() - _exec_start)
@@ -410,5 +421,18 @@ def generate_and_execute_stream(question, tables=None, retries=2,
         yield {"type": "done", "code": code, "content": formatted_result, "phase": "act", "sub_phase": "exec", "images": images}
         return
 
-    yield {"type": "error", "content": "generate_and_execute_stream_error", "phase": "act"}
+    # Retry budget exhausted: emit a terminal, actionable error that carries the
+    # concrete failure kind and detail. ``sub_phase`` is set so the client treats
+    # it as a handled action failure (recorded, fed to the next LLM step) rather
+    # than a transport failure.
+    final_kind = error_kind or "execution_error"
+    final_detail = error_detail or "code generation/execution failed"
+    yield {
+        "type": "error",
+        "content": "generate_and_execute_stream_error",
+        "error_kind": final_kind,
+        "error": final_detail,
+        "phase": "act",
+        "sub_phase": "exec",
+    }
 

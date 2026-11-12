@@ -948,6 +948,7 @@ def _event_stream_generate_and_execute(question: str, tables: Optional[List[str]
     full_code = ""
     full_ans = ""
     exec_error = None
+    exec_error_kind = ""
     for event in generate_and_execute_stream(question, tables, selected_fields=selected_fields, selected_functions=selected_functions):
         sub_type = event.get("sub_type")
         if sub_type == "code_chunk":
@@ -955,23 +956,29 @@ def _event_stream_generate_and_execute(question: str, tables: Optional[List[str]
                 full_code = ""
                 full_ans = ""
                 exec_error = None
+                exec_error_kind = ""
             full_code += event.get("content", "")
         if sub_type == "code_complete":
             full_code = event.get("content", full_code)
         if sub_type == "exec_chunk":
             full_ans += event.get("content", "")
-        if sub_type == "code_exe_error":
+        if sub_type in ("code_exe_error", "code_gen_error"):
             exec_error = event.get("content", "")
-        if sub_type == "code_gen_error":
-            exec_error = event.get("content", "")
+            if event.get("error_kind"):
+                exec_error_kind = event["error_kind"]
         if event.get("type") == "done" and event.get("sub_phase") == "exec":
             full_code = event.get("code", full_code)
             full_ans = event.get("content", full_ans)
         if event.get("type") == "error":
-            exec_error = event.get("content", exec_error or "code generation/execution failed")
+            exec_error = event.get("error") or event.get("content", exec_error or "code generation/execution failed")
+            if event.get("error_kind"):
+                exec_error_kind = event["error_kind"]
         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
     if exec_error:
-        record_session_operation(session_id, request_url, request_json, ans=full_ans, code=full_code, result_type="error", msg=exec_error[:500])
+        record_msg = exec_error
+        if exec_error_kind and not record_msg.startswith(f"[{exec_error_kind}]"):
+            record_msg = f"[{exec_error_kind}] {record_msg}"
+        record_session_operation(session_id, request_url, request_json, ans=full_ans, code=full_code, result_type="error", msg=record_msg[:500])
     else:
         record_session_operation(session_id, request_url, request_json, ans=full_ans, code=full_code, result_type="success")
 

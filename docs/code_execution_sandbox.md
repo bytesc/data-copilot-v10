@@ -85,7 +85,7 @@ data = {
 
 ```yaml
 code_exec:
-  timeout: 120        # 总超时秒数（主进程墙钟计时）
+  timeout: 600        # 总超时秒数（主进程墙钟计时，10 分钟）
   max_memory_mb: 1536 # 内存上限
   cpu_rate: 120       # CPU 秒数上限
   max_processes: 64   # 进程/线程数上限
@@ -106,6 +106,27 @@ code_exec:
 
 平台不支持的限制项自动跳过并记一条 warning。子进程若未发出结束消息即退出（被资源限制
 杀掉或崩溃），主进程按“异常退出”抛出 `SandboxError`，进入重试链路，而不是当作成功。
+
+### 沙箱错误类型（`SandboxError.kind`）
+
+`SandboxError` 除消息外还带一个稳定的机器可读 `kind`（`executor.py`），使调用方能记录、
+展示并把具体类型回喂 LLM，而不必解析自然语言文案：
+
+| `kind` | 触发点 |
+|--------|--------|
+| `config_error` | 渲染最小沙箱配置失败（fail-closed） |
+| `syntax_error` | AST 解析失败（`policy.py` 抛 `PolicyViolation(kind="syntax_error")`） |
+| `policy_violation` | AST 审查命中禁用 import/调用/属性 |
+| `timeout` | 超过 `timeout` 强杀整棵进程树 |
+| `resource_limit` | 子进程未发结束消息即退出（内存/CPU/文件超限或崩溃） |
+| `no_func` | 代码未定义可调用的 `func`（子进程 `runner.py` 上报） |
+| `runtime_error` | 生成代码执行时抛异常（子进程上报，含 traceback） |
+| `environment_error` | 沙箱工具函数加载等执行前环境准备失败 |
+| `job_error` | 子进程读取 job 文件失败 |
+
+生成层还有 `code_format_error`（未能在回复中解析出代码块）。这些 `kind` 会经
+`code_exe_error` / `code_gen_error` chunk 与终端 `error` 事件的 `error_kind` 字段向上传递，
+并记入 `generate_and_execute` 的 act 条目，供下一步（Observe）读取。
 
 ## 六、跨平台
 

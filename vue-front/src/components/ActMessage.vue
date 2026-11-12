@@ -101,7 +101,9 @@
           </div>
         </details>
         <details v-if="message.error" class="msg-collapse">
-          <summary class="collapse-summary">Error</summary>
+          <summary class="collapse-summary">
+            Error<template v-if="message.error_kind"> · {{ message.error_kind }}</template>
+          </summary>
           <div class="error-block">
             <strong>Error:</strong> {{ message.error }}
           </div>

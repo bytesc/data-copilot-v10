@@ -416,16 +416,16 @@ data: {"type":"msg","content":"Generating code...","phase":"act","sub_phase":"co
 data: {"type":"chunk","sub_type":"code_chunk","content":"...","phase":"act","sub_phase":"code"}
 data: {"type":"reasoning_chunk","content":"...","phase":"act","sub_phase":"code"}
 data: {"type":"chunk","sub_type":"code_complete","content":"def ...","phase":"act","sub_phase":"code"}
-data: {"type":"chunk","sub_type":"code_gen_error","content":"code generation error","phase":"act","sub_phase":"code"}
+data: {"type":"chunk","sub_type":"code_gen_error","content":"code generation error","error_kind":"code_format_error","phase":"act","sub_phase":"code"}
 data: {"type":"msg","content":"Executing code...","phase":"act","sub_phase":"exec"}
 data: {"type":"chunk","sub_type":"exec_chunk","content":"...","phase":"act","sub_phase":"exec"}
-data: {"type":"chunk","sub_type":"code_exe_error","content":"...","phase":"act","sub_phase":"exec"}
+data: {"type":"chunk","sub_type":"code_exe_error","content":"...","error_kind":"runtime_error","phase":"act","sub_phase":"exec"}
 data: {"type":"chunk","sub_type":"exec_complete","content":"...","phase":"act","sub_phase":"exec","images":["xxx.png"]}
 data: {"type":"done","code":"...","content":"...","phase":"act","sub_phase":"exec","images":["xxx.png"]}
-data: {"type":"error","content":"generate_and_execute_stream_error","phase":"act"}
+data: {"type":"error","content":"generate_and_execute_stream_error","error_kind":"runtime_error","error":"...","phase":"act","sub_phase":"exec"}
 ```
 
-> 终态成功事件为 `done`（含 `code` / `content` / `images`，**没有** `ans` 字段）；`code_gen_error` 的 `phase` 为 `"act"`；重试耗尽时发出 `{"type":"error","content":"generate_and_execute_stream_error","phase":"act"}`。
+> 终态成功事件为 `done`（含 `code` / `content` / `images`，**没有** `ans` 字段）；`code_gen_error` 的 `phase` 为 `"act"`。重试耗尽时发出终态 `error`：`content` 恒为 `generate_and_execute_stream_error`，`error_kind` 为具体类型（沙箱：`policy_violation` / `syntax_error` / `timeout` / `resource_limit` / `no_func` / `runtime_error` / `environment_error` / `job_error` / `config_error`；生成层：`code_format_error`），`error` 为真实原因，并带 `sub_phase:"exec"`。`code_gen_error` / `code_exe_error` 与终态 `error` 均携带 `error_kind`；该错误会记入 `generate_and_execute` 的 act 条目（`error` 带 `[error_kind]` 前缀，另带结构化 `error_kind`）并喂给下一步 LLM。
 
 ### POST `/api/plain-chat/stream/`
 

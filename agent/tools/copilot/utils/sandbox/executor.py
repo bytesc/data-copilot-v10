@@ -41,7 +41,28 @@ _RUNNER = _HERE / "runner.py"
 
 
 class SandboxError(RuntimeError):
-    """Raised when generated code is rejected, times out or fails in the child."""
+    """Raised when generated code is rejected, times out or fails in the child.
+
+    ``kind`` is a stable machine-readable code for the failure category, so the
+    caller can record it, show it and feed it back to the LLM instead of having
+    to parse prose. Known kinds:
+
+    * ``policy_violation``  - rejected by the AST review (the code is NOT run);
+    * ``syntax_error``      - generated code is not valid Python;
+    * ``timeout``           - exceeded the wall-clock sandbox limit;
+    * ``resource_limit``    - child killed by a resource cap (memory / CPU /
+      file size) or crashed before finishing;
+    * ``no_func``           - code did not define a callable named ``func``;
+    * ``runtime_error``     - generated code raised while executing;
+    * ``environment_error`` - sandbox/tool setup failed before running the code;
+    * ``job_error``         - the sandbox job file could not be read;
+    * ``config_error``      - the minimal sandbox config could not be rendered.
+    """
+
+    def __init__(self, message, kind="sandbox_error", **details):
+        super().__init__(message)
+        self.kind = kind
+        self.details = details
 
 
 def _config():
@@ -130,7 +151,7 @@ def _render_sandbox_config(workdir):
                            default_flow_style=False, sort_keys=False)
     except (OSError, yaml.YAMLError) as exc:
         raise SandboxError(
-            f"failed to render the sandbox config: {exc}"
+            f"failed to render the sandbox config: {exc}", kind="config_error"
         ) from exc
     return path
 
@@ -195,14 +216,16 @@ def execute_in_sandbox(code):
     except PolicyViolation as exc:
         raise SandboxError(
             "Generated code was rejected by the sandbox security policy and was "
-            f"NOT executed:\n  - {exc}\nPlease regenerate the code without it."
+            f"NOT executed:\n  - {exc}\nPlease regenerate the code without it.",
+            kind=getattr(exc, "kind", "policy_violation"),
         ) from exc
     if violations:
         bullets = "\n".join(f"  - {item}" for item in violations)
         raise SandboxError(
             "Generated code was rejected by the sandbox security policy and was "
             f"NOT executed:\n{bullets}\n"
-            "Remove the disallowed imports/calls and regenerate the code."
+            "Remove the disallowed imports/calls and regenerate the code.",
+            kind="policy_violation",
         )
     return _iter_items(code)
 
@@ -267,11 +290,11 @@ def _iter_items(code):
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise SandboxError(_timeout_message(cfg, err_path))
+                raise SandboxError(_timeout_message(cfg, err_path), kind="timeout")
             try:
                 kind, raw = sink.get(timeout=remaining)
             except queue.Empty:
-                raise SandboxError(_timeout_message(cfg, err_path))
+                raise SandboxError(_timeout_message(cfg, err_path), kind="timeout")
 
             if kind == "eof":
                 break
@@ -283,7 +306,7 @@ def _iter_items(code):
                 msg = message.get("msg") or "sandbox execution error"
                 if tail:
                     msg = f"{msg}\n--- sandbox stderr (tail) ---\n{tail}"
-                raise SandboxError(msg)
+                raise SandboxError(msg, kind=message.get("kind") or "runtime_error")
             if message.get("t") == "done":
                 finished = True
                 break
@@ -293,7 +316,9 @@ def _iter_items(code):
             # The child vanished without a terminal message: killed by a resource
             # limit (memory/CPU/file size) or crashed. Surface it as an error so
             # the caller retries instead of silently accepting a partial result.
-            raise SandboxError(_unexpected_exit_message(proc, err_path))
+            raise SandboxError(
+                _unexpected_exit_message(proc, err_path), kind="resource_limit"
+            )
     finally:
         if proc is not None and proc.poll() is None:
             kill_tree(proc.pid, job_object)

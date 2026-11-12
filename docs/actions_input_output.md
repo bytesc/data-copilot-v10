@@ -248,10 +248,12 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 **输出（失败）**
 ```json
-{"role":"assistant","type":"act","action":"generate_and_execute","error":"..."}
+{"role":"assistant","type":"act","action":"generate_and_execute","error":"[runtime_error] ...","error_kind":"runtime_error"}
 // code、result、images 在非空时可选出现
-{"role":"assistant","type":"act","action":"generate_and_execute","error":"...","code":"...","result":"...","images":["xxx.png"]}
+{"role":"assistant","type":"act","action":"generate_and_execute","error":"[runtime_error] ...","error_kind":"runtime_error","code":"...","result":"...","images":["xxx.png"]}
 ```
+
+失败条目的 `error` 带 `[{error_kind}]` 前缀，并另带结构化的 `error_kind` 字段。`error_kind` 取值来自沙箱（`policy_violation` / `syntax_error` / `timeout` / `resource_limit` / `no_func` / `runtime_error` / `environment_error` / `job_error` / `config_error`）或代码生成层（`code_format_error`）。该条目会记入历史并喂给下一步（Observe），使 LLM 能读到失败的具体类型并据此调整。
 
 **上下文（成功）**
 ```
@@ -267,9 +269,13 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 ```
 [ACT generate_and_execute] code:
 {code}
+[ACT generate_and_execute] result (partial; execution failed afterwards):
+{result}
 [ACT generate_and_execute] error:
 {error}
 ```
+
+失败时若条目带有 `result`（执行流在抛错前已经 yield 的部分输出），会以 `result (partial; execution failed afterwards)` 一并渲染进上下文，使下一轮 LLM 既看到错误、也看到已经跑出来的部分结果；没有 `result` 时只渲染 `error`。
 
 `images` 为本次执行生成的图片列表（去重后；本地图片通常只存文件名，本机静态地址或外部 http 图片保留完整 URL）。`act` 条目的该字段仅用于前端展示，不进入 LLM 上下文（`history_to_text` 不渲染该字段）；同时会覆盖写入 blackboard 的 `recent_generated_images` 区域，并随 `## Blackboard` 段以文本注入所有 LLM 阶段。若模型 `supports_images=true` 且请求 `meta.use_images` 开启，这些图片还会作为 `image_url` 内容数组附加到用户消息中，每张图片前带 `Image filename: ...` 标签。
 

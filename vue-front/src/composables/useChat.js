@@ -512,12 +512,19 @@ function historyToText(history) {
           })
         }
       } else if (etype === 'error') {
-        if (event.fatal || (!sub && !event.phase)) {
+        // An error carrying a sub_phase / error_kind is an action-level failure
+        // (e.g. code generation/execution). It is recorded in history and fed to
+        // the next step (Observe), so it must NOT stop the loop. Only a
+        // transport/fatal error (no phase, no kind, or fatal:true) aborts.
+        if (event.fatal || (!sub && !event.phase && !event.error_kind)) {
           streamFailed = true
-        } else if (sub) {
+        } else {
           gotHandledError = true
         }
-        updateStreamingSubPhase(msgId, currentSubPhase, content, false, true)
+        const shownError = event.error_kind
+          ? `[${event.error_kind}] ${event.error || content}`
+          : (event.error || content)
+        updateStreamingSubPhase(msgId, currentSubPhase, shownError, false, true)
         if (!event.silent) showErrorToast('Request failed')
       }
     }
@@ -835,6 +842,7 @@ function historyToText(history) {
         code: entry.code,
         result: entry.result,
         error: entry.error,
+        error_kind: entry.error_kind,
         images: entry.images,
         selected_images: entry.selected_images,
         solved_ans: entry.solved_ans,

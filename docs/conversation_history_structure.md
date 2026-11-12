@@ -501,10 +501,10 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 
 ```json
 {"role":"assistant","type":"act","action":"generate_and_execute",
- "error":"...","code":"...","result":"...","images":["xxx.png"]}
+  "error":"[runtime_error] ...","error_kind":"runtime_error","code":"...","result":"...","images":["xxx.png"]}
 ```
 
-失败时 `error` 必填，`code` / `result` 在存在时保留。`images` 为本轮执行过程中生成的图片文件名列表（去重后，本地图片仅存文件名，外部 http 图片保留完整 URL），无论成功失败，只要生成过图片就保留；仅用于前端展示，不进入 LLM 上下文。
+失败时 `error` 必填（带 `[error_kind]` 前缀），并附结构化 `error_kind` 字段（沙箱：`policy_violation` / `syntax_error` / `timeout` / `resource_limit` / `no_func` / `runtime_error` / `environment_error` / `job_error` / `config_error`；生成层：`code_format_error`），供下一步 LLM 读取失败类型；`code` / `result` 在存在时保留。`images` 为本轮执行过程中生成的图片文件名列表（去重后，本地图片仅存文件名，外部 http 图片保留完整 URL），无论成功失败，只要生成过图片就保留；仅用于前端展示，不进入 LLM 上下文。
 
 ### generate_document
 
@@ -645,7 +645,7 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 
 `uploaded_suffix`：当 user 条目带 `uploaded` 时，在该行后追加一行 `\nUploaded images: a.png, b.png`。仅取文件名（字符串项，或对象项的 `path`/`filename`/`name`），因此 LLM 能看到用户上传的文件名列表。
 
-`generate_and_execute` 条目的 `images` 字段不会被 `history_to_text` 渲染，因此不会进入任何 LLM 阶段。
+`generate_and_execute` 条目的 `images` 字段不会被 `history_to_text` 渲染，因此不会进入任何 LLM 阶段。失败条目（带 `error`）的 `result`（执行中途已产出的部分输出）会被渲染为 `[ACT generate_and_execute] result (partial; execution failed afterwards):`，使下一步 LLM 同时看到错误与部分结果（无 `result` 时只渲染 `error`）。
 
 ## blackboard 渲染
 

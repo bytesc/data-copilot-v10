@@ -121,7 +121,7 @@ def _build_namespace():
         from agent.tools.get_function_info import FUNCTION_DICT
         namespace.update(FUNCTION_DICT)
     except Exception as exc:
-        _emit({"t": "error", "msg": f"failed to load tool functions: {exc}"})
+        _emit({"t": "error", "kind": "environment_error", "msg": f"failed to load tool functions: {exc}"})
 
     try:
         from agent.tools import tools_def
@@ -171,7 +171,7 @@ def _execute(job):
         exec(compile(code, "<llm_generated_code>", "exec"), namespace)
         func = namespace.get("func")
         if not callable(func):
-            _emit({"t": "error", "msg": "generated code did not define a callable named 'func'"})
+            _emit({"t": "error", "kind": "no_func", "msg": "generated code did not define a callable named 'func'"})
             return
         for item in func():
             _emit(_serialize(item, max_rows, max_bytes))
@@ -179,6 +179,7 @@ def _execute(job):
     except Exception as exc:
         _emit({
             "t": "error",
+            "kind": "runtime_error",
             "msg": f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}",
         })
 
@@ -192,7 +193,7 @@ def main(argv):
         with open(argv[1], "r", encoding="utf-8") as handle:
             job = json.load(handle)
     except Exception as exc:
-        _emit({"t": "error", "msg": f"failed to read sandbox job: {exc}"})
+        _emit({"t": "error", "kind": "job_error", "msg": f"failed to read sandbox job: {exc}"})
         return 1
 
     limits = job.get("limits") or {}

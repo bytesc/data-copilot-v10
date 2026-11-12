@@ -112,7 +112,7 @@ enable_perf_log: true
 #   max_df_rows   - DataFrames larger than this are truncated before transfer
 #   max_line_mb   - hard cap for a single protocol line (oversized frames degrade)
 code_exec:
-  timeout: 120
+  timeout: 600
   max_memory_mb: 1536
   cpu_rate: 120
   max_processes: 64
