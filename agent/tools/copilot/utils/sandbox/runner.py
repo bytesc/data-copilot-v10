@@ -137,11 +137,35 @@ def _build_namespace():
     return namespace
 
 
+def _apply_llm_selection(selection):
+    """Apply the parent request's model/Depth/Style inside this fresh process.
+
+    The contextvars that carry the per-request model selection reset to their
+    defaults in a new interpreter, so the LLM-backed tool functions would use the
+    first configured model instead of the one the user chose. The parent passes
+    the selected values in the job; re-applying them here restores parity.
+    Best-effort: an invalid/absent selection falls back to the model defaults.
+    """
+    if not isinstance(selection, dict):
+        return
+    try:
+        from agent.utils.llm_access.LLM import apply_request_selection
+        apply_request_selection(
+            selection.get("model"),
+            selection.get("reasoning_effort"),
+            selection.get("style"),
+            selection.get("use_images"),
+        )
+    except Exception as exc:  # pragma: no cover - selection is best effort
+        print(f"[sandbox] WARNING: failed to apply LLM selection: {exc}", flush=True)
+
+
 def _execute(job):
     code = job.get("code") or ""
     max_rows = int(job.get("max_df_rows") or 50000)
     max_bytes = int(job.get("max_line_mb") or 20) * 1024 * 1024
 
+    _apply_llm_selection(job.get("llm_selection"))
     namespace = _build_namespace()
     try:
         exec(compile(code, "<llm_generated_code>", "exec"), namespace)

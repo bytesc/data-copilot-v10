@@ -76,6 +76,11 @@ data = {
 `server_*`、`code_exec` 等也不被子进程读取。该文件随 workdir 一起删除；写入失败即中止
 （fail-closed），不回退到特权 `config.yaml`。
 
+除最小配置外，本次请求选中的模型 / Depth / Style（以及 use_images）由主进程在 spawn 时读取
+当前上下文，随 `job.json` 的 `llm_selection` 字段传给子进程；子进程在执行前调用
+`apply_request_selection` 还原，使 `explain_data`、`predict_hdb_price` 等自带 LLM 调用的工具
+与前端选择一致（新进程的 contextvar 会复位为默认，故必须显式传递）。
+
 ## 五、配置项与超限行为（`config/config.yaml` → `code_exec`）
 
 ```yaml

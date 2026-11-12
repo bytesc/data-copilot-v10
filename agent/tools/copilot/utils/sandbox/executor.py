@@ -57,6 +57,33 @@ def _config():
     }
 
 
+def _current_llm_selection():
+    """Snapshot the current request's model selection for the sandbox child.
+
+    The child process is a fresh interpreter whose contextvars start at their
+    defaults (the first configured model), so the LLM-backed tool functions it
+    runs (``explain_data``, ``predict_hdb_price``) would otherwise ignore the
+    model/Depth/Style the user picked. The values are read here, at spawn time
+    inside the request's context, and forwarded to the child via the job file.
+    Best-effort: if the selection cannot be read, the child keeps its defaults.
+    """
+    try:
+        from agent.utils.llm_access.LLM import (
+            get_current_model_id,
+            get_current_reasoning_effort,
+            get_current_style,
+            get_current_use_images,
+        )
+        return {
+            "model": get_current_model_id(),
+            "reasoning_effort": get_current_reasoning_effort(),
+            "style": get_current_style(),
+            "use_images": get_current_use_images(),
+        }
+    except Exception:
+        return {}
+
+
 _ENV_ALLOW = (
     "PATH", "PATHEXT", "SYSTEMROOT", "SystemRoot", "WINDIR", "COMSPEC",
     "TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA",
@@ -187,6 +214,7 @@ def _iter_items(code):
         "project_root": str(_PROJECT_ROOT),
         "max_df_rows": cfg["max_df_rows"],
         "max_line_mb": cfg["max_line_mb"],
+        "llm_selection": _current_llm_selection(),
         "limits": {
             "max_memory_mb": cfg["max_memory_mb"],
             "cpu_seconds": cfg["cpu_seconds"],
