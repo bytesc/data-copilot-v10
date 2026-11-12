@@ -32,10 +32,17 @@ def read_csv_from_local(file_path):
 
 def extract_csv_filename_from_url(url):
     match = re.search(r'/([^/]+\.csv)$', url, re.IGNORECASE)
-    if match:
-        return match.group(1)
-    else:
+    if not match:
         return None
+    # Reject traversal outright rather than rewriting it: the regex above
+    # only excludes "/", so on Windows a name like "..\\..\\secret.csv"
+    # would otherwise be joined to tmp_imgs and escape it. The filenames
+    # load_data itself produces are 8 random lowercase letters, so no
+    # legitimate name contains ".." or a backslash.
+    file_name = match.group(1)
+    if ".." in file_name or "\\" in file_name:
+        return None
+    return file_name
 
 
 if __name__ == "__main__":

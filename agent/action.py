@@ -301,6 +301,8 @@ def _parse_action_json(raw: str) -> dict:
     result = parse_json(raw)
     if result is None:
         return {"action": None, "error": f"Failed to parse JSON: {raw.strip()[:200]}"}
+    if not isinstance(result, dict):
+        return {"action": None, "error": f"Action JSON is not an object: {raw.strip()[:200]}"}
 
     actions_list = result.get("actions")
     if actions_list is not None and isinstance(actions_list, list):
