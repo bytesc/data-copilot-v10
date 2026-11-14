@@ -29,8 +29,8 @@ code_exec:
 #
 # Everything the guard allows is defined HERE (nothing allow-related is
 # hard-coded in the sandbox code): the writable image/CSV dir, read-only asset
-# dirs and files, the project source extensions (for imports), plus two flags
-# for interpreter-dependent roots. Everything else is DENIED, including any
+# dirs and files, the project source extensions (for imports), plus flags for
+# interpreter/OS-dependent roots. Everything else is DENIED, including any
 # *.txt / *.yaml that could hold secrets.
 #
 # `deny_paths` always wins over the allow lists below, so list secrets explicitly.
@@ -66,6 +66,10 @@ file_access:
   # Python, so they cannot be written statically here; these flags turn them on.
   python_libs: true                  # stdlib / site-packages (imports need this)
   matplotlib_cache: true             # matplotlib cache dir (read + write)
+  # OS temp dir (path decided by the running process). Subprocess-based tools such
+  # as Playwright (headless-browser screenshots) and asyncio create temp files and
+  # pipes here; without it they fail closed. Read + write; set false to forbid.
+  temp_dir: true
 
 # ---------------------------------------------------------------------------
 # Network egress allow-list (enforced at runtime inside the child).
@@ -83,6 +87,12 @@ file_access:
 #
 # Use "*" to allow everything on that axis: allow_hosts: ["*"] permits every
 # host, allow_ports: ["*"] permits every port. Use only in trusted environments.
+#
+# Loopback destinations (localhost / 127.0.0.1 / ::1) are governed by the
+# `allow_loopback` flag below: when it is true they are NOT port-gated, because
+# local IPC such as the asyncio self-pipe (socket.socketpair) picks a random
+# ephemeral port, so gating it by port would break any library that spawns a
+# subprocess. The host allow-list still decides whether loopback is reachable.
 # ---------------------------------------------------------------------------
 network:
   # Hosts: exact name or subdomain suffix (e.g. "openstreetmap.org" also covers
@@ -94,5 +104,10 @@ network:
     - "openstreetmap.org"
     - "streetdirectory.com"
     - "duckduckgo.com"
-  # Ports: numbers; add "*" to allow ALL ports.
+  # Ports: numbers; add "*" to allow ALL ports. Applies to non-loopback hosts only.
   allow_ports: [80, 443, 3306]
+  # Loopback (localhost / 127.0.0.1 / ::1) is exempt from the port list above when
+  # this is true (the default), so subprocess-based tools (e.g. Playwright via
+  # asyncio) can create their local IPC sockets on an ephemeral port. Set false to
+  # gate loopback by allow_ports as well.
+  allow_loopback: true

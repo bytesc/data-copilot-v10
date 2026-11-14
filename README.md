@@ -218,6 +218,9 @@ enable_llmlog: false          # 记录 LLM 调用日志到 llmlog/*.txt
 enable_perf_log: true         # 写接口性能指标到 perf_log.csv
 ```
 
+> LLM 代码执行沙箱（资源上限 / 文件访问与网络白名单）的设置**不在本文件**，而在
+> **`config/sandbox.yaml`**（见 [`docs/code_execution_sandbox.md`](docs/code_execution_sandbox.md)）。
+
 ### 请求格式（统一信封）
 
 JSON `POST/PUT/PATCH` 请求可选使用 `{meta, data}` 信封（模型调用选项只能通过信封传入）：携带信封时，`meta` 放模型调用选项，`data` 放原接口参数，后端解包后把 `data` 转发给原接口；未携带信封的普通 JSON 请求原样透传：

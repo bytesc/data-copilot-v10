@@ -549,7 +549,8 @@ def _check_module(self, name, node):
 | 内容 | 来源 | 谁建 / 何时 |
 |---|---|---|
 | 有哪些模型 / 只读库 URL / static_path | `sandbox_config.yaml`（父进程每次渲染，经 `CODE_EXEC_CONFIG` 传子进程） | 子进程 import 时建 `MODEL_CONFIGS` / `read_engine` |
-| 真正的 DB 连接 / LLM client | 同上配置 + 磁盘 `key_file` | **首次调用时**惰性创建 |
+| 真正的 DB 连接 | 同上配置（`mysql_readonly`） | **首次调用时**惰性创建（只读库） |
+| LLM 调用 | 子进程不持有 key：`_get_client` 被换为代理，请求经协议回传父进程，父进程用磁盘 `key_file` 真调 | 代理在 `exec` 前装；调用时按需 RPC |
 | 本次"用哪个模型 / Depth / Style / 是否带图" | `job.json` 的 `llm_selection` | `exec` 前 `_apply_llm_selection` 写回 contextvar |
 | 超时/内存/CPU/进程/文件/行数限制 | `config/sandbox.yaml` → `code_exec`（`executor._config()`） | 父进程读限值；子进程设 rlimit |
 | 运行期文件/网络白名单 | `config/sandbox.yaml` → `file_access` / `network`（随 job 下发） | 子进程 `guard.py` 装 audit hook 执行 |

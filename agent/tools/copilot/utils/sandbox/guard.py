@@ -25,6 +25,7 @@ an audit hook cannot be removed, which is why this is installed last.
 """
 
 import fnmatch
+import ipaddress
 import os
 import socket
 import sys
@@ -40,6 +41,24 @@ def _as_real(path):
 
 def _norm_host(host):
     return str(host or "").strip().lower().rstrip(".")
+
+
+def _is_loopback(host):
+    """True for a loopback destination (name or IP literal).
+
+    Loopback traffic never leaves the machine, so it is not gated by the port
+    allow-list: local IPC — e.g. the asyncio self-pipe Playwright builds with
+    ``socket.socketpair()`` — binds/connects to an arbitrary ephemeral port.
+    """
+    h = _norm_host(host)
+    if not h:
+        return False
+    if h == "localhost" or h == "::1" or h == "0:0:0:0:0:0:0:1":
+        return True
+    try:
+        return ipaddress.ip_address(h).is_loopback
+    except ValueError:
+        return False
 
 
 # Flags that mark an `open`/`os.open` as a WRITE (used to enforce read-only roots).
@@ -105,6 +124,18 @@ class _Guard:
             except Exception:
                 self.mpl_dir = ""
 
+        # OS temp dir: its path depends on the running process (env), so like the
+        # lib/matplotlib roots it is turned on by a flag rather than listed by
+        # path. Subprocess pipes (asyncio/Playwright) and other libraries create
+        # temp files here; without it they fail closed. Read + write.
+        self.temp_dir = ""
+        if fa.get("temp_dir"):
+            try:
+                import tempfile
+                self.temp_dir = _as_real(tempfile.gettempdir())
+            except Exception:
+                self.temp_dir = ""
+
         # ---- network ----
         # "*" in allow_hosts means "allow EVERY host"; "*" in allow_ports means
         # "allow EVERY port". Values come from config/sandbox.yaml (no defaults).
@@ -121,6 +152,10 @@ class _Guard:
                 self.allow_ports.add(int(str(p).strip()))
             except ValueError:
                 pass
+        # Loopback handling is a config choice (network.allow_loopback): when on,
+        # loopback destinations bypass the port allow-list (local IPC uses an
+        # arbitrary ephemeral port). No policy is hard-coded here.
+        self.allow_loopback = bool(net.get("allow_loopback"))
         # Resolve allowed hostnames to IPs up front so a direct connection to a
         # raw IP of an approved host is permitted, while an arbitrary IP is not.
         # This startup set is extended at run time by _learn_host_ips for hosts
@@ -200,7 +235,20 @@ class _Guard:
             return True
         return any(h.endswith("." + d) for d in self.allow_hosts)
 
-    def _port_ok(self, port):
+    def _host_allowed(self, host):
+        """Allow by name, by an already-approved IP, or loopback (if enabled)."""
+        return (
+            (self.allow_loopback and _is_loopback(host))
+            or self._host_ok(host)
+            or str(host) in self.allow_ips
+        )
+
+    def _port_ok(self, port, host=None):
+        # Loopback is not port-gated when network.allow_loopback is on (default):
+        # local IPC uses arbitrary ephemeral ports and cannot reach the network.
+        # The host allow-list still decides whether the loopback host is allowed.
+        if self.allow_loopback and host is not None and _is_loopback(host):
+            return True
         if not port:
             # None / 0 / "" = unknown port, do not gate.
             return True
@@ -226,6 +274,8 @@ class _Guard:
             if self._under(real, d):
                 return True
         if self.mpl_dir and self._under(real, self.mpl_dir):
+            return True
+        if self.temp_dir and self._under(real, self.temp_dir):
             return True
         # Read-only areas (writes are refused).
         if real in self.allow_read_files:
@@ -257,11 +307,11 @@ class _Guard:
             if event == "socket.getaddrinfo":
                 host = args[0] if args else None
                 port = args[1] if len(args) > 1 else None
-                if host and not (self._host_ok(host) or str(host) in self.allow_ips):
+                if host and not self._host_allowed(host):
                     raise PermissionError(
                         f"sandbox: network access is not allowed (DNS {host!r})"
                     )
-                if not self._port_ok(port):
+                if not self._port_ok(port, host):
                     raise PermissionError(
                         f"sandbox: network access is not allowed (port {port!r})"
                     )
@@ -274,17 +324,17 @@ class _Guard:
                 if isinstance(addr, tuple) and addr:
                     target = str(addr[0])
                     port = addr[1] if len(addr) > 1 else None
-                    if target not in self.allow_ips and not self._host_ok(target):
+                    if not self._host_allowed(target):
                         raise PermissionError(
                             f"sandbox: network access is not allowed ({addr!r})"
                         )
-                    if not self._port_ok(port):
+                    if not self._port_ok(port, target):
                         raise PermissionError(
                             f"sandbox: network access is not allowed (port {port!r})"
                         )
             elif event in ("socket.gethostbyname", "socket.gethostbyaddr"):
                 host = args[0] if args else None
-                if host and not (self._host_ok(host) or str(host) in self.allow_ips):
+                if host and not self._host_allowed(host):
                     raise PermissionError(
                         f"sandbox: network access is not allowed ({host!r})"
                     )
