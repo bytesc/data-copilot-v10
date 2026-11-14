@@ -98,6 +98,12 @@ enable_target_knowledge: false
 # enable_edit - set false to disable data/comment editing features (upload, delete table, edit comments/import)
 enable_edit: true
 
+# enable_code_sandbox - run LLM-generated Python in the isolated sandbox child
+# process (recommended). Set to false to run it directly in the main process
+# instead (the legacy behavior): NO isolation, NO resource limits, NO file/network
+# guard — only enable this on a fully trusted, single-tenant deployment.
+enable_code_sandbox: true
+
 enable_llmlog: false
 
 # enable_perf_log - write API performance metrics to perf_log.csv (time, api_name, total_response_time, llm_first_chunk_time, llm_complete_time, code_exec_time, llm_input_chars)
