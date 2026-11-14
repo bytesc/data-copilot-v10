@@ -199,6 +199,9 @@ def _render_sandbox_config(workdir):
       used here and are therefore never provided);
     * ``sql_query_timeout`` - the per-query SQL timeout the child's read engine
       applies (same value as the main process; see config.yaml);
+    * ``sql_socket_timeout`` - the socket read/write timeout for the child's read
+      engine, kept separate from the per-query cap (see config.yaml). Omitted
+      when unset so the child falls back to its own default;
     * ``static_path``    - the base URL used to build image/CSV links;
     * ``llm_models``     - model metadata needed by the LLM-backed tools
       (explain_data, predict_hdb_price) to build their request parameters. No
@@ -213,6 +216,7 @@ def _render_sandbox_config(workdir):
     data = {
         "mysql_readonly": config_data.get("mysql_readonly") or "",
         "sql_query_timeout": config_data.get("sql_query_timeout", 0) or 0,
+        "sql_socket_timeout": config_data.get("sql_socket_timeout"),
         "static_path": config_data.get("static_path", ""),
         "llm_models": config_data.get("llm_models") or [],
     }
@@ -256,9 +260,19 @@ def _deserialize(message):
     if kind == "df":
         text = message.get("v", "")
         try:
-            return pd.read_csv(io.StringIO(text), index_col=0)
+            frame = pd.read_csv(io.StringIO(text), index_col=0)
         except Exception:
-            return pd.read_csv(io.StringIO(text))
+            frame = pd.read_csv(io.StringIO(text))
+        # Carry the child's truncation metadata on the DataFrame so the caller
+        # can tell the user/LLM that the transferred result is only a subset
+        # (the child truncates by row count and by protocol-line size).
+        if message.get("truncated"):
+            try:
+                frame.attrs["sandbox_truncated"] = True
+                frame.attrs["sandbox_original_rows"] = message.get("rows")
+            except Exception:
+                pass
+        return frame
     if kind == "json":
         return message.get("v")
     return message.get("v", "")

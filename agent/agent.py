@@ -284,6 +284,15 @@ def format_yield_item(item, print_rows=5):
                    "\nthe data above are just slice example, download csv to get full data\n"
         else:
             text = df_to_markdown(item)
+        attrs = getattr(item, "attrs", None) or {}
+        if attrs.get("sandbox_truncated"):
+            original_rows = attrs.get("sandbox_original_rows")
+            original = f" (original rows: {original_rows})" if original_rows is not None else ""
+            text = (
+                "\n⚠️ The result was truncated by the execution sandbox"
+                f"{original}; only part of the data was transferred. Please narrow "
+                "the query (WHERE / LIMIT) if the full data is needed.\n"
+            ) + text
         html_link = pd_to_walker(item)
         csv_link = pd_to_csv(item)
         text += wrap_html_url_with_html_a(html_link)

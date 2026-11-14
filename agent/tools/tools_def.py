@@ -11,6 +11,7 @@ from agent.utils.llm_access.LLM import get_llm_dynamic
 from data_access.db_conn import (
     engine,
     query_timeout_seconds as _query_timeout_seconds,
+    socket_timeout_seconds as _socket_timeout_seconds,
     build_connect_args as _build_connect_args,
     register_query_timeout as _register_query_timeout,
 )
@@ -31,6 +32,7 @@ setup_chinese_font()
 # removed, so the read-only account is now the only access control for these queries.
 READONLY_DATABASE_URL = config_data.get('mysql_readonly') or ""
 _QUERY_TIMEOUT = _query_timeout_seconds()
+_SOCKET_TIMEOUT = _socket_timeout_seconds()
 if READONLY_DATABASE_URL:
     read_engine = sqlalchemy.create_engine(
         READONLY_DATABASE_URL,
@@ -38,7 +40,7 @@ if READONLY_DATABASE_URL:
         max_overflow=20,
         pool_pre_ping=True,
         pool_recycle=3600,
-        connect_args=_build_connect_args(_QUERY_TIMEOUT),
+        connect_args=_build_connect_args(_SOCKET_TIMEOUT),
     )
     _register_query_timeout(read_engine, _QUERY_TIMEOUT)
 else:

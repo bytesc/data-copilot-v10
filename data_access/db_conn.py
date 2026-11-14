@@ -5,9 +5,10 @@ from config.get_config import config_data
 def query_timeout_seconds():
     """Configured per-query SQL timeout in seconds (``0`` / absent = no limit).
 
-    Read from ``sql_query_timeout`` in config.yaml. It caps how long a single
-    statement may run so one runaway query (e.g. an accidental cross join)
-    cannot hold a worker thread and a pooled connection open indefinitely.
+    Read from ``sql_query_timeout`` in config.yaml. It is applied as the
+    server-side ``max_execution_time`` cap (SELECT-only) so a runaway query
+    (e.g. an accidental cross join) is aborted by the server while the
+    connection stays usable.
     """
     try:
         seconds = float(config_data.get("sql_query_timeout", 0) or 0)
@@ -16,12 +17,38 @@ def query_timeout_seconds():
     return seconds if seconds > 0 else 0.0
 
 
+# Default socket read/write timeout (seconds) when ``sql_socket_timeout`` is
+# absent. Kept deliberately generous: this is a safety net against a truly stuck
+# connection, NOT the per-query cap. A small value here would abort legitimate
+# long-running queries or large result transfers mid-stream.
+DEFAULT_SOCKET_TIMEOUT = 300.0
+
+
+def socket_timeout_seconds():
+    """pymysql socket read/write timeout in seconds (``0`` = disabled).
+
+    Read from ``sql_socket_timeout`` in config.yaml; when the key is absent the
+    generous ``DEFAULT_SOCKET_TIMEOUT`` is used, and a value ``<= 0`` disables
+    the socket timeout entirely. It is intentionally independent of
+    ``sql_query_timeout`` so the per-statement cap (``max_execution_time``) does
+    not also impose a tight socket deadline on large result sets.
+    """
+    raw = config_data.get("sql_socket_timeout", DEFAULT_SOCKET_TIMEOUT)
+    if raw is None:
+        raw = DEFAULT_SOCKET_TIMEOUT
+    try:
+        seconds = float(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_SOCKET_TIMEOUT
+    return seconds if seconds > 0 else 0.0
+
+
 def build_connect_args(seconds):
     """pymysql socket read/write timeout for ``create_engine(connect_args=...)``.
 
     Must be passed at engine creation (SQLAlchemy applies ``connect_args`` only
     then). Applies to every statement and every server version, so it is the
-    guaranteed layer; returns ``{}`` when the cap is disabled.
+    guaranteed layer; returns ``{}`` when the socket timeout is disabled.
     """
     if not seconds:
         return {}
@@ -57,7 +84,7 @@ def register_query_timeout(engine, seconds):
     return engine
 
 
-def _create_business_engine(url, seconds):
+def _create_business_engine(url, query_seconds, socket_seconds):
     if not url:
         return None
     engine = create_engine(
@@ -66,9 +93,9 @@ def _create_business_engine(url, seconds):
         max_overflow=20,
         pool_pre_ping=True,
         pool_recycle=3600,
-        connect_args=build_connect_args(seconds),
+        connect_args=build_connect_args(socket_seconds),
     )
-    return register_query_timeout(engine, seconds)
+    return register_query_timeout(engine, query_seconds)
 
 
 # Optional engine: the privileged user-database engine is only used by features
@@ -77,4 +104,7 @@ def _create_business_engine(url, seconds):
 # functions and never uses the privileged engine, so its minimal config omits
 # ``mysql`` altogether and no privileged engine is created inside the sandbox.
 _MYSQL_QUERY_TIMEOUT = query_timeout_seconds()
-engine = _create_business_engine(config_data.get('mysql'), _MYSQL_QUERY_TIMEOUT)
+_MYSQL_SOCKET_TIMEOUT = socket_timeout_seconds()
+engine = _create_business_engine(
+    config_data.get('mysql'), _MYSQL_QUERY_TIMEOUT, _MYSQL_SOCKET_TIMEOUT
+)

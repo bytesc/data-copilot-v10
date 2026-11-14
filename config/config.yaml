@@ -11,15 +11,22 @@ mysql_readonly: "mysql+pymysql://readonly:123456@localhost:3306/singapore_land_2
 
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
 
-# SQL query timeout in seconds. Caps how long a single statement on the business
-# database may run before it is aborted, so one runaway query (e.g. an accidental
-# cross join) cannot hold a worker thread and a pooled DB connection open
-# indefinitely. Enforced on both the read-only engine (exe_sql / schema
-# exploration, including inside the code sandbox) and the privileged edit engine.
-# Implemented as a pymysql socket read/write timeout plus, best-effort, MySQL's
-# per-session max_execution_time (SELECT only; unsupported servers ignore it).
+# Per-statement SQL timeout in seconds. Caps how long a single SELECT on the
+# business database may run before the server aborts it, so one runaway query
+# (e.g. an accidental cross join) cannot hold a worker thread and a pooled DB
+# connection open indefinitely. Enforced on both the read-only engine (exe_sql /
+# schema exploration, including inside the code sandbox) and the privileged edit
+# engine via MySQL's per-session max_execution_time (SELECT only; servers that do
+# not support the variable ignore it). The aborted connection stays usable.
 # Set to 0 (or remove) to disable the cap.
 sql_query_timeout: 60
+
+# Socket read/write timeout in seconds for the business database connections.
+# This is a safety net against a truly stuck connection, NOT the per-query cap:
+# it is intentionally independent of sql_query_timeout so a large result set or
+# a slow-but-legitimate query is not killed mid-transfer. When this key is absent
+# the code default (300) applies; set to 0 to disable.
+sql_socket_timeout: 300
 
 static_path: "http://127.0.0.1:8008/"
 
