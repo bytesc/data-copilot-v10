@@ -23,6 +23,10 @@ mysql_sys: "mysql+pymysql://root:<密码>@<host>:<端口>/data_copilot_v10_land_
 
 连本机 docker 库：`<host>:<端口>` 写 `localhost:<宿主发布端口>`（构建时 `localhost` 换成 `host.docker.internal`，端口照抄）；连外部库写真实地址。
 
+> 代码执行沙箱的资源上限、文件访问与网络白名单在 **`config/sandbox.yaml`**（与 `config.yaml` 分离，随
+> 镜像 `COPY . .` 一并打包，由 `config/sandbox_config.py` 加载）。改该文件同样需 `--build` 重建后端镜像。
+> Docker 下沙箱网络白名单会自动追加只读库主机（改写后的 `host.docker.internal`）及其端口，无需手改。
+
 ```bash
 docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build          # 首次 / 改 config.yaml 后
 docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build backend   # 只重建后端

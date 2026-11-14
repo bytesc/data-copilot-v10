@@ -41,8 +41,9 @@ LLM 生成代码 → 提取 ```python 块
 |------|------|
 | `policy.py` | AST 审查规则与检查函数 |
 | `limits.py` | 跨平台资源限制 + `kill_tree` + 孤儿看门狗（平台差异收敛于此，能力探测、不支持则降级） |
-| `runner.py` | 沙箱入口：环境设置、白名单命名空间、执行、序列化 |
-| `executor.py` | 主进程侧：审查、渲染最小沙箱配置、spawn、deadline 读行、超时强杀、协议解码 |
+| `runner.py` | 沙箱入口：环境设置、白名单命名空间、LLM 代理、执行、序列化 |
+| `executor.py` | 主进程侧：审查、渲染最小沙箱配置、spawn、deadline 读行、LLM 代理应答、超时强杀、协议解码 |
+| `guard.py` | 子进程内运行期管控：`sys.addaudithook` 拦 `open`/`socket`，按 `sandbox.yaml` 白名单放行（文件访问 + 网络出口） |
 
 若干相关模块的行为：
 

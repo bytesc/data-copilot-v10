@@ -100,6 +100,44 @@ enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 
 **单一来源**：以上配置项**只**来自本文件，程序不读取任何环境变量；`static_path`、`server_host`/`server_port`、`mysql*` 等如需变更，请直接修改本文件并重启（Docker 部署需重建镜像）。
 
+### LLM 代码执行沙箱 `config/sandbox.yaml`
+
+沙箱（执行 LLM 生成代码的一次性子进程）的设置**独立于此文件**（由 `config/sandbox_config.py`
+加载），与主配置分离；**代码内不写默认值**，缺必需键会以 `SandboxError(kind="config_error")` 报错。
+
+```yaml
+code_exec:            # 资源上限
+  timeout: 600        # 总超时秒数
+  max_memory_mb: 1536 # 内存上限（POSIX RLIMIT_AS / Windows Job Object）
+  cpu_rate: 120       # CPU 秒上限（POSIX RLIMIT_CPU）
+  max_processes: 64   # 进程/线程上限（POSIX RLIMIT_NPROC）
+  max_file_mb: 64     # 单文件大小上限（POSIX RLIMIT_FSIZE）
+  max_df_rows: 50000  # DataFrame 超过则截断
+  max_line_mb: 20     # 单条协议行上限
+
+file_access:          # 运行期文件访问白名单（子进程 audit hook）
+  allow_write_dirs: ["tmp_imgs"]   # 可读写目录
+  allow_read_dirs: ["assets"]      # 只读目录（写被拒）
+  allow_read_files: ["config/mcp_servers.yaml"]  # 只读文件
+  deny_paths:                      # 一律拒绝（读+写，优先级最高），支持 glob
+    - "config/config.yaml"
+    - "config/sandbox.yaml"
+    - "agent/utils/llm_access/*.txt"
+  code_exts: [".py", ".pyc", ".pyd", ".so", ".dll", ".whl"]  # 项目根内源码后缀（只读，供 import）
+  python_libs: true      # 允许读 Python 安装目录（stdlib/site-packages，import 必需）
+  matplotlib_cache: true # 允许读写 matplotlib 缓存目录
+
+network:              # 运行期网络白名单（子进程 audit hook）
+  allow_hosts: ["localhost", "127.0.0.1", "onemap.gov.sg", "openstreetmap.org", "streetdirectory.com", "duckduckgo.com"]
+  allow_ports: [80, 443, 3306]
+```
+
+- `allow_hosts` / `allow_ports` 支持 `"*"`（放行全部）；运行期自动追加只读库、各 LLM API、SSE MCP
+  的主机与端口；`fetch_webpage` 抓取的任意外部站点需手动加入 `allow_hosts`。
+- 此白名单**只作用于沙箱内运行的代码**；`web_search` / `fetch_webpage` 作为 action 在主进程运行，不受限。
+- 子进程**不持有 API key**：LLM 调用由子进程经协议回传父进程，父进程用 key 真调（见 `docs/code_execution_sandbox.md`）。
+- 详见 `docs/code_execution_sandbox.md` 与 `docs/sandbox_init_and_lifecycle.md`。
+
 ---
 
 ## 2. 前端环境变量 `vue-front/.env`

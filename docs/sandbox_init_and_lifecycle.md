@@ -8,9 +8,10 @@
 
 - 父：`agent/tools/copilot/utils/sandbox/executor.py`
 - 子：`agent/tools/copilot/utils/sandbox/runner.py`
-- 辅助：`sandbox/policy.py`、`sandbox/limits.py`
-- 配置/依赖：`config/get_config.py`、`agent/tools/tools_def.py`、`data_access/db_conn.py`、
-  `data_access/sys_db_conn.py`、`agent/utils/llm_access/LLM.py`
+- 辅助：`sandbox/policy.py`、`sandbox/limits.py`、`sandbox/guard.py`（运行期文件/网络 audit hook）
+- 配置/依赖：`config/sandbox.yaml`（`config/sandbox_config.py` 加载）、`config/get_config.py`、
+  `agent/tools/tools_def.py`、`data_access/db_conn.py`、`data_access/sys_db_conn.py`、
+  `agent/utils/llm_access/LLM.py`
 
 ---
 
@@ -48,8 +49,11 @@ sequenceDiagram
     C->>C: 拆 stdout/stderr 协议通道
     C->>C: 读 job.json → set_process_limits → 启看门狗 → chdir(项目根)
     C->>C: 应用模型选择 → 建白名单命名空间（库+字体+工具函数）
+    C->>C: 启 stdin 读线程 → 换 LLM client 为代理 → 装运行期 guard
     C->>C: exec(code) → 迭代 func()
-    C-->>P: JSON 行 {"t":"df|str|json"...}
+    C-->>P: JSON 行 {"t":"df|str|json"...} 或 {"t":"llm_request"...}
+    P->>P: 收 llm_request → 用主进程 key 真调 LLM
+    P-->>C: 写子进程 stdin {"t":"llm_response"...}
     C-->>P: {"t":"done"} 或 {"t":"error"}
     P->>P: _deserialize 还原 → 交 SSE
     P->>C: 超时/未结束 → kill_tree 强杀整树；finally 删临时目录
@@ -79,17 +83,18 @@ def execute_in_sandbox(code):
 ### 3.2 读取限值
 
 ```python
-# executor.py  限值现取自 config/sandbox.yaml（不再读 config.yaml）
+# executor.py  限值取自 config/sandbox.yaml（代码内不写默认值）
 from config.sandbox_config import get_section
 def _config():
     code_exec = get_section("code_exec")
-    return {"timeout": float(code_exec.get("timeout", 120)),
-            "max_memory_mb": int(code_exec.get("max_memory_mb", 1536)),
-            "cpu_seconds": int(code_exec.get("cpu_rate", 120)),
-            "max_processes": int(code_exec.get("max_processes", 64)),
-            "max_file_mb": int(code_exec.get("max_file_mb", 64)),
-            "max_df_rows": int(code_exec.get("max_df_rows", 50000)),
-            "max_line_mb": int(code_exec.get("max_line_mb", 20))}
+    # 缺必需键 → SandboxError(kind="config_error")
+    return {"timeout": float(code_exec["timeout"]),
+            "max_memory_mb": int(code_exec["max_memory_mb"]),
+            "cpu_seconds": int(code_exec["cpu_rate"]),
+            "max_processes": int(code_exec["max_processes"]),
+            "max_file_mb": int(code_exec["max_file_mb"]),
+            "max_df_rows": int(code_exec["max_df_rows"]),
+            "max_line_mb": int(code_exec["max_line_mb"])}
 ```
 
 ```python
@@ -170,7 +175,7 @@ def _build_env(sandbox_config_path):
 # executor.py:260-286
     command = [sys.executable, "-E", "-s", "-u", str(_RUNNER), job_path]  # -E 忽略PYTHON*；-s 无user site；-u 无缓冲
     popen_kwargs = dict(cwd=str(_PROJECT_ROOT), env=_build_env(sandbox_config_path),
-                        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=err_handle)
+                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err_handle)
     if IS_WINDOWS:
         popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     else:
@@ -183,7 +188,7 @@ def _build_env(sandbox_config_path):
     reader = threading.Thread(target=_pump, args=(proc.stdout, sink), ...); reader.start()
 ```
 
-- stdout（PIPE）承载 JSON-lines 协议；stderr 重定向到 `stderr.log`；stdin 关闭。
+- stdout（PIPE）承载 JSON-lines 协议；stderr 重定向到 `stderr.log`；**stdin 为 PIPE**，承载父进程对 LLM 代理请求（`llm_response`）的回写。
 - 进程分组：Windows 用 Job Object（内存上限 + kill-on-close + 整树终止）；POSIX 用新会话，便于 `killpg`。
 
 ### 3.6 读取协议（deadline + 分类）
@@ -198,10 +203,28 @@ def _build_env(sandbox_config_path):
             if kind == "eof": break
             message = _decode(raw)
             if message is None: continue
+            if message.get("t") == "llm_request":   # LLM 代理：父进程用 key 真调，回写 stdin
+                _write_child(proc, _handle_llm_request(message)); continue
             if message.get("t") == "error":      # 子进程报错 → 附 stderr tail 抛出
                 raise SandboxError(msg, kind=message.get("kind") or "runtime_error")
             if message.get("t") == "done": finished = True; break
             yield _deserialize(message)          # 解析好的结果逐条交给上层 SSE
+```
+
+**LLM 代理（父进程侧）**：子进程内所有 LLM 调用不真连 API，而是把请求经协议通道回传；父进程在
+读循环里用**自己内存里的 key** 完成调用并回写：
+
+```python
+# executor.py
+def _handle_llm_request(message):        # 父进程持有 key
+    payload = message.get("payload") or {}
+    resp = get_llm_dynamic().chat.completions.create(**payload)
+    return {"t": "llm_response", "id": message.get("id"), "ok": True,
+            "content": resp.choices[0].message.content}
+
+def _write_child(proc, obj):             # 写回子进程 stdin
+    proc.stdin.write((json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8"));
+    proc.stdin.flush()
 ```
 
 ```python
@@ -431,25 +454,31 @@ def _emit(obj):
 | 5 | POSIX rlimit | `runner.py:199-207` → `limits.py:52-67` |
 | 6 | 孤儿看门狗 | `runner.py:208` → `limits.start_orphan_watchdog` |
 | 7 | `chdir(project_root)` | `runner.py:210-212` |
-| 8 | 模型选择写回 contextvar | `runner.py:168` → `140-160` |
-| 9 | 预导入库 + 绑定 namespace | `runner.py:88-104` |
-| 10 | 中文字体 + `plt.show` 置空 | `runner.py:106-117` |
-| 11 | 工具函数 + 触发 engine/LLM 配置初始化 | `runner.py:120-135`（副作用见 `tools_def.py` / `db_conn.py` / `LLM.py`） |
-| 12 | `exec(code)` | `runner.py:171` |
+| 8 | 应用模型选择（写回 contextvar） | `runner.py` `_apply_llm_selection` |
+| 9 | 预导入库 + 绑定 namespace（含中文字体、工具函数、`plt.show` 置空） | `runner.py` `_build_namespace` |
+| 10 | 启动 stdin 回复读线程（LLM 代理用） | `runner.py` `_start_rpc_reader` |
+| 11 | 替换 `LLM._get_client` 为代理（子进程不再读 key） | `runner.py` `_install_llm_proxy` |
+| 12 | 安装运行期 guard（audit hook） | `runner.py` `_install_guard` → `guard.py` |
+| 13 | `exec(code)` → 迭代 `func()` | `runner.py` `_execute` |
+
+> 顺序要点：**重库导入先于读线程**（避免"后台阻塞读 stdin + numpy 首次导入"死锁）；**guard 最后装**（
+> 前面的 import 读盘不受影响）。
 
 ---
 
-## 五、输出协议（子 → 父）
+## 五、输出协议（子 → 父，父 → 子）
 
 每行一个 JSON 对象，`t` 为类型：
 
-| `t` | 字段 | 含义 |
-|---|---|---|
-| `df` | `v`(CSV), `truncated`, `rows` | DataFrame，主进程 `_deserialize` 还原 |
-| `str` | `v` | 字符串 |
-| `json` | `v` | 标量/可 JSON 化对象 |
-| `error` | `msg`, `kind` | 子进程出错；父进程据此抛 `SandboxError`（kind 见下） |
-| `done` | — | 正常结束标志 |
+| `t` | 方向 | 字段 | 含义 |
+|---|---|---|---|
+| `df` | 子→父 | `v`(CSV), `truncated`, `rows` | DataFrame，主进程 `_deserialize` 还原 |
+| `str` | 子→父 | `v` | 字符串 |
+| `json` | 子→父 | `v` | 标量/可 JSON 化对象 |
+| `llm_request` | 子→父 | `id`, `payload` | LLM 代理：子进程请求父进程代调 LLM |
+| `llm_response` | 父→子 | `id`, `ok`, `content`/`error` | 父进程回写 LLM 结果（经子进程 stdin） |
+| `error` | 子→父 | `msg`, `kind` | 子进程出错；父进程据此抛 `SandboxError`（kind 见下） |
+| `done` | 子→父 | — | 正常结束标志 |
 
 错误 `kind`（稳定分类，便于调用方记录/回传 LLM，定义见 `executor.py:43-60`）：
 `policy_violation` / `syntax_error` / `timeout` / `resource_limit` / `no_func` /
@@ -461,7 +490,7 @@ def _emit(obj):
 
 | 配置（`config/sandbox.yaml` → `code_exec`） | 生效范围 | 超过时 |
 |---|---|---|
-| `timeout`（默认 120 秒，当前配置为 600） | 全平台（父进程墙钟计时） | 强杀整棵进程树 → `SandboxError(kind="timeout")` |
+| `timeout`（取自 `code_exec.timeout`，示例 600） | 全平台（父进程墙钟计时） | 强杀整棵进程树 → `SandboxError(kind="timeout")` |
 | `max_memory_mb` | POSIX `RLIMIT_AS`；Windows Job Object | POSIX 抛 `MemoryError`；Windows 被 OS 杀进程 → 报错 |
 | `cpu_rate` | 仅 POSIX（`RLIMIT_CPU`，CPU 秒） | 触顶被信号终止 → 报错；Windows 不生效 |
 | `max_processes` | 仅 POSIX（`RLIMIT_NPROC`） | fork/建线程失败 → `OSError` → 报错；Windows 不生效 |
@@ -481,9 +510,10 @@ def _emit(obj):
 |---|---|---|
 | 1 AST 审查 | `policy.py` | 白名单 import（`ALLOWED_MODULE_ROOTS`）、拦危险调用/逃逸属性；不合规不执行 |
 | 2 独立进程 | `executor.py` + `runner.py` | 每次新进程，崩溃/卡死/内存泄漏/图状态随进程消亡，天然并发隔离 |
-| 3 最小环境/配置 | `_build_env` + `_render_sandbox_config` | 环境变量白名单；只给只读库身份；无特权库/密钥（密钥在磁盘，由子进程按 `key_file` 读） |
+| 3 最小环境/配置 | `_build_env` + `_render_sandbox_config` | 环境变量白名单；只给只读库身份；无特权库；子进程**不持有密钥**（LLM 调用代理回父进程） |
 | 4 资源限制 | `limits.py` | 超时/内存/CPU/进程/文件大小；父亡子自杀；整树强杀 |
 | 5 窄输出 | 协议 | 结果只经 stdout JSON-lines；行数/行大小有上限 |
+| 6 运行期管控 | `guard.py`（子进程 `sys.addaudithook`） | 运行期按 `sandbox.yaml` 白名单拦 `open`/`socket`；密钥/`config.yaml` 等被拒；开关见 `file_access`/`network` |
 
 模块白名单逻辑（deny-by-default）：
 

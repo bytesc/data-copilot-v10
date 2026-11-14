@@ -14,7 +14,10 @@ Two independent allow-lists are applied:
   ``agent/utils/llm_access/*.txt`` — is denied. ``deny`` always wins.
 * **network** — ``socket.connect`` / ``socket.getaddrinfo`` are only allowed for
   approved hosts (from ``sandbox.yaml`` plus the DB / LLM / MCP hosts the parent
-  injects at run time). All other destinations are refused.
+  injects at run time). Hosts are matched by name; the raw IPs a connection lands
+  on are matched against the approved hosts' IPs, which are resolved at startup
+  and refreshed at run time (``_learn_host_ips``) so IP-rotating CDN-fronted
+  domains still work. All other destinations are refused.
 
 The hook is installed immediately before the generated code is ``exec``'d, so
 import-time library reads (which happen earlier) are not affected. Once added,
@@ -25,6 +28,7 @@ import fnmatch
 import os
 import socket
 import sys
+import threading
 
 
 def _as_real(path):
@@ -58,6 +62,10 @@ def _is_write(mode, flags):
 class _Guard:
     def __init__(self, cfg, project_root):
         self.project = _as_real(project_root)
+        # Serialises the allow_ips set, and (via the thread-local) stops our own
+        # run-time DNS lookups from re-entering the audit hook. See _learn_host_ips.
+        self._lock = threading.Lock()
+        self._local = threading.local()
 
         fa = (cfg or {}).get("file_access") or {}
         net = (cfg or {}).get("network") or {}
@@ -115,6 +123,8 @@ class _Guard:
                 pass
         # Resolve allowed hostnames to IPs up front so a direct connection to a
         # raw IP of an approved host is permitted, while an arbitrary IP is not.
+        # This startup set is extended at run time by _learn_host_ips for hosts
+        # whose IPs change after startup (CDNs, round-robin DNS).
         self.allow_ips = set()
         for host in list(self.allow_hosts):
             self._resolve_host_ips(host)
@@ -150,10 +160,35 @@ class _Guard:
     # -- network helpers ----------------------------------------------------
     def _resolve_host_ips(self, host):
         try:
-            for info in socket.getaddrinfo(host, None):
-                self.allow_ips.add(str(info[4][0]))
+            infos = socket.getaddrinfo(host, None)
         except OSError:
-            pass
+            return
+        ips = {str(info[4][0]) for info in infos}
+        if ips:
+            with self._lock:
+                self.allow_ips |= ips
+
+    def _learn_host_ips(self, host):
+        """Trust the CURRENT IPs of an allowed hostname, not just the startup set.
+
+        CDN-fronted hosts (e.g. ``www.streetdirectory.com`` behind CloudFront)
+        hand out connect-time IPs that differ from — and rotate independently of —
+        the ones resolved when the guard was installed. Because ``socket.connect``
+        is gated on raw IPs, such a host was refused even though its name was
+        allow-listed: ``getaddrinfo`` passed (hostname suffix match) but the
+        follow-up ``connect`` to a fresh IP failed. Whenever a permitted hostname
+        is resolved, the IPs it now maps to are learned as well.
+
+        Reentrancy-guarded: our own lookup fires the same audit event, which would
+        otherwise call straight back into this method.
+        """
+        if getattr(self._local, "resolving", False):
+            return
+        self._local.resolving = True
+        try:
+            self._resolve_host_ips(host)
+        finally:
+            self._local.resolving = False
 
     def _host_ok(self, host):
         if self.allow_any_host:
@@ -230,6 +265,10 @@ class _Guard:
                     raise PermissionError(
                         f"sandbox: network access is not allowed (port {port!r})"
                     )
+                # Allowed name: learn the IPs it resolves to now so the following
+                # connect() to a (possibly new) raw IP is accepted too.
+                if host and self._host_ok(host):
+                    self._learn_host_ips(host)
             elif event == "socket.connect":
                 addr = args[1] if len(args) > 1 else None
                 if isinstance(addr, tuple) and addr:
@@ -249,6 +288,8 @@ class _Guard:
                     raise PermissionError(
                         f"sandbox: network access is not allowed ({host!r})"
                     )
+                if event == "socket.gethostbyname" and host and self._host_ok(host):
+                    self._learn_host_ips(host)
 
         sys.addaudithook(_hook)
 
