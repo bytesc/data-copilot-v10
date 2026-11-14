@@ -1,0 +1,98 @@
+# Sandbox configuration for LLM-generated code execution.
+#
+# This file is intentionally kept SEPARATE from config.yaml: everything here only
+# affects the one-shot child process that runs LLM-generated code (resource
+# limits, runtime file-access guard and network allow-list). The main server
+# config (database, models, feature toggles) stays in config.yaml.
+
+# ---------------------------------------------------------------------------
+# Resource limits (formerly config.yaml -> code_exec).
+# ---------------------------------------------------------------------------
+#   timeout       - wall-clock seconds before the whole process tree is force-killed
+#   max_memory_mb - memory cap (POSIX RLIMIT_AS / Windows Job Object)
+#   cpu_rate      - CPU seconds cap (POSIX RLIMIT_CPU; ignored where unsupported)
+#   max_processes - process/thread cap (POSIX RLIMIT_NPROC; ignored where unsupported)
+#   max_file_mb   - max size of any single file written (POSIX RLIMIT_FSIZE)
+#   max_df_rows   - DataFrames larger than this are truncated before transfer
+#   max_line_mb   - hard cap for a single protocol line (oversized frames degrade)
+code_exec:
+  timeout: 600
+  max_memory_mb: 1536
+  cpu_rate: 120
+  max_processes: 64
+  max_file_mb: 64
+  max_df_rows: 50000
+  max_line_mb: 20
+
+# ---------------------------------------------------------------------------
+# File-access guard (enforced at runtime inside the child via an audit hook).
+#
+# Everything the guard allows is defined HERE (nothing allow-related is
+# hard-coded in the sandbox code): the writable image/CSV dir, read-only asset
+# dirs and files, the project source extensions (for imports), plus two flags
+# for interpreter-dependent roots. Everything else is DENIED, including any
+# *.txt / *.yaml that could hold secrets.
+#
+# `deny_paths` always wins over the allow lists below, so list secrets explicitly.
+# ---------------------------------------------------------------------------
+file_access:
+  # Directories the generated code may BOTH read and write
+  # (relative to the project root, or absolute).
+  allow_write_dirs:
+    - "tmp_imgs"                     # generated charts / CSV output dir
+  # Directories that are READ-ONLY (writes are refused).
+  allow_read_dirs:
+    - "assets"                       # bundled CJK font and other assets
+  # Single files the generated code may READ (relative to the project root, or
+  # absolute), e.g. the MCP server list that `exe_mcp` reads at call time.
+  allow_read_files:
+    - "config/mcp_servers.yaml"
+  # Paths that are ALWAYS denied (win over every allow list), for BOTH read and
+  # write. A plain path denies that path and everything under it; glob patterns
+  # are supported too. Keep secrets here.
+  #
+  # Do NOT deny the whole `agent/utils/llm_access` directory: the *.py modules in
+  # it are imported by the LLM tools. Deny only the key text files (below). They
+  # are already unreadable by default (not *.py, not allowed) — this is an
+  # explicit safeguard.
+  deny_paths:
+    - "config/config.yaml"
+    - "config/sandbox.yaml"
+    - "agent/utils/llm_access/*.txt"
+  # Source-file extensions under the PROJECT ROOT that imports may read
+  # (read-only). This does NOT grant access to *.py elsewhere on the machine.
+  code_exts: [".py", ".pyc", ".pyd", ".so", ".dll", ".whl"]
+  # Interpreter-dependent roots: their actual paths are decided by the running
+  # Python, so they cannot be written statically here; these flags turn them on.
+  python_libs: true                  # stdlib / site-packages (imports need this)
+  matplotlib_cache: true             # matplotlib cache dir (read + write)
+
+# ---------------------------------------------------------------------------
+# Network egress allow-list (enforced at runtime inside the child).
+#
+# Only connections to the hosts/ports below (plus those auto-added at run time:
+# the read-only database, every configured LLM API and every SSE MCP server) are
+# permitted. All other outbound connections are refused.
+#
+# NOTE: this allow-list ONLY applies to code running INSIDE the sandbox
+# (LLM-generated code). web_search / fetch_webpage run as ACTIONS in the main
+# process and are NOT restricted here. It matters only when generated code
+# itself calls search_web / fetch_webpage, or reads an http(s) URL via
+# pandas/urllib: any host not listed is refused. Add such domains here if a
+# code-execution flow needs them.
+#
+# Use "*" to allow everything on that axis: allow_hosts: ["*"] permits every
+# host, allow_ports: ["*"] permits every port. Use only in trusted environments.
+# ---------------------------------------------------------------------------
+network:
+  # Hosts: exact name or subdomain suffix (e.g. "openstreetmap.org" also covers
+  # "tile.openstreetmap.org"). "*" = allow ALL hosts.
+  allow_hosts:
+    - "localhost"
+    - "127.0.0.1"
+    - "onemap.gov.sg"
+    - "openstreetmap.org"
+    - "streetdirectory.com"
+    - "duckduckgo.com"
+  # Ports: numbers; add "*" to allow ALL ports.
+  allow_ports: [80, 443, 3306]

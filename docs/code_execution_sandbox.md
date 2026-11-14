@@ -13,6 +13,7 @@ LLM 生成的 Python 代码在一个**一次性子进程**中执行：代码先�
 | 3 白名单环境 | `sandbox/runner.py` + 每次生成的最小沙箱配置 | 子进程内 `exec` 使用手工构造的命名空间，只含白名单工具函数与预注入库；子进程读到的是最小化的独立配置，数据库身份只有只读账号 |
 | 4 限时限量强杀 | `sandbox/limits.py` | 总超时到点强杀整棵进程树；内存/CPU/进程数/文件大小硬限；父进程退出则子进程自杀 |
 | 5 输出收口 | 协议（`runner.py` ↔ `executor.py`） | 结果只经 stdout 的 JSON-lines 协议传回；DataFrame 转 CSV 传回后在主进程还原；单行与行数有上限 |
+| 6 运行期管控 | `sandbox/guard.py`（子进程内 `sys.addaudithook`） | 运行期按白名单拦 `open`/`socket`：生成代码只能读写 `tmp_imgs` 等允许路径、只能连白名单主机；`config/config.yaml`、`agent/utils/llm_access/*` 等敏感文件被拒。密钥不回传子进程（见下） |
 
 ## 二、执行流水线
 
@@ -70,20 +71,32 @@ data = {
 
 - `mysql_readonly`：`tools_def` 用它建 `read_engine`；沙箱内被白名单工具使用的数据库访问只有只读这一条。
 - `static_path`：`tools_def` / `custom_tools_def` 拼图片、CSV 的 URL。
-- `llm_models`：`explain_data`、`predict_hdb_price` 在子进程里自建 LLM 客户端。
+- `llm_models`：`explain_data`、`predict_hdb_price` 在子进程里构造请求参数用（**不含密钥**：子进程不读 key 文件，见下）。
 
 其余配置项不写入该文件：特权库 `mysql`、系统库 `mysql_sys` 在沙箱内不被使用；`enable_*`、
-`server_*`、`code_exec` 等也不被子进程读取。该文件随 workdir 一起删除；写入失败即中止
-（fail-closed），不回退到特权 `config.yaml`。
+`server_*`、`code_exec`（现已移至 `config/sandbox.yaml`）等也不被子进程读取。该文件随 workdir
+一起删除；写入失败即中止（fail-closed），不回退到特权 `config.yaml`。
+
+### 密钥不回传子进程（LLM 代理）
+
+子进程**不再持有 API key**：`runner.py` 在 `exec` 前把 `LLM._get_client` 替换为代理，子进程内
+`explain_data` / `predict_hdb_price` 发起的每次 LLM 调用都被转发给父进程（协议通道的
+`llm_request` 行），父进程用自己内存里的 key 完成真实请求，再把回复经子进程 stdin 的
+`llm_response` 行回传。因此 `agent/utils/llm_access/*.txt` 在子进程内被禁止读取（见 `guard`），
+且不影响这两个工具正常工作。
 
 除最小配置外，本次请求选中的模型 / Depth / Style（以及 use_images）由主进程在 spawn 时读取
 当前上下文，随 `job.json` 的 `llm_selection` 字段传给子进程；子进程在执行前调用
 `apply_request_selection` 还原，使 `explain_data`、`predict_hdb_price` 等自带 LLM 调用的工具
 与前端选择一致（新进程的 contextvar 会复位为默认，故必须显式传递）。
 
-## 五、配置项与超限行为（`config/config.yaml` → `code_exec`）
+## 五、配置项与超限行为（`config/sandbox.yaml`）
+
+沙箱全部配置集中在 `config/sandbox.yaml`（由 `config/sandbox_config.py` 读取），与主配置
+`config/config.yaml` 分离：
 
 ```yaml
+# 资源上限
 code_exec:
   timeout: 600        # 总超时秒数（主进程墙钟计时，10 分钟）
   max_memory_mb: 1536 # 内存上限
@@ -92,7 +105,33 @@ code_exec:
   max_file_mb: 64     # 单文件大小上限
   max_df_rows: 50000  # DataFrame 超过此行数则截断后再传回
   max_line_mb: 20     # 单条协议行硬上限
+
+# 运行期文件访问管控（子进程 audit hook）—— 全部在此定义，沙箱代码不含内置放行
+file_access:
+  allow_write_dirs: ["tmp_imgs"]   # 可读写目录（相对项目根/绝对）
+  allow_read_dirs: ["assets"]      # 只读目录（写被拒）
+  allow_read_files: ["config/mcp_servers.yaml"]  # 只读单文件
+  deny_paths:                      # 始终拒绝（读+写，优先级最高）；支持 glob
+    - "config/config.yaml"
+    - "config/sandbox.yaml"
+    - "agent/utils/llm_access/*.txt"
+  code_exts: [".py", ".pyc", ".pyd", ".so", ".dll", ".whl"]  # 项目根内源码后缀（只读）
+  python_libs: true                # 允许读 Python 安装目录（stdlib/site-packages，import 必需）
+  matplotlib_cache: true           # 允许读写 matplotlib 缓存目录
+
+# 运行期网络白名单（子进程 audit hook）
+network:
+  allow_hosts: ["localhost", "127.0.0.1", "onemap.gov.sg", "openstreetmap.org",
+                "streetdirectory.com", "duckduckgo.com"]   # "*" = 放行全部主机
+  allow_ports: [80, 443, 3306]                             # "*" = 放行全部端口
 ```
+
+> `network.allow_hosts` / `allow_ports` 会自动追加：只读库主机与端口、各 LLM API 主机与端口、
+> SSE MCP 主机与端口（`executor._guard_config()`）。`fetch_webpage` 抓取的任意外部站点默认不在
+> 白名单内，需要按需把域名加入 `allow_hosts`。若要放行全部，把 `allow_hosts` 或 `allow_ports`
+> 写成 `["*"]` 即可（仅建议受信环境）。
+> 主机名按"完全相等或子域后缀"匹配（`openstreetmap.org` 覆盖 `tile.openstreetmap.org`）；`*` 是
+> 整轴放行，不是 `*.` 后缀。
 
 | 配置 | 生效范围 | 超过时 |
 |------|----------|--------|
@@ -173,7 +212,11 @@ icacls config\config.yaml /deny "%USERNAME%:(W,M)"
 
 | 能防住 | 防不住（需容器才能防） |
 |--------|----------------------|
-| 主程序被拖垮/挂死/资源耗尽；特权对象引用泄露；配置密钥被读；文件写失控；网络库被 import；死循环与内存炸弹 | 同账户内核级逃逸（理论存在）；工具函数本身被滥用刷配额（靠数据库侧超时/限流缓解）；强网络物理隔离（靠可选防火墙补） |
+| 主程序被拖垮/挂死/资源耗尽；特权对象引用泄露；配置密钥被读（含 API key 不进子进程）；运行期按白名单拦任意文件读写与任意联网（`guard.py` audit hook）；死循环与内存炸弹 | 同账户内核级逃逸（理论存在）；C 扩展里不触发 audit 事件的极端路径；工具函数本身被滥用刷配额（靠数据库侧超时/限流缓解）；真正的网络物理隔离（firewall/容器） |
+
+`guard.py` 是在**运行期**拦截，而非文本期：无论读文件/联网来自 `open`、`pd.read_csv` 还是
+`np.load`，底层都会触发同一个 audit 事件，因此覆盖了 AST 审查看不到的库内 I/O。它仍是
+**同进程、同 OS 用户**的防护，不能替代容器/独立低权账户。
 
 其它已知边界：`max_line_mb` 只作用于 DataFrame 的 CSV，生成代码 `yield` 的超大普通字符串
 不受其约束；`max_processes` 基于 `RLIMIT_NPROC`，按用户(UID)计进程/线程数。

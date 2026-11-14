@@ -1,5 +1,6 @@
 import http.client
 from typing import Optional, List, Tuple
+from urllib.parse import urlencode
 
 
 def get_onemap_static_map_func(
@@ -69,7 +70,7 @@ def get_onemap_static_map_func(
     if fillColor:
         params["fillColor"] = fillColor
 
-    query = "&".join(f"{k}={v}" for k, v in params.items())
+    query = urlencode(params)
     conn = http.client.HTTPSConnection("www.onemap.gov.sg", timeout=60)
     conn.request("GET", f"/api/staticmap/getStaticImage?{query}")
     resp = conn.getresponse()

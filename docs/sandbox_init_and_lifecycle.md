@@ -79,9 +79,10 @@ def execute_in_sandbox(code):
 ### 3.2 读取限值
 
 ```python
-# executor.py:68-78
+# executor.py  限值现取自 config/sandbox.yaml（不再读 config.yaml）
+from config.sandbox_config import get_section
 def _config():
-    code_exec = config_data.get("code_exec") or {}
+    code_exec = get_section("code_exec")
     return {"timeout": float(code_exec.get("timeout", 120)),
             "max_memory_mb": int(code_exec.get("max_memory_mb", 1536)),
             "cpu_seconds": int(code_exec.get("cpu_rate", 120)),
@@ -458,7 +459,7 @@ def _emit(obj):
 
 ## 六、资源限制
 
-| 配置（`config/config.yaml` → `code_exec`） | 生效范围 | 超过时 |
+| 配置（`config/sandbox.yaml` → `code_exec`） | 生效范围 | 超过时 |
 |---|---|---|
 | `timeout`（默认 120 秒，当前配置为 600） | 全平台（父进程墙钟计时） | 强杀整棵进程树 → `SandboxError(kind="timeout")` |
 | `max_memory_mb` | POSIX `RLIMIT_AS`；Windows Job Object | POSIX 抛 `MemoryError`；Windows 被 OS 杀进程 → 报错 |
@@ -503,11 +504,13 @@ def _check_module(self, name, node):
 
 ### 边界（能防 / 防不住）
 
-- **能防**：主程序被拖垮/挂死/资源耗尽；特权对象引用泄露；配置密钥经配置传入；生成代码
-  直接 `open`/`import os`；死循环与内存炸弹。
-- **防不住（需容器才有）**：同账户内核级逃逸；**工具库自带的文件/网络 I/O 绕过 AST**
-  （如 `pd.read_csv/to_csv`、`plt.savefig`、`np.load`）；工具函数本身被滥用刷配额；
-  强网络物理隔离。子进程与父进程是**同一 OS 用户**，AST 是"门卫"而非内核边界。
+- **能防**：主程序被拖垮/挂死/资源耗尽；特权对象引用泄露；配置密钥（含 API key 不回传子进程）；
+  生成代码直接 `open`/`import os`；**运行期按白名单拦库内文件/网络 I/O**（`guard.py` 的
+  audit hook 覆盖 `pd.read_csv/to_csv`、`np.load`、`plt.savefig` 等，因为底层是同一个
+  `open`/`socket` 事件）；死循环与内存炸弹。
+- **防不住（需容器/独立账户才有）**：同账户内核级逃逸；C 扩展里不触发 audit 事件的极端路径；
+  工具函数本身被滥用刷配额；真正的网络物理隔离。子进程与父进程是**同一 OS 用户**，
+  AST 与 audit hook 都是"门卫"而非内核边界。
 
 ---
 
@@ -518,20 +521,25 @@ def _check_module(self, name, node):
 | 有哪些模型 / 只读库 URL / static_path | `sandbox_config.yaml`（父进程每次渲染，经 `CODE_EXEC_CONFIG` 传子进程） | 子进程 import 时建 `MODEL_CONFIGS` / `read_engine` |
 | 真正的 DB 连接 / LLM client | 同上配置 + 磁盘 `key_file` | **首次调用时**惰性创建 |
 | 本次"用哪个模型 / Depth / Style / 是否带图" | `job.json` 的 `llm_selection` | `exec` 前 `_apply_llm_selection` 写回 contextvar |
-| 超时/内存/CPU/进程/文件/行数限制 | 主配置 `code_exec`（`executor._config()`） | 父进程读限值；子进程设 rlimit |
+| 超时/内存/CPU/进程/文件/行数限制 | `config/sandbox.yaml` → `code_exec`（`executor._config()`） | 父进程读限值；子进程设 rlimit |
+| 运行期文件/网络白名单 | `config/sandbox.yaml` → `file_access` / `network`（随 job 下发） | 子进程 `guard.py` 装 audit hook 执行 |
 | 协议通道 | 子进程 `_setup_protocol()` | 拆分 fd1/fd2 |
 
 ---
 
-## 九、关键参数与默认
+## 九、关键参数
 
-| 参数 | 默认 | 位置 |
+所有沙箱参数均来自 `config/sandbox.yaml`（**代码内不写默认值**），缺失必需键会以
+`SandboxError(kind="config_error")` 报错：
+
+| 参数 | 来源 | 读取位置 |
 |---|---|---|
-| 超时 `timeout` | 120 秒（当前 `config.yaml` 设为 600） | `executor.py:71` |
-| 内存 `max_memory_mb` | 1536 | `executor.py:72` |
-| CPU 秒 `cpu_rate` | 120 | `executor.py:73` |
-| 进程数 `max_processes` | 64 | `executor.py:74` |
-| 单文件 `max_file_mb` | 64 | `executor.py:75` |
-| DataFrame 行数 `max_df_rows` | 50000 | `executor.py:76` |
-| 单行协议 `max_line_mb` | 20 | `executor.py:77` |
-| 启动 `command` | `python -E -s -u runner.py <job>` | `executor.py:261` |
+| 超时 `timeout` | `sandbox.yaml` → `code_exec.timeout` | `executor._config()` |
+| 内存 `max_memory_mb` | `sandbox.yaml` → `code_exec.max_memory_mb` | `executor._config()` |
+| CPU 秒 `cpu_rate` | `sandbox.yaml` → `code_exec.cpu_rate` | `executor._config()` |
+| 进程数 `max_processes` | `sandbox.yaml` → `code_exec.max_processes` | `executor._config()` |
+| 单文件 `max_file_mb` | `sandbox.yaml` → `code_exec.max_file_mb` | `executor._config()` |
+| DataFrame 行数 `max_df_rows` | `sandbox.yaml` → `code_exec.max_df_rows` | `executor._config()` |
+| 单行协议 `max_line_mb` | `sandbox.yaml` → `code_exec.max_line_mb` | `executor._config()` |
+| 文件/网络白名单 | `sandbox.yaml` → `file_access` / `network` | `executor._guard_config()` |
+| 启动 `command` | `python -E -s -u runner.py <job>` | `executor._iter_items()` |

@@ -103,19 +103,7 @@ enable_llmlog: false
 # enable_perf_log - write API performance metrics to perf_log.csv (time, api_name, total_response_time, llm_first_chunk_time, llm_complete_time, code_exec_time, llm_input_chars)
 enable_perf_log: true
 
-# code_exec - limits for the LLM code execution sandbox (one-shot child process).
-#   timeout       - wall-clock seconds before the whole process tree is force-killed
-#   max_memory_mb - memory cap (POSIX RLIMIT_AS / Windows Job Object)
-#   cpu_rate      - CPU seconds cap (POSIX RLIMIT_CPU; ignored where unsupported)
-#   max_processes - process/thread cap (POSIX RLIMIT_NPROC; ignored where unsupported)
-#   max_file_mb   - max size of any single file written (POSIX RLIMIT_FSIZE)
-#   max_df_rows   - DataFrames larger than this are truncated before transfer
-#   max_line_mb   - hard cap for a single protocol line (oversized frames degrade)
-code_exec:
-  timeout: 600
-  max_memory_mb: 1536
-  cpu_rate: 120
-  max_processes: 64
-  max_file_mb: 64
-  max_df_rows: 50000
-  max_line_mb: 20
+# LLM code-execution sandbox settings have MOVED out of this file.
+# Resource limits, the runtime file-access guard and the network allow-list now
+# live in config/sandbox.yaml (loaded by config/sandbox_config.py). Edit that
+# file to tune the sandbox; this file keeps only the main server config.

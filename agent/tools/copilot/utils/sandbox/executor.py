@@ -26,11 +26,13 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pandas as pd
 import yaml
 
 from agent.utils.get_config import config_data
+from config.sandbox_config import get_section
 
 from .limits import IS_WINDOWS, WindowsJob, kill_tree
 from .policy import PolicyViolation, validate
@@ -66,16 +68,80 @@ class SandboxError(RuntimeError):
 
 
 def _config():
-    code_exec = config_data.get("code_exec") or {}
+    # Resource limits come entirely from config/sandbox.yaml (no in-code
+    # defaults); a missing key is reported as a config error.
+    code_exec = get_section("code_exec")
+    required = ("timeout", "max_memory_mb", "cpu_rate", "max_processes",
+                "max_file_mb", "max_df_rows", "max_line_mb")
+    missing = [key for key in required if key not in code_exec]
+    if missing:
+        raise SandboxError(
+            "sandbox config 'code_exec' is missing required keys: "
+            + ", ".join(missing),
+            kind="config_error",
+        )
     return {
-        "timeout": float(code_exec.get("timeout", 120)),
-        "max_memory_mb": int(code_exec.get("max_memory_mb", 1536)),
-        "cpu_seconds": int(code_exec.get("cpu_rate", 120)),
-        "max_processes": int(code_exec.get("max_processes", 64)),
-        "max_file_mb": int(code_exec.get("max_file_mb", 64)),
-        "max_df_rows": int(code_exec.get("max_df_rows", 50000)),
-        "max_line_mb": int(code_exec.get("max_line_mb", 20)),
+        "timeout": float(code_exec["timeout"]),
+        "max_memory_mb": int(code_exec["max_memory_mb"]),
+        "cpu_seconds": int(code_exec["cpu_rate"]),
+        "max_processes": int(code_exec["max_processes"]),
+        "max_file_mb": int(code_exec["max_file_mb"]),
+        "max_df_rows": int(code_exec["max_df_rows"]),
+        "max_line_mb": int(code_exec["max_line_mb"]),
     }
+
+
+def _url_endpoint(url):
+    """Return ``(host, port)`` from a URL (either may be None)."""
+    try:
+        parsed = urlparse(str(url or ""))
+        return parsed.hostname, parsed.port
+    except Exception:
+        return None, None
+
+
+def _mcp_sse_endpoints():
+    """(host, port) of configured SSE MCP servers (stdio servers need no network)."""
+    endpoints = []
+    try:
+        with open(os.path.join(_PROJECT_ROOT, "config", "mcp_servers.yaml"),
+                  "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+        for srv in (data.get("mcp_servers") or []):
+            if str(srv.get("transport", "stdio")) == "sse":
+                endpoints.append(_url_endpoint(srv.get("url")))
+    except Exception:
+        pass
+    return endpoints
+
+
+def _guard_config():
+    """Assemble the runtime file-access / network guard config for the child.
+
+    Starts from ``sandbox.yaml`` (``file_access`` + ``network``) and augments the
+    network allow-list with the hosts/ports the whitelisted tools must be able to
+    reach: the read-only database, every configured LLM API and every SSE MCP
+    server. This keeps the operator from having to list them by hand while still
+    denying every other destination.
+    """
+    file_access = get_section("file_access")
+    network = dict(get_section("network"))
+
+    hosts = list(network.get("allow_hosts") or [])
+    ports = list(network.get("allow_ports") or [])
+
+    endpoints = [_url_endpoint(config_data.get("mysql_readonly"))]
+    endpoints += [_url_endpoint(m.get("url")) for m in (config_data.get("llm_models") or [])]
+    endpoints += _mcp_sse_endpoints()
+    for host, port in endpoints:
+        if host and host not in hosts:
+            hosts.append(host)
+        if port is not None and port not in ports:
+            ports.append(port)
+
+    network["allow_hosts"] = hosts
+    network["allow_ports"] = ports
+    return {"file_access": file_access, "network": network}
 
 
 def _current_llm_selection():
@@ -130,8 +196,10 @@ def _render_sandbox_config(workdir):
       the sandbox needs; the privileged ``mysql`` / ``mysql_sys`` engines are not
       used here and are therefore never provided);
     * ``static_path``    - the base URL used to build image/CSV links;
-    * ``llm_models``     - needed by the LLM-backed tools (explain_data,
-      predict_hdb_price), which build their own client inside the child.
+    * ``llm_models``     - model metadata needed by the LLM-backed tools
+      (explain_data, predict_hdb_price) to build their request parameters. No
+      API key is included: the child does not create a real client or read a key
+      file — every LLM call is proxied back to the parent (see ``runner.py``).
 
     Privileged and irrelevant keys are neither copied nor touched, so no
     privileged credential and no unused setting ever reaches the child. Fails
@@ -204,6 +272,36 @@ def _cleanup(path):
     shutil.rmtree(path, ignore_errors=True)
 
 
+def _handle_llm_request(message):
+    """Run one proxied LLM call in the PARENT, which owns the API key.
+
+    The child never holds the key; it forwards the request here and receives the
+    answer text back. This keeps the key out of the (untrusted) child process.
+    """
+    from agent.utils.llm_access.LLM import get_llm_dynamic
+
+    payload = message.get("payload") or {}
+    try:
+        response = get_llm_dynamic().chat.completions.create(**payload)
+        content = response.choices[0].message.content
+        return {"t": "llm_response", "id": message.get("id"), "ok": True, "content": content}
+    except Exception as exc:
+        return {
+            "t": "llm_response",
+            "id": message.get("id"),
+            "ok": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _write_child(proc, obj):
+    try:
+        proc.stdin.write((json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8"))
+        proc.stdin.flush()
+    except Exception:
+        pass
+
+
 def execute_in_sandbox(code):
     """Validate ``code`` and return a generator over its deserialized results.
 
@@ -238,7 +336,9 @@ def _iter_items(code):
         "max_df_rows": cfg["max_df_rows"],
         "max_line_mb": cfg["max_line_mb"],
         "llm_selection": _current_llm_selection(),
+        "guard": _guard_config(),
         "limits": {
+            "timeout": cfg["timeout"],
             "max_memory_mb": cfg["max_memory_mb"],
             "cpu_seconds": cfg["cpu_seconds"],
             "max_processes": cfg["max_processes"],
@@ -262,7 +362,7 @@ def _iter_items(code):
     popen_kwargs = dict(
         cwd=str(_PROJECT_ROOT),
         env=_build_env(sandbox_config_path),
-        stdin=subprocess.DEVNULL,
+        stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=err_handle,
     )
@@ -301,6 +401,10 @@ def _iter_items(code):
             message = _decode(raw)
             if message is None:
                 continue
+            if message.get("t") == "llm_request":
+                # Proxied LLM call: run it here (parent holds the key) and reply.
+                _write_child(proc, _handle_llm_request(message))
+                continue
             if message.get("t") == "error":
                 tail = _read_tail(err_path)
                 msg = message.get("msg") or "sandbox execution error"
@@ -331,6 +435,11 @@ def _iter_items(code):
         if proc is not None and proc.stdout is not None:
             try:
                 proc.stdout.close()
+            except Exception:
+                pass
+        if proc is not None and proc.stdin is not None:
+            try:
+                proc.stdin.close()
             except Exception:
                 pass
         err_handle.close()

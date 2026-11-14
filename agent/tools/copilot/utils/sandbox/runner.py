@@ -17,7 +17,9 @@ Spawned once per execution by ``executor.py`` with ``python -E -s -u runner.py
 import json
 import os
 import sys
+import threading
 import traceback
+import types
 
 # Make both this directory (for ``limits``) and the project root importable.
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -44,6 +46,12 @@ def _setup_protocol():
     os.dup2(2, 1)
     try:
         sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
+    # stdin carries the parent's replies to our LLM-proxy requests; JSON-RPC over
+    # the pipe is UTF-8, so pin the codec instead of the (possibly GBK) locale.
+    try:
+        sys.stdin.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, ValueError):
         pass
     return os.fdopen(fd, "w", encoding="utf-8", buffering=1, newline="\n")
@@ -160,13 +168,140 @@ def _apply_llm_selection(selection):
         print(f"[sandbox] WARNING: failed to apply LLM selection: {exc}", flush=True)
 
 
+# --------------------------------------------------------------------------- #
+# LLM proxy bridge
+#
+# The child never holds an API key. Every LLM call made by a whitelisted tool
+# (explain_data, predict_hdb_price) is forwarded to the PARENT over the protocol
+# channel (stdout) as a ``llm_request`` line; the parent, which owns the key,
+# performs the real request and writes the answer back over the child's stdin as
+# a ``llm_response`` line. The key therefore never enters the sandbox process.
+# --------------------------------------------------------------------------- #
+_rpc_lock = threading.Lock()
+_rpc_next_id = 0
+_rpc_events = {}
+_rpc_replies = {}
+# Set from the sandbox job's ``limits.timeout`` in _execute (no in-code default).
+_RPC_TIMEOUT = None
+
+
+def _rpc_reader_loop():
+    try:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                msg = json.loads(line)
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(msg, dict):
+                continue
+            rid = msg.get("id")
+            with _rpc_lock:
+                _rpc_replies[rid] = msg
+                event = _rpc_events.get(rid)
+            if event is not None:
+                event.set()
+    except Exception:
+        pass
+
+
+def _start_rpc_reader():
+    thread = threading.Thread(target=_rpc_reader_loop, name="sandbox-rpc", daemon=True)
+    thread.start()
+    return thread
+
+
+def _rpc_call(payload):
+    """Send one LLM request to the parent and block until its reply arrives."""
+    global _rpc_next_id
+    with _rpc_lock:
+        _rpc_next_id += 1
+        rid = _rpc_next_id
+        event = threading.Event()
+        _rpc_events[rid] = event
+    _emit({"t": "llm_request", "id": rid, "payload": payload})
+    if not event.wait(timeout=_RPC_TIMEOUT):
+        with _rpc_lock:
+            _rpc_events.pop(rid, None)
+            _rpc_replies.pop(rid, None)
+        raise RuntimeError("sandbox: LLM proxy timed out waiting for the parent")
+    with _rpc_lock:
+        _rpc_events.pop(rid, None)
+        reply = _rpc_replies.pop(rid, {})
+    if not reply.get("ok"):
+        raise RuntimeError(reply.get("error") or "sandbox: LLM proxy request failed")
+    return reply.get("content", "")
+
+
+class _ProxyResponse:
+    def __init__(self, content):
+        message = types.SimpleNamespace(content=content)
+        self.choices = [types.SimpleNamespace(message=message)]
+
+
+class _ProxyCompletions:
+    def create(self, **kwargs):
+        return _ProxyResponse(_rpc_call(kwargs))
+
+
+class _ProxyChat:
+    def __init__(self):
+        self.completions = _ProxyCompletions()
+
+
+class _ProxyClient:
+    def __init__(self):
+        self.chat = _ProxyChat()
+
+
+def _install_llm_proxy():
+    """Route all in-child LLM clients to the parent (key stays in the parent)."""
+    try:
+        from agent.utils.llm_access import LLM as _LLM
+
+        def _proxy_get_client(model_id=None):
+            return _ProxyClient()
+
+        _LLM._get_client = _proxy_get_client
+    except Exception as exc:  # pragma: no cover - best effort
+        print(f"[sandbox] WARNING: failed to install LLM proxy: {exc}", flush=True)
+
+
+def _install_guard(job):
+    project_root = job.get("project_root") or os.getcwd()
+    try:
+        import guard as _guard
+    except Exception as exc:  # pragma: no cover - guard.py is next to this file
+        print(f"[sandbox] WARNING: guard module unavailable: {exc}", flush=True)
+        return
+    try:
+        _guard.install_guard(job.get("guard") or {}, project_root)
+    except Exception as exc:
+        print(f"[sandbox] WARNING: failed to install guard: {exc}", flush=True)
+
+
 def _execute(job):
+    global _RPC_TIMEOUT
     code = job.get("code") or ""
-    max_rows = int(job.get("max_df_rows") or 50000)
-    max_bytes = int(job.get("max_line_mb") or 20) * 1024 * 1024
+    limits = job.get("limits") or {}
+    # Reuse the sandbox timeout as the LLM-proxy wait budget (config-driven).
+    _RPC_TIMEOUT = float(limits["timeout"])
+    max_rows = int(job["max_df_rows"])
+    max_bytes = int(job["max_line_mb"]) * 1024 * 1024
 
     _apply_llm_selection(job.get("llm_selection"))
+    # Import the heavy libraries BEFORE starting the stdin reply reader: a
+    # background thread blocked on a stdin read concurrently with numpy's first
+    # import deadlocks on some platforms. All heavy imports are cached here, and
+    # tool code does not import new heavy modules at call time.
     namespace = _build_namespace()
+    _start_rpc_reader()
+    _install_llm_proxy()
+    # Install the runtime guard LAST, immediately before the generated code runs,
+    # so import-time library reads above are unaffected.
+    _install_guard(job)
     try:
         exec(compile(code, "<llm_generated_code>", "exec"), namespace)
         func = namespace.get("func")
