@@ -56,6 +56,25 @@ def _safe_workspace_path(file_name: str) -> str:
     return candidate
 
 
+def _client_workspace_path(file_name: str):
+    """Resolve a client-supplied workspace file name, or return ``None``.
+
+    Only a plain, single-segment name is accepted. Path separators, ``..``
+    traversal and Windows drive-relative names (``C:foo``, which ``os.path.join``
+    would resolve on the wrong drive) are rejected, and the result must still
+    resolve inside ``doc_workspace`` (defence in depth via
+    :func:`_safe_workspace_path`).
+    """
+    if not isinstance(file_name, str) or not file_name:
+        return None
+    if re.search(r'[/\\]|\.\.|:', file_name):
+        return None
+    try:
+        return _safe_workspace_path(file_name)
+    except (ValueError, OSError):
+        return None
+
+
 def _write_workspace_file(path: str, content: str) -> None:
     """Blocking file write, kept out of the event loop (called via threadpool)."""
     with open(path, "w", encoding="utf-8") as f:
@@ -1227,10 +1246,9 @@ def list_workspace_files():
 
 @router.get("/api/doc-workspace/file/{filename:path}")
 def read_workspace_file(filename: str):
-    import re as _re
-    if _re.search(r'[/\\]|\.\.', filename):
+    path = _client_workspace_path(filename)
+    if path is None:
         return JSONResponse(content={"error": "Invalid filename"}, status_code=400)
-    path = os.path.join(DOC_WORKSPACE, filename)
     if not os.path.isfile(path):
         return JSONResponse(content={"error": "File not found"}, status_code=404)
     try:
@@ -1243,12 +1261,11 @@ def read_workspace_file(filename: str):
 
 @router.delete("/api/doc-workspace/outline/{filename:path}")
 def delete_outline_file(filename: str):
-    import re as _re
-    if _re.search(r'[/\\]|\.\.', filename):
+    path = _client_workspace_path(filename)
+    if path is None:
         return JSONResponse(content={"error": "Invalid filename"}, status_code=400)
     if not filename.endswith(".yaml"):
         return JSONResponse(content={"error": "Not a YAML file"}, status_code=400)
-    path = os.path.join(DOC_WORKSPACE, filename)
     try:
         os.remove(path)
         return JSONResponse(content={"deleted": filename})
@@ -1260,12 +1277,11 @@ def delete_outline_file(filename: str):
 
 @router.post("/api/doc-workspace/save/{filename:path}")
 async def save_workspace_file(filename: str, request: Request):
-    import re as _re
-    if _re.search(r'[/\\]|\.\.', filename):
+    path = _client_workspace_path(filename)
+    if path is None:
         return JSONResponse(content={"error": "Invalid filename"}, status_code=400)
     body = await request.json()
     content = body.get("content", "")
-    path = os.path.join(DOC_WORKSPACE, filename)
     try:
         await run_in_threadpool(_write_workspace_file, path, content)
         return JSONResponse(content={"saved": filename})

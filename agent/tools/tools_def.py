@@ -8,7 +8,12 @@ from agent.utils.llm_access.LLM import get_llm_dynamic
 # Reuse the single user-database engine defined in ``data_access.db_conn`` so the
 # project does not open two independent connection pools (each 20+20) against the
 # same database, which doubled connections and split the transaction view.
-from data_access.db_conn import engine
+from data_access.db_conn import (
+    engine,
+    query_timeout_seconds as _query_timeout_seconds,
+    build_connect_args as _build_connect_args,
+    register_query_timeout as _register_query_timeout,
+)
 from .copilot.data_explanation import get_llm_data_explanation_func
 from .copilot.examples.path_tools import generate_img_path
 from .copilot.utils.read_db import execute_select
@@ -25,6 +30,7 @@ setup_chinese_font()
 # rather than silently falling back to the privileged user: the SQL-text validation was
 # removed, so the read-only account is now the only access control for these queries.
 READONLY_DATABASE_URL = config_data.get('mysql_readonly') or ""
+_QUERY_TIMEOUT = _query_timeout_seconds()
 if READONLY_DATABASE_URL:
     read_engine = sqlalchemy.create_engine(
         READONLY_DATABASE_URL,
@@ -32,7 +38,9 @@ if READONLY_DATABASE_URL:
         max_overflow=20,
         pool_pre_ping=True,
         pool_recycle=3600,
+        connect_args=_build_connect_args(_QUERY_TIMEOUT),
     )
+    _register_query_timeout(read_engine, _QUERY_TIMEOUT)
 else:
     read_engine = None
     print(

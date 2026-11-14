@@ -197,6 +197,8 @@ def _render_sandbox_config(workdir):
     * ``mysql_readonly`` - the read-only database URL (the only database identity
       the sandbox needs; the privileged ``mysql`` / ``mysql_sys`` engines are not
       used here and are therefore never provided);
+    * ``sql_query_timeout`` - the per-query SQL timeout the child's read engine
+      applies (same value as the main process; see config.yaml);
     * ``static_path``    - the base URL used to build image/CSV links;
     * ``llm_models``     - model metadata needed by the LLM-backed tools
       (explain_data, predict_hdb_price) to build their request parameters. No
@@ -210,6 +212,7 @@ def _render_sandbox_config(workdir):
     """
     data = {
         "mysql_readonly": config_data.get("mysql_readonly") or "",
+        "sql_query_timeout": config_data.get("sql_query_timeout", 0) or 0,
         "static_path": config_data.get("static_path", ""),
         "llm_models": config_data.get("llm_models") or [],
     }

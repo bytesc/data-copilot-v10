@@ -7,8 +7,10 @@ import io
 import json
 import math
 import mimetypes
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
+from urllib.parse import quote
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 import pandas as pd
@@ -75,6 +77,21 @@ def _require_table(inspector, table_name):
     if not isinstance(table_name, str) or table_name not in inspector.get_table_names():
         raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
     return table_name
+
+
+def _content_disposition(filename):
+    """Build a header-safe ``Content-Disposition`` value for a download.
+
+    ``filename`` may be derived from a database identifier, so any character
+    that could break the header (``"`` / CR / LF / backslash / non-ASCII) is
+    stripped from the legacy quoted ASCII fallback and percent-encoded in the
+    RFC 5987 ``filename*`` parameter. This prevents header injection while
+    still conveying the real (possibly non-ASCII) name to capable clients.
+    """
+    name = str(filename)
+    ascii_fallback = re.sub(r'[^A-Za-z0-9._-]', '_', name).strip('_') or "download"
+    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{quote(name, safe='')}"
+
 
 from data_access.base_knowledge_db import create_base_knowledge_table
 from data_access.db_query_guide_db import create_db_query_guide_table
@@ -325,7 +342,7 @@ def read_static_file(request: Request, filename: str, download: str = None):
         content_type = "application/octet-stream"
     headers = {}
     if download is not None:
-        headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+        headers["Content-Disposition"] = _content_disposition(safe_name)
     with open(filepath, "rb") as file:
         file_content = file.read()
     return Response(content=file_content, media_type=content_type, headers=headers)
@@ -477,7 +494,7 @@ async def export_table_data_csv(table_name: str):
     return Response(
         content=csv_bytes,
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{table_name}_data.csv"'}
+        headers={"Content-Disposition": _content_disposition(f"{table_name}_data.csv")}
     )
 
 
@@ -548,7 +565,7 @@ async def export_comments_csv(table_name: str):
     return Response(
         content=csv_bytes,
         media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{table_name}_comments.csv"'}
+        headers={"Content-Disposition": _content_disposition(f"{table_name}_comments.csv")}
     )
 
 

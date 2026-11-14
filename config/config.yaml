@@ -11,6 +11,16 @@ mysql_readonly: "mysql+pymysql://readonly:123456@localhost:3306/singapore_land_2
 
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
 
+# SQL query timeout in seconds. Caps how long a single statement on the business
+# database may run before it is aborted, so one runaway query (e.g. an accidental
+# cross join) cannot hold a worker thread and a pooled DB connection open
+# indefinitely. Enforced on both the read-only engine (exe_sql / schema
+# exploration, including inside the code sandbox) and the privileged edit engine.
+# Implemented as a pymysql socket read/write timeout plus, best-effort, MySQL's
+# per-session max_execution_time (SELECT only; unsupported servers ignore it).
+# Set to 0 (or remove) to disable the cap.
+sql_query_timeout: 60
+
 static_path: "http://127.0.0.1:8008/"
 
 # Multiple LLM configs: selectable from the frontend; the first model in the list is the default.
