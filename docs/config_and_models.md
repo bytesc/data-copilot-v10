@@ -84,6 +84,7 @@ enable_edit: true             # 数据/知识编辑（设为 false 时前端隐�
 enable_code_sandbox: true     # LLM 生成代码是否走沙箱子进程（true，推荐）；false=主进程直接 exec（旧行为，无隔离）
 enable_llmlog: false           # 记录 LLM 调用日志到 llmlog/*.txt
 enable_perf_log: true          # 写接口性能指标到 perf_log.csv
+enable_sandbox_log: true       # 写沙箱审计日志到 sandbox_audit.log（每次沙箱启动/每次拒绝，含时间戳与 session_id）
 ```
 
 > 图片能力需以模型供应商实际支持为准。当前仓库配置中 `deepseek-v4.1-flash`、`glm-5.3-flash`、`glm-5.3-flashx` 已开启 `supports_images: true`；`deepseek-v4-flash` 为 `false`。
@@ -137,6 +138,7 @@ network:              # 运行期网络白名单（子进程 audit hook）
   的主机与端口；`fetch_webpage` 抓取的任意外部站点需手动加入 `allow_hosts`。
 - 此白名单**只作用于沙箱内运行的代码**；`web_search` / `fetch_webpage` 作为 action 在主进程运行，不受限。
 - 子进程**不持有 API key**：LLM 调用由子进程经协议回传父进程，父进程用 key 真调（见 `docs/code_execution_sandbox.md`）。
+- 沙箱审计日志由主配置 `enable_sandbox_log` 控制：每次沙箱**启动**与每次**拒绝**（运行期文件/网络拦截、或 AST 策略拒绝）都会以 JSON 行追加到 `sandbox_audit.log`（含时间戳与 `session_id`）。详见 `docs/code_execution_sandbox.md`。
 - 详见 `docs/code_execution_sandbox.md` 与 `docs/sandbox_init_and_lifecycle.md`。
 
 ---

@@ -651,6 +651,7 @@ def _act_generate_and_execute(build_question, session_id: str, tables, selected_
         blackboard=blackboard,
         images=images,
         question_builder=build_question,
+        session_id=session_id,
     ):
         if event.get("sub_type") == "code_chunk":
             if exec_error:

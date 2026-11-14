@@ -79,8 +79,12 @@ def _is_write(mode, flags):
 
 
 class _Guard:
-    def __init__(self, cfg, project_root):
+    def __init__(self, cfg, project_root, on_deny=None):
         self.project = _as_real(project_root)
+        # Optional sink called with ``(kind, message)`` just before every refusal,
+        # so the runner can report it to the parent's audit log. Reporting must
+        # never affect enforcement, so its failures are swallowed in _deny.
+        self._on_deny = on_deny
         # Serialises the allow_ips set, and (via the thread-local) stops our own
         # run-time DNS lookups from re-entering the audit hook. See _learn_host_ips.
         self._lock = threading.Lock()
@@ -291,6 +295,23 @@ class _Guard:
             return not write
         return False
 
+    # -- refusal ------------------------------------------------------------
+    def _deny(self, kind, message):
+        """Report one refusal to the configured sink, then raise.
+
+        ``message`` is the exact ``PermissionError`` text the caller would have
+        raised (kept verbatim so existing behaviour and messages do not change);
+        ``kind`` classifies it for the audit log (``file_access`` /
+        ``network_access``). The sink runs outside the audit-hook contract only
+        in the sense that it must not raise, so any failure is ignored.
+        """
+        if self._on_deny is not None:
+            try:
+                self._on_deny(kind, message)
+            except Exception:
+                pass
+        raise PermissionError(message)
+
     def install(self):
         def _hook(event, args):
             if event in ("open", "io.open_code"):
@@ -300,20 +321,23 @@ class _Guard:
                 if isinstance(path, (str, bytes, os.PathLike)) and not self.file_ok(
                     path, write=_is_write(mode, flags)
                 ):
-                    raise PermissionError(
-                        f"sandbox: file access is not allowed: {path!r}"
+                    self._deny(
+                        "file_access",
+                        f"sandbox: file access is not allowed: {path!r}",
                     )
                 return
             if event == "socket.getaddrinfo":
                 host = args[0] if args else None
                 port = args[1] if len(args) > 1 else None
                 if host and not self._host_allowed(host):
-                    raise PermissionError(
-                        f"sandbox: network access is not allowed (DNS {host!r})"
+                    self._deny(
+                        "network_access",
+                        f"sandbox: network access is not allowed (DNS {host!r})",
                     )
                 if not self._port_ok(port, host):
-                    raise PermissionError(
-                        f"sandbox: network access is not allowed (port {port!r})"
+                    self._deny(
+                        "network_access",
+                        f"sandbox: network access is not allowed (port {port!r})",
                     )
                 # Allowed name: learn the IPs it resolves to now so the following
                 # connect() to a (possibly new) raw IP is accepted too.
@@ -325,18 +349,21 @@ class _Guard:
                     target = str(addr[0])
                     port = addr[1] if len(addr) > 1 else None
                     if not self._host_allowed(target):
-                        raise PermissionError(
-                            f"sandbox: network access is not allowed ({addr!r})"
+                        self._deny(
+                            "network_access",
+                            f"sandbox: network access is not allowed ({addr!r})",
                         )
                     if not self._port_ok(port, target):
-                        raise PermissionError(
-                            f"sandbox: network access is not allowed (port {port!r})"
+                        self._deny(
+                            "network_access",
+                            f"sandbox: network access is not allowed (port {port!r})",
                         )
             elif event in ("socket.gethostbyname", "socket.gethostbyaddr"):
                 host = args[0] if args else None
                 if host and not self._host_allowed(host):
-                    raise PermissionError(
-                        f"sandbox: network access is not allowed ({host!r})"
+                    self._deny(
+                        "network_access",
+                        f"sandbox: network access is not allowed ({host!r})",
                     )
                 if event == "socket.gethostbyname" and host and self._host_ok(host):
                     self._learn_host_ips(host)
@@ -344,6 +371,10 @@ class _Guard:
         sys.addaudithook(_hook)
 
 
-def install_guard(cfg, project_root):
-    """Install the file-access and network guard in the current process."""
-    _Guard(cfg, project_root).install()
+def install_guard(cfg, project_root, on_deny=None):
+    """Install the file-access and network guard in the current process.
+
+    ``on_deny`` (optional) is called with ``(kind, message)`` right before every
+    refusal; the runner uses it to forward the denial to the parent's audit log.
+    """
+    _Guard(cfg, project_root, on_deny=on_deny).install()

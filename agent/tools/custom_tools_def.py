@@ -28,6 +28,21 @@ from .tools_def import engine, STATIC_URL, read_only_engine
 llm = get_llm_dynamic()
 
 
+_STATIC_MAP_DETAIL_CAP = 500
+
+
+def _static_map_error_message(tool, exc):
+    """Return a specific static-map failure message for the LLM.
+
+    Replaces the old generic string with the concrete reason (HTTP status,
+    timeout, missing Playwright, refused connection, ...), capped so a long
+    message cannot overflow the model's context.
+    """
+    detail = f"{type(exc).__name__}: {exc}"
+    if len(detail) > _STATIC_MAP_DETAIL_CAP:
+        detail = detail[:_STATIC_MAP_DETAIL_CAP] + "...[truncated]"
+    return f"Error: failed to generate static map image ({tool}): {detail}"
+
 
 def get_onemap_minimap(
         markers: Optional[List[Dict[str, Union[str, Tuple[float, float]]]]] = None
@@ -297,8 +312,7 @@ def get_streetdirectory_static_map(
     try:
         img_list = get_streetdirectory_static_map_func(urls, width=width, height=height)
     except Exception as e:
-            print(f"Error: failed to generate static map image: {e}", flush=True)
-            return "Error: failed to generate static map image."
+        return _static_map_error_message("get_streetdirectory_static_map", e)
     paths = []
     for img_bytes in img_list:
         path = generate_img_path()
@@ -383,8 +397,7 @@ def get_osm_static_map(
             fillColor=fillColor,
         )
     except Exception as e:
-            print(f"Error: failed to generate static map image: {e}", flush=True)
-            return "Error: failed to generate static map image."
+        return _static_map_error_message("get_osm_static_map", e)
     path = generate_img_path()
     with open(path, "wb") as f:
         f.write(img_bytes)
@@ -463,8 +476,7 @@ def get_onemap_static_map(
             fillColor=fillColor,
         )
     except Exception as e:
-            print(f"Error: failed to generate static map image: {e}", flush=True)
-            return "Error: failed to generate static map image."
+        return _static_map_error_message("get_onemap_static_map", e)
     path = generate_img_path()
     with open(path, "wb") as f:
         f.write(img_bytes)

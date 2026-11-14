@@ -12,12 +12,13 @@ from agent.tools.tools_def import *  # noqa: F401,F403,E402
 from config.get_config import config_data  # noqa: E402
 
 
-def execute_py_code(code, assert_func=assert_skip):
+def execute_py_code(code, assert_func=assert_skip, session_id=""):
     """
     执行生成的代码并返回结果。
 
     :param code: 生成的Python代码
     :param assert_func: 断言函数，用于验证结果
+    :param session_id: 当前请求的 session id，写入沙箱审计日志
     :return: 执行结果，如果执行成功且通过断言则返回结果，否则返回None
 
     由主配置 `enable_code_sandbox` 决定执行方式：
@@ -30,7 +31,7 @@ def execute_py_code(code, assert_func=assert_skip):
     这里不再重复记录 ``code_exec_time``。
     """
     if config_data.get("enable_code_sandbox", True):
-        result = execute_in_sandbox(code)
+        result = execute_in_sandbox(code, session_id=session_id)
     else:
         result = _execute_in_process(code)
     assert_result = assert_func(result)

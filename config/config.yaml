@@ -109,6 +109,11 @@ enable_llmlog: false
 # enable_perf_log - write API performance metrics to perf_log.csv (time, api_name, total_response_time, llm_first_chunk_time, llm_complete_time, code_exec_time, llm_input_chars)
 enable_perf_log: true
 
+# enable_sandbox_log - append every code-execution sandbox start and every sandbox
+# refusal (file/network denial by the runtime guard, or AST policy rejection) to
+# sandbox_audit.log as JSON lines, each tagged with a timestamp and session id.
+enable_sandbox_log: true
+
 # LLM code-execution sandbox settings have MOVED out of this file.
 # Resource limits, the runtime file-access guard and the network allow-list now
 # live in config/sandbox.yaml (loaded by config/sandbox_config.py). Edit that

@@ -48,6 +48,7 @@ LLM 生成代码 → 提取 ```python 块
 | `runner.py` | 沙箱入口：环境设置、白名单命名空间、LLM 代理、执行、序列化 |
 | `executor.py` | 主进程侧：审查、渲染最小沙箱配置、spawn、deadline 读行、LLM 代理应答、超时强杀、协议解码 |
 | `guard.py` | 子进程内运行期管控：`sys.addaudithook` 拦 `open`/`socket`，按 `sandbox.yaml` 白名单放行（文件访问 + 网络出口） |
+| `audit_log.py` | 审计日志（主进程侧）：把每次沙箱启动与每次拒绝以 JSON 行追加到 `sandbox_audit.log`，含时间戳与 `session_id` |
 
 若干相关模块的行为：
 
@@ -171,6 +172,28 @@ network:
 生成层还有 `code_format_error`（未能在回复中解析出代码块）。这些 `kind` 会经
 `code_exe_error` / `code_gen_error` chunk 与终端 `error` 事件的 `error_kind` 字段向上传递，
 并记入 `generate_and_execute` 的 act 条目，供下一步（Observe）读取。
+
+### 沙箱审计日志 `sandbox_audit.log`
+
+主配置 `enable_sandbox_log`（默认 `true`）开启后，主进程把**每一次沙箱启动**与**每一次沙箱
+拒绝**以 JSON 行追加到工作目录下的 `sandbox_audit.log`（路径与 `perf_log.csv` 一样相对进程
+工作目录，无环境变量；`*.log` 已在 `.gitignore` 中）。每条都带**时间戳**与**请求 `session_id`**：
+
+- `event="start"`：即将/正在启动一次性沙箱子进程，含 `run_id` 与 `code_chars`；
+- `event="deny"`：一次拒绝，`kind` 为 `file_access` / `network_access`（运行期 guard 拦截
+  `open`/`socket`）或 `policy_violation` / `syntax_error`（AST 审查直接拒绝），`detail` 为
+  与 `PermissionError` 完全一致的文案。
+
+同一请求的启动与拒绝用 `run_id` 关联。示例：
+
+```json
+{"time": "2026-11-14 09:24:48.123", "event": "start", "session_id": "s-1a2b", "run_id": "9f3c1d2e", "code_chars": 812}
+{"time": "2026-11-14 09:24:49.007", "event": "deny", "kind": "network_access", "detail": "sandbox: network access is not allowed (DNS 'example.com')", "session_id": "s-1a2b", "run_id": "9f3c1d2e"}
+```
+
+关键点：拒绝事件由**子进程**经协议通道（`{"t":"denied", ...}`）回传，由**父进程**写盘，因此
+即使生成代码 `try/except` 吞掉了 `PermissionError`，拒绝仍会被记录；日志写入是 best-effort，
+失败只 warn 一次，绝不影响代码执行。写入路径见 `sandbox/executor.py` 与 `sandbox/audit_log.py`。
 
 ## 六、跨平台
 

@@ -949,7 +949,7 @@ def _event_stream_generate_and_execute(question: str, tables: Optional[List[str]
     full_ans = ""
     exec_error = None
     exec_error_kind = ""
-    for event in generate_and_execute_stream(question, tables, selected_fields=selected_fields, selected_functions=selected_functions):
+    for event in generate_and_execute_stream(question, tables, selected_fields=selected_fields, selected_functions=selected_functions, session_id=session_id):
         sub_type = event.get("sub_type")
         if sub_type == "code_chunk":
             if exec_error:

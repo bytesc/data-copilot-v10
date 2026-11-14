@@ -20,6 +20,7 @@ import sys
 import threading
 import traceback
 import types
+from datetime import datetime
 
 # Make both this directory (for ``limits``) and the project root importable.
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -276,8 +277,24 @@ def _install_guard(job):
     except Exception as exc:  # pragma: no cover - guard.py is next to this file
         print(f"[sandbox] WARNING: guard module unavailable: {exc}", flush=True)
         return
+
+    def _on_deny(kind, detail):
+        # Forward the refusal to the PARENT, which owns the audit log and knows
+        # the session id. Sent on the protocol channel so it is recorded even if
+        # the generated code catches the PermissionError and keeps running. Must
+        # never raise: reporting is best-effort.
+        try:
+            _emit({
+                "t": "denied",
+                "kind": kind,
+                "detail": detail,
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
+            })
+        except Exception:
+            pass
+
     try:
-        _guard.install_guard(job.get("guard") or {}, project_root)
+        _guard.install_guard(job.get("guard") or {}, project_root, on_deny=_on_deny)
     except Exception as exc:
         print(f"[sandbox] WARNING: failed to install guard: {exc}", flush=True)
 

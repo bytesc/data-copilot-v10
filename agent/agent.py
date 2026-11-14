@@ -302,7 +302,7 @@ def format_yield_item(item, print_rows=5):
 def generate_and_execute_stream(question, tables=None, retries=2,
                                  selected_fields=None, selected_functions=None, print_rows=5,
                                  research_guide=None, blackboard=None, images=None,
-                                 question_builder=None,
+                                 question_builder=None, session_id="",
                                  ):
     yield {"type": "msg", "content": "Analyzing question...", "phase": "act", "sub_phase": "code"}
 
@@ -389,7 +389,7 @@ def generate_and_execute_stream(question, tables=None, retries=2,
         images = []
         _exec_start = _time.monotonic()
         try:
-            result = execute_py_code(code)
+            result = execute_py_code(code, session_id=session_id)
             for item in result:
                 formatted = format_yield_item(item, print_rows)
                 formatted_result += formatted

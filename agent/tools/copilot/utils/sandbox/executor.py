@@ -25,6 +25,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -34,6 +35,7 @@ import yaml
 from agent.utils.get_config import config_data
 from config.sandbox_config import get_section
 
+from . import audit_log
 from .limits import IS_WINDOWS, WindowsJob, kill_tree
 from .policy import PolicyViolation, validate
 
@@ -302,16 +304,22 @@ def _write_child(proc, obj):
         pass
 
 
-def execute_in_sandbox(code):
+def execute_in_sandbox(code, session_id=""):
     """Validate ``code`` and return a generator over its deserialized results.
 
     Policy violations raise immediately (before any process is started) so the
     caller can feed the message back to the LLM. Otherwise the returned generator
     lazily starts a one-shot child when first iterated.
+
+    ``session_id`` is the current request's session id; it is written to the
+    audit log alongside every sandbox start and every refusal.
     """
     try:
         violations = validate(code)
     except PolicyViolation as exc:
+        audit_log.record_deny(
+            getattr(exc, "kind", "policy_violation"), str(exc), session_id=session_id
+        )
         raise SandboxError(
             "Generated code was rejected by the sandbox security policy and was "
             f"NOT executed:\n  - {exc}\nPlease regenerate the code without it.",
@@ -319,17 +327,19 @@ def execute_in_sandbox(code):
         ) from exc
     if violations:
         bullets = "\n".join(f"  - {item}" for item in violations)
+        audit_log.record_deny("policy_violation", bullets, session_id=session_id)
         raise SandboxError(
             "Generated code was rejected by the sandbox security policy and was "
             f"NOT executed:\n{bullets}\n"
             "Remove the disallowed imports/calls and regenerate the code.",
             kind="policy_violation",
         )
-    return _iter_items(code)
+    return _iter_items(code, session_id)
 
 
-def _iter_items(code):
+def _iter_items(code, session_id=""):
     cfg = _config()
+    run_id = uuid.uuid4().hex[:12]
     job = {
         "code": code,
         "project_root": str(_PROJECT_ROOT),
@@ -379,6 +389,9 @@ def _iter_items(code):
         proc = subprocess.Popen(command, **popen_kwargs)
         if job_object is not None:
             job_object.assign(proc.pid)
+        # The child is now running: record the start (with the session id) so the
+        # audit log has one entry per launched sandbox.
+        audit_log.record_start(session_id=session_id, run_id=run_id, code=code)
         reader = threading.Thread(
             target=_pump, args=(proc.stdout, sink),
             name="sandbox-reader", daemon=True,
@@ -404,6 +417,18 @@ def _iter_items(code):
             if message.get("t") == "llm_request":
                 # Proxied LLM call: run it here (parent holds the key) and reply.
                 _write_child(proc, _handle_llm_request(message))
+                continue
+            if message.get("t") == "denied":
+                # The child guard refused a file/network access. Record it (with
+                # the session id) and keep streaming: the denial is not a fatal
+                # error for the run.
+                audit_log.record_deny(
+                    message.get("kind") or "denied",
+                    message.get("detail") or "",
+                    session_id=session_id,
+                    run_id=run_id,
+                    time=message.get("time") or "",
+                )
                 continue
             if message.get("t") == "error":
                 tail = _read_tail(err_path)
