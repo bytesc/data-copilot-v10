@@ -98,7 +98,8 @@
             class="user-input-textarea"
             rows="2"
             placeholder="Type your response..."
-            @keydown.enter.exact.prevent="onUserResponse(userInput)"
+            @keydown.ctrl.enter.prevent="onUserResponse(userInput)"
+            @paste="onPasteImages"
           ></textarea>
           <div class="input-actions">
             <button
@@ -128,7 +129,8 @@
             class="user-input-textarea"
             rows="2"
             placeholder="continue"
-            @keydown.enter.exact.prevent="onPausedSubmit"
+            @keydown.ctrl.enter.prevent="onPausedSubmit"
+            @paste="onPasteImages"
           ></textarea>
           <div class="input-actions">
             <button
@@ -159,6 +161,7 @@
             :placeholder="isCompleted ? 'What is next?' : 'Enter your question here...'"
             :disabled="isRunning"
             @keydown.ctrl.enter.prevent="onSubmitQuestion"
+            @paste="onPasteImages"
           ></textarea>
           <div class="input-actions">
             <button
@@ -197,6 +200,7 @@
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import MessageItem from '@/components/MessageItem.vue'
 import { configState, selectUseImages } from '@/utils/config.js'
+import { showWarningToast } from '@/utils/toast.js'
 
 const props = defineProps({
   chat: { type: Object, required: true },
@@ -266,6 +270,32 @@ function onImagesSelected(event) {
   const files = Array.from(input.files || [])
   input.value = ''
   if (files.length === 0) return
+  addUploadImages(files)
+}
+
+function onPasteImages(event) {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  const files = []
+  for (const item of items) {
+    if (item.kind !== 'file' || !item.type?.startsWith('image/')) continue
+    const file = item.getAsFile()
+    if (!file) continue
+    if (file.name) {
+      files.push(file)
+    } else {
+      const ext = (file.type.split('/')[1] || 'png').replace(/[^a-z0-9]/gi, '') || 'png'
+      files.push(new File([file], `pasted-image-${Date.now()}.${ext}`, { type: file.type }))
+    }
+  }
+  if (files.length === 0) return
+
+  event.preventDefault()
+  if (!canAttachImages.value) {
+    showWarningToast('Turn on the Images switch to paste images')
+    return
+  }
   addUploadImages(files)
 }
 
