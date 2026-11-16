@@ -225,12 +225,10 @@ Base URL: `http://<host>:8008`
   "session_id": "xxx",
   "question": "查询上个月销售额",
   "status": "active",
-  "total_cycles": 3,
   "total_tokens": 12000,
   "created_at": "2026-01-01 10:00:00",
   "updated_at": "2026-01-01 10:05:00",
-  "conversation_history": [...],
-  "cycle_count": 3
+  "conversation_history": [...]
 }
 ```
 
@@ -256,24 +254,6 @@ Base URL: `http://<host>:8008`
     }
   ]
 }
-```
-
-### POST `/api/log-user-input/`
-
-记录用户输入到观察日志。
-
-**请求体**
-```json
-{
-  "session_id": "xxx",
-  "cycle_index": 0,
-  "user_input": "查询上个月销售额"
-}
-```
-
-**响应** `200`
-```json
-{ "status": "ok" }
 ```
 
 ---

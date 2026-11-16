@@ -91,6 +91,8 @@ _current_reasoning_effort_var = contextvars.ContextVar(
 _current_style_var = contextvars.ContextVar("llm_current_style", default="")
 # 是否随请求上传 blackboard 图片；None 表示按模型能力取默认值
 _current_use_images_var = contextvars.ContextVar("llm_current_use_images", default=None)
+# 当前请求的会话 ID（可能为空）；由 HTTP 中间件从请求体写入，供 LLM 调用日志读取。
+_current_session_id_var = contextvars.ContextVar("llm_current_session_id", default="")
 _clients = {}
 
 
@@ -201,6 +203,16 @@ def get_current_use_images():
     if value is None:
         return model_supports_images()
     return bool(value)
+
+
+def set_current_session_id(session_id):
+    """记录本次请求的会话 ID，供 LLM 调用日志使用（可为空）。"""
+    _current_session_id_var.set(session_id or "")
+
+
+def get_current_session_id():
+    """当前请求的会话 ID；无会话时返回 None。"""
+    return _current_session_id_var.get() or None
 
 
 def get_extra_body(model_id=None):

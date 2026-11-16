@@ -19,7 +19,6 @@ CREATE TABLE IF NOT EXISTS `observe_session_log` (
   `session_id` VARCHAR(255) NOT NULL COMMENT '会话ID',
   `question` LONGTEXT COMMENT '用户问题',
   `status` VARCHAR(50) COMMENT '会话状态',
-  `total_cycles` INT COMMENT '总循环次数',
   `total_tokens` INT COMMENT '总token数',
   `conversation_history` LONGTEXT COMMENT '完整对话上下文(JSON数组)',
   `trimmed_context` LONGTEXT COMMENT '送给LLM的裁剪后上下文(JSON数组)',
@@ -28,25 +27,6 @@ CREATE TABLE IF NOT EXISTS `observe_session_log` (
   PRIMARY KEY (`id`),
   INDEX `idx_session_id` (`session_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='观察会话日志表';
-
-CREATE TABLE IF NOT EXISTS `observe_cycle_log` (
-  `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `session_id` VARCHAR(255) NOT NULL COMMENT '会话ID',
-  `cycle_index` INT NOT NULL COMMENT '循环序号',
-  `phase` VARCHAR(50) NOT NULL COMMENT '阶段: think/execute/observe',
-  `sub_phase` VARCHAR(100) COMMENT '子阶段: filter_db/filter_func/plan/gen_code/exec_code/result',
-  `prompt` LONGTEXT COMMENT '发送给LLM的prompt',
-  `response` LONGTEXT COMMENT 'LLM返回的响应',
-  `user_decision` VARCHAR(2000) COMMENT '用户决策/输入: approve/reject/edit/skip 或用户输入文本(最多2000字)',
-  `exec_code` LONGTEXT COMMENT '执行的代码',
-  `exec_result` LONGTEXT COMMENT '执行结果',
-  `exec_error` LONGTEXT COMMENT '执行错误',
-  `token_estimate` INT COMMENT 'token估算',
-  `created_at` DATETIME COMMENT '记录时间',
-  PRIMARY KEY (`id`),
-  INDEX `idx_session_id` (`session_id`),
-  INDEX `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='观察周期日志表';
 
 CREATE TABLE IF NOT EXISTS `report_generation_log` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
@@ -60,6 +40,23 @@ CREATE TABLE IF NOT EXISTS `report_generation_log` (
   INDEX `idx_session_id` (`session_id`),
   INDEX `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='报告生成日志表';
+
+CREATE TABLE IF NOT EXISTS `llm_log` (
+  `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `session_id` VARCHAR(255) COMMENT '会话ID（可能为空）',
+  `input` LONGTEXT COMMENT '输入消息(JSON字符串，已去除图片base64)',
+  `output` LONGTEXT COMMENT '输出文本',
+  `prompt_tokens` INT COMMENT 'prompt token数',
+  `completion_tokens` INT COMMENT 'completion token数',
+  `total_tokens` INT COMMENT '总token数',
+  `reasoning_tokens` INT COMMENT 'reasoning token数',
+  `first_token_ms` INT COMMENT '首字符响应延迟(ms)，非流式为NULL',
+  `duration_ms` INT COMMENT '本次调用总耗时(ms)',
+  `created_at` DATETIME COMMENT '记录时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_session_id` (`session_id`),
+  INDEX `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='LLM调用日志表';
 
 CREATE TABLE IF NOT EXISTS `base_knowledge` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',

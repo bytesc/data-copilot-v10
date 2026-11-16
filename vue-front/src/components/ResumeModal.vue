@@ -36,7 +36,6 @@
         <div v-else class="session-detail">
           <p><strong>Session:</strong> {{ selectedSession.session_id }}</p>
           <p v-if="selectedSession.question"><strong>Question:</strong> {{ selectedSession.question }}</p>
-          <p v-if="selectedSession.cycle_count != null"><strong>Cycles:</strong> {{ selectedSession.cycle_count }}</p>
           <div v-if="loadingDetail" class="loading-text">Loading session data...</div>
           <div v-if="detailError" class="error-text">{{ detailError }}</div>
         </div>

@@ -1,12 +1,16 @@
 from utils.get_config import config_data
 from utils.perf_log import record_first_chunk, record_llm_complete, record_llm_input
-from agent.utils.llm_access.LLM import get_model_config, get_extra_body, get_current_use_images
+from agent.utils.llm_access.LLM import (
+    get_model_config, get_extra_body, get_current_use_images, get_current_session_id,
+)
 from agent.utils.llm_access.image_input import build_user_content
+from data_access.llm_log import record_llm_call, messages_to_json
 
 from datetime import datetime
 import os
 import random
 import string
+import time
 
 llmlog_dir = "./llmlog"
 
@@ -66,16 +70,26 @@ def call_llm(question, llm, images=None):
     messages = _build_messages(question, model_cfg, images)
     print("question len : ", len(question), " model:", model_cfg["id"], " images:", _count_message_images(messages))
     record_llm_input(len(question))
+    start = time.monotonic()
     response = llm.chat.completions.create(
         model=model_cfg["model"],
         messages=messages,
         stream=False,
         extra_body=get_extra_body(model_cfg["id"])
     )
+    duration_ms = int((time.monotonic() - start) * 1000)
     record_llm_complete()
     _print_usage(getattr(response, "usage", None))
 
     answer = response.choices[0].message
+    record_llm_call(
+        session_id=get_current_session_id(),
+        input_json=messages_to_json(messages),
+        output=answer.content or "",
+        usage=getattr(response, "usage", None),
+        first_token_ms=None,
+        duration_ms=duration_ms,
+    )
     if config_data.get("enable_llmlog", False):
         _write_llmlog(question, answer.content)
     return answer
@@ -96,6 +110,7 @@ def _call_llm_stream_events(question, llm, images=None):
     messages = _build_messages(question, model_cfg, images)
     print("question len (stream): ", len(question), " model:", model_cfg["id"], " images:", _count_message_images(messages))
     record_llm_input(len(question))
+    start = time.monotonic()
     response = llm.chat.completions.create(
         model=model_cfg["model"],
         messages=messages,
@@ -106,12 +121,15 @@ def _call_llm_stream_events(question, llm, images=None):
 
     full_content = ""
     usage = None
+    first_token_ms = None
     for chunk in response:
         if getattr(chunk, "usage", None) is not None:
             usage = chunk.usage
         if chunk.choices:
             delta = chunk.choices[0].delta
             if getattr(delta, 'content', None) is not None:
+                if first_token_ms is None:
+                    first_token_ms = int((time.monotonic() - start) * 1000)
                 content_delta = delta.content
                 full_content += content_delta
                 record_first_chunk()
@@ -120,9 +138,18 @@ def _call_llm_stream_events(question, llm, images=None):
             if getattr(delta, 'reasoning_content', None) is not None:
                 reasoning_delta = delta.reasoning_content
                 yield None, reasoning_delta
+    duration_ms = int((time.monotonic() - start) * 1000)
     record_llm_complete()
     print()
     _print_usage(usage)
 
+    record_llm_call(
+        session_id=get_current_session_id(),
+        input_json=messages_to_json(messages),
+        output=full_content,
+        usage=usage,
+        first_token_ms=first_token_ms,
+        duration_ms=duration_ms,
+    )
     if config_data.get("enable_llmlog", False):
         _write_llmlog(question, full_content)

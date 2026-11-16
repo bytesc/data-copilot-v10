@@ -28,7 +28,6 @@ from agent.utils.get_config import config_data
 from data_access.session_log import record_session_operation
 
 _ENABLE_TARGET = config_data.get('enable_target_knowledge', False)
-from data_access.observe_log import log_observe_cycle
 from data_access.report_log import record_report_generation
 from utils.front_utils import history_to_text
 from utils.blackboard import blackboard_section, blackboard_input_images_from_history
@@ -589,10 +588,6 @@ Conversation History:
     outline = _parse_outline_json(outline_raw)
     yield f"data: {json.dumps({'phase': 'outline', 'type': 'done', 'content': outline_raw, 'outline': outline}, ensure_ascii=False)}\n\n"
 
-    log_observe_cycle(session_id, 0, "generate_document", "outline",
-                      prompt=outline_prompt[:10000], response=outline_raw[:10000],
-                      token_estimate=len(outline_prompt))
-
     parts = outline.get("parts", [])
     title = outline.get("title", "Summary Document")
 
@@ -649,10 +644,6 @@ Write the content for the section "{heading}" in markdown format. ⚠️ CRITICA
 
         document_parts.append((heading, part_raw))
         yield f"data: {json.dumps({'phase': 'part', 'type': 'done', 'content': part_raw, 'part_index': i, 'heading': heading}, ensure_ascii=False)}\n\n"
-
-        log_observe_cycle(session_id, i + 1, "generate_document", "part",
-                          prompt=part_prompt[:10000], response=part_raw[:10000],
-                          token_estimate=len(part_prompt))
 
     full_document = f"# {title}\n\n"
     for idx, (heading, content) in enumerate(document_parts, 1):
@@ -766,10 +757,6 @@ Write the complete business summary document in markdown format. Start with `# T
         yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate_document', 'type': 'done', 'content': full_raw}, ensure_ascii=False)}\n\n"
-
-    log_observe_cycle(session_id, 0, "generate_document_unified", "full",
-                      prompt=prompt[:10000], response=full_raw[:10000],
-                      token_estimate=len(prompt))
 
     full_document = re.sub(r'```[a-z]*\n.*?```\n?', '', full_raw, flags=re.DOTALL)
 
@@ -895,10 +882,6 @@ Conversation History:
 
     yaml_base = generate_random_string(8)
     yaml_file_name = _save_intermediate_yaml(yaml_str, yaml_base, session_id)
-
-    log_observe_cycle(session_id, 0, "generate_yaml_outline", "outline",
-                      prompt=prompt[:10000], response=raw[:10000],
-                      token_estimate=len(prompt))
 
     yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'done', 'content': yaml_str, 'yaml_file': yaml_file_name, 'yaml_base': yaml_base}, ensure_ascii=False)}\n\n"
 
@@ -1057,10 +1040,6 @@ Write the content for the section "{heading}" in markdown format."""
         section_files.append({"name": sec_file, "heading": heading, "index": actual_idx})
 
         yield f"data: {json.dumps({'phase': 'document_from_yaml', 'type': 'section_done', 'content': part_raw, 'section_index': actual_idx, 'heading': heading, 'section_file': sec_file, 'total_sections': total}, ensure_ascii=False)}\n\n"
-
-        log_observe_cycle(session_id, actual_idx + 1, "generate_from_yaml", "part",
-                          prompt=section_prompt[:10000], response=part_raw[:10000],
-                          token_estimate=len(section_prompt))
 
     if section_index is None:
         full_document = f"# {title}\n\n"

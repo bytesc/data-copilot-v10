@@ -1,7 +1,7 @@
 import { ref, reactive, computed } from 'vue'
 import {
   thinkStream, actionStream, actStream, observeStream,
-  logUserInput, fetchGeneratedFiles, generateDocumentStream, generateDocumentUnifiedStream,
+  fetchGeneratedFiles, generateDocumentStream, generateDocumentUnifiedStream,
 } from '@/utils/api.js'
 import { notifyError, showErrorToast, showWarningToast } from '@/utils/toast.js'
 
@@ -359,7 +359,6 @@ function historyToText(history) {
     const gen = actionStream({
       question: question.value,
       conversation_history: conversationHistory.value,
-      cycle_index: cycleIndex.value,
       session_id: sessionId.value,
     })
     for await (const event of gen) {
@@ -586,7 +585,6 @@ function historyToText(history) {
     const gen = observeStream({
       question: question.value,
       conversation_history: conversationHistory.value,
-      cycle_index: cycleIndex.value,
       session_id: sessionId.value,
     })
     for await (const event of gen) {
@@ -661,11 +659,6 @@ function historyToText(history) {
     if (inputChoices.value.length > 0) {
       conversationHistory.value.push({ role: 'user', type: 'choice', content: response })
       addMessage('user', 'choice', { content: `Selected: ${response}` })
-      try {
-        await logUserInput(sessionId.value, cycleIndex.value, `User chose: ${response}`)
-      } catch (e) {
-        notifyError(e, 'Request failed')
-      }
     } else {
       const { uploaded, ok } = await _encodePendingImages()
       if (!ok) {
@@ -676,11 +669,6 @@ function historyToText(history) {
       if (uploaded.length) userEntry.uploaded = uploaded
       conversationHistory.value.push(userEntry)
       addMessage('user', 'response', { content: response, uploaded })
-      try {
-        await logUserInput(sessionId.value, cycleIndex.value, `User response: ${response}`)
-      } catch (e) {
-        notifyError(e, 'Request failed')
-      }
     }
     inputChoices.value = []
     inputPrompt.value = ''
@@ -710,11 +698,6 @@ function historyToText(history) {
     if (uploaded.length) userEntry.uploaded = uploaded
     conversationHistory.value.push(userEntry)
     addMessage('user', 'input', { content: userInput, uploaded })
-    try {
-      await logUserInput(sessionId.value, cycleIndex.value, `User: ${userInput}`)
-    } catch (e) {
-      notifyError(e, 'Request failed')
-    }
 
     isRunning.value = true
     try {
@@ -760,10 +743,10 @@ function historyToText(history) {
   async function resumeSession(sessionData) {
     sessionId.value = sessionData.session_id
     question.value = sessionData.question || ''
-    cycleIndex.value = sessionData.cycle_count || 0
+    cycleIndex.value = 0
 
     addMessage('system', 'resume', {
-      content: `Session restored: \`${sessionId.value}\`\nOriginal question: ${question.value}\nCycles completed: ${cycleIndex.value}`,
+      content: `Session restored: \`${sessionId.value}\`\nOriginal question: ${question.value}`,
     })
 
     handleHistoryEvent(sessionData.conversation_history || [])

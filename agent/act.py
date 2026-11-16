@@ -17,7 +17,6 @@ from agent.tools.get_function_info import FUNCTION_DICT
 from agent.tools.web_search.web_search import search_web, fetch_webpages
 from agent.tools.mcp_client import load_mcp_servers, get_mcp_server, MCPClient, MCPError
 from data_access.session_log import record_session_operation
-from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context, save_session_step, stream_with_context_retry, cap_text
 from utils.blackboard import (
@@ -425,11 +424,6 @@ Example:
                 if v['value'] and v['id'] in guide_id_set
             ) if selected_guide_keys else ""
 
-            log_observe_cycle(session_id, 0, "act", "explore_schema",
-                              prompt=prompt[:5000], response=raw[:5000],
-                              exec_result=display_content[:10000],
-                              token_estimate=len(prompt))
-
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_schema', 'type': 'done', 'content': display_content, 'result': {'selected_fields': selected_fields, 'db_context': full_schema, 'explore_plan': explore_plan, 'selected_guides': selected_guide_keys, 'query_guide_content': guide_result}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
             return {"selected_fields": selected_fields, "explore_plan": explore_plan, "schema_detail": display_content, "selected_guides": selected_guide_keys, "query_guide_content": guide_result}
@@ -507,22 +501,12 @@ Example:
         # left without any functions or database schema.
         yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'error', 'content': 'Failed to parse function selection after retries; keeping previous selection'}, ensure_ascii=False)}\n\n"
 
-        log_observe_cycle(session_id, 0, "act", "explore_functions",
-                          prompt=prompt[:5000], response=raw_text[:5000],
-                          exec_result="*(parse failed; previous selection preserved)*",
-                          token_estimate=len(prompt))
-
         return {"parse_failed": True, "selected_functions": None, "explore_plan": "", "func_docs": ""}
 
     if selected_functions:
         display_content = get_func_docs_for(selected_functions)
     else:
         display_content = "*(No functions selected)*"
-
-    log_observe_cycle(session_id, 0, "act", "explore_functions",
-                      prompt=prompt[:5000], response=raw_text[:5000],
-                      exec_result=display_content[:10000],
-                      token_estimate=len(prompt))
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_functions', 'type': 'done', 'content': display_content, 'result': {'selected_functions': selected_functions, 'func_context': full_catalog, 'explore_plan': explore_plan}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
@@ -607,11 +591,6 @@ Example:
             selected_entries = {k: v for k, v in all_knowledge.items() if v['id'] in id_set}
             display_content = base_knowledge_to_str(selected_entries) if selected_entries else "*(No relevant knowledge selected)*"
 
-            log_observe_cycle(session_id, 0, "act", "explore_base_knowledge",
-                              prompt=prompt[:5000], response=raw[:5000],
-                              exec_result=display_content[:10000],
-                              token_estimate=len(prompt))
-
             yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'done', 'content': display_content, 'result': {'selected_knowledge_ids': selected_ids, 'knowledge_content': display_content, 'summary': summary}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
 
             return {"selected_knowledge_ids": selected_ids, "knowledge_content": display_content, "summary": summary}
@@ -692,15 +671,8 @@ def _act_generate_and_execute(build_question, session_id: str, tables, selected_
     if exec_error:
         record_msg = _tag_error(exec_error_kind, exec_error)
         record_session_operation(session_id, "/api/act/stream/", request_json, ans=full_ans, code=full_code, result_type="error", msg=record_msg[:500])
-        log_observe_cycle(session_id, 0, "act", "generate_and_execute",
-                          prompt=full_question[:10000], response=full_code[:10000],
-                          exec_code=full_code[:10000], exec_result=full_ans[:10000],
-                          exec_error=record_msg[:2000])
     else:
         record_session_operation(session_id, "/api/act/stream/", request_json, ans=full_ans, code=full_code, result_type="success")
-        log_observe_cycle(session_id, 0, "act", "generate_and_execute",
-                          prompt=full_question[:10000], response=full_code[:10000],
-                          exec_code=full_code[:10000], exec_result=full_ans[:10000])
 
     return {"full_code": full_code, "full_ans": full_ans, "exec_error": exec_error, "exec_error_kind": exec_error_kind, "images": generated_images}
 
@@ -767,11 +739,6 @@ def _act_web_search(full_question: str, session_id: str, params: dict, request_j
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'chunk', 'content': display_content}, ensure_ascii=False)}\n\n"
 
-    log_observe_cycle(session_id, 0, "act", "web_search",
-                      prompt=full_question[:5000], response=raw_result[:5000],
-                      exec_result=display_content[:10000],
-                      token_estimate=len(full_question))
-
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
         ans=json.dumps({"query": query, "count": result_data.get("count", 0)}, ensure_ascii=False),
@@ -819,11 +786,6 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
     display_content = f"## Page Content ({len(pages)} page(s))\n\n" + "\n\n---\n\n".join(sections)
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'chunk', 'content': display_content}, ensure_ascii=False)}\n\n"
-
-    log_observe_cycle(session_id, 0, "act", "fetch_webpage",
-                      prompt=full_question[:5000], response=display_content[:5000],
-                      exec_result=display_content[:10000],
-                      token_estimate=len(full_question))
 
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
@@ -962,11 +924,6 @@ If no tools are needed, return {{"selected_tools": [], "plan": "No MCP tools nee
     else:
         tool_detail = "*(No tools selected)*"
 
-    log_observe_cycle(session_id, 0, "act", "explore_mcp",
-                      prompt=prompt[:5000], response=raw[:5000],
-                      exec_result=tool_detail[:10000],
-                      token_estimate=len(prompt))
-
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
         ans=json.dumps({"servers_count": len(all_servers_config), "tools_count": len(all_tools), "selected_count": len(selected_tools)}, ensure_ascii=False),
@@ -1038,9 +995,6 @@ def _act_select_images(session_id: str, params: dict, request_json: str = ""):
     else:
         display_content = "## Selected Images\n\n(none)"
 
-    log_observe_cycle(session_id, 0, "act", "select_images",
-                      prompt="", response=json.dumps({"images": images}, ensure_ascii=False)[:5000],
-                      token_estimate=0)
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
         ans=json.dumps({"images": images}, ensure_ascii=False),
@@ -1087,9 +1041,6 @@ def _act_user_interaction(action: str, session_id: str, params: dict, request_js
         "completed": completed,
     }
 
-    log_observe_cycle(session_id, 0, "act", action,
-                      prompt="", response=json.dumps(result, ensure_ascii=False)[:5000],
-                      token_estimate=0)
     record_session_operation(
         session_id, "/api/act/stream/", request_json,
         ans=json.dumps(result, ensure_ascii=False),
@@ -1161,10 +1112,6 @@ def _act_exe_mcp(full_question: str, session_id: str, params: dict, request_json
     result_text = "\n\n".join(all_displays) if all_displays else "(no results)"
 
     combined_display = f"## MCP Tool Execution Results\n\n{result_text}"
-
-    log_observe_cycle(session_id, 0, "act", "exe_mcp",
-                      prompt=full_question[:5000], response=result_text[:5000],
-                      token_estimate=len(full_question))
 
     status = "success" if not has_error else "partial"
     record_session_operation(

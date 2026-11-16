@@ -291,18 +291,29 @@ def _cleanup(path):
     shutil.rmtree(path, ignore_errors=True)
 
 
-def _handle_llm_request(message):
+def _handle_llm_request(message, session_id=""):
     """Run one proxied LLM call in the PARENT, which owns the API key.
 
     The child never holds the key; it forwards the request here and receives the
     answer text back. This keeps the key out of the (untrusted) child process.
     """
     from agent.utils.llm_access.LLM import get_llm_dynamic
+    from data_access.llm_log import record_llm_call, messages_to_json
 
     payload = message.get("payload") or {}
     try:
+        start = time.monotonic()
         response = get_llm_dynamic().chat.completions.create(**payload)
+        duration_ms = int((time.monotonic() - start) * 1000)
         content = response.choices[0].message.content
+        record_llm_call(
+            session_id=session_id or None,
+            input_json=messages_to_json(payload.get("messages")),
+            output=content or "",
+            usage=getattr(response, "usage", None),
+            first_token_ms=None,
+            duration_ms=duration_ms,
+        )
         return {"t": "llm_response", "id": message.get("id"), "ok": True, "content": content}
     except Exception as exc:
         return {
@@ -433,7 +444,7 @@ def _iter_items(code, session_id=""):
                 continue
             if message.get("t") == "llm_request":
                 # Proxied LLM call: run it here (parent holds the key) and reply.
-                _write_child(proc, _handle_llm_request(message))
+                _write_child(proc, _handle_llm_request(message, session_id))
                 continue
             if message.get("t") == "denied":
                 # The child guard refused a file/network access. Record it (with

@@ -44,14 +44,16 @@ from agent.utils.llm_access.LLM import (
     get_current_reasoning_effort,
     get_current_style,
     apply_request_selection,
+    set_current_session_id,
 )
 from data_access.session_log import record_session_operation, create_session_log_table
 from data_access.observe_log import (
-    create_observe_log_tables, log_observe_cycle, log_observe_session,
+    create_observe_log_tables,
     list_sessions, reconstruct_conversation_history
 )
 from utils.perf_log import perf_api, perf_context
 from data_access.report_log import create_report_log_table, get_generated_files
+from data_access.llm_log import create_llm_log_table
 _ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
 _ENABLE_EDIT = config_data.get('enable_edit', True)
 
@@ -104,6 +106,7 @@ from data_access.brief_info_db import create_brief_info_table, init_brief_info
 create_session_log_table()
 create_observe_log_tables()
 create_report_log_table()
+create_llm_log_table()
 create_db_query_guide_table()
 create_brief_info_table()
 init_brief_info()
@@ -212,6 +215,8 @@ async def unified_request_envelope(request: Request, call_next):
         ):
             _apply_meta(payload["meta"])
             data = payload["data"]
+            if isinstance(data, dict):
+                set_current_session_id(data.get("session_id"))
             if isinstance(data, dict) and isinstance(data.get("conversation_history"), list):
                 data["conversation_history"] = ingest_uploaded_images(data["conversation_history"])
             inner = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -229,6 +234,9 @@ async def unified_request_envelope(request: Request, call_next):
             request._headers = Headers(scope=request.scope)
             if hasattr(request, "_json"):
                 del request._json
+        elif isinstance(payload, dict) and payload.get("session_id"):
+            # Plain (non-envelope) JSON body carrying a session id.
+            set_current_session_id(payload.get("session_id"))
     return await call_next(request)
 
 
@@ -361,12 +369,6 @@ class ReviewInput(BaseModel):
     ans: str
     code: str
     session_id: Optional[str] = None
-
-
-class UserInputLog(BaseModel):
-    session_id: str
-    cycle_index: int = 0
-    user_input: str
 
 # print(get_db())
 
@@ -672,22 +674,6 @@ def get_session_generated_files(request: Request, session_id: str):
     return JSONResponse(content={"files": files})
 
 
-@app.post("/api/log-user-input/")
-def log_user_input(request: Request, user_input: UserInputLog):
-    log_observe_cycle(
-        user_input.session_id, user_input.cycle_index,
-        "user", "input",
-        user_decision=user_input.user_input[:2000],
-    )
-    return JSONResponse(content={"status": "ok"})
-
-
-
-
-
-
-
-
 @app.post("/api/exe-sql/")
 async def exe_sql(request: Request, user_input: AgentInput):
     if read_engine is None:
@@ -708,12 +694,6 @@ async def exe_sql(request: Request, user_input: AgentInput):
         record_session_operation,
         user_input.session_id, request.url.path,
         user_input.model_dump_json(), ans_str, "", "success", "处理成功",
-    )
-    await run_in_threadpool(
-        log_observe_cycle,
-        user_input.session_id or "", 0, "execute", "exe_sql",
-        exec_code=user_input.question,
-        exec_result=ans_str[:10000],
     )
 
     return JSONResponse(content=processed_data)

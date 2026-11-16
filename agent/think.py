@@ -12,7 +12,7 @@ from agent.tools.base_knowledge.get_base_knowledge import TARGET, BRIEF_INFO, TH
 from agent.tools.tools_def import llm
 from agent.tools.search_func import get_func_summary_for_agent
 from data_access.session_log import record_session_operation
-from data_access.observe_log import log_observe_cycle, log_observe_session
+from data_access.observe_log import log_observe_session
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json, stream_with_context_retry
 from utils.blackboard import blackboard_section, blackboard_input_images_from_history
@@ -153,9 +153,6 @@ def _event_stream_think_impl(
         if plan_result is not None:
             yield f"data: {json.dumps({'phase': 'think', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
 
-            log_observe_cycle(session_id, 0, "think", "plan",
-                              prompt=think_prompt[:5000], response=raw[:5000],
-                              token_estimate=prompt_length)
             record_session_operation(session_id, "/api/think/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
             log_observe_session(session_id, status="think_done", total_tokens=prompt_length)
             history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "think", "content": parse_json_raw(raw)}])

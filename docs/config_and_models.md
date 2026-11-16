@@ -93,6 +93,7 @@ enable_edit: true             # 数据/知识编辑（设为 false 时前端隐�
 enable_code_sandbox: true     # LLM 生成代码是否走沙箱子进程（true，推荐）；false=主进程直接 exec（旧行为，无隔离）
 enable_llmlog: false           # 记录 LLM 调用日志到 llmlog/*.txt
 enable_perf_log: true          # 写接口性能指标到 perf_log.csv
+enable_llm_log: true           # 记录每次 LLM 调用到系统库 llm_log 表（时间、session_id、去除图片base64的输入JSON、输出、token 统计、首字符延迟、总耗时）
 enable_sandbox_log: true       # 写沙箱审计日志到 sandbox_audit.log（每次沙箱启动/每次拒绝，含时间戳与 session_id）
 ```
 
@@ -272,8 +273,7 @@ JSON `POST/PUT/PATCH` 的 HTTP 请求体可选使用 `{meta, data}` 信封（模
 {
   "question": "分析上个月销售趋势",
   "session_id": "xxx",
-  "conversation_history": [...],
-  "cycle_index": 0
+  "conversation_history": [...]
 }
 ```
 
@@ -285,24 +285,11 @@ JSON `POST/PUT/PATCH` 的 HTTP 请求体可选使用 `{meta, data}` 信封（模
 {
   "question": "分析上个月销售趋势",
   "session_id": "xxx",
-  "conversation_history": [...],
-  "cycle_index": 1
+  "conversation_history": [...]
 }
 ```
 
 **用于**: `POST /api/observe/stream/`
-
-### UserInputLog
-
-```json
-{
-  "session_id": "xxx",
-  "cycle_index": 0,
-  "user_input": "查询上个月销售额"
-}
-```
-
-**用于**: `POST /api/log-user-input/`
 
 ### CommentUpdate
 
@@ -427,33 +414,12 @@ id                   INT AUTO_INCREMENT PRIMARY KEY
 session_id           VARCHAR(255)
 question             LONGTEXT         -- 用户初始问题
 status               VARCHAR(50)      -- 会话状态
-total_cycles         INT              -- 总循环次数
 total_tokens         INT              -- 总 token 消耗
 conversation_history LONGTEXT         -- 完整历史（JSON 数组，含 blackboard）
 trimmed_context      LONGTEXT         -- 裁剪后的普通上下文（JSON 数组，不含 blackboard）
 created_at           DATETIME
 updated_at           DATETIME
 ```
-
-### observe_cycle_log — 单次循环日志
-
-```sql
-id              INT AUTO_INCREMENT PRIMARY KEY
-session_id      VARCHAR(255)
-cycle_index     INT
-phase           VARCHAR(50)     -- think / execute / observe
-sub_phase       VARCHAR(100)    -- filter_db / filter_func / plan / gen_code / exec_code / result
-prompt          LONGTEXT        -- 发给 LLM 的 prompt
-response        LONGTEXT        -- LLM 回复
-user_decision   VARCHAR(2000)   -- approve / reject / edit / skip 或用户输入文本（最多 2000 字；旧表的 VARCHAR(50) 在启动时自动加宽）
-exec_code       LONGTEXT        -- 执行的代码
-exec_result     LONGTEXT        -- 执行结果
-exec_error      LONGTEXT        -- 执行错误
-token_estimate  INT             -- token 估算
-created_at      DATETIME
-```
-
-> 上表 `phase` / `sub_phase` 的注释为建表时的历史描述，实际写入值随实现演进：`phase` 实际为 `think` / `action` / `act` / `observe` / `execute`（`/api/exe-sql/`）以及 `generate_document` / `generate_document_unified` / `generate_yaml_outline` / `generate_from_yaml` / `user`；`sub_phase` 实际为 `plan` / `decide` / `review` / `explore_*` / `generate_and_execute` / `web_search` / `fetch_webpage` / `exe_mcp` / `select_images` / `ask_question` 等。
 
 ### report_generation_log — 文档生成日志
 
@@ -465,6 +431,24 @@ chat_history LONGTEXT       -- 输入的对话历史（JSON）
 outline     LONGTEXT        -- 生成的大纲
 full_text   LONGTEXT        -- 生成的完整文本
 created_at  DATETIME
+```
+
+### llm_log — LLM 调用日志
+
+每次 LLM 调用一行，由 `data_access/llm_log.py` 写入（开关 `enable_llm_log`）。覆盖 `call_llm`/流式 `call_llm_stream*`（think/action/act/observe/文档生成等全部走此层）以及沙箱内的 LLM 代理调用。
+
+```sql
+id                INT AUTO_INCREMENT PRIMARY KEY
+session_id        VARCHAR(255)  -- 会话ID（可能为空，来自请求体）
+input             LONGTEXT      -- 输入消息 JSON 字符串；已去除 content 中的图片 image_url(base64)，保留含图片文件名的 text 片段
+output            LONGTEXT      -- 输出文本
+prompt_tokens     INT           -- prompt token 数
+completion_tokens INT           -- completion token 数
+total_tokens      INT           -- 总 token 数
+reasoning_tokens  INT           -- reasoning token 数（如有）
+first_token_ms    INT           -- 首字符响应延迟(ms)；非流式调用为 NULL
+duration_ms       INT           -- 本次调用总耗时(ms)
+created_at        DATETIME      -- 记录时间
 ```
 
 ### 系统库知识表

@@ -32,14 +32,6 @@ export async function fetchGeneratedFiles(sessionId) {
   return data.files || []
 }
 
-export async function logUserInput(sessionId, cycleIndex, userInput) {
-  await request(`${BASE_URL}/log-user-input/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, cycle_index: cycleIndex, user_input: userInput }),
-  })
-}
-
 export function thinkStream(payload) {
   return createSSEStream(`${BASE_URL}/think/stream/`, payload)
 }

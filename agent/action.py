@@ -10,7 +10,7 @@ from agent.tools.base_knowledge.get_base_knowledge import BRIEF_INFO
 from agent.tools.search_db import get_db_summary_for_agent
 from agent.tools.search_func import get_func_summary_for_agent
 from agent.tools.tools_def import llm
-from data_access.observe_log import log_observe_cycle, log_observe_session
+from data_access.observe_log import log_observe_session
 from data_access.session_log import record_session_operation
 from agent.tools.tools_def import engine, read_only_engine
 from utils.front_utils import history_to_text
@@ -48,7 +48,6 @@ class ActionInput(BaseModel):
     question: str
     session_id: Optional[str] = None
     conversation_history: Optional[List[dict]] = None
-    cycle_index: int = 0
 
 
 _ACTION_DESCRIPTIONS = {
@@ -199,7 +198,6 @@ def _event_stream_action(
         question: str,
         session_id: str,
         conversation_history: Optional[List[dict]],
-        cycle_index: int,
         request_json: str = "",
 ):
     """Action phase wrapper: turn unexpected errors into a terminal error event.
@@ -210,7 +208,7 @@ def _event_stream_action(
     """
     try:
         yield from _event_stream_action_impl(
-            question, session_id, conversation_history, cycle_index, request_json,
+            question, session_id, conversation_history, request_json,
         )
     except Exception as e:
         traceback.print_exc()
@@ -229,7 +227,6 @@ def _event_stream_action_impl(
         question: str,
         session_id: str,
         conversation_history: Optional[List[dict]],
-        cycle_index: int,
         request_json: str = "",
 ):
     prompt = _build_action_prompt(
@@ -264,9 +261,6 @@ def _event_stream_action_impl(
             yield f"data: {json.dumps({'phase': 'action', 'type': 'done', 'content': raw, 'action_result': action_result}, ensure_ascii=False)}\n\n"
 
             action_label = action or f"multi({len(actions)} actions)"
-            log_observe_cycle(session_id, cycle_index, "action", "decide",
-                              prompt=prompt[:5000], response=raw[:5000],
-                              token_estimate=len(prompt))
             record_session_operation(
                 session_id, "/api/action/stream/",
                 request_json, str(action_result), "",
@@ -381,7 +375,6 @@ async def action_stream_api(request: Request, user_input: ActionInput):
             user_input.question,
             user_input.session_id or "",
             user_input.conversation_history,
-            user_input.cycle_index,
             user_input.model_dump_json(),
         ),
         media_type="text/event-stream",

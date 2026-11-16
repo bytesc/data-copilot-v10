@@ -10,7 +10,6 @@ from agent.action import ACTIONS, ACTIONS_BODY
 from agent.tools.base_knowledge.get_base_knowledge import TARGET
 from agent.tools.tools_def import llm
 from data_access.session_log import record_session_operation
-from data_access.observe_log import log_observe_cycle
 from utils.front_utils import history_to_text
 from utils.blackboard import blackboard_section, blackboard_input_images_from_history, last_act_action
 from utils.context_trim import prepare_trimmed_context, save_session_step, parse_json_raw, parse_json, stream_with_context_retry
@@ -27,7 +26,6 @@ class ObserveInput(BaseModel):
     question: str
     session_id: Optional[str] = None
     conversation_history: Optional[List[dict]] = None
-    cycle_index: int = 0
 
 
 def _build_observe_prompt(context: str, blackboard_text: str) -> str:
@@ -77,7 +75,6 @@ def _event_stream_observe(
     question: str,
     session_id: str,
     conversation_history: Optional[List[dict]],
-    cycle_index: int,
     request_json: str = "",
 ):
     """Observe phase wrapper: turn unexpected errors into a terminal error event.
@@ -88,7 +85,7 @@ def _event_stream_observe(
     """
     try:
         yield from _event_stream_observe_impl(
-            question, session_id, conversation_history, cycle_index, request_json,
+            question, session_id, conversation_history, request_json,
         )
     except Exception as e:
         traceback.print_exc()
@@ -107,7 +104,6 @@ def _event_stream_observe_impl(
     question: str,
     session_id: str,
     conversation_history: Optional[List[dict]],
-    cycle_index: int,
     request_json: str = "",
 ):
     """Observe phase: LLM reviews execution results and updates the plan."""
@@ -143,9 +139,6 @@ def _event_stream_observe_impl(
         if plan_result is not None:
             yield f"data: {json.dumps({'phase': 'observe', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
 
-            log_observe_cycle(session_id, cycle_index, "observe", "review",
-                              prompt=observe_prompt[:5000], response=raw[:5000],
-                              token_estimate=prompt_length)
             record_session_operation(session_id, "/api/observe/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
             observe_entry = {"role": "assistant", "type": "observe", "content": parse_json_raw(raw)}
             observe_action = last_act_action(conversation_history)
@@ -178,7 +171,6 @@ async def observe_stream_api(request: Request, user_input: ObserveInput):
             user_input.question,
             user_input.session_id or "",
             user_input.conversation_history,
-            user_input.cycle_index,
             user_input.model_dump_json(),
         ),
         media_type="text/event-stream",

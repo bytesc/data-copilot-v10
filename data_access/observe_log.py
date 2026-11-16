@@ -8,36 +8,9 @@ from sqlalchemy.dialects.mysql import LONGTEXT
 
 from data_access.sys_db_conn import sys_engine
 from data_access.session_log import session_operation_log
-from utils.blackboard import (
-    SCHEMA, FUNCTIONS, KNOWLEDGE, MCP, SELECTED_IMAGES, REGIONS,
-    empty_blackboard, normalize_selected_images, replace_blackboard,
-    last_act_action,
-)
 
-
-def _parse_json_raw(raw: str) -> dict:
-    from utils.json_parse import parse_json
-    result = parse_json(raw)
-    return result if result is not None else {}
 
 metadata = MetaData()
-
-observe_cycle_log = Table(
-    "observe_cycle_log", metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("session_id", String(255), nullable=False, comment="会话ID"),
-    Column("cycle_index", Integer, nullable=False, comment="循环序号"),
-    Column("phase", String(50), nullable=False, comment="阶段: think/execute/observe"),
-    Column("sub_phase", String(100), comment="子阶段: filter_db/filter_func/plan/gen_code/exec_code/result"),
-    Column("prompt", LONGTEXT, comment="发送给LLM的prompt"),
-    Column("response", LONGTEXT, comment="LLM返回的响应"),
-    Column("user_decision", String(2000), comment="用户决策/输入: approve/reject/edit/skip 或用户输入文本(最多2000字)"),
-    Column("exec_code", LONGTEXT, comment="执行的代码"),
-    Column("exec_result", LONGTEXT, comment="执行结果"),
-    Column("exec_error", LONGTEXT, comment="执行错误"),
-    Column("token_estimate", Integer, comment="token估算"),
-    Column("created_at", DateTime, comment="记录时间"),
-)
 
 observe_session_log = Table(
     "observe_session_log", metadata,
@@ -45,7 +18,6 @@ observe_session_log = Table(
     Column("session_id", String(255), nullable=False, comment="会话ID"),
     Column("question", LONGTEXT, comment="用户问题"),
     Column("status", String(50), comment="会话状态"),
-    Column("total_cycles", Integer, comment="总循环次数"),
     Column("total_tokens", Integer, comment="总token数"),
     Column("conversation_history", LONGTEXT, comment="完整对话上下文(JSON数组)"),
     Column("trimmed_context", LONGTEXT, comment="送给LLM的裁剪后上下文(JSON数组)"),
@@ -56,23 +28,14 @@ observe_session_log = Table(
 
 # Serializes the check-then-create write of a session row so concurrent phase
 # logs (think/action/act/observe) cannot both INSERT and create a duplicate
-# session row, and so per-session aggregates (total_cycles/total_tokens) are
-# read and written from a consistent view. Logging is low volume, so a single
-# process-wide lock is enough and avoids per-session bookkeeping.
+# session row, and so the per-session token aggregate is read and written from
+# a consistent view. Logging is low volume, so a single process-wide lock is
+# enough and avoids per-session bookkeeping.
 _session_lock = threading.RLock()
 
 
 def create_observe_log_tables():
     metadata.create_all(sys_engine)
-    _ensure_column_exists(sys_engine, "observe_cycle_log", "prompt", "LONGTEXT COMMENT 'prompt'")
-    _ensure_column_exists(sys_engine, "observe_cycle_log", "response", "LONGTEXT COMMENT 'response'")
-    _ensure_column_exists(sys_engine, "observe_cycle_log", "exec_code", "LONGTEXT COMMENT 'exec_code'")
-    _ensure_column_exists(sys_engine, "observe_cycle_log", "exec_result", "LONGTEXT COMMENT 'exec_result'")
-    _ensure_column_exists(sys_engine, "observe_cycle_log", "exec_error", "LONGTEXT COMMENT 'exec_error'")
-    # user_decision also stores raw user input (up to 2000 chars) from
-    # /api/log-user-input/; widen legacy VARCHAR(50) columns so those writes no
-    # longer fail under MySQL strict mode and get silently dropped.
-    _ensure_column_exists(sys_engine, "observe_cycle_log", "user_decision", "VARCHAR(2000) COMMENT 'user decision/input'")
     _ensure_column_exists(sys_engine, "observe_session_log", "question", "LONGTEXT COMMENT 'question'")
     _ensure_column_exists(sys_engine, "observe_session_log", "conversation_history", "LONGTEXT COMMENT 'conversation history' AFTER total_tokens")
     _ensure_column_exists(sys_engine, "observe_session_log", "trimmed_context", "LONGTEXT COMMENT 'trimmed context for LLM' AFTER conversation_history")
@@ -105,61 +68,6 @@ def _ensure_column_exists(engine, table_name, column_name, column_def):
         )
 
 
-def log_observe_cycle(
-    session_id,
-    cycle_index,
-    phase,
-    sub_phase="",
-    prompt="",
-    response="",
-    user_decision="",
-    exec_code="",
-    exec_result="",
-    exec_error="",
-    token_estimate=0,
-):
-    if not session_id:
-        return
-    try:
-        with sys_engine.connect() as conn:
-            # Hold the session lock across insert + count + update so the cycle
-            # count is computed from a consistent view and cannot be clobbered by
-            # a concurrent writer of the same session row.
-            with _session_lock:
-                conn.execute(
-                    insert(observe_cycle_log).values(
-                        session_id=session_id,
-                        cycle_index=cycle_index,
-                        phase=phase,
-                        sub_phase=sub_phase,
-                        prompt=prompt[:10000] if prompt else "",
-                        response=response[:10000] if response else "",
-                        user_decision=user_decision[:2000] if user_decision else "",
-                        exec_code=exec_code[:10000] if exec_code else "",
-                        exec_result=exec_result[:10000] if exec_result else "",
-                        exec_error=exec_error[:2000] if exec_error else "",
-                        token_estimate=token_estimate,
-                        created_at=datetime.now(),
-                    )
-                )
-                cycle_count = conn.execute(
-                    select(func.count()).select_from(observe_cycle_log).where(
-                        observe_cycle_log.c.session_id == session_id
-                    )
-                ).scalar()
-                conn.execute(
-                    observe_session_log.update().where(
-                        observe_session_log.c.session_id == session_id
-                    ).values(
-                        total_cycles=cycle_count,
-                        updated_at=datetime.now(),
-                    )
-                )
-                conn.commit()
-    except Exception as e:
-        print(f"记录观察日志失败: {e}")
-
-
 def log_observe_session(session_id, question="", status="active", total_tokens=0):
     if not session_id:
         return
@@ -181,7 +89,6 @@ def log_observe_session(session_id, question="", status="active", total_tokens=0
                             session_id=session_id,
                             question=question,
                             status=status,
-                            total_cycles=0,
                             total_tokens=delta,
                             created_at=datetime.now(),
                             updated_at=datetime.now(),
@@ -245,21 +152,6 @@ def save_session_context(session_id, conversation_history, trimmed_context):
         print(f"保存会话上下文失败: {e}")
 
 
-def get_session_history(session_id, limit=50):
-    try:
-        with sys_engine.connect() as conn:
-            result = conn.execute(
-                select(observe_cycle_log)
-                .where(observe_cycle_log.c.session_id == session_id)
-                .order_by(desc(observe_cycle_log.c.created_at))
-                .limit(limit)
-            ).fetchall()
-            return [dict(row._mapping) for row in result]
-    except Exception as e:
-        print(f"查询会话历史失败: {e}")
-        return []
-
-
 def _serialize_row(row_dict):
     return {
         k: v.isoformat() if isinstance(v, datetime) else v
@@ -276,7 +168,6 @@ def list_sessions(limit=50):
                     observe_session_log.c.session_id,
                     observe_session_log.c.question,
                     observe_session_log.c.status,
-                    observe_session_log.c.total_cycles,
                     observe_session_log.c.total_tokens,
                     observe_session_log.c.created_at,
                     observe_session_log.c.updated_at,
@@ -305,34 +196,6 @@ def get_session_operations(session_id, limit=200):
         return []
 
 
-def get_session_cycles(session_id, limit=200):
-    try:
-        with sys_engine.connect() as conn:
-            result = conn.execute(
-                select(observe_cycle_log)
-                .where(observe_cycle_log.c.session_id == session_id)
-                .order_by(observe_cycle_log.c.created_at)
-                .limit(limit)
-            ).fetchall()
-            return [_serialize_row(dict(row._mapping)) for row in result]
-    except Exception as e:
-        print(f"查询周期日志失败: {e}")
-        return []
-
-
-FRONTEND_ACTIONS = {"ask_question", "ask_choice", "summary_and_pause", "attempt_completion", "generate_document"}
-
-
-def _parse_action_decision(raw: str):
-    from utils.json_parse import parse_json
-    data = parse_json(raw)
-    if isinstance(data, dict):
-        action = data.get("action", "")
-        if action in FRONTEND_ACTIONS:
-            return action, data.get("text", "")
-    return None, None
-
-
 def reconstruct_conversation_history(session_id):
     try:
         with sys_engine.connect() as conn:
@@ -353,226 +216,47 @@ def reconstruct_conversation_history(session_id):
             else:
                 history = []
             if not history:
-                history = _rebuild_from_cycle_logs(conn, session_id, question)
+                history = _rebuild_from_operations(conn, session_id, question)
 
         return {
             "session_id": session_id,
             "question": question,
             "status": session_info.get("status", ""),
-            "total_cycles": session_info.get("total_cycles", 0),
             "total_tokens": session_info.get("total_tokens", 0),
             "created_at": str(session_info.get("created_at", "")),
             "updated_at": str(session_info.get("updated_at", "")),
             "conversation_history": history,
-            "cycle_count": session_info.get("total_cycles", 0),
         }
     except Exception as e:
         print(f"重建会话历史失败: {e}")
         return None
 
 
-def _rebuild_from_cycle_logs(conn, session_id, question):
+def _rebuild_from_operations(conn, session_id, question):
+    """Best-effort history rebuild from operation logs.
+
+    Used only when ``observe_session_log.conversation_history`` is empty. The
+    per-cycle log has been removed, so only document-generation operations can
+    be recovered here; richer phase context is no longer available from the
+    database and must come from the persisted conversation history instead.
+    """
     ops = conn.execute(
         select(session_operation_log)
         .where(session_operation_log.c.session_id == session_id)
         .order_by(session_operation_log.c.created_at)
     ).fetchall()
 
-    cycles = conn.execute(
-        select(observe_cycle_log)
-        .where(observe_cycle_log.c.session_id == session_id)
-        .order_by(observe_cycle_log.c.created_at)
-    ).fetchall()
-
-    all_entries = []
-    for op in ops:
-        opd = dict(op._mapping)
-        all_entries.append((opd["created_at"], "op", opd))
-    for cyc in cycles:
-        cd = dict(cyc._mapping)
-        all_entries.append((cd["created_at"], "cycle", cd))
-    all_entries.sort(key=lambda x: x[0] if x[0] else datetime.min)
-
     history = []
-    board = empty_blackboard()
     if question:
         history.append({"role": "user", "type": "question", "content": question})
 
-    for ts, etype, entry in all_entries:
-        if etype == "op":
-            ep = entry.get("api_endpoint", "")
-            if ep == "/api/generate-document/stream/":
-                msg = entry.get("msg", "")
-                history.append({"role": "assistant", "type": "document", "content": msg})
-        elif etype == "cycle":
-            phase = entry.get("phase", "")
-            sub_phase = entry.get("sub_phase", "")
-            response = entry.get("response", "") or ""
-            exec_code = entry.get("exec_code", "") or ""
-            exec_result = entry.get("exec_result", "") or ""
-            exec_error = entry.get("exec_error", "") or ""
-            user_decision = entry.get("user_decision", "") or ""
-            if phase == "think" and sub_phase == "plan":
-                if response:
-                    history.append({"role": "assistant", "type": "think", "content": _parse_json_raw(response)})
-            elif phase == "action" and sub_phase == "decide":
-                if response:
-                    history.append({"role": "assistant", "type": "action_decision", "content": _parse_json_raw(response)})
-                    _rebuild_selected_images_from_action(board, response)
-                    action_type, action_text = _parse_action_decision(response)
-                    if action_type and action_text:
-                        act_entry = {"role": "assistant", "type": "act", "action": action_type, "text": action_text}
-                        if action_type == "ask_question":
-                            act_entry["needs_user_input"] = True
-                        elif action_type == "ask_choice":
-                            act_entry["needs_user_input"] = True
-                            act_entry["choices"] = []
-                        elif action_type == "summary_and_pause":
-                            act_entry["paused"] = True
-                        elif action_type == "attempt_completion":
-                            act_entry["completed"] = True
-                        elif action_type == "generate_document":
-                            act_entry["completed"] = True
-                        history.append(act_entry)
-            elif phase == "observe" and sub_phase == "review":
-                if response:
-                    observe_entry = {"role": "assistant", "type": "observe", "content": _parse_json_raw(response)}
-                    # The corresponding act entry has already been appended to
-                    # ``history``, so its action drives the observe retention.
-                    observe_action = last_act_action(history)
-                    if observe_action:
-                        observe_entry["action"] = observe_action
-                    history.append(observe_entry)
-            elif phase == "act" and sub_phase in ("explore_schema", "explore_functions", "explore_base_knowledge", "explore_mcp"):
-                _rebuild_blackboard_region(board, sub_phase, response, exec_result, history)
-            elif phase == "act" and sub_phase == "select_images":
-                parsed = _parse_json_raw(response) if response else {}
-                images = parsed.get("images") if isinstance(parsed, dict) else None
-                if images is None and isinstance(parsed, dict):
-                    images = parsed.get("selected_images")
-                board[SELECTED_IMAGES] = {"images": normalize_selected_images(images)}
-            elif phase == "act" and sub_phase == "generate_and_execute":
-                act_entry = {"role": "assistant", "type": "act", "action": "generate_and_execute"}
-                if exec_code:
-                    act_entry["code"] = exec_code
-                if exec_error:
-                    act_entry["error"] = exec_error
-                elif exec_code:
-                    # Mark a successful execution even when it produced no
-                    # textual output, so the rebuilt history keeps the entry
-                    # instead of dropping it (keeps parity with the live path).
-                    act_entry["exec_ok"] = True
-                    act_entry["result"] = exec_result
-                if act_entry.get("code") or act_entry.get("result") or act_entry.get("error") or act_entry.get("exec_ok"):
-                    history.append(act_entry)
-            elif phase == "user" and sub_phase == "input":
-                if user_decision:
-                    if user_decision.startswith("User chose: "):
-                        history.append({"role": "user", "type": "choice", "content": user_decision[12:]})
-                    elif user_decision.startswith("User response: "):
-                        history.append({"role": "user", "type": "response", "content": user_decision[15:]})
-                    elif user_decision.startswith("User: "):
-                        history.append({"role": "user", "type": "input", "content": user_decision[6:]})
-                    else:
-                        history.append({"role": "user", "type": "input", "content": user_decision})
+    for op in ops:
+        opd = dict(op._mapping)
+        if opd.get("api_endpoint") == "/api/generate-document/stream/":
+            history.append({
+                "role": "assistant",
+                "type": "document",
+                "content": opd.get("msg", ""),
+            })
 
-    if any(board.get(region) for region in REGIONS):
-        history = replace_blackboard(history, board)
     return history
-
-
-def _rebuild_selected_images_from_action(board, response):
-    """Restore the selected images region from a logged action decision."""
-    parsed = _parse_json_raw(response)
-    actions = parsed.get("actions")
-    if isinstance(actions, list):
-        candidates = actions
-    else:
-        candidates = [parsed]
-    for item in candidates:
-        if not isinstance(item, dict) or item.get("action") != "select_images":
-            continue
-        images = item.get("images")
-        if images is None:
-            images = item.get("selected_images")
-        board[SELECTED_IMAGES] = {"images": normalize_selected_images(images)}
-
-
-def _rebuild_blackboard_region(board, sub_phase, response, exec_result, history):
-    """Rebuild a blackboard region from cycle logs instead of the LLM context."""
-    parsed = _parse_json_raw(response) if response else {}
-
-    if sub_phase == "explore_schema":
-        # Mirror the live path (agent/act.py `_act_explore_schema`): the logged
-        # response may carry ``tables`` plus ``plan``/``selected_guides`` at the
-        # top level, so only the table->columns mapping belongs in
-        # ``selected_fields``. Keeping ``plan``/``selected_guides`` inside it (as
-        # the previous ``parsed.get("tables", parsed)`` did when no ``tables``
-        # key was present) produced a blackboard that diverged from the live run.
-        if "tables" in parsed:
-            selected_fields = parsed.get("tables")
-        else:
-            selected_fields = {
-                k: v for k, v in parsed.items()
-                if k not in ("plan", "selected_guides")
-            }
-        if not isinstance(selected_fields, dict):
-            selected_fields = {}
-        explore_plan = parsed.get("plan", "")
-        selected_guides = parsed.get("selected_guides", []) or []
-        board[SCHEMA] = {
-            "selected_fields": selected_fields,
-            "explore_plan": explore_plan,
-            "selected_guides": selected_guides,
-            "query_guide_content": "",
-            "schema_detail": exec_result,
-        }
-        history.append({
-            "role": "assistant", "type": "act", "action": "explore_schema",
-            "selected_fields": selected_fields,
-            "explore_plan": explore_plan,
-            "selected_guides": selected_guides,
-        })
-    elif sub_phase == "explore_functions":
-        selected_functions = parsed.get("selected_functions", []) or []
-        explore_plan = parsed.get("plan", "")
-        if "selected_functions" in parsed:
-            # Only overwrite the region when the logged response really parsed
-            # into a selection; a failed run must not blank out the FUNC region.
-            board[FUNCTIONS] = {
-                "selected_functions": selected_functions,
-                "explore_plan": explore_plan,
-                "func_docs": exec_result,
-            }
-        history.append({
-            "role": "assistant", "type": "act", "action": "explore_functions",
-            "selected_functions": selected_functions,
-            "explore_plan": explore_plan,
-        })
-    elif sub_phase == "explore_base_knowledge":
-        selected_ids = parsed.get("selected_ids", []) or []
-        summary = parsed.get("summary", "")
-        board[KNOWLEDGE] = {
-            "selected_knowledge_ids": selected_ids,
-            "knowledge_content": exec_result,
-            "summary": summary,
-        }
-        history.append({
-            "role": "assistant", "type": "act", "action": "explore_base_knowledge",
-            "selected_knowledge_ids": selected_ids,
-            "summary": summary,
-        })
-    elif sub_phase == "explore_mcp":
-        selected_tools = parsed.get("selected_tools", []) or []
-        explore_plan = parsed.get("plan", "")
-        board[MCP] = {
-            "selected_tools": selected_tools,
-            "explore_plan": explore_plan,
-            "tool_detail": exec_result,
-            "catalog": "",
-        }
-        history.append({
-            "role": "assistant", "type": "act", "action": "explore_mcp",
-            "selected_tools": selected_tools,
-            "explore_plan": explore_plan,
-        })
