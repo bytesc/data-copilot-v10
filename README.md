@@ -158,6 +158,15 @@ mysql_readonly: "mysql+pymysql://readonly:123456@localhost:3306/singapore_land_2
 # 系统数据库（会话日志、知识库等）
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
 
+# 单条 SQL 超时秒数：限制业务库上一条 SELECT 的最长执行时间，防止失控查询
+# 长期占用连接。对只读 engine（exe_sql / 结构探索，含沙箱内）与特权 engine 都生效
+# （MySQL 会话级 max_execution_time，仅 SELECT）。设为 0 或删除则关闭。
+sql_query_timeout: 60
+
+# 业务库连接的 socket 读写超时秒数：专防“卡死”的连接，与上面的单条查询超时相互独立。
+# 缺省时取代码默认值 300；设为 0 则关闭。
+sql_socket_timeout: 300
+
 # 静态文件服务地址
 static_path: "http://127.0.0.1:8008/"
 # 静态文件固定存储在项目根目录 tmp_imgs/ 下（不可配置）
@@ -217,6 +226,7 @@ enable_edit: true             # 数据/知识管理页（设为 false 时前端�
 enable_code_sandbox: true     # LLM 生成代码走沙箱子进程（推荐）；false=主进程直接 exec（旧行为，无隔离）
 enable_llmlog: false          # 记录 LLM 调用日志到 llmlog/*.txt
 enable_perf_log: true         # 写接口性能指标到 perf_log.csv
+enable_sandbox_log: true      # 写沙箱审计日志到 sandbox_audit.log（每次沙箱启动/每次拒绝）
 ```
 
 > LLM 代码执行沙箱（资源上限 / 文件访问与网络白名单）的设置**不在本文件**，而在

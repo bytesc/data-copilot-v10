@@ -17,6 +17,15 @@ mysql_readonly: "mysql+pymysql://readonly:123456@localhost:3306/singapore_land_2
 # 系统数据库（会话日志、知识库、操作审计）
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
 
+# 单条 SQL 超时秒数（业务库）：限制一条 SELECT 的最长执行时间，防止失控查询长期占用连接。
+# 对只读 engine（exe_sql / 结构探索，含沙箱内）与特权 engine 都生效（MySQL 会话级 max_execution_time，仅 SELECT）。
+# 设为 0 或删除则关闭。
+sql_query_timeout: 60
+
+# 业务库连接的 socket 读写超时秒数：与单条查询超时相互独立，专防“卡死”的连接，不打断正常的慢查询。
+# 缺省（未配置）时取代码默认值 300；设为 0 则关闭。
+sql_socket_timeout: 300
+
 # 静态文件 URL 前缀（部署时改为服务器实际地址，如 http://your-server-ip:8038/）
 # 以本文件为唯一来源，不读取任何环境变量。
 static_path: "http://127.0.0.1:8008/"
@@ -128,14 +137,19 @@ file_access:          # 运行期文件访问白名单（子进程 audit hook）
   code_exts: [".py", ".pyc", ".pyd", ".so", ".dll", ".whl"]  # 项目根内源码后缀（只读，供 import）
   python_libs: true      # 允许读 Python 安装目录（stdlib/site-packages，import 必需）
   matplotlib_cache: true # 允许读写 matplotlib 缓存目录
+  temp_dir: true         # 允许读写 OS 临时目录（Playwright 截图、asyncio 自管道等依赖；设 false 则禁止）
 
 network:              # 运行期网络白名单（子进程 audit hook）
   allow_hosts: ["localhost", "127.0.0.1", "onemap.gov.sg", "openstreetmap.org", "streetdirectory.com", "duckduckgo.com"]
   allow_ports: [80, 443, 3306]
+  allow_loopback: true   # true 时 loopback（localhost/127.0.0.1/::1）不受 allow_ports 端口门禁；false 则一并按端口过滤
 ```
 
 - `allow_hosts` / `allow_ports` 支持 `"*"`（放行全部）；运行期自动追加只读库、各 LLM API、SSE MCP
   的主机与端口；`fetch_webpage` 抓取的任意外部站点需手动加入 `allow_hosts`。
+- `allow_loopback` 为 true（默认）时 loopback 目标不受 `allow_ports` 端口门禁（子进程类工具如
+  Playwright/asyncio 的自管道会用随机临时端口），是否可达仍由 `allow_hosts` 决定；设为 false 则
+  loopback 也按 `allow_ports` 过滤。
 - 此白名单**只作用于沙箱内运行的代码**；`web_search` / `fetch_webpage` 作为 action 在主进程运行，不受限。
 - 子进程**不持有 API key**：LLM 调用由子进程经协议回传父进程，父进程用 key 真调（见 `docs/code_execution_sandbox.md`）。
 - 沙箱审计日志由主配置 `enable_sandbox_log` 控制：每次沙箱**启动**与每次**拒绝**（运行期文件/网络拦截、或 AST 策略拒绝）都会以 JSON 行追加到 `sandbox_audit.log`（含时间戳与 `session_id`）。详见 `docs/code_execution_sandbox.md`。

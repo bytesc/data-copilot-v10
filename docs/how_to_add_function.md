@@ -11,17 +11,17 @@ Think → Action → Act(generate_and_execute) → Code Generation → Code Exec
 - **Think / Action** 阶段：`agent/think.py` 与 `agent/action.py` 中虽有 `get_func_summary_for_agent()` 调用，但其结果当前并未注入 Think / Action 的 prompt（死变量）；LLM 实际看到的函数目录来自 `explore_functions` act 提示词中的 `get_func_catalog_markdown()`（`agent/act.py`），以及 `BRIEF_INFO` 中硬编码的 Function Brief（`agent/tools/base_knowledge/get_base_knowledge.py`）。
 - **Act 阶段**：`act.py` 将 `selected_fields` 传递给 `agent.py` 中的 `generate_and_execute_stream()`；选中的函数通过 blackboard 的 `functions.selected_functions` 区域传递，由 `get_cot_code_prompt()` 读取（`agent/agent.py`）。
 - **Code Generation 阶段**：`agent.py` 中的 `get_cot_code_prompt()` 将选中函数的完整 docstring 注入 LLM prompt，LLM 生成带 `def func():` 的 Python 代码。
-- **Code Execution 阶段**：`code_executor.py` 通过 `exec()` 执行生成的代码，函数的 import 由 `code_insert.py` 自动注入。
+- **Code Execution 阶段**：`code_executor.py` 通过 `exec()` 执行生成的代码；`code_insert.py` 只注入**模块级** import（`IMPORTANT_MODULE` / `THIRD_MODULE`，见 `agent/agent.py`）。**工具函数本身不靠 import 注入**——执行命名空间已预绑定全部 `FUNCTION_DICT` 函数，生成代码直接调用函数名即可（见 [docs/code_execution_sandbox.md](code_execution_sandbox.md)）。
 
 ## 步骤概览
 
 | 步骤 | 文件 | 修改内容 |
 |------|------|----------|
 | 1 | `agent/tools/tools_def.py`（核心）或 `agent/tools/custom_tools_def.py`（自定义） | 定义 Python 函数（含 docstring） |
-| 2 | `agent/tools/get_function_info.py` | 注册到 `FUNCTION_DICT`、`FUNCTION_IMPORT`（自定义函数由 `CUSTOM_FUNC_NAMES` 自动识别） |
+| 2 | `agent/tools/get_function_info.py` | 注册到 `FUNCTION_DICT`（决定函数是否暴露给 LLM 与执行命名空间；自定义函数由 `CUSTOM_FUNC_NAMES` 自动识别）。`FUNCTION_IMPORT` 目前**不再参与代码注入**，登记它无实际效果（见下方说明） |
 | 3 | `agent/tools/search_func.py` | 加入 `_CORE_CATEGORIES` 分类（可选；自定义函数自动进入 `Custom` 分类） |
 | 4 | `agent/tools/get_function_info.py` | 添加到 `IMPORTANT_FUNC`（可选） |
-| 5 | `agent/agent.py` | 检查是否需要更新 prompt 或 import 注入 |
+| 5 | `agent/agent.py` | 检查是否需要更新 prompt 或模块级 import 注入（`IMPORTANT_MODULE` / `THIRD_MODULE`） |
 
 ## 详细步骤
 
@@ -107,18 +107,14 @@ FUNCTION_DICT = {
 }
 ```
 
-**c) 添加到 `FUNCTION_IMPORT`**（约第 28 行）：
+**c) `FUNCTION_IMPORT`（当前不再用于注入，登记无实际效果）**
 
-```python
-FUNCTION_IMPORT = {
-    exe_sql: "from agent.tools.tools_def import exe_sql",
-    load_data: "from agent.tools.tools_def import load_data",
-    ...
-    my_new_function: "from agent.tools.tools_def import my_new_function",   # 新增
-}
-```
+`FUNCTION_IMPORT`（约第 25 行）历史上用于把 `from agent.tools... import ...` 注入到 LLM 生成的代码中。**该注入已移除**：生成的代码不再接受工具 import（沙箱 AST 策略 `agent/tools/copilot/utils/sandbox/policy.py` 明确拒绝 `import agent.*`），函数可用性改由**执行命名空间**提供：
 
-`FUNCTION_IMPORT` 中的字符串会被自动注入到 LLM 生成的代码中，确保代码执行时能正确导入。自定义函数的映射字符串应指向 `agent.tools.custom_tools_def`（例如 `from agent.tools.custom_tools_def import my_new_function`）。
+- 沙箱路径（默认，`enable_code_sandbox: true`）：`agent/tools/copilot/utils/sandbox/runner.py` 的 `_build_namespace()` 执行 `namespace.update(FUNCTION_DICT)` 后再 `exec(code, namespace)`，把 `FUNCTION_DICT` 中全部函数连同 `pd / np / plt / ...` 预绑定为全局名；
+- 非沙箱回退（`enable_code_sandbox: false`）：`agent/tools/copilot/utils/code_executor.py` 通过 `from agent.tools.tools_def import *` 把核心工具与库放进模块 globals 再 `exec`（注意该回退只带出 `tools_def` 里的核心函数，不含 `custom_tools_def` 的自定义函数）。
+
+因此**只要把函数注册进 `FUNCTION_DICT`（步骤 b），它就会在生成代码中可用，无需在任何地方写 import**。`FUNCTION_IMPORT` 可以照旧维护以保持一致，但它当前是死代码，不参与注入。
 
 ### 3. `agent/tools/search_func.py` — 注册分类（可选）
 
@@ -146,11 +142,11 @@ IMPORTANT_FUNC = ["load_data", "get_save_image_path", "my_new_function"]
 
 > `IMPORTANT_FUNC` 中的函数始终被包含在 `function_set` 中，即使 LLM 没有明确选择它们。
 
-### 5. `agent/agent.py` — 检查 prompt 和 import 注入
+### 5. `agent/agent.py` — 检查 prompt 和模块级 import 注入
 
 通常不需要修改 `agent.py`，但以下情况需要检查：
 
-- **函数依赖第三方库**：如果新函数使用了 `tools_def.py` 之外的第三方模块，需要在 `agent/agent.py` 中将 import 语句添加到 `IMPORTANT_MODULE` 或 `THIRD_MODULE`（约第 31-40 行），确保生成代码时自动注入。
+- **函数依赖第三方库**：如果新函数使用了 `tools_def.py` 之外的第三方模块，需要在 `agent/agent.py` 中将 import 语句添加到 `IMPORTANT_MODULE` 或 `THIRD_MODULE`（约第 31-40 行），确保生成代码时自动注入（仅模块级 import；工具函数名由执行命名空间提供，无需在此登记）。
 - **函数需要数据库上下文**：如果函数涉及数据库查询，检查 `agent/agent.py` 中 `get_cot_code_prompt()` 的数据库上下文注入逻辑（`agent.py:115-128`）。
 
 ## 函数定义的完整格式规范
@@ -194,4 +190,4 @@ def function_name(param1: Type1, param2: Type2 = default) -> ReturnType:
 | `agent/agent.py` | 代码生成 prompt 构建（`get_cot_code_prompt`）和执行入口（`generate_and_execute_stream`） |
 | `agent/act.py` | 动作分发，`generate_and_execute` 路由到 `_act_generate_and_execute` |
 | `agent/tools/copilot/utils/code_executor.py` | 代码执行（`exec()`） |
-| `agent/tools/copilot/utils/code_insert.py` | import 注入 |
+| `agent/tools/copilot/utils/code_insert.py` | 模块级 import 注入（`IMPORTANT_MODULE` / `THIRD_MODULE`） |

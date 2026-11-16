@@ -127,12 +127,14 @@ file_access:
   code_exts: [".py", ".pyc", ".pyd", ".so", ".dll", ".whl"]  # 项目根内源码后缀（只读）
   python_libs: true                # 允许读 Python 安装目录（stdlib/site-packages，import 必需）
   matplotlib_cache: true           # 允许读写 matplotlib 缓存目录
+  temp_dir: true                   # 允许读写 OS 临时目录（Playwright 截图、asyncio 自管道等依赖；设 false 则禁止）
 
 # 运行期网络白名单（子进程 audit hook）
 network:
   allow_hosts: ["localhost", "127.0.0.1", "onemap.gov.sg", "openstreetmap.org",
                 "streetdirectory.com", "duckduckgo.com"]   # "*" = 放行全部主机
   allow_ports: [80, 443, 3306]                             # "*" = 放行全部端口
+  allow_loopback: true                                     # true 时 loopback（localhost/127.0.0.1/::1）不受 allow_ports 端口门禁；false 则一并按端口过滤
 ```
 
 > `network.allow_hosts` / `allow_ports` 会自动追加：只读库主机与端口、各 LLM API 主机与端口、
@@ -141,6 +143,9 @@ network:
 > 写成 `["*"]` 即可（仅建议受信环境）。
 > 主机名按"完全相等或子域后缀"匹配（`openstreetmap.org` 覆盖 `tile.openstreetmap.org`）；`*` 是
 > 整轴放行，不是 `*.` 后缀。
+> `allow_loopback` 为 true（默认）时，loopback 目标不受 `allow_ports` 端口门禁（子进程类工具如
+> Playwright/asyncio 的自管道会用随机临时端口，按端口过滤会误杀），是否可达仍由 `allow_hosts`
+> 决定；设为 false 则 loopback 也按 `allow_ports` 过滤。
 
 | 配置 | 生效范围 | 超过时 |
 |------|----------|--------|
