@@ -123,7 +123,7 @@ enable_edit: true
 # intervention (input, choice, Interrupt) and on page init / new session /
 # session resume. Document-generation boxes and the YAML outline flow are NOT
 # counted. Set to 0 (or remove) to disable the cap.
-max_steps: 999
+max_steps: 99
 
 # enable_code_sandbox - run LLM-generated Python in the isolated sandbox child
 # process (recommended). Set to false to run it directly in the main process

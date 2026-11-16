@@ -90,6 +90,7 @@ enable_target_knowledge: false # 目标文档模板知识（target_knowledge.md�
 enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
 enable_edit: true             # 数据/知识编辑（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
+max_steps: 999                # 前端 Agent 循环步数上限（0 表示不限制；由前端按本值控制，后端仅返回该配置）
 enable_code_sandbox: true     # LLM 生成代码是否走沙箱子进程（true，推荐）；false=主进程直接 exec（旧行为，无隔离）
 enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 enable_llm_log: true           # 记录每次 LLM 调用到系统库 llm_log 表（时间、session_id、去除图片base64的输入JSON、输出、token 统计、首字符延迟、总耗时）
@@ -481,7 +482,6 @@ created_at        DATETIME      -- 记录时间
 | `matplotlib` + `seaborn` | 图表绘制 |
 | `Pillow` | 图片处理 |
 | `PyPDF2` + `python-docx` | PDF/DOCX 文档解析 |
-| `beautifulsoup4` | HTML 解析 |
 | `trafilatura` | 网页正文抽取（`fetch_webpage` 主内容提取，去除导航/页脚等噪声，依赖 lxml）|
 | `ddgs` | DuckDuckGo 搜索 |
 | `mcp` | MCP 官方 SDK（测试服务器用）|

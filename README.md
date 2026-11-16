@@ -182,6 +182,7 @@ enable_target_knowledge: false # 目标文档模板知识（target_knowledge.md�
 enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
 enable_edit: true             # 数据/知识管理页（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
+max_steps: 999                # 前端 Agent 循环步数上限（0 表示不限制；由前端按本值控制，后端仅返回该配置）
 enable_code_sandbox: true     # LLM 生成代码走沙箱子进程（推荐）；false=主进程直接 exec（旧行为，无隔离）
 enable_perf_log: true         # 写接口性能指标到 perf_log.csv
 enable_llm_log: true          # 记录每次 LLM 调用到系统库 llm_log 表（token 统计、首字符延迟、总耗时等）

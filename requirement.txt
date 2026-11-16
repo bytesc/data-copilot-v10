@@ -30,7 +30,6 @@ seaborn==0.13.2
 PyPDF2==3.0.1
 python-docx==1.2.0
 markdown-pdf==1.13.2
-beautifulsoup4==4.12.3
 
 ddgs==9.14.4
 trafilatura==2.0.0

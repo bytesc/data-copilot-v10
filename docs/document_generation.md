@@ -101,7 +101,7 @@ sections:
             description: "简述"
 ```
 
-- `YAML_OUTLINE_SYSTEM` 规则 2 要求每个 section 与 subsection 都必须同时包含 `elements` 和 `subsections` 两个键，无内容时用空列表 `[]`（如末节 `elements: []` / `subsections: []`）；`elements` 不是可选字段。
+- `YAML_OUTLINE_SYSTEM` 规则 2 要求每个 **section** 都必须同时包含 `elements` 和 `subsections` 两个键，无内容时用空列表 `[]`（如某节无子节时 `subsections: []`、无内容块时 `elements: []`）；**subsection** 不再嵌套 `subsections`，只包含 `heading` / `description` / `elements`。`elements` 不是可选字段。
 - `elements` 中每个元素有 `type`（`text`/`table`/`image`）和简短 `description`。
 - `YAML_PART_SYSTEM` 规则 10 要求 LLM 按照 `elements` 定义的顺序和类型生成内容。
 

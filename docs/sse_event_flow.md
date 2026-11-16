@@ -409,7 +409,7 @@
 - `select_images` 执行后会把 `{"path", "reason"}` 列表整体覆盖写入 blackboard 的 `selected_images` 区域，并返回含 `selected_images` 的 `act` 条目。该 action 属于 Group 1，可与 `explore_*` 在同一次 `actions` 数组中选择。
 - 用户上传的图片随本轮第一个请求（Think 模式 `POST /api/think/stream/`，Chat 模式 `POST /api/action/stream/`）以 base64 放在 user 条目的 `uploaded` 字段提交（无独立上传接口）；信封中间件解码保存为 `tmp_imgs/upload_<8位小写字母>.png` 并**追加合并**进 blackboard 的 `selected_images`，处理在路由前完成且幂等，故 `## Context` 与随后的 `history` 事件都已是文件名版本。详见 [`api.md`](api.md) 的「用户上传图片」。
 - 所有 `chunk` 事件仅用于流式临时显示，最终显示由 `history` 决定。
-- 重试次数为 2（首次 + 1 次重试），explore_* 全部如此（含 explore_functions）；YAML Outline 生成也是 2 次重试。
+- `explore_*`（含 `explore_functions`）与 YAML Outline 生成在解析失败时均为**最多尝试 2 次（首次 + 1 次重试）**。
 - generate_document_unified 的 done 事件会先发一个仅含 content 的 done，再发一个含完整文件元数据的 done。
 - 重试耗尽后是否 yield `history` 取决于阶段：think/action/observe 在重试耗尽时只 yield `error`，**不** yield `history`；而 **act** 无论子步骤是否重试耗尽（包括顶层捕获到未处理异常时发出带 `fatal:true` 的 error），都会继续追加并 yield 一条 `history`。act 的两个例外：action 在配置中被禁用时只发出 `error`（`content:"Action \`{action}\` is not available: ..."`）并直接结束，**不** yield `history`；未知 action 只发出 `error`（`content:"Unknown action: {action}"`），仅当传入的 `conversation_history` 非空时才把原历史原样作为 `history` 事件发出（不落库、无新条目）。
 - think/action/observe 顶层捕获到未处理异常时同样发出带 `fatal:true` 的终止 error 事件（`content:"Internal error during \`think\`/\`action\`/\`observe\`: ..."`），其后**没有** `history` 事件（对比：act 的 fatal error 之后仍会追加一条 `history`）。

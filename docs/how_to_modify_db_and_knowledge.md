@@ -24,7 +24,7 @@ FLUSH PRIVILEGES;
 
 除直接改库外，系统自带知识管理接口：`/api/sys-knowledge/{base-knowledge|db-query-guide|code-guide|graph-code-guide|think-guide|doc-guide}/…` 与 `/api/sys-knowledge/brief-info/…`（增删改查，受 `enable_edit` 开关限制），前端管理页面位于 `/knowledge` 路由下，可直接在页面上维护这些配置。
 
-> 注：五种 Brief（DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / CUSTOM_FUNC_BRIEF，以及硬编码的 Function Brief）全部通过 `BRIEF_INFO` 同时注入 **think 与 action** 两个阶段（`agent/think.py`、`agent/action.py`）；下文各节列出的 `explore_*` act 提示词是**额外**注入位置。其中 BASE_KNOWLEDGE_BRIEF / CUSTOM_FUNC_BRIEF 注入各自 act 提示词时**不带** `Domain Knowledge Brief` / `Custom Function Brief` 标签——这两个标签只存在于 `BRIEF_INFO` 的渲染中（DB_BRIEF / MCP_BRIEF 的值自带 `DataBase Brief:` / `MCP Brief:` 标签，随注入位置始终显示）。
+> 注：五种 Brief（DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / CUSTOM_FUNC_BRIEF，以及硬编码的 Function Brief）全部通过 `BRIEF_INFO` 同时注入 **think 与 action** 两个阶段（`agent/think.py`、`agent/action.py`）；下文各节列出的 `explore_*` act 提示词是**额外**注入位置。其中 BASE_KNOWLEDGE_BRIEF / CUSTOM_FUNC_BRIEF 注入各自 act 提示词时**不带** `Domain Knowledge Brief` / `Custom Function Brief` 标签——这两个标签只存在于 `BRIEF_INFO` 的渲染中（DB_BRIEF / MCP_BRIEF 的值自带 `DataBase Brief:` / `MCP Brief:` 标签，随注入位置始终显示）。另注：`BRIEF_INFO` 中 `BASE_KNOWLEDGE_BRIEF` 受 `enable_base_knowledge`、`MCP_BRIEF` 受 `enable_mcp` 门控（`get_base_knowledge.py::_get_brief_info`）——对应开关为 `false` 时该 Brief 不会进入 `BRIEF_INFO`（默认均为 `true`，故默认五者全部注入）。
 
 ### 3.1 DB_BRIEF — 数据库概览
 

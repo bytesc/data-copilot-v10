@@ -41,6 +41,7 @@ Base URL: `http://<host>:8008`
   "enable_fetch_url": true,
   "enable_target_knowledge": false,
   "enable_edit": true,
+  "max_steps": 999,
   "models": [
     {
       "id": "deepseek-v4.1-flash",
@@ -74,6 +75,8 @@ Base URL: `http://<host>:8008`
 > **`models`** 按 `config/config.yaml` 的 `llm_models` 全量返回（上例仅列出前两个，实际还包含 `glm-5.3-flash`、`glm-5.3-flashx`）；默认（第一个）模型为 `deepseek-v4.1-flash`。
 
 > **`enable_edit`**: 设为 `false` 时，数据管理（`/api/db-overview/`、删表、数据/注释导出、注释编辑、上传）与系统知识管理（`/api/sys-knowledge/*`）等接口全部返回 `403`；前端同时隐藏 Data、Knowledge 页面并拦截其路由。
+
+> **`max_steps`**: 前端 Agent 循环的步数上限（取自 `config/config.yaml` 的 `max_steps`，`0` 表示不限制）。前端据此在步数超限时暂停该轮（等同 Interrupt），配置注释见 `config/config.yaml`。
 
 > GET 请求没有 `meta`，因此 `current_*` 返回默认值（第一个模型、Depth 第一个值、Style `Default`）。前端用 localStorage 的 `data-copilot-llm-config` 缓存模型配置列表和选择；启动时从后端获取并校验，不一致或选择失效时回退默认值。
 
