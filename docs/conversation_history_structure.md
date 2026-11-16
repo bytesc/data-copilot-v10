@@ -12,7 +12,7 @@
 数据库中的两份数据：
 
 - `conversation_history`：完整历史，包含 blackboard。
-- `trimmed_context`：按保留策略裁剪后的普通条目，**不包含 blackboard**；实际送给 LLM 的上下文文本由它经 `history_to_text` 生成。
+- `trimmed_context`：按保留策略裁剪后的普通条目**快照**，**不包含 blackboard**；它只是落库记录，实际送给 LLM 的上下文由各阶段用 `prepare_trimmed_context` 从 `conversation_history` 现场裁剪后经 `history_to_text` 生成（见下文「裁剪规则」）。
 
 blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独提取成 `## Blackboard` 段，注入所有 LLM 阶段。
 
@@ -504,7 +504,7 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
   "error":"[runtime_error] ...","error_kind":"runtime_error","code":"...","result":"...","images":["xxx.png"]}
 ```
 
-失败时 `error` 必填（带 `[error_kind]` 前缀），并附结构化 `error_kind` 字段（沙箱：`policy_violation` / `syntax_error` / `timeout` / `resource_limit` / `no_func` / `runtime_error` / `environment_error` / `job_error` / `config_error`；生成层：`code_format_error`），供下一步 LLM 读取失败类型；`code` / `result` 在存在时保留。`images` 为本轮执行过程中生成的图片文件名列表（去重后，本地图片仅存文件名，外部 http 图片保留完整 URL），无论成功失败，只要生成过图片就保留；仅用于前端展示，不进入 LLM 上下文。
+失败时 `error` 必填（带 `[error_kind]` 前缀），并附结构化 `error_kind` 字段（沙箱：`policy_violation` / `syntax_error` / `timeout` / `resource_limit` / `runtime_error` / `environment_error` / `job_error` / `config_error`；生成层：`code_format_error`，以及代码块缺 `def func(` 时在执行前即拦下的 `no_func`；主进程执行或异常未带 `kind` 时退化为 `execution_error`），供下一步 LLM 读取失败类型；`code` / `result` 在存在时保留。`images` 为本轮执行过程中生成的图片文件名列表（去重后，本地图片仅存文件名，外部 http 图片保留完整 URL），无论成功失败，只要生成过图片就保留；仅用于前端展示，不进入 LLM 上下文。
 
 ### generate_document
 

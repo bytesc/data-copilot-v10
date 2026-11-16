@@ -8,7 +8,7 @@ LLM 生成的 Python 代码在一个**一次性子进程**中执行：代码先�
 > `true`）。设为 `false` 时不走沙箱，改为在主进程内直接 `exec` 生成代码（旧行为：**无隔离、无
 > 资源限制、无文件/网络管控**，仅限完全可信的单租户部署）。下方各层仅在开关为 `true` 时生效。
 
-## 一、五层防线
+## 一、六层防线
 
 | 层 | 位置 | 作用 |
 |----|------|------|
@@ -177,7 +177,7 @@ network:
 | `environment_error` | 沙箱工具函数加载等执行前环境准备失败 |
 | `job_error` | 子进程读取 job 文件失败 |
 
-生成层还有 `code_format_error`（未能在回复中解析出代码块）。这些 `kind` 会经
+生成层还有 `code_format_error`（未能在回复中解析出代码块）与 `no_func`（提取到代码块但没有 `def func(`，在执行前即拦下）。`generate_and_execute_stream` 以 `getattr(e, "kind", "execution_error")` 兜底，因此未带 `kind` 的异常（例如 `enable_code_sandbox=false` 走主进程 `exec` 时的普通异常）会归为 `execution_error`。这些 `kind` 会经
 `code_exe_error` / `code_gen_error` chunk 与终端 `error` 事件的 `error_kind` 字段向上传递，
 并记入 `generate_and_execute` 的 act 条目，供下一步（Observe）读取。
 

@@ -27,7 +27,7 @@ sql_query_timeout: 60
 sql_socket_timeout: 300
 
 # 静态文件 URL 前缀（部署时改为服务器实际地址，如 http://your-server-ip:8038/）
-# 以本文件为唯一来源，不读取任何环境变量。
+# 以本文件为唯一来源；主进程不读取任何环境变量（唯一例外是沙箱子进程，经 CODE_EXEC_CONFIG 读取瘦身配置，见下）。
 static_path: "http://127.0.0.1:8008/"
 # 静态文件固定存储在项目根目录 tmp_imgs/ 下（不可配置）
 
@@ -109,7 +109,7 @@ enable_sandbox_log: true       # 写沙箱审计日志到 sandbox_audit.log（�
 > ```
 > `SELECT` 覆盖查询与 `SHOW TABLES/COLUMNS`，`SHOW VIEW` 覆盖视图定义（`SHOW CREATE VIEW`）。
 
-**单一来源**：以上配置项**只**来自本文件，程序不读取任何环境变量；`static_path`、`server_host`/`server_port`、`mysql*` 等如需变更，请直接修改本文件并重启（Docker 部署需重建镜像）。
+**单一来源**：以上配置项**只**来自本文件，主进程不读取任何环境变量；唯一例外是**沙箱子进程的配置路径**可由环境变量 `CODE_EXEC_CONFIG` 覆盖（由 `config/get_config.py` 读取、`sandbox/executor.py` 每次执行前注入并指向临时生成的瘦身配置；主进程从不设置它，详见 `docs/code_execution_sandbox.md`）。`static_path`、`server_host`/`server_port`、`mysql*` 等如需变更，请直接修改本文件并重启（Docker 部署需重建镜像）。
 
 ### LLM 代码执行沙箱 `config/sandbox.yaml`
 

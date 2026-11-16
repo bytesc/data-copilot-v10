@@ -313,7 +313,10 @@
    section_index:0, heading:"...", total_sections:N}
   {phase:"document_from_yaml", type:"chunk",       content:"..."}  ×N
   {phase:"document_from_yaml", type:"section_done", content:"...", section_index:0,
-   heading:"...", section_file:"draft_{session_id}_{base}_s00.md", total_sections:N}
+   heading:"...", section_file:"draft_{yaml_base}_s00.md", total_sections:N}
+  # section_file 命名直接取请求的 yaml_base（= draft_{yaml_base}_sNN.md）：前端会把 sid 拼进
+  # yaml_base（{sid}_{base}）后再传，故页面操作得到 draft_{sid}_{base}_sNN.md；直连 API 传裸 base
+  # 则为 draft_{base}_sNN.md（详见 docs/document_generation.md）
   # 全篇生成（请求未指定 section_index）完成后追加一条汇总 done：
   {phase:"document_from_yaml", type:"done", content:"<full markdown>", title:"...",
    md_file:"...", section_files:[{name, heading, index}, ...], sections_count:N}

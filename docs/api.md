@@ -425,7 +425,7 @@ data: {"type":"done","code":"...","content":"...","phase":"act","sub_phase":"exe
 data: {"type":"error","content":"generate_and_execute_stream_error","error_kind":"runtime_error","error":"...","phase":"act","sub_phase":"exec"}
 ```
 
-> 终态成功事件为 `done`（含 `code` / `content` / `images`，**没有** `ans` 字段）；`code_gen_error` 的 `phase` 为 `"act"`。重试耗尽时发出终态 `error`：`content` 恒为 `generate_and_execute_stream_error`，`error_kind` 为具体类型（沙箱：`policy_violation` / `syntax_error` / `timeout` / `resource_limit` / `no_func` / `runtime_error` / `environment_error` / `job_error` / `config_error`；生成层：`code_format_error`），`error` 为真实原因，并带 `sub_phase:"exec"`。`code_gen_error` / `code_exe_error` 与终态 `error` 均携带 `error_kind`；该错误会记入 `generate_and_execute` 的 act 条目（`error` 带 `[error_kind]` 前缀，另带结构化 `error_kind`）并喂给下一步 LLM。
+> 终态成功事件为 `done`（含 `code` / `content` / `images`，**没有** `ans` 字段）；`code_gen_error` 的 `phase` 为 `"act"`。重试耗尽时发出终态 `error`：`content` 恒为 `generate_and_execute_stream_error`，`error_kind` 为具体类型（沙箱：`policy_violation` / `syntax_error` / `timeout` / `resource_limit` / `runtime_error` / `environment_error` / `job_error` / `config_error`；生成层：`code_format_error`，以及代码块缺 `def func(` 时在执行前即拦下的 `no_func`；另有兜底值 `execution_error`，出现在 `enable_code_sandbox=false` 走主进程执行、或异常未带 `kind` 时），`error` 为真实原因，并带 `sub_phase:"exec"`。`code_gen_error` / `code_exe_error` 与终态 `error` 均携带 `error_kind`；该错误会记入 `generate_and_execute` 的 act 条目（`error` 带 `[error_kind]` 前缀，另带结构化 `error_kind`）并喂给下一步 LLM。
 
 ### POST `/api/plain-chat/stream/`
 

@@ -253,7 +253,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 {"role":"assistant","type":"act","action":"generate_and_execute","error":"[runtime_error] ...","error_kind":"runtime_error","code":"...","result":"...","images":["xxx.png"]}
 ```
 
-失败条目的 `error` 带 `[{error_kind}]` 前缀，并另带结构化的 `error_kind` 字段。`error_kind` 取值来自沙箱（`policy_violation` / `syntax_error` / `timeout` / `resource_limit` / `no_func` / `runtime_error` / `environment_error` / `job_error` / `config_error`）或代码生成层（`code_format_error`）。该条目会记入历史并喂给下一步（Observe），使 LLM 能读到失败的具体类型并据此调整。
+失败条目的 `error` 带 `[{error_kind}]` 前缀，并另带结构化的 `error_kind` 字段。`error_kind` 取值来自沙箱（`policy_violation` / `syntax_error` / `timeout` / `resource_limit` / `runtime_error` / `environment_error` / `job_error` / `config_error`）或代码生成层（`code_format_error`，以及代码块缺 `def func(` 时在执行前即拦下的 `no_func`；`no_func` 在沙箱 `runner.py` 中也有一处触发点）。当 `enable_code_sandbox=false` 走主进程执行、或异常未带 `kind` 时，会退化为兜底值 `execution_error`。该条目会记入历史并喂给下一步（Observe），使 LLM 能读到失败的具体类型并据此调整。
 
 **上下文（成功）**
 ```
