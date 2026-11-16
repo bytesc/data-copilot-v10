@@ -70,10 +70,10 @@ def my_new_function(param1: str, param2: int = 10) -> pd.DataFrame:
 
 | 场景 | 代码位置 | 截取方式 | 用途 |
 |------|----------|----------|------|
-| 函数选择（`FUNCTION_DESCRIPTION`） | `get_function_info.py:60-62` | `splitlines()[1:4]`（docstring 以空行开头，故为签名行 + 描述行 + Returns 行） | LLM 选择函数时的简短描述 |
-| 函数目录（`get_func_catalog_markdown` / `_get_func_desc`） | `search_func.py:25-26` | `splitlines()[1:4]`（同上） | 展示给 LLM 的函数目录 |
-| 函数摘要表（`Purpose` 列） | `search_func.py:60-61` | `splitlines()[3]`（第 4 行，即 Returns 描述行） | Think/Action 阶段函数摘要表的 Purpose 列 |
-| 代码生成（brief 模式） | `get_function_info.py:104,135` | `splitlines()[:3]`（第 1~3 行，即空行 + 签名行 + 描述行） | 代码生成 prompt 中的函数简介。brief 模式当前未被调用：唯一的外部调用是 `agent/agent.py` 的 `get_function_info(question, llm, use_all_functions=True)`（brief 默认 False），代码生成实际注入的是完整 docstring |
+| 函数选择（`FUNCTION_DESCRIPTION`） | `get_function_info.py` 的 `FUNCTION_DESCRIPTION` | `splitlines()[1:4]`（docstring 以空行开头，故为签名行 + 描述行 + Returns 行） | LLM 选择函数时的简短描述 |
+| 函数目录（`get_func_catalog_markdown` / `_get_func_desc`） | `search_func.py` 的 `_get_func_desc` | `splitlines()[1:4]`（同上） | 展示给 LLM 的函数目录 |
+| 函数摘要表（`Purpose` 列） | `search_func.py` 的 `get_func_summary_for_agent` | `splitlines()[3]`（第 4 行，即 Returns 描述行） | Think/Action 阶段函数摘要表的 Purpose 列 |
+| 代码生成（brief 模式） | `get_function_info.py` 的 `get_function_info` | `splitlines()[:3]`（第 1~3 行，即空行 + 签名行 + 描述行） | 代码生成 prompt 中的函数简介。brief 模式当前未被调用：唯一的外部调用是 `agent/agent.py` 的 `get_function_info(question, llm, use_all_functions=True)`（brief 默认 False），代码生成实际注入的是完整 docstring |
 
 以 `exe_sql` 为例，其 docstring 各行的使用情况：
 
@@ -96,7 +96,7 @@ from agent.tools.tools_def import my_new_function
 
 > 若函数定义在 `custom_tools_def.py`，改为 `from agent.tools.custom_tools_def import my_new_function`。`CUSTOM_FUNC_NAMES` 通过函数对象的 `__module__` 自动识别自定义函数，无需额外登记。
 
-**b) 添加到 `FUNCTION_DICT`**（约第 6 行）：
+**b) 添加到 `FUNCTION_DICT`**：
 
 ```python
 FUNCTION_DICT = {
@@ -109,7 +109,7 @@ FUNCTION_DICT = {
 
 **c) `FUNCTION_IMPORT`（当前不再用于注入，登记无实际效果）**
 
-`FUNCTION_IMPORT`（约第 25 行）历史上用于把 `from agent.tools... import ...` 注入到 LLM 生成的代码中。**该注入已移除**：生成的代码不再接受工具 import（沙箱 AST 策略 `agent/tools/copilot/utils/sandbox/policy.py` 明确拒绝 `import agent.*`），函数可用性改由**执行命名空间**提供：
+`FUNCTION_IMPORT` 历史上用于把 `from agent.tools... import ...` 注入到 LLM 生成的代码中。**该注入已移除**：生成的代码不再接受工具 import（沙箱 AST 策略 `agent/tools/copilot/utils/sandbox/policy.py` 明确拒绝 `import agent.*`），函数可用性改由**执行命名空间**提供：
 
 - 沙箱路径（默认，`enable_code_sandbox: true`）：`agent/tools/copilot/utils/sandbox/runner.py` 的 `_build_namespace()` 执行 `namespace.update(FUNCTION_DICT)` 后再 `exec(code, namespace)`，把 `FUNCTION_DICT` 中全部函数连同 `pd / np / plt / ...` 预绑定为全局名；
 - 非沙箱回退（`enable_code_sandbox: false`）：`agent/tools/copilot/utils/code_executor.py` 通过 `from agent.tools.tools_def import *` 把核心工具与库放进模块 globals 再 `exec`（注意该回退只带出 `tools_def` 里的核心函数，不含 `custom_tools_def` 的自定义函数）。
@@ -118,7 +118,7 @@ FUNCTION_DICT = {
 
 ### 3. `agent/tools/search_func.py` — 注册分类（可选）
 
-核心函数的分类定义在 `_CORE_CATEGORIES`（约第 5-10 行），将函数加入对应列表即可在函数目录中按分类显示：
+核心函数的分类定义在 `_CORE_CATEGORIES`，将函数加入对应列表即可在函数目录中按分类显示：
 
 ```python
 _CORE_CATEGORIES = {
@@ -134,7 +134,7 @@ _CORE_CATEGORIES = {
 
 ### 4. `agent/tools/get_function_info.py` — 设为重要函数（可选）
 
-如果该函数应在每次代码生成时默认可用，添加到 `IMPORTANT_FUNC`（`get_function_info.py:53-55`）：
+如果该函数应在每次代码生成时默认可用，添加到 `IMPORTANT_FUNC`（`get_function_info.py`）：
 
 ```python
 IMPORTANT_FUNC = ["load_data", "get_save_image_path", "my_new_function"]
@@ -146,8 +146,8 @@ IMPORTANT_FUNC = ["load_data", "get_save_image_path", "my_new_function"]
 
 通常不需要修改 `agent.py`，但以下情况需要检查：
 
-- **函数依赖第三方库**：如果新函数使用了 `tools_def.py` 之外的第三方模块，需要在 `agent/agent.py` 中将 import 语句添加到 `IMPORTANT_MODULE` 或 `THIRD_MODULE`（约第 31-40 行），确保生成代码时自动注入（仅模块级 import；工具函数名由执行命名空间提供，无需在此登记）。
-- **函数需要数据库上下文**：如果函数涉及数据库查询，检查 `agent/agent.py` 中 `get_cot_code_prompt()` 的数据库上下文注入逻辑（`agent.py:115-128`）。
+- **函数依赖第三方库**：如果新函数使用了 `tools_def.py` 之外的第三方模块，需要在 `agent/agent.py` 中将 import 语句添加到 `IMPORTANT_MODULE` 或 `THIRD_MODULE`，确保生成代码时自动注入（仅模块级 import；工具函数名由执行命名空间提供，无需在此登记）。
+- **函数需要数据库上下文**：如果函数涉及数据库查询，检查 `agent/agent.py` 中 `get_cot_code_prompt()` 的数据库上下文注入逻辑。
 
 ## 函数定义的完整格式规范
 

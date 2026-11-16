@@ -388,13 +388,10 @@ blackboard 由 `utils/blackboard.py` 维护：
 {"role":"user","type":"question","content":"分析这些图片","uploaded":["upload_abcd1234.png"]}
 ```
 
-保存规则：写入 `tmp_imgs/upload_<8位小写字母>.png`，扩展名与生成图片一致，进行格式归一（非 `RGB`/`RGBA` 会转换）。后端按请求卡控：单个请求最多处理 10 张图片、原始 base64 总量不超过 50MB（`utils/image_ingest.py` 的 `MAX_IMAGES_PER_REQUEST` / `MAX_TOTAL_IMAGE_BYTES`），超出预算的项被静默丢弃（仅在服务端打印警告，前端不会收到错误）；不变式是磁盘文件名。
-
-摄取逻辑见 `utils/image_ingest.py`：
-
-- `ingest_uploaded_images(history)`：遍历 user 条目的 `uploaded`，把 base64 项解码保存，改写为文件名列表，并把新增文件名合并进 blackboard 的 `selected_images`（每项 `{"path", "reason": "user uploaded image"}`，按 `path` 去重）。
-- 幂等：`uploaded` 已经是文件名字符串时不再处理、不重复合并。
-- 单项限制 20MB；解码或保存失败的项会被跳过。
+保存规则：摄取后写入 `tmp_imgs/upload_<8位小写字母>.png`，并把文件名**追加合并**进 blackboard 的
+`selected_images` 区域（每项 `{"path", "reason": "user uploaded image"}`，按 `path` 去重）；处理幂等。
+张数/大小上限（每请求 10 张、单张 20MB、总量 50MB）与完整摄取规则见
+[`api.md`](api.md) 的「用户上传图片」（实现：`utils/image_ingest.py` 的 `ingest_uploaded_images`）。
 
 ## think
 

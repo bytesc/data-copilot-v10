@@ -19,7 +19,7 @@
 - **智能图表绘制**：自动选择图表类型（matplotlib/seaborn），支持对比图、数据标注
 - **知识蒸馏与检索**：多源知识库（业务规则、查询指南、思维策略、代码范例），动态注入上下文
 - **上下文智能裁剪**：按类别独立保留策略，避免长对话上下文溢出
-- **Blackboard 探索缓存**：explore_schema / explore_functions / explore_base_knowledge / explore_mcp 的完整结果存入 history 的 blackboard，独立注入所有 LLM 阶段，上下文只保留参数、计划和选中项；blackboard 另设 `recent_generated_images` 区域（旧拼写 `rencent_generated_images` 仅作为已持久化历史的读取兼容别名保留）保存最近一次代码执行生成的图片列表，`selected_images` 区域通过 `select_images` action 保存人工/模型选中的图片（文件名或 URL）及一句话选中原因，随 `## Blackboard` 段喂给 LLM。支持图片多模态的模型还会把图片作为 `image_url` 内容随请求提交（前端 Images 开关控制），本地图片/本机静态 URL 转 base64，外部 URL 原样传递；聊天记录 act 条目的 `images` 字段仅前端展示
+- **Blackboard 探索缓存**：explore_schema / explore_functions / explore_base_knowledge / explore_mcp 的完整结果存入 history 的 blackboard，独立注入所有 LLM 阶段，上下文只保留参数、计划和选中项；blackboard 另设 `recent_generated_images`（最近一次代码执行生成的图片）与 `selected_images`（`select_images` 选中或用户上传的图片及原因）两个图片区域，随 `## Blackboard` 段喂给 LLM，模型支持多模态时还会作为 `image_url` 提交（前端 Images 开关控制）。详见 [`docs/conversation_history_structure.md`](docs/conversation_history_structure.md)
 - **文档自动生成**：一键生成 Markdown / DOCX / PDF 格式分析报告，含图表的智能排版
 - **任意 CSV 导入**：上传 CSV 自动建表，上传文档自动生成数据注释
 - **联网搜索**：支持 DuckDuckGo 联网搜索，结合外部信息分析
@@ -151,70 +151,29 @@ server_host: "0.0.0.0"
 
 # 用户数据数据库（查询分析，同时供需修改数据库的功能使用）
 mysql: "mysql+pymysql://root:123456@localhost:3306/singapore_land_2"
-
-# 业务数据库只读用户（可选）：exe_sql 的 SELECT/SHOW 使用该账号，仅需 SELECT、SHOW VIEW；留空或删除则不启用只读查询（不会回退到 mysql，exe_sql 将被禁用）
+# 业务数据库只读用户（可选）：exe_sql 的 SELECT/SHOW 使用该账号；留空或删除则不启用只读查询（不会回退到 mysql，exe_sql 将被禁用）
 mysql_readonly: "mysql+pymysql://readonly:123456@localhost:3306/singapore_land_2"
-
 # 系统数据库（会话日志、知识库等）
 mysql_sys: "mysql+pymysql://root:123456@localhost:3306/data_copilot_v10_land_sys"
 
-# 单条 SQL 超时秒数：限制业务库上一条 SELECT 的最长执行时间，防止失控查询
-# 长期占用连接。对只读 engine（exe_sql / 结构探索，含沙箱内）与特权 engine 都生效
-# （MySQL 会话级 max_execution_time，仅 SELECT）。设为 0 或删除则关闭。
+# 单条 SQL 超时秒数（业务库 SELECT 最长执行时间）；业务库连接 socket 读写超时秒数（缺省 300，0 关闭）
 sql_query_timeout: 60
-
-# 业务库连接的 socket 读写超时秒数：专防“卡死”的连接，与上面的单条查询超时相互独立。
-# 缺省时取代码默认值 300；设为 0 则关闭。
 sql_socket_timeout: 300
 
-# 静态文件服务地址
+# 静态文件服务地址（文件固定存储于项目根目录 tmp_imgs/，不可配置）
 static_path: "http://127.0.0.1:8008/"
-# 静态文件固定存储在项目根目录 tmp_imgs/ 下（不可配置）
 
-# 大模型配置（多模型，前端可切换，列表第一个为默认）
+# 大模型配置（多模型，前端可切换，列表第一个为默认；supports_images 控制图片多模态）
 llm_models:
   - id: "deepseek-v4.1-flash"
-    name: "DeepSeek V4.1 Flash"        # 自定义模型名称（前端下拉框显示）
-    model: "deepseek-v4.1-flash"       # 实际调用的模型名称
-    url: "https://tokenhub.tencentmaas.com/v1"  # OpenAI 兼容接口地址
-    key_file: "api_key_openai.txt"     # key 文件名（位于 agent/utils/llm_access/），不填用默认 api_key_openai.txt
-    supports_images: true              # 是否支持图片多模态输入
-    reasoning_effort: ["none", "low", "high", "max"]  # 前端 Depth 下拉选项，默认选中第一个；不填/[] 则该项不可用
-    style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}  # 前端 Style 下拉，默认 Default；不填/{} 则该项不可用
-    extra_params: {"max_tokens": 393216}  # 该模型专属额外请求参数
-  - id: "deepseek-v4-flash"
-    name: "DeepSeek V4 Flash"
-    model: "deepseek-v4-flash"
+    name: "DeepSeek V4.1 Flash"
+    model: "deepseek-v4.1-flash"
     url: "https://tokenhub.tencentmaas.com/v1"
     key_file: "api_key_openai.txt"
-    supports_images: false
+    supports_images: true
     reasoning_effort: ["none", "low", "high", "max"]
     style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
     extra_params: {"max_tokens": 393216}
-  - id: "glm-5.3-flash"
-    name: "glm5.3 flash"
-    model: "glm-5.3-flash"
-    url: "https://tokenhub.tencentmaas.com/v1"
-    key_file: "api_key_openai.txt"
-    supports_images: true
-    style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
-    extra_params: {}
-  - id: "glm-5.3-flashx"
-    name: "glm5.3 flashx"
-    model: "glm-5.3-flashx"
-    url: "https://tokenhub.tencentmaas.com/v1"
-    key_file: "api_key_openai.txt"
-    supports_images: true
-    reasoning_effort: ["low", "high", "max"]
-    extra_params: {}
-
-# Depth 默认选中列表第一个，Style 默认选中 Default（不额外上传 reasoning_effort/temperature）。
-# extra_params 若也含 reasoning_effort 或 temperature，最终合并时以 extra_params 为准。
-
-# extra_params 参考（各模型单独配置）：
-# DeepSeek 关闭思考: {"thinking": {"type": "disabled"}}；调强度用 reasoning_effort: none/low/high/max
-# GLM-5.3: {"thinking": {"type": "enabled"}, "reasoning_effort": "low"|"high"|"max"}（默认 max）
-# OpenAI gpt-5/o 系：无法完全关闭，用 {"reasoning_effort": "low"}；设 {} 恢复默认
 
 # 功能开关（设为 false 关闭对应能力）
 enable_mcp: true              # MCP 外部工具集成
@@ -229,6 +188,8 @@ enable_perf_log: true         # 写接口性能指标到 perf_log.csv
 enable_sandbox_log: true      # 写沙箱审计日志到 sandbox_audit.log（每次沙箱启动/每次拒绝）
 ```
 
+> 以上为**常用字段精简示例**；多模型/Depth/Style/`extra_params` 的完整字段说明见
+> [`docs/config_and_models.md`](docs/config_and_models.md)。
 > LLM 代码执行沙箱（资源上限 / 文件访问与网络白名单）的设置**不在本文件**，而在
 > **`config/sandbox.yaml`**（见 [`docs/code_execution_sandbox.md`](docs/code_execution_sandbox.md)）。
 
@@ -307,6 +268,8 @@ Docker 部署请见 [`docs/deployment.md`](docs/deployment.md)。
 | [`docs/api.md`](docs/api.md) | 全部 API 端点说明、统一请求信封、请求/响应格式、错误码 |
 | [`docs/config_and_models.md`](docs/config_and_models.md) | 配置格式（config.yaml / .env）、Pydantic 请求模型、日志表结构、依赖说明、前端构建配置 |
 | [`docs/deployment.md`](docs/deployment.md) | 部署指南：Docker Compose 与 front.py，端口、配置、数据库初始化、故障排查 |
+| [`docs/code_execution_sandbox.md`](docs/code_execution_sandbox.md) | 代码执行沙箱（配置/防护/运维视角）：防护分层、`config/sandbox.yaml` 配置、错误类型、审计日志、跨平台与能力边界 |
+| [`docs/sandbox_init_and_lifecycle.md`](docs/sandbox_init_and_lifecycle.md) | 代码执行沙箱（实现视角）：父/子进程准备与启动、`exec` 前初始化顺序、JSON-lines 协议、收尾 |
 | [`docs/mcp_servers.md`](docs/mcp_servers.md) | MCP 服务器配置与启动指南（mcp_servers.yaml、测试服务器、新增步骤） |
 | [`docs/sse_event_flow.md`](docs/sse_event_flow.md) | SSE 流式事件类型与数据格式 |
 | [`docs/context_overflow_handling.md`](docs/context_overflow_handling.md) | 上下文超长（Context Overflow）处理机制 |

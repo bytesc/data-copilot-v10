@@ -240,19 +240,9 @@ email,邮箱地址
 
 ## 7. 用户上传图片（随 JSON 请求）
 
-图片上传与 CSV/文档不同，**不使用 Multipart 接口**。前端选择图片后先在浏览器暂存，点击发送时才编码为 base64，放进 `conversation_history` 的 user 条目 `uploaded` 字段，随 Think/Action 等 JSON 请求提交；后端信封中间件解码保存为 `tmp_imgs/upload_<8位小写字母>.png`，把 `uploaded` 改写为文件名列表并追加进 blackboard 的 `selected_images`。
+图片上传与 CSV/文档不同，**不使用 Multipart 接口**：前端选择图片后先在浏览器暂存，点击发送时才编码为 base64，放进 `conversation_history` 的 user 条目 `uploaded` 字段（`[{"name", "data"}]`），随 Think/Action 等 JSON 请求提交。后端信封中间件（`utils/image_ingest.py` 的 `ingest_uploaded_images`，经 `main.py` 的 `unified_request_envelope` 调用）解码保存为 `tmp_imgs/upload_<8位小写字母>.png`，把 `uploaded` 改写为文件名列表并**追加合并**进 blackboard 的 `selected_images`（幂等，按 `path` 去重）。
 
-| 项目 | 说明 |
-|------|------|
-| 传输 | base64 data URL，位于 JSON 请求 `data.conversation_history[].uploaded`（`[{"name", "data"}]`） |
-| 保存 | `tmp_imgs/upload_<8位小写字母>.png`（扩展名与生成图片一致，非 RGB/RGBA 会转换） |
-| 落库 | `uploaded` 改写为文件名列表，并合并进 blackboard 的 `selected_images` 区域 |
-| 张数 | 前端最多 10 张；后端每次请求同样最多处理 10 张（`MAX_IMAGES_PER_REQUEST`），且整包 base64 总量上限 50MB（`MAX_TOTAL_IMAGE_BYTES`），超限图片会被静默丢弃 |
-| 单张大小 | ≤ 20MB，超限或解码/保存失败会被跳过 |
-| 幂等 | `uploaded` 已是文件名字符串时不再处理、不重复合并 |
-| 实现 | `utils/image_ingest.py` 的 `ingest_uploaded_images`（经 `main.py` 的 `unified_request_envelope` 调用） |
-
-详见 `docs/api.md` 的「用户上传图片」与 `docs/conversation_history_structure.md` 的「用户输入 → 上传图片」。
+张数/大小上限（每请求 10 张、单张 20MB、总量 50MB）与完整规则见 [`api.md`](api.md) 的「用户上传图片」；历史字段形态见 [`conversation_history_structure.md`](conversation_history_structure.md)。
 
 ---
 

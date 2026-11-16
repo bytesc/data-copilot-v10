@@ -21,6 +21,8 @@ Base URL: `http://<host>:8008`
 - [文档生成](#6-文档生成)
 - [系统知识管理 (CRUD)](#7-系统知识管理-crud)
 - [文件上传](#8-文件上传)
+- [注释管理](#9-注释管理)
+- [通用错误响应](#10-通用错误响应)
 
 ---
 
@@ -867,7 +869,7 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 
 ---
 
-## 注释管理
+## 9. 注释管理
 
 > 该节全部接口受 `enable_edit` 控制，设为 `false` 时返回 `403`。
 
@@ -920,7 +922,7 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 
 ---
 
-## 通用错误响应
+## 10. 通用错误响应
 
 ```json
 { "error": "Internal server error", "detail": "..." }

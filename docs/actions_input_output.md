@@ -6,7 +6,7 @@
 
 每个环节记录三项：**输入**（LLM 决策输出的 JSON / API 入参）、**输出**（写入 `conversation_history` 的条目）、**上下文**（`history_to_text` 转换后喂给 LLM 的文本）。
 
-> 除下文列出的上下文外，每个 LLM 阶段还会额外注入独立的 `## Blackboard` 段（`blackboard_section(conversation_history)`），用于提供完整的 DB schema、函数文档、业务知识和 MCP 工具详情。blackboard 不进入 `history_to_text`，详见 `docs/conversation_history_structure.md`。blackboard 的 `recent_generated_images` 区域（最近一次代码执行生成的图片列表）和 `selected_images` 区域（`select_images` 选中或用户上传的图片及原因）也随该段以文本注入；当模型 `supports_images=true` 且请求 `meta.use_images` 开启时，两处图片会按 `recent_generated_images` 在前、`selected_images` 在后的顺序以 `image_url` 内容数组的形式随请求提交（本地文件/本机静态 URL 转 base64，外部 URL 原样传递，详见 `docs/conversation_history_structure.md`）。
+> 除下文列出的上下文外，每个 LLM 阶段还会额外注入独立的 `## Blackboard` 段（`blackboard_section(conversation_history)`），提供完整的 DB schema、函数文档、业务知识和 MCP 工具详情；blackboard 不进入 `history_to_text`。其中 `recent_generated_images` / `selected_images` 两个图片区域也会以文本注入，并在模型 `supports_images=true` 且 `meta.use_images` 开启时按「`recent_generated_images` 在前、`selected_images` 在后」作为 `image_url` 提交。完整规则见 [`conversation_history_structure.md`](conversation_history_structure.md)。
 
 ---
 
@@ -277,7 +277,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示，不用�
 
 失败时若条目带有 `result`（执行流在抛错前已经 yield 的部分输出），会以 `result (partial; execution failed afterwards)` 一并渲染进上下文，使下一轮 LLM 既看到错误、也看到已经跑出来的部分结果；没有 `result` 时只渲染 `error`。
 
-`images` 为本次执行生成的图片列表（去重后；本地图片通常只存文件名，本机静态地址或外部 http 图片保留完整 URL）。`act` 条目的该字段仅用于前端展示，不进入 LLM 上下文（`history_to_text` 不渲染该字段）；同时会覆盖写入 blackboard 的 `recent_generated_images` 区域，并随 `## Blackboard` 段以文本注入所有 LLM 阶段。若模型 `supports_images=true` 且请求 `meta.use_images` 开启，这些图片还会作为 `image_url` 内容数组附加到用户消息中，每张图片前带 `Image filename: ...` 标签。
+`images` 为本次执行生成的图片列表（去重后；本地图片通常只存文件名，本机静态地址或外部 http 图片保留完整 URL）。`act` 条目的该字段仅用于前端展示（`history_to_text` 不渲染），但会覆盖写入 blackboard 的 `recent_generated_images` 区域；模型 `supports_images=true` 且 `meta.use_images` 开启时，这些图片还会作为 `image_url` 内容附加到用户消息中，每张前带 `Image filename: ...` 标签。详见 [`conversation_history_structure.md`](conversation_history_structure.md)。
 
 ---
 
@@ -567,4 +567,4 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 上下文: Q: {content}
         Uploaded images: upload_abcd1234.png
 ```
-后端在请求信封中间件（`utils/image_ingest.py`）把 base64 保存为 `tmp_imgs/upload_<8位小写字母>.png`，改写 `uploaded` 为文件名列表，并追加合并进 blackboard 的 `selected_images` 区域。详见 `docs/api.md` 的「用户上传图片」。
+后端在请求信封中间件（`utils/image_ingest.py`）把 base64 保存为 `tmp_imgs/upload_<8位小写字母>.png`、改写 `uploaded` 为文件名列表并合并进 blackboard 的 `selected_images`；张数/大小上限等完整规则见 [`api.md`](api.md) 的「用户上传图片」。

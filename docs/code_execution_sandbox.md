@@ -4,6 +4,10 @@ LLM 生成的 Python 代码在一个**一次性子进程**中执行：代码先�
 完全隔离的子进程运行，结果通过一条窄的 JSON-lines 通道传回，并叠加超时与资源上限。
 不依赖 Docker，零新增依赖，全部使用标准库，Windows / Linux / macOS 共用同一套代码。
 
+> **本文定位**：从**配置 / 防护 / 运维**视角介绍沙箱——防护分层、`config/sandbox.yaml` 配置、
+> 错误类型、审计日志、跨平台与能力边界。父/子进程的**实现与生命周期**（如何准备、启动、
+> `exec` 前初始化、协议、收尾）见 [`sandbox_init_and_lifecycle.md`](sandbox_init_and_lifecycle.md)。
+
 > **开关**：整个沙箱由主配置 `config/config.yaml` 的 **`enable_code_sandbox`** 控制（默认
 > `true`）。设为 `false` 时不走沙箱，改为在主进程内直接 `exec` 生成代码（旧行为：**无隔离、无
 > 资源限制、无文件/网络管控**，仅限完全可信的单租户部署）。下方各层仅在开关为 `true` 时生效。
@@ -36,6 +40,9 @@ LLM 生成代码 → 提取 ```python 块
 
 主进程侧 `execute_in_sandbox()` 返回生成器：调用方开始迭代时才启动子进程，迭代提前结束
 时子进程被强杀。生成代码只在子进程内执行。
+
+> 逐阶段的父/子进程时序（准备、启动、`exec` 前初始化、协议、收尾）见
+> [`sandbox_init_and_lifecycle.md`](sandbox_init_and_lifecycle.md) 的「二、执行链路总览」。
 
 ## 三、组件
 

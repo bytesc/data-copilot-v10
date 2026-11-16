@@ -2,7 +2,12 @@
 
 本文描述"LLM 生成的 Python 代码"这条执行链的**功能与实现**：主进程（父）如何准备并启动
 一次性子进程，子进程在 `exec` 生成代码**之前**初始化了什么，执行如何回传结果、如何收尾。
-每步都引用关键代码行（行号以当前修订为准）。
+每步都引用关键函数/模块（不使用行号，避免随修订漂移）。
+
+> **本文定位**：从**实现 / 生命周期**视角描述沙箱运行时——父/子进程如何准备与启动、`exec`
+> 前初始化顺序、JSON-lines 协议、收尾。防护分层、`config/sandbox.yaml` 配置项、错误类型、
+> 审计日志、跨平台与能力边界的**完整说明**见 [`code_execution_sandbox.md`](code_execution_sandbox.md)，
+> 本文只做简述并给出链接。
 
 涉及文件：
 
@@ -70,10 +75,10 @@ sequenceDiagram
 ### 3.1 先审查，绝不执行违规代码
 
 ```python
-# executor.py:207-230
+# executor.py  execute_in_sandbox
 def execute_in_sandbox(code):
     try:
-        violations = validate(code)           # policy.py:134
+        violations = validate(code)           # policy.py  validate
     except PolicyViolation as exc:
         raise SandboxError("...rejected...", kind=getattr(exc, "kind", "policy_violation"))
     if violations:
@@ -102,14 +107,14 @@ def _config():
 ```
 
 ```python
-# config/get_config.py:15  子进程配置路径由环境变量决定（主进程不设它）
+# config/get_config.py  子进程配置路径由环境变量决定（主进程不设它）
 _CONFIG_PATH = os.environ.get("CODE_EXEC_CONFIG") or <项目>/config/config.yaml
 ```
 
 ### 3.3 生成任务描述 job（含模型选择快照）
 
 ```python
-# executor.py:81-105  快照当前请求选中的模型/Depth/Style
+# executor.py  _current_llm_selection  快照当前请求选中的模型/Depth/Style
 def _current_llm_selection():
     try:
         from agent.utils.llm_access.LLM import (
@@ -125,7 +130,7 @@ def _current_llm_selection():
 ```
 
 ```python
-# executor.py:233-247
+# executor.py  _iter_items（组装 job）
 def _iter_items(code):
     cfg = _config()
     job = {"code": code, "project_root": str(_PROJECT_ROOT),
@@ -138,7 +143,7 @@ def _iter_items(code):
 ### 3.4 临时目录、最小沙箱配置与 job 文件
 
 ```python
-# executor.py:249-258
+# executor.py  _iter_items（临时目录与 job.json）
     workdir = tempfile.mkdtemp(prefix="code_sandbox_")   # 系统临时目录，如 %TEMP%\code_sandbox_xxxx
     try:
         sandbox_config_path = _render_sandbox_config(workdir)
@@ -166,7 +171,7 @@ def _iter_items(code):
 ### 3.5 最小环境变量与启动命令
 
 ```python
-# executor.py:108-120  环境变量白名单 + CODE_EXEC_CONFIG 指向最小配置
+# executor.py  _ENV_ALLOW / _build_env  环境变量白名单 + CODE_EXEC_CONFIG 指向最小配置
 _ENV_ALLOW = ("PATH", "PATHEXT", "SYSTEMROOT", "SystemRoot", "WINDIR", "COMSPEC",
               "TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", ...)
 def _build_env(sandbox_config_path):
@@ -178,7 +183,7 @@ def _build_env(sandbox_config_path):
 ```
 
 ```python
-# executor.py:260-286
+# executor.py  _iter_items（spawn 子进程）
     command = [sys.executable, "-E", "-s", "-u", str(_RUNNER), job_path]  # -E 忽略PYTHON*；-s 无user site；-u 无缓冲
     popen_kwargs = dict(cwd=str(_PROJECT_ROOT), env=_build_env(sandbox_config_path),
                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err_handle)
@@ -200,7 +205,7 @@ def _build_env(sandbox_config_path):
 ### 3.6 读取协议（deadline + 分类）
 
 ```python
-# executor.py:288-313
+# executor.py  _iter_items（deadline 读循环）
         deadline = time.monotonic() + cfg["timeout"]
         while True:
             remaining = deadline - time.monotonic()
@@ -234,7 +239,7 @@ def _write_child(proc, obj):             # 写回子进程 stdin
 ```
 
 ```python
-# executor.py:315-321  子进程未发结束消息就退出 → 视为被资源限制杀掉/崩溃，报错走重试
+# executor.py  _iter_items（异常退出处理）  子进程未发结束消息就退出 → 视为被资源限制杀掉/崩溃，报错走重试
         if not finished:
             raise SandboxError(_unexpected_exit_message(proc, err_path), kind="resource_limit")
 ```
@@ -242,7 +247,7 @@ def _write_child(proc, obj):             # 写回子进程 stdin
 ### 3.7 结果还原与收尾
 
 ```python
-# executor.py:181-191  还原：DataFrame 由 CSV 还原
+# executor.py  _deserialize  还原：DataFrame 由 CSV 还原
 def _deserialize(message):
     kind = message.get("t")
     if kind == "df":
@@ -252,7 +257,7 @@ def _deserialize(message):
 ```
 
 ```python
-# executor.py:322-337  无论成功/异常/超时：杀进程树、关 Job、关文件、删临时目录
+# executor.py  _iter_items（finally 收尾）  无论成功/异常/超时：杀进程树、关 Job、关文件、删临时目录
     finally:
         if proc is not None and proc.poll() is None:
             kill_tree(proc.pid, job_object)
@@ -271,7 +276,7 @@ def _deserialize(message):
 ### 4.1 进程入口
 
 ```python
-# runner.py:22-31  让 sandbox 目录与项目根可 import；matplotlib 后端必须在导入前设
+# runner.py  模块顶部：让 sandbox 目录与项目根可 import；matplotlib 后端必须在导入前设
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 _PROJECT_ROOT = os.path.abspath(os.path.join(_HERE, *([os.pardir] * 5)))
@@ -280,7 +285,7 @@ os.environ["MPLBACKEND"] = "Agg"
 ```
 
 ```python
-# runner.py:187-215  main()
+# runner.py  main()
 def main(argv):
     _PROTOCOL = _setup_protocol()                     # ① 拆协议通道
     with open(argv[1], ...) as handle: job = json.load(handle)   # ② 读 job.json
@@ -294,7 +299,7 @@ def main(argv):
 ```
 
 ```python
-# runner.py:36-49  ① 协议通道与用户输出分离
+# runner.py  _setup_protocol  ① 协议通道与用户输出分离
 def _setup_protocol():
     fd = os.dup(1)          # 保留原 stdout 用于协议
     os.dup2(2, 1)           # fd1 指向 stderr：生成代码的 print/库告警都进 stderr
@@ -303,7 +308,7 @@ def _setup_protocol():
 ```
 
 ```python
-# limits.py:52-67  ③ 逐项设限，不支持的平台跳过
+# limits.py  set_process_limits  ③ 逐项设限，不支持的平台跳过
     if max_memory_mb: _apply_rlimit(resource.RLIMIT_AS, int(max_memory_mb) * 1024 * 1024)
     if cpu_seconds:   _apply_rlimit(resource.RLIMIT_CPU, int(cpu_seconds))
     if max_processes: _apply_rlimit(resource.RLIMIT_NPROC, int(max_processes))
@@ -315,7 +320,7 @@ def _setup_protocol():
 **（a）应用模型选择（写回 contextvar）**
 
 ```python
-# runner.py:140-160
+# runner.py  _apply_llm_selection
 def _apply_llm_selection(selection):
     if not isinstance(selection, dict): return
     try:
@@ -327,19 +332,19 @@ def _apply_llm_selection(selection):
 ```
 
 ```python
-# runner.py:163-169  _execute 开头，exec 之前
+# runner.py  _execute 开头，exec 之前
     _apply_llm_selection(job.get("llm_selection"))
     namespace = _build_namespace()
 ```
 
-> 模型选择存在 contextvar（`LLM.py:101`、`184-185`）；contextvar **不跨进程**，故需在子进程
+> 模型选择存在 contextvar（`LLM.py` 中的 `_current_*_var`）；contextvar **不跨进程**，故需在子进程
 > 里用 job 里的值重设。`apply_request_selection` 是同一份函数，父进程由 HTTP 中间件调用、
 > 子进程由 `runner` 调用。
 
 **（b）预导入库并绑定到命名空间**
 
 ```python
-# runner.py:87-104
+# runner.py  _build_namespace
 def _build_namespace():
     import datetime as _datetime, json as _json, math, re as _re
     import matplotlib, matplotlib.pyplot as plt, numpy as np, pandas as pd, PIL, seaborn as sns
@@ -351,7 +356,7 @@ def _build_namespace():
 **（c）中文字体 + 禁用 GUI 阻塞**
 
 ```python
-# runner.py:106-117
+# runner.py  _build_namespace（中文字体 + 禁用 GUI 阻塞）
     try:
         from agent.tools.copilot.utils.mpl_chinese_font import setup_chinese_font
         setup_chinese_font()
@@ -364,7 +369,7 @@ def _build_namespace():
 **（d）加载工具函数（触发 import 副作用，把"连接对象/配置"也建好）**
 
 ```python
-# runner.py:119-135
+# runner.py  _build_namespace（加载工具函数）
     try:
         from agent.tools.get_function_info import FUNCTION_DICT
         namespace.update(FUNCTION_DICT)              # exe_sql/load_data/explain_data/地图/predict_hdb_price...
@@ -382,7 +387,7 @@ def _build_namespace():
 上述 import 的**副作用**（`exec` 前发生，按沙箱配置建好对象，但不等于已建立连接）：
 
 ```python
-# tools_def.py:27-49  数据库引擎：只读账号来自沙箱配置；无 mysql 时 engine=None
+# tools_def.py  只读/特权数据库引擎：只读账号来自沙箱配置；无 mysql 时 engine=None
 READONLY_DATABASE_URL = config_data.get('mysql_readonly') or ""
 if READONLY_DATABASE_URL:
     read_engine = sqlalchemy.create_engine(READONLY_DATABASE_URL, pool_size=20, ...)
@@ -392,27 +397,27 @@ read_only_engine = read_engine if read_engine is not None else engine
 ```
 
 ```python
-# data_access/db_conn.py:9-19   沙箱配置没有 'mysql' → 特权 engine = None
+# data_access/db_conn.py   沙箱配置没有 'mysql' → 特权 engine = None
 engine = create_engine(config_data.get('mysql'), ...) if config_data.get('mysql') else None
 # data_access/sys_db_conn.py   同理：无 'mysql_sys' → sys_engine = None
 ```
 
 ```python
-# LLM.py:54-72   模型清单来自沙箱配置；工具用的是代理，本身不含模型
+# LLM.py  _build_model_configs / MODEL_CONFIGS   模型清单来自沙箱配置；工具用的是代理，本身不含模型
 def _build_model_configs(): ...        # 读 config_data["llm_models"]
 MODEL_CONFIGS = _build_model_configs()
-# tools_def.py:54
+# tools_def.py
 llm = get_llm_dynamic()                # DynamicLLM 代理；首次调用才解析/建 client
 ```
 
 > `create_engine()` 只建对象，**不立即开数据库连接**；真正的 LLM `OpenAI` client 在
 > **首次调用**文本（`llm_data_explanation` / `predict_hdb_price`）时才在
-> `LLM._get_client`（`LLM.py:227-242`）里创建。
+> `LLM._get_client`（`LLM.py`）里创建。
 
 ### 4.3 `exec` 与迭代
 
 ```python
-# runner.py:170-178
+# runner.py  _execute（exec + 迭代 func）
     try:
         exec(compile(code, "<llm_generated_code>", "exec"), namespace)   # namespace 即被执行的 globals
         func = namespace.get("func")
@@ -426,7 +431,7 @@ llm = get_llm_dynamic()                # DynamicLLM 代理；首次调用才解�
 ### 4.4 序列化与回传
 
 ```python
-# runner.py:58-84  逐项序列化：DataFrame→CSV（超大按 max_df_rows/max_line_mb 截断），str/json 原样
+# runner.py  _serialize  逐项序列化：DataFrame→CSV（超大按 max_df_rows/max_line_mb 截断），str/json 原样
     if isinstance(item, pd.DataFrame):
         ... truncated = original_rows > max_rows ...
         return {"t": "df", "v": csv, "truncated": truncated, "rows": original_rows}
@@ -435,7 +440,7 @@ llm = get_llm_dynamic()                # DynamicLLM 代理；首次调用才解�
 ```
 
 ```python
-# runner.py:52-55  _emit：一行一条 JSON，写协议口（原 stdout）
+# runner.py  _emit：一行一条 JSON，写协议口（原 stdout）
 def _emit(obj):
     _PROTOCOL.write(json.dumps(obj, ensure_ascii=False)); _PROTOCOL.write("\n"); _PROTOCOL.flush()
 ```
@@ -443,7 +448,7 @@ def _emit(obj):
 ### 4.5 执行期异常回传
 
 ```python
-# runner.py:179-184
+# runner.py  _execute（异常回传）
     except Exception as exc:
         _emit({"t": "error", "kind": "runtime_error",
                "msg": f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"})
@@ -453,13 +458,13 @@ def _emit(obj):
 
 | 顺序 | 做了什么 | 位置 |
 |---|---|---|
-| 1 | 注入 `sys.path`（sandbox 目录 + 项目根） | `runner.py:22-28` |
-| 2 | `MPLBACKEND=Agg` | `runner.py:31` |
-| 3 | 拆分 stdout/stderr 协议通道 | `runner.py:189` → `36-49` |
-| 4 | 读 `job.json` | `runner.py:192-197` |
-| 5 | POSIX rlimit | `runner.py:199-207` → `limits.py:52-67` |
-| 6 | 孤儿看门狗 | `runner.py:208` → `limits.start_orphan_watchdog` |
-| 7 | `chdir(project_root)` | `runner.py:210-212` |
+| 1 | 注入 `sys.path`（sandbox 目录 + 项目根） | `runner.py` 模块顶部 |
+| 2 | `MPLBACKEND=Agg` | `runner.py` 模块顶部 |
+| 3 | 拆分 stdout/stderr 协议通道 | `runner.py` `main()` → `_setup_protocol()` |
+| 4 | 读 `job.json` | `runner.py` `main()` |
+| 5 | POSIX rlimit | `runner.py` `main()` → `limits.set_process_limits()` |
+| 6 | 孤儿看门狗 | `runner.py` `main()` → `limits.start_orphan_watchdog()` |
+| 7 | `chdir(project_root)` | `runner.py` `main()` |
 | 8 | 应用模型选择（写回 contextvar） | `runner.py` `_apply_llm_selection` |
 | 9 | 预导入库 + 绑定 namespace（含中文字体、工具函数、`plt.show` 置空） | `runner.py` `_build_namespace` |
 | 10 | 启动 stdin 回复读线程（LLM 代理用） | `runner.py` `_start_rpc_reader` |
@@ -486,7 +491,7 @@ def _emit(obj):
 | `error` | 子→父 | `msg`, `kind` | 子进程出错；父进程据此抛 `SandboxError`（kind 见下） |
 | `done` | 子→父 | — | 正常结束标志 |
 
-错误 `kind`（稳定分类，便于调用方记录/回传 LLM，定义见 `executor.py:43-60`）：
+错误 `kind`（稳定分类，便于调用方记录/回传 LLM，定义见 `executor.py` 的 `SandboxError`）：
 `policy_violation` / `syntax_error` / `timeout` / `resource_limit` / `no_func` /
 `runtime_error` / `environment_error` / `job_error` / `config_error`。
 
@@ -494,37 +499,25 @@ def _emit(obj):
 
 ## 六、资源限制
 
-| 配置（`config/sandbox.yaml` → `code_exec`） | 生效范围 | 超过时 |
-|---|---|---|
-| `timeout`（取自 `code_exec.timeout`，示例 600） | 全平台（父进程墙钟计时） | 强杀整棵进程树 → `SandboxError(kind="timeout")` |
-| `max_memory_mb` | POSIX `RLIMIT_AS`；Windows Job Object | POSIX 抛 `MemoryError`；Windows 被 OS 杀进程 → 报错 |
-| `cpu_rate` | 仅 POSIX（`RLIMIT_CPU`，CPU 秒） | 触顶被信号终止 → 报错；Windows 不生效 |
-| `max_processes` | 仅 POSIX（`RLIMIT_NPROC`） | fork/建线程失败 → `OSError` → 报错；Windows 不生效 |
-| `max_file_mb` | 仅 POSIX（`RLIMIT_FSIZE`，单文件） | `SIGXFSZ` 或 `OSError` → 报错；Windows 不生效 |
-| `max_df_rows` | 全平台（runner 序列化） | 静默截断到该行数 |
-| `max_line_mb` | 全平台（runner，仅 DataFrame 的 CSV） | 继续减行；连 1 行都超则替换为占位字符串 |
+各项上限（`timeout` / `max_memory_mb` / `cpu_rate` / `max_processes` / `max_file_mb` /
+`max_df_rows` / `max_line_mb`）的取值、跨平台生效范围与超限行为（完整表格）见
+[`code_execution_sandbox.md`](code_execution_sandbox.md) 的「五、配置项与超限行为」。各上限由父
+进程 `executor._config()` 读取、子进程 `limits.set_process_limits()` 设置（见 §九）。
 
-进程树终止与孤儿防护见 `limits.py`：Windows 用 Job Object（`KILL_ON_JOB_CLOSE` +
-`TerminateJobObject`，不可用则 `taskkill /T /F`）；POSIX `killpg(SIGKILL)`；子进程
-`start_orphan_watchdog` 在父进程消失时自杀。
+本文只补充实现侧的进程树终止与孤儿防护（`limits.py`）：Windows 用 Job Object
+（`KILL_ON_JOB_CLOSE` + `TerminateJobObject`，不可用则 `taskkill /T /F`）；POSIX `killpg(SIGKILL)`；
+子进程 `start_orphan_watchdog` 在父进程消失时自杀。
 
 ---
 
-## 七、安全模型（多层防线）
+## 七、安全模型（要点）
 
-| 层 | 位置 | 作用 |
-|---|---|---|
-| 1 AST 审查 | `policy.py` | 白名单 import（`ALLOWED_MODULE_ROOTS`）、拦危险调用/逃逸属性；不合规不执行 |
-| 2 独立进程 | `executor.py` + `runner.py` | 每次新进程，崩溃/卡死/内存泄漏/图状态随进程消亡，天然并发隔离 |
-| 3 最小环境/配置 | `_build_env` + `_render_sandbox_config` | 环境变量白名单；只给只读库身份；无特权库；子进程**不持有密钥**（LLM 调用代理回父进程） |
-| 4 资源限制 | `limits.py` | 超时/内存/CPU/进程/文件大小；父亡子自杀；整树强杀 |
-| 5 窄输出 | 协议 | 结果只经 stdout JSON-lines；行数/行大小有上限 |
-| 6 运行期管控 | `guard.py`（子进程 `sys.addaudithook`） | 运行期按 `sandbox.yaml` 白名单拦 `open`/`socket`；密钥/`config.yaml` 等被拒；开关见 `file_access`/`network` |
-
-模块白名单逻辑（deny-by-default）：
+六层防护（AST 审查 / 独立进程 / 最小环境与配置 / 资源限制 / 窄输出 / 运行期 audit hook）的完整
+分层表，以及「能防 / 防不住」的边界，见 [`code_execution_sandbox.md`](code_execution_sandbox.md)
+的「一、六层防线」与「八、能力边界」。本文只保留实现侧独有的模块白名单逻辑（deny-by-default）：
 
 ```python
-# policy.py:94-101
+# policy.py  _check_module
 def _check_module(self, name, node):
     root = name.split(".")[0]
     if not name:
@@ -536,17 +529,15 @@ def _check_module(self, name, node):
 ```
 
 即：**只有显式列在 `ALLOWED_MODULE_ROOTS` 的顶层模块可 import**；黑名单与其它未列出的模块
-一律拒绝。相对 import（`from . import x`）单独拒绝（`policy.py:108-113`）。
+一律拒绝。相对 import（`from . import x`）由 `policy.py` 的 `visit_ImportFrom` 单独拒绝。
 
 ### 边界（能防 / 防不住）
 
-- **能防**：主程序被拖垮/挂死/资源耗尽；特权对象引用泄露；配置密钥（含 API key 不回传子进程）；
-  生成代码直接 `open`/`import os`；**运行期按白名单拦库内文件/网络 I/O**（`guard.py` 的
-  audit hook 覆盖 `pd.read_csv/to_csv`、`np.load`、`plt.savefig` 等，因为底层是同一个
-  `open`/`socket` 事件）；死循环与内存炸弹。
-- **防不住（需容器/独立账户才有）**：同账户内核级逃逸；C 扩展里不触发 audit 事件的极端路径；
-  工具函数本身被滥用刷配额；真正的网络物理隔离。子进程与父进程是**同一 OS 用户**，
-  AST 与 audit hook 都是"门卫"而非内核边界。
+完整边界见 [`code_execution_sandbox.md`](code_execution_sandbox.md) 的「八、能力边界」。要点：运行期
+`guard.py` 的 audit hook 能拦住库内文件/网络 I/O（覆盖 `pd.read_csv/to_csv`、`np.load`、`plt.savefig`
+等，因为底层是同一个 `open`/`socket` 事件），但子进程与父进程是**同一 OS 用户**，AST 与 audit hook
+都是"门卫"而非内核边界；同账户内核级逃逸、不触发 audit 的 C 扩展路径、真正的网络物理隔离仍需容器/
+独立低权账户。
 
 ---
 
