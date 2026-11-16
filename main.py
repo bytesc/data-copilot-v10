@@ -447,6 +447,7 @@ async def get_config():
         "current_model": get_current_model_id(),
         "current_reasoning_effort": get_current_reasoning_effort(),
         "current_style": get_current_style(),
+        "max_steps": config_data.get("max_steps", 0),
     })
 
 

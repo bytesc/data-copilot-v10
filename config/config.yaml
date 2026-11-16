@@ -115,6 +115,16 @@ enable_target_knowledge: false
 # enable_edit - set false to disable data/comment editing features (upload, delete table, edit comments/import)
 enable_edit: true
 
+# max_steps - cap on the frontend agent loop, counted per "step box". Each box
+# rendered on the frontend (THINK, ACTION, ACT per action, the frontend ask/act
+# boxes, OBSERVE) counts as one step: roughly one step per backend call. When the
+# count exceeds this limit the run pauses exactly like an Interrupt (waiting for
+# the user) and the counter resets. The counter also resets on any user
+# intervention (input, choice, Interrupt) and on page init / new session /
+# session resume. Document-generation boxes and the YAML outline flow are NOT
+# counted. Set to 0 (or remove) to disable the cap.
+max_steps: 999
+
 # enable_code_sandbox - run LLM-generated Python in the isolated sandbox child
 # process (recommended). Set to false to run it directly in the main process
 # instead (the legacy behavior): NO isolation, NO resource limits, NO file/network

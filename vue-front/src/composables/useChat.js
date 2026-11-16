@@ -4,14 +4,18 @@ import {
   fetchGeneratedFiles, generateDocumentStream, generateDocumentUnifiedStream,
 } from '@/utils/api.js'
 import { notifyError, showErrorToast, showWarningToast } from '@/utils/toast.js'
+import { configState } from '@/utils/config.js'
 
 export function useChat() {
   const sessionId = ref(generateSessionId())
   const question = ref('')
   const conversationHistory = ref([])
-  const cycleIndex = ref(0)
+  const stepCount = ref(0)
   const isRunning = ref(false)
-  const maxCycles = 999
+  const maxSteps = computed(() => {
+    const n = Number(configState.max_steps)
+    return Number.isFinite(n) && n > 0 ? n : 0
+  })
   const awaitingInput = ref(false)
   const inputPrompt = ref('')
   const inputChoices = ref([])
@@ -198,7 +202,7 @@ function historyToText(history) {
     isPaused.value = false
     awaitingInput.value = false
     interruptRequested.value = false
-    cycleIndex.value = 0
+    stepCount.value = 0
 
     addMessage('user', 'question', { content: questionText, uploaded })
     const userEntry = { role: 'user', type: 'question', content: questionText }
@@ -219,6 +223,7 @@ function historyToText(history) {
   }
 
   function requestInterrupt() {
+    stepCount.value = 0
     interruptRequested.value = true
   }
 
@@ -226,14 +231,9 @@ function historyToText(history) {
     while (true) {
       if (isCompleted.value || isPaused.value) break
 
-      cycleIndex.value++
-      if (cycleIndex.value > maxCycles) {
-        addMessage('system', 'warning', { content: 'Reached max cycles.' })
-        break
-      }
-
       // Think phase
       if (chatMode.value === 'think') {
+        if (!canStep()) { await pauseForLimit(); return }
         await runThinkPhase()
         if (interruptRequested.value) { await pauseAfterInterrupt(); return }
       }
@@ -241,6 +241,7 @@ function historyToText(history) {
       const fullQuestion = historyToText(conversationHistory.value)
 
       // Action phase - decide what to do
+      if (!canStep()) { await pauseForLimit(); return }
       const actionResult = await runActionPhase()
       if (interruptRequested.value) { await pauseAfterInterrupt(); return }
 
@@ -259,6 +260,7 @@ function historyToText(history) {
       let loopChoices = []
 
       for (const actItem of actions) {
+        if (!canStep()) { await pauseForLimit(); return }
         const actResult = await runActPhase(actItem.action, fullQuestion, actItem)
         if (interruptRequested.value) { await pauseAfterInterrupt(); return }
 
@@ -311,6 +313,7 @@ function historyToText(history) {
 
       // Observe phase
       if (chatMode.value === 'think') {
+        if (!canStep()) { await pauseForLimit(); return }
         await runObservePhase()
         if (interruptRequested.value) { await pauseAfterInterrupt(); return }
       }
@@ -322,6 +325,25 @@ function historyToText(history) {
     isPaused.value = true
     isRunning.value = false
     addMessage('system', 'interrupt', { content: 'Interrupted. Enter a new instruction or click Continue.' })
+  }
+
+  // Count one frontend "box" (THINK / ACTION / ACT / ask-act / OBSERVE) and report
+  // whether the configured step budget still allows it. Returns false only when a
+  // positive limit is set and this step would exceed it.
+  function canStep() {
+    stepCount.value++
+    return !(maxSteps.value > 0 && stepCount.value > maxSteps.value)
+  }
+
+  async function pauseForLimit() {
+    const limit = maxSteps.value
+    stepCount.value = 0
+    interruptRequested.value = false
+    isPaused.value = true
+    isRunning.value = false
+    addMessage('system', 'interrupt', {
+      content: `Reached the max step limit (${limit}). Paused like an interrupt. Enter a new instruction or click Continue.`,
+    })
   }
 
   async function runThinkPhase() {
@@ -668,6 +690,7 @@ function historyToText(history) {
 
   async function submitUserResponse(response) {
     awaitingInput.value = false
+    stepCount.value = 0
     if (inputChoices.value.length > 0) {
       conversationHistory.value.push({ role: 'user', type: 'choice', content: response })
       addMessage('user', 'choice', { content: `Selected: ${response}` })
@@ -700,6 +723,7 @@ function historyToText(history) {
 
   async function submitPausedInput(input) {
     isPaused.value = false
+    stepCount.value = 0
     const userInput = input || 'continue'
     const { uploaded, ok } = await _encodePendingImages()
     if (!ok) {
@@ -736,7 +760,7 @@ function historyToText(history) {
     const userEntry = { role: 'user', type: 'question', content: newQuestion }
     if (uploaded.length) userEntry.uploaded = uploaded
     conversationHistory.value.push(userEntry)
-    cycleIndex.value = 0
+    stepCount.value = 0
 
     isRunning.value = true
     try {
@@ -755,7 +779,7 @@ function historyToText(history) {
   async function resumeSession(sessionData) {
     sessionId.value = sessionData.session_id
     question.value = sessionData.question || ''
-    cycleIndex.value = 0
+    stepCount.value = 0
 
     addMessage('system', 'resume', {
       content: `Session restored: \`${sessionId.value}\`\nOriginal question: ${question.value}`,
@@ -1048,7 +1072,7 @@ function historyToText(history) {
   function reset() {
     messages.value = []
     conversationHistory.value = []
-    cycleIndex.value = 0
+    stepCount.value = 0
     isRunning.value = false
     isCompleted.value = false
     isPaused.value = false
@@ -1083,7 +1107,8 @@ function historyToText(history) {
     chatMode,
     inputPrompt,
     inputChoices,
-    cycleIndex,
+    stepCount,
+    maxSteps,
     startChat,
     submitUserResponse,
     submitPausedInput,

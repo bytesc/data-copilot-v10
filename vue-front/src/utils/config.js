@@ -12,6 +12,7 @@ export const configState = reactive({
   current_reasoning_effort: '',
   current_style: '',
   use_images: false,
+  max_steps: 0,
   _loaded: false,
 })
 
