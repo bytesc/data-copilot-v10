@@ -184,6 +184,9 @@ enable_fetch_url: true        # 网页内容抓取
 enable_edit: true             # 数据/知识管理页（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
 enable_code_sandbox: true     # LLM 生成代码走沙箱子进程（推荐）；false=主进程直接 exec（旧行为，无隔离）
 enable_perf_log: true         # 写接口性能指标到 perf_log.csv
+enable_llm_log: true          # 记录每次 LLM 调用到系统库 llm_log 表（token 统计、首字符延迟、总耗时等）
+enable_llm_tph_limit: false   # 开启 LLM 每小时 token 总量控制（按 llm_log 近 60 分钟用量，超限接口返回 429）
+llm_tph_limit: 1000000        # 每小时允许的 token 数（enable_llm_tph_limit 为 true 时生效；0 表示不限制）
 enable_sandbox_log: true      # 写沙箱审计日志到 sandbox_audit.log（每次沙箱启动/每次拒绝）
 ```
 

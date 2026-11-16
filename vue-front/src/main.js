@@ -38,6 +38,10 @@ function wrapJsonBody(body, meta) {
 }
 
 function reportHttpError(response) {
+  if (response.status === 429) {
+    showErrorToast('LLM hourly token limit reached. Please try again later.')
+    return
+  }
   showErrorToast(String(response.status))
 }
 

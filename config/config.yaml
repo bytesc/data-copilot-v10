@@ -126,6 +126,20 @@ enable_code_sandbox: true
 # token usage, first-token latency, total duration). Set false to disable.
 enable_llm_log: true
 
+# enable_llm_tph_limit - enforce a sliding one-hour cap on LLM token usage.
+# When true, endpoints that call the LLM are checked ONCE at the API entry
+# against the sum of llm_log.total_tokens over the trailing 60 minutes; if it
+# has reached llm_tph_limit the request is rejected with HTTP 429 (code
+# "llm_tph_limit"). Internal LLM calls of the same request (multiple calls,
+# retries) still count toward the hour total but are not re-checked. Non-LLM
+# endpoints are never affected. This reads llm_log, so it is a no-op when
+# enable_llm_log is false (no rows means no usage to count).
+enable_llm_tph_limit: true
+
+# llm_tph_limit - tokens per hour allowed while enable_llm_tph_limit is true.
+# Set to 0 (or remove) to disable enforcement.
+llm_tph_limit: 1000000
+
 # enable_perf_log - write API performance metrics to perf_log.csv (time, api_name, total_response_time, llm_first_chunk_time, llm_complete_time, code_exec_time, llm_input_chars)
 enable_perf_log: true
 

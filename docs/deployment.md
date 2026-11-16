@@ -171,6 +171,7 @@ mysql -u root -p -e "CREATE USER IF NOT EXISTS 'readonly'@'%' IDENTIFIED BY '123
 | 上传报 `413 Request Entity Too Large` | nginx 请求体上限，`docker/nginx.conf` 已设 `client_max_body_size 60m;`（≥ 后端上限 CSV 50MB / 文档 20MB） |
 | 上传文档无响应 / 504 | `/upload-txt/` 做 LLM 注释生成，`docker/nginx.conf` 的 `/upload-txt/` 已设 `proxy_read_timeout 600s` |
 | SSE / 长任务超过 10 分钟被中断 | `proxy_read_timeout` / `PROXY_TIMEOUT` 默认 600s；分别改 `docker/nginx.conf`、`front.py` 文件开头的 `PROXY_TIMEOUT` |
+| 接口返回 `429`（响应体 `code: llm_tph_limit`） | 触发了 LLM 每小时 token 总量控制（`enable_llm_tph_limit`）：近 60 分钟 `llm_log` 的 token 总量已达 `llm_tph_limit`。调大 `llm_tph_limit`、关闭 `enable_llm_tph_limit`，或等待滑动窗口滑出。仅调用 LLM 的接口会出现，前端按 interrupt 暂停 |
 | 后端一直卡在 `Waiting for MySQL to be ready` | 确认 MySQL 可达且 `config.yaml` 的 DSN 端口写对（本机 docker 库写宿主发布端口）；库名与 `docker-init.sql` 一致；必要时 `docker compose -f docker/docker-compose.mysql.yml -p docker down -v` 重初始化 |
 | LLM 调用鉴权失败 | 缺少 `agent/utils/llm_access/<key_file>`；补上后重建镜像（Docker）或重启后端 |
 | 改了 `config.yaml` 后容器行为未变 | 容器用的是构建时打包的 config，需 `docker compose -f docker/docker-compose.app.yml -p docker-app up -d --build` 重建后端镜像 |

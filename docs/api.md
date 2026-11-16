@@ -262,6 +262,8 @@ Base URL: `http://<host>:8008`
 
 所有流式接口使用 `text/event-stream`，格式为 `data: {json}\n\n`。
 
+> **LLM 流量控制**：开启 `enable_llm_tph_limit` 后，调用 LLM 的接口会在**入口检查一次**本小时（滑动 60 分钟）已消耗的 token（数据来自 `llm_log`）。达到 `llm_tph_limit` 时，在**发出任何 SSE 事件之前**返回 `HTTP 429`，响应体 `{"error": "...", "code": "llm_tph_limit"}`；同一请求内部的多次 LLM 调用/重试不再检查，但仍计入总量。前端把该 429 当作 interrupt 处理：暂停当前轮、展示报错，可 Continue 继续。**仅调用 LLM 的接口**受影响，不调用 LLM 的接口（`exe-sql`、`db-*`、`finalize`、`yaml-to-prompt` 等）不受影响；`enable_llm_log=false` 时该功能不生效（直接放行）。
+
 | 阶段 | 端点 | 说明 |
 |------|------|------|
 | **Think** | `POST /api/think/stream/` | LLM 生成结构化计划 |
@@ -913,6 +915,7 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 | 404 | 资源不存在 |
 | 409 | 资源冲突（如键已存在）|
 | 413 | 上传文件超过大小上限（见「文件上传」的「上传大小限制」） |
+| 429 | LLM 每小时 token 总量达到上限（`enable_llm_tph_limit` 开启时，仅对调用 LLM 的接口；响应体 `{"error": "...", "code": "llm_tph_limit"}`） |
 | 500 | 服务器内部错误 |
 | 502 | 代理连接后端失败（仅 front.py） |
 | 503 | 只读数据库未配置（`mysql_readonly` 缺失时 `/api/exe-sql/`） |

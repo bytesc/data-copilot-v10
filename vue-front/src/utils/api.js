@@ -5,8 +5,15 @@ const BASE_URL = import.meta.env.VITE_API_BASE || '/api'
 async function request(url, init) {
   const response = await fetch(url, init)
   if (!response.ok) {
-    const error = new ApiError(String(response.status), {
+    let payload = null
+    try {
+      payload = await response.json()
+    } catch (_) {
+      /* non-JSON error body */
+    }
+    const error = new ApiError(payload?.error || String(response.status), {
       status: response.status,
+      payload,
       url,
     })
     markErrorAsNotified(error)
@@ -78,6 +85,8 @@ async function* createSSEStream(url, payload) {
       type: 'error',
       content: error?.message || 'Request failed',
       silent: isErrorNotified(error),
+      status: error?.status || 0,
+      code: error?.payload?.code || '',
     }
     return
   }

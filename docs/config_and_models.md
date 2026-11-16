@@ -93,10 +93,21 @@ enable_edit: true             # 数据/知识编辑（设为 false 时前端隐�
 enable_code_sandbox: true     # LLM 生成代码是否走沙箱子进程（true，推荐）；false=主进程直接 exec（旧行为，无隔离）
 enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 enable_llm_log: true           # 记录每次 LLM 调用到系统库 llm_log 表（时间、session_id、去除图片base64的输入JSON、输出、token 统计、首字符延迟、总耗时）
+enable_llm_tph_limit: false    # 开启 LLM 每小时 token 总量控制（按 llm_log 近 60 分钟用量，超限接口返回 429）
+llm_tph_limit: 1000000         # 每小时允许的 token 数（enable_llm_tph_limit 为 true 时生效；0 表示不限制）
 enable_sandbox_log: true       # 写沙箱审计日志到 sandbox_audit.log（每次沙箱启动/每次拒绝，含时间戳与 session_id）
 ```
 
 > 图片能力需以模型供应商实际支持为准。当前仓库配置中 `deepseek-v4.1-flash`、`glm-5.3-flash`、`glm-5.3-flashx` 已开启 `supports_images: true`；`deepseek-v4-flash` 为 `false`。
+
+### LLM 每小时 token 总量控制（`enable_llm_tph_limit` / `llm_tph_limit`）
+
+- **数据源**：`llm_log` 表（`total_tokens`、`created_at`）。滑动窗口固定 60 分钟，阈值由 Python 侧按本地时间计算（与写入一致）。
+- **检查粒度**：仅在**调用 LLM 的接口**入口检查**一次**（`enable_llm_log` 为 false 时直接放行）。同一次 API 请求内部的多次 LLM 调用/重试**不再检查**，但仍照常计入 `llm_log`、算进这一小时的总量。
+- **生效范围**：仅这些接口被拦截（前缀匹配）：`/api/think/stream/`、`/api/action/stream/`、`/api/act/stream/`、`/api/observe/stream/`、`/api/generate-and-execute/stream/`、`/api/plain-chat/stream/`、`/api/filter-db-fields/`（含 `/stream/`）、`/api/filter-functions/stream/`、`/api/generate-document/stream/`（含 `/unified/`、`/from-yaml/`）、`/api/generate-document/generate-yaml-outline/`、`/upload-txt/`。不调用 LLM 的接口（`exe-sql`、`db-*`、`finalize`、`yaml-to-prompt`、注释管理等）完全不受影响。
+- **超限响应**：`HTTP 429`，响应体 `{"error": "...", "code": "llm_tph_limit"}`，在 SSE 开始之前返回。前端把该错误当作 interrupt 处理（暂停当前轮，展示报错，可 Continue），不会终止会话。
+- **性能**：`llm_log.created_at` 建索引（`ix_llm_log_created_at`）；已有表在启动时自动 `ALTER TABLE ADD INDEX`（`metadata.create_all` 不会改动已存在的表）。
+- **边界**：查询失败/系统库不可用时 fail-open（放行）；日志在调用结束后才写入，因此并发或边界请求可能略微超出阈值；依赖 `enable_llm_log=true`。
 
 **DSN 格式**: `mysql+pymysql://用户名:密码@主机:端口/数据库名`
 
@@ -434,7 +445,7 @@ created_at  DATETIME
 
 ### llm_log — LLM 调用日志
 
-每次 LLM 调用一行，由 `data_access/llm_log.py` 写入（开关 `enable_llm_log`）。覆盖 `call_llm`/流式 `call_llm_stream*`（think/action/act/observe/文档生成等全部走此层）以及沙箱内的 LLM 代理调用。
+每次 LLM 调用一行，由 `data_access/llm_log.py` 写入（开关 `enable_llm_log`）。覆盖 `call_llm`/流式 `call_llm_stream*`（think/action/act/observe/文档生成等全部走此层）以及沙箱内的 LLM 代理调用。该表同时是**每小时 token 总量控制**（`enable_llm_tph_limit`）的统计来源；`created_at` 建有索引 `ix_llm_log_created_at`（已有表在启动时自动补建），用于近 60 分钟 `SUM(total_tokens)` 查询。
 
 ```sql
 id                INT AUTO_INCREMENT PRIMARY KEY

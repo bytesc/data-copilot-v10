@@ -102,6 +102,12 @@ function historyToText(history) {
 
   const FRONTEND_ACTIONS = new Set(['ask_question', 'ask_choice', 'summary_and_pause', 'attempt_completion'])
 
+  // A rate-limit rejection (HTTP 429 / code "llm_tph_limit") pauses the run like
+  // an interrupt instead of aborting it.
+  function isRateLimitedEvent(event) {
+    return event?.status === 429 || event?.code === 'llm_tph_limit'
+  }
+
   function addUploadImages(files) {
     const list = Array.from(files || []).filter(
       f => f && (!f.type || f.type.startsWith('image/')),
@@ -343,6 +349,7 @@ function historyToText(history) {
       } else if (event.type === 'error') {
         updateStreamingMessage(msgId, event.content, false, true)
         if (!event.silent) showErrorToast('Request failed')
+        if (isRateLimitedEvent(event)) interruptRequested.value = true
       } else if (event.type === 'history') {
         handleHistoryEvent(event.history)
       }
@@ -373,6 +380,7 @@ function historyToText(history) {
       } else if (event.type === 'error') {
         updateStreamingMessage(msgId, event.content, false, true)
         if (!event.silent) showErrorToast('Request failed')
+        if (isRateLimitedEvent(event)) interruptRequested.value = true
       } else if (event.type === 'history') {
         handleHistoryEvent(event.history)
       }
@@ -511,11 +519,14 @@ function historyToText(history) {
           })
         }
       } else if (etype === 'error') {
-        // An error carrying a sub_phase / error_kind is an action-level failure
+        // A rate-limit rejection pauses the run like an interrupt. Otherwise an
+        // error carrying a sub_phase / error_kind is an action-level failure
         // (e.g. code generation/execution). It is recorded in history and fed to
         // the next step (Observe), so it must NOT stop the loop. Only a
         // transport/fatal error (no phase, no kind, or fatal:true) aborts.
-        if (event.fatal || (!sub && !event.phase && !event.error_kind)) {
+        if (isRateLimitedEvent(event)) {
+          interruptRequested.value = true
+        } else if (event.fatal || (!sub && !event.phase && !event.error_kind)) {
           streamFailed = true
         } else {
           gotHandledError = true
@@ -599,6 +610,7 @@ function historyToText(history) {
       } else if (event.type === 'error') {
         updateStreamingMessage(msgId, event.content, false, true)
         if (!event.silent) showErrorToast('Request failed')
+        if (isRateLimitedEvent(event)) interruptRequested.value = true
       } else if (event.type === 'history') {
         handleHistoryEvent(event.history)
       }

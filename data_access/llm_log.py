@@ -1,8 +1,8 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import (
-    Table, Column, Integer, String, DateTime, MetaData, insert
+    Table, Column, Integer, String, DateTime, MetaData, insert, select, func
 )
 from sqlalchemy.dialects.mysql import LONGTEXT
 
@@ -24,14 +24,68 @@ llm_log = Table(
     Column("reasoning_tokens", Integer, comment="reasoning token数"),
     Column("first_token_ms", Integer, comment="首字符响应延迟(ms)，非流式为NULL"),
     Column("duration_ms", Integer, comment="本次调用总耗时(ms)"),
-    Column("created_at", DateTime, comment="记录时间"),
+    Column("created_at", DateTime, index=True, comment="记录时间"),
 )
+
+# Index on created_at (auto name "ix_llm_log_created_at") so the sliding-window
+# token sum for the TPH limit does not full-scan this large LONGTEXT table.
+_CREATED_AT_INDEX = "ix_llm_log_created_at"
+
+# Sliding window length for the token-per-hour limit.
+TPH_WINDOW_MINUTES = 60
 
 
 def create_llm_log_table():
     if sys_engine is None:
         return
     metadata.create_all(sys_engine)
+    _ensure_created_at_index()
+
+
+def _ensure_created_at_index():
+    """Add the created_at index to an already-existing llm_log table.
+
+    ``metadata.create_all`` only creates the index on a fresh table; it does not
+    alter a table that already exists, so deploy the index explicitly. Idempotent.
+    """
+    import pymysql
+    url = sys_engine.url
+    try:
+        conn = pymysql.connect(
+            host=url.host, port=url.port, user=url.username,
+            password=url.password, database=url.database
+        )
+        cursor = conn.cursor()
+        cursor.execute(f"SHOW INDEX FROM llm_log WHERE Key_name = '{_CREATED_AT_INDEX}'")
+        if cursor.fetchone() is None:
+            cursor.execute(f"ALTER TABLE llm_log ADD INDEX {_CREATED_AT_INDEX} (created_at)")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[WARNING] Failed to ensure index on llm_log.created_at: {e}")
+
+
+def get_total_tokens_last_hour(window_minutes=TPH_WINDOW_MINUTES):
+    """Sum ``total_tokens`` over the trailing sliding window (default 60 min).
+
+    Used by the hourly token cap: the caller compares this against the configured
+    limit at API entry. Fail-open: returns 0 on any error (or when the system
+    database/llm_log is unavailable) so a metrics outage never blocks requests.
+    """
+    if sys_engine is None:
+        return 0
+    since = datetime.now() - timedelta(minutes=window_minutes)
+    try:
+        with sys_engine.connect() as conn:
+            total = conn.execute(
+                select(func.coalesce(func.sum(llm_log.c.total_tokens), 0)).where(
+                    llm_log.c.created_at >= since
+                )
+            ).scalar()
+        return int(total or 0)
+    except Exception as e:
+        print(f"查询LLM token用量失败: {e}")
+        return 0
 
 
 def sanitize_messages(messages):

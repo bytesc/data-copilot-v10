@@ -53,9 +53,36 @@ from data_access.observe_log import (
 )
 from utils.perf_log import perf_api, perf_context
 from data_access.report_log import create_report_log_table, get_generated_files
-from data_access.llm_log import create_llm_log_table
+from data_access.llm_log import create_llm_log_table, get_total_tokens_last_hour
 _ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
 _ENABLE_EDIT = config_data.get('enable_edit', True)
+_ENABLE_LLM_TPH_LIMIT = config_data.get('enable_llm_tph_limit', False)
+try:
+    _LLM_TPH_LIMIT = int(config_data.get('llm_tph_limit', 0) or 0)
+except (TypeError, ValueError):
+    _LLM_TPH_LIMIT = 0
+
+# Endpoints that call the LLM, and therefore count against the hourly token
+# budget. Only these are gated; every other API is unaffected. Prefixes are
+# matched so sub-paths (e.g. /api/generate-document/stream/unified/) are covered.
+_LLM_ENDPOINT_PREFIXES = (
+    "/api/think/stream/",
+    "/api/action/stream/",
+    "/api/act/stream/",
+    "/api/observe/stream/",
+    "/api/generate-and-execute/stream/",
+    "/api/plain-chat/stream/",
+    "/api/filter-db-fields/",
+    "/api/filter-functions/stream/",
+    "/api/generate-document/stream/",
+    "/api/generate-document/generate-yaml-outline/",
+    "/upload-txt/",
+)
+
+
+def _is_llm_endpoint(path):
+    return any(path.startswith(prefix) for prefix in _LLM_ENDPOINT_PREFIXES)
+
 
 def _require_edit_enabled():
     if not _ENABLE_EDIT:
@@ -265,6 +292,40 @@ async def limit_multipart_upload_size(request: Request, call_next):
                             f"size of {MAX_MULTIPART_BYTES // (1024 * 1024)} MB"
                         },
                     )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def enforce_llm_tph_limit(request: Request, call_next):
+    """Reject LLM endpoints once the trailing-hour token budget is exhausted.
+
+    The check runs ONCE per API request, before any work is done, against the
+    sum of ``llm_log.total_tokens`` over the last 60 minutes. Internal LLM calls
+    of the same request (multiple calls, retries) still count toward the hour
+    total but are never re-checked. Only endpoints that call the LLM are gated;
+    non-LLM endpoints, and all requests when the feature is off or
+    ``enable_llm_log`` is false, pass through untouched.
+    """
+    if (
+        _ENABLE_LLM_TPH_LIMIT
+        and _LLM_TPH_LIMIT > 0
+        and config_data.get("enable_llm_log", True)
+        and request.method == "POST"
+        and _is_llm_endpoint(request.url.path)
+    ):
+        used = await run_in_threadpool(get_total_tokens_last_hour)
+        if used >= _LLM_TPH_LIMIT:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": (
+                        "LLM hourly token limit reached "
+                        f"({used}/{_LLM_TPH_LIMIT} tokens in the last hour). "
+                        "Please try again later."
+                    ),
+                    "code": "llm_tph_limit",
+                },
+            )
     return await call_next(request)
 
 
