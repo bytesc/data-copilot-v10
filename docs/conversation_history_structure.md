@@ -752,11 +752,12 @@ images:
 | Action | 同上 | 同上 |
 | Observe | 同上 | 同上 |
 | Act explore_schema / explore_functions / explore_base_knowledge / explore_mcp | 同上 | 同上 |
-| Act select_images | 同上 | 同上 |
 | Act generate_and_execute | 同上 | 同上 |
 | 文档生成 / YAML 生成 | 同上（先裁剪） | 同上 |
 
 文档生成虽然使用完整 `conversation_history` 作为输入，但在拼接 prompt 前会先调用 `prepare_trimmed_context`，因此同样只使用裁剪后的上下文。
+
+> `select_images` 与用户交互类（`ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion`）不属于 LLM 阶段：它们不调用 LLM，因而不接收 `## Context` 或 `## Blackboard`（`agent/act.py` 的 `_act_select_images` / `_act_user_interaction` 只读取 `params` 并发出 SSE 事件）。
 
 ## 存储
 

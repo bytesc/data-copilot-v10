@@ -24,6 +24,8 @@ FLUSH PRIVILEGES;
 
 除直接改库外，系统自带知识管理接口：`/api/sys-knowledge/{base-knowledge|db-query-guide|code-guide|graph-code-guide|think-guide|doc-guide}/…` 与 `/api/sys-knowledge/brief-info/…`（增删改查，受 `enable_edit` 开关限制），前端管理页面位于 `/knowledge` 路由下，可直接在页面上维护这些配置。
 
+> 注：五种 Brief（DB_BRIEF / BASE_KNOWLEDGE_BRIEF / MCP_BRIEF / CUSTOM_FUNC_BRIEF，以及硬编码的 Function Brief）全部通过 `BRIEF_INFO` 同时注入 **think 与 action** 两个阶段（`agent/think.py`、`agent/action.py`）；下文各节列出的 `explore_*` act 提示词是**额外**注入位置。其中 BASE_KNOWLEDGE_BRIEF / CUSTOM_FUNC_BRIEF 注入各自 act 提示词时**不带** `Domain Knowledge Brief` / `Custom Function Brief` 标签——这两个标签只存在于 `BRIEF_INFO` 的渲染中（DB_BRIEF / MCP_BRIEF 的值自带 `DataBase Brief:` / `MCP Brief:` 标签，随注入位置始终显示）。
+
 ### 3.1 DB_BRIEF — 数据库概览
 
 | 来源 | 路径/表 |
@@ -31,7 +33,7 @@ FLUSH PRIVILEGES;
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/db_brief.md` |
 | 数据库表 | `brief_info` 中 `attr='db_brief'` 的行 |
 
-- 用于 `explore_schema` action（带 `DataBase Brief` 标签）和 think 阶段
+- 注入位置：think + action 阶段（经 `BRIEF_INFO`，值自带 `DataBase Brief:` 标签，随注入位置始终显示）+ `explore_schema` act 提示词
 
 ### 3.2 BASE_KNOWLEDGE_BRIEF — 基础业务知识摘要
 
@@ -40,7 +42,7 @@ FLUSH PRIVILEGES;
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/base_knowledge_brief.md` |
 | 数据库表 | `brief_info` 中 `attr='base_knowledge_brief'` 的行 |
 
-用于 think 阶段的 `### Domain Knowledge Brief` 区段和 `explore_base_knowledge` action。**仅摘要**，完整业务知识（`base_knowledge` 表）通过 `explore_base_knowledge` action 按需获取。
+注入位置：think + action 阶段（经 `BRIEF_INFO` 的 `### Domain Knowledge Brief` 区段，该标签只存在于 `BRIEF_INFO` 渲染中）+ `explore_base_knowledge` act 提示词（不带该标签）。**仅摘要**，完整业务知识（`base_knowledge` 表）通过 `explore_base_knowledge` action 按需获取。
 
 ### 3.3 DB_QUERY_GUIDE — SQL 查询指南
 
@@ -57,7 +59,7 @@ FLUSH PRIVILEGES;
 |---|---|
 | 代码硬编码 | `agent/tools/base_knowledge/get_base_knowledge.py` |
 
-用于 think 阶段的 `### Function Brief` 区段。内容为代码中写死的静态摘要（仅 Database 与 Visualization 两大类）。
+注入位置：think + action 阶段（经 `BRIEF_INFO` 的 `### Function Brief` 区段）。内容为代码中写死的静态摘要（仅 Database 与 Visualization 两大类）。
 
 ### 3.5 MCP_BRIEF — MCP 服务器摘要
 
@@ -66,7 +68,7 @@ FLUSH PRIVILEGES;
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/mcp_brief.md` |
 | 数据库表 | `brief_info` 中 `attr='mcp_brief'` 的行 |
 
-用于 think 阶段的 `### MCP Brief` 区段和 `explore_mcp` action。
+注入位置：think + action 阶段（经 `BRIEF_INFO`，值自带 `MCP Brief:` 标签，随注入位置始终显示）+ `explore_mcp` act 提示词。
 
 ### 3.6 CUSTOM_FUNC_BRIEF — 自定义函数摘要
 
@@ -75,7 +77,7 @@ FLUSH PRIVILEGES;
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/custom_func_brief.md` |
 | 数据库表 | `brief_info` 中 `attr='custom_func_brief'` 的行 |
 
-用于 think 阶段的 `### Custom Function Brief` 区段和 `explore_functions` action。描述自定义/额外注册的函数能力，与 Function Brief 互补。
+注入位置：think + action 阶段（经 `BRIEF_INFO` 的 `### Custom Function Brief` 区段，该标签只存在于 `BRIEF_INFO` 渲染中）+ `explore_functions` act 提示词（不带该标签）。描述自定义/额外注册的函数能力，与 Function Brief 互补。
 
 ### 3.7 BASE — 基础业务知识（完整）
 

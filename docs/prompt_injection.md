@@ -101,6 +101,8 @@ images:
 | `mcp_brief.md` | `_MCP_BRIEF_MD` |
 | `custom_func_brief.md` | `_CUSTOM_FUNC_BRIEF_MD` |
 
+> 注：上述 MD 文件为**可选的合并来源**，仓库默认不提供（`knowledge_docs/` 被 `.gitignore` 忽略，仅保留 `.gitkeep`），需自行创建；`_read_doc()` 对缺失/空文件返回空串，实际内容默认来自下节的系统库表（`brief_info` 等表内容与其合并后注入）。修改 MD 文件后需**重启应用**才能生效（缓存只在模块导入时读取一次）。详见 `docs/how_to_modify_db_and_knowledge.md` 与 `docs/how_to_write_brief.md`。
+
 其中 `target_knowledge.md` 缓存为 `_TARGET_MD` 并暴露为 `TARGET`，仅在 `config/config.yaml` 的 `enable_target_knowledge` 为 `true`（默认 `false`）时注入 Think、Observe、代码生成与文档生成。
 
 ### 2. 数据库表（实时查询，无需重启）

@@ -11,7 +11,7 @@ Think → Action → Act(generate_and_execute) → Code Generation → Code Exec
 - **Think / Action** 阶段：`agent/think.py` 与 `agent/action.py` 中虽有 `get_func_summary_for_agent()` 调用，但其结果当前并未注入 Think / Action 的 prompt（死变量）；LLM 实际看到的函数目录来自 `explore_functions` act 提示词中的 `get_func_catalog_markdown()`（`agent/act.py`），以及 `BRIEF_INFO` 中硬编码的 Function Brief（`agent/tools/base_knowledge/get_base_knowledge.py`）。
 - **Act 阶段**：`act.py` 将 `selected_fields` 传递给 `agent.py` 中的 `generate_and_execute_stream()`；选中的函数通过 blackboard 的 `functions.selected_functions` 区域传递，由 `get_cot_code_prompt()` 读取（`agent/agent.py`）。
 - **Code Generation 阶段**：`agent.py` 中的 `get_cot_code_prompt()` 将选中函数的完整 docstring 注入 LLM prompt，LLM 生成带 `def func():` 的 Python 代码。
-- **Code Execution 阶段**：`code_executor.py` 通过 `exec()` 执行生成的代码；`code_insert.py` 只注入**模块级** import（`IMPORTANT_MODULE` / `THIRD_MODULE`，见 `agent/agent.py`）。**工具函数本身不靠 import 注入**——执行命名空间已预绑定全部 `FUNCTION_DICT` 函数，生成代码直接调用函数名即可（见 [docs/code_execution_sandbox.md](code_execution_sandbox.md)）。
+- **Code Execution 阶段**：`code_executor.py` 默认把代码交给一次性沙箱子进程执行（`enable_code_sandbox=true`，真正的 `exec` 在 `agent/tools/copilot/utils/sandbox/runner.py` 的白名单命名空间中进行）；设为 `false` 时才回退到主进程内直接 `exec`（`_execute_in_process`）。两条路径下，`code_insert.py` 都只注入**模块级** import（`IMPORTANT_MODULE` / `THIRD_MODULE`，见 `agent/agent.py`）。**工具函数本身不靠 import 注入**——执行命名空间已预绑定全部 `FUNCTION_DICT` 函数，生成代码直接调用函数名即可（见 [docs/code_execution_sandbox.md](code_execution_sandbox.md)）。
 
 ## 步骤概览
 

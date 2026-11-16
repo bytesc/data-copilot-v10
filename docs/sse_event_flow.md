@@ -1,6 +1,6 @@
 # SSE 事件流
 
-大多数事件包含 `phase` 字段标识当前阶段，前端据此分发显示。**例外**：终态 `{type:"history"}` 事件没有 `phase` 字段（think/action/observe/act 均如此）；文档生成 `/api/generate-document/*` 的各流**不发出** `history` 事件，其完整历史随终态 `done` 的 `conversation_history` 字段下发（只有经 act 的 `generate_document` action 路径才会在末尾补发一条 `history`）；plain-chat `/api/plain-chat/stream/` 的 `chunk`/`done` 也没有 `phase`。
+大多数事件包含 `phase` 字段标识当前阶段，前端据此分发显示。**例外**：终态 `{type:"history"}` 事件没有 `phase` 字段（think/action/observe/act 均如此）；文档生成 `/api/generate-document/*` 的各流**不发出** `history` 事件——其中分步 `/api/generate-document/stream/` 与统一 `/api/generate-document/stream/unified/` 两流的终态 `done` 携带 `conversation_history` 字段下发完整历史，而 YAML 大纲 `/api/generate-document/generate-yaml-outline/`、按 YAML 逐节 `/api/generate-document/stream/from-yaml/` 与 `/api/generate-document/finalize/` 三流的终态 `done` **不带**该字段（只有经 act 的 `generate_document` action 路径才会在末尾补发一条 `history`）；plain-chat `/api/plain-chat/stream/` 的 `chunk`/`done` 也没有 `phase`。
 
 除 `chunk` 外，仅 Think/Action/Observe/Act（explore_* 与代码生成）这些主流程 LLM 流式阶段会发出 `reasoning_chunk` 事件，携带模型推理增量；文档生成（outline/part/unified/YAML outline/from-yaml）、plain-chat 与字段筛选等其余流式调用不发出 `reasoning_chunk`：
 
@@ -368,8 +368,11 @@
 
 > `code_gen_error` / `code_exe_error` chunk 与终端 `error` 事件都带一个机器可读的
 > `error_kind`，取值来自沙箱：`policy_violation` / `syntax_error` / `timeout` /
-> `resource_limit` / `no_func` / `runtime_error` / `environment_error` / `job_error` /
-> `config_error`，以及代码生成层的 `code_format_error`（未能解析出代码块）。
+> `resource_limit` / `runtime_error` / `environment_error` / `job_error` /
+> `config_error`；来自代码生成层：`code_format_error`（未能解析出代码块），以及代码块
+> 缺 `def func(` 时在执行前即拦下的 `no_func`（沙箱子进程在 `func` 不可调用时也有一处
+> 触发点）；另有兜底值 `execution_error`（`enable_code_sandbox=false` 走主进程执行、
+> 或异常未带 `kind` 时）。
 > 终端错误的事件 `content` 仍是稳定的 `generate_and_execute_stream_error`，真实原因放在
 > `error` 字段；它带 `sub_phase:"exec"`，客户端据此判定为“动作级失败”而**继续**下一步
 > （Observe 从 history 读到该 act 条目的 `error`/`error_kind`），而不是当成传输失败中止会话。
