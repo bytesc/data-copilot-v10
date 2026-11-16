@@ -151,11 +151,13 @@ def _iter_items(code):
 ```
 
 ```python
-# executor.py:123-156  最小沙箱配置：只有工具真正会读的三项，绝不含特权库
+# executor.py  最小沙箱配置：只含工具真正会读的键（只读库身份 + 两个 SQL 超时 + static_path + 模型清单），绝不含特权库
     data = {
-        "mysql_readonly": config_data.get("mysql_readonly") or "",
-        "static_path": config_data.get("static_path", ""),
-        "llm_models": config_data.get("llm_models") or [],
+        "mysql_readonly":     config_data.get("mysql_readonly") or "",
+        "sql_query_timeout":  config_data.get("sql_query_timeout", 0) or 0,
+        "sql_socket_timeout": config_data.get("sql_socket_timeout"),
+        "static_path":        config_data.get("static_path", ""),
+        "llm_models":         config_data.get("llm_models") or [],
     }
     path = os.path.join(workdir, "sandbox_config.yaml")
     ... yaml.safe_dump(data, ...)      # 写失败即中止（fail-closed），不回退特权 config.yaml
@@ -552,7 +554,7 @@ def _check_module(self, name, node):
 
 | 内容 | 来源 | 谁建 / 何时 |
 |---|---|---|
-| 有哪些模型 / 只读库 URL / static_path | `sandbox_config.yaml`（父进程每次渲染，经 `CODE_EXEC_CONFIG` 传子进程） | 子进程 import 时建 `MODEL_CONFIGS` / `read_engine` |
+| 有哪些模型 / 只读库 URL / static_path / SQL 超时（`sql_query_timeout`、`sql_socket_timeout`） | `sandbox_config.yaml`（父进程每次渲染，经 `CODE_EXEC_CONFIG` 传子进程） | 子进程 import 时建 `MODEL_CONFIGS` / `read_engine` |
 | 真正的 DB 连接 | 同上配置（`mysql_readonly`） | **首次调用时**惰性创建（只读库） |
 | LLM 调用 | 子进程不持有 key：`_get_client` 被换为代理，请求经协议回传父进程，父进程用磁盘 `key_file` 真调 | 代理在 `exec` 前装；调用时按需 RPC |
 | 本次"用哪个模型 / Depth / Style / 是否带图" | `job.json` 的 `llm_selection` | `exec` 前 `_apply_llm_selection` 写回 contextvar |

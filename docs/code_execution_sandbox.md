@@ -66,16 +66,19 @@ LLM 生成代码 → 提取 ```python 块
 
 ```python
 data = {
-    "mysql_readonly": config_data.get("mysql_readonly") or "",  # 唯一的数据库身份（只读）
-    "static_path":    config_data.get("static_path", ""),       # 图片/CSV 链接前缀
-    "llm_models":     config_data.get("llm_models") or [],      # explain_data / predict_hdb_price 用
+    "mysql_readonly":     config_data.get("mysql_readonly") or "",       # 唯一的数据库身份（只读）
+    "sql_query_timeout":  config_data.get("sql_query_timeout", 0) or 0,  # 子进程只读 engine 的单语句超时（max_execution_time）
+    "sql_socket_timeout": config_data.get("sql_socket_timeout"),         # 子进程只读 engine 的 socket 读写超时（未设则子进程取代码默认）
+    "static_path":        config_data.get("static_path", ""),            # 图片/CSV 链接前缀
+    "llm_models":         config_data.get("llm_models") or [],           # explain_data / predict_hdb_price 用
 }
 # 写入 workdir/sandbox_config.yaml，路径经 CODE_EXEC_CONFIG 传给子进程
 ```
 
-这三项对应子进程导入链里真正被读取的配置：
+这几项对应子进程导入链里真正被读取的配置：
 
 - `mysql_readonly`：`tools_def` 用它建 `read_engine`；沙箱内被白名单工具使用的数据库访问只有只读这一条。
+- `sql_query_timeout` / `sql_socket_timeout`：子进程内 `tools_def` 建只读 `read_engine` 时读取，分别设 MySQL 单语句超时（`max_execution_time`）与 pymysql socket 读写超时；取值与主进程一致（`sql_socket_timeout` 未设时子进程取其代码默认）。
 - `static_path`：`tools_def` / `custom_tools_def` 拼图片、CSV 的 URL。
 - `llm_models`：`explain_data`、`predict_hdb_price` 在子进程里构造请求参数用（**不含密钥**：子进程不读 key 文件，见下）。
 
@@ -257,5 +260,5 @@ icacls config\config.yaml /deny "%USERNAME%:(W,M)"
 4. `print(engine)` → `NameError`。
 5. 并发多个画图请求互不串扰、无字体异常。
 6. 三平台各跑一遍：强杀后无孤儿进程。
-7. 生成的沙箱配置只含 `mysql_readonly / static_path / llm_models`；子进程内 `engine`、`sys_engine` 均为 None。
+7. 生成的沙箱配置只含 `mysql_readonly / sql_query_timeout / sql_socket_timeout / static_path / llm_models`；子进程内 `engine`、`sys_engine` 均为 None。
 8. `perf_log.csv` 的 `code_exec_time` 含沙箱冷启动开销（约 1s）。
