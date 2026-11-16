@@ -34,7 +34,7 @@
 
 **输入**
 ```json
-{"question": "...", "session_id": "...", "conversation_history": [...], "cycle_index": 0}
+{"question": "...", "session_id": "...", "conversation_history": [...]}
 ```
 
 **输出（单 action）**
@@ -514,7 +514,7 @@ keyword 为可选提示词，传递给 LLM 作为关注重点的提示。连接�
 
 **输入**
 ```json
-{"question": "...", "session_id": "...", "conversation_history": [...], "cycle_index": 0}
+{"question": "...", "session_id": "...", "conversation_history": [...]}
 ```
 
 **输出**

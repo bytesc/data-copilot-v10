@@ -301,8 +301,7 @@ data: {"type":"done","content":""}
 {
   "question": "分析上个月销售趋势",
   "session_id": "xxx",
-  "conversation_history": [...],
-  "cycle_index": 0
+  "conversation_history": [...]
 }
 ```
 
@@ -334,8 +333,7 @@ data: {"type":"done","content":""}
 {
   "question": "分析上个月销售趋势",
   "session_id": "xxx",
-  "conversation_history": [...],
-  "cycle_index": 1
+  "conversation_history": [...]
 }
 ```
 

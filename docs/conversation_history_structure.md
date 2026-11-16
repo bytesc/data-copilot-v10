@@ -37,7 +37,7 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
 
 - 每个 `action_decision` 只携带当前 action 对应的字段，不会同时出现所有可选字段。
 - 同一决策使用多动作时，用 `{"actions":[{...}, ...]}` 代替 `action`。
-- 前端交互类动作在实时流程中通常只出现在 `action_decision.content`（网页前端本地渲染，不调用 `/api/act/stream/`）；API 调用方直接对这类动作请求 `/api/act/stream/` 时，`agent/act.py` 也会写出一条独立的 `act` 条目，但**不带** `needs_user_input`/`paused`/`completed` 等状态标记（这些标记只在由日志重建时补出，见「纯前端执行」）。
+- 前端交互类动作在实时流程中通常只出现在 `action_decision.content`（网页前端本地渲染，不调用 `/api/act/stream/`）；API 调用方直接对这类动作请求 `/api/act/stream/` 时，`agent/act.py` 也会写出一条独立的 `act` 条目，但**不带** `needs_user_input`/`paused`/`completed` 等状态标记（这些标记只出现在该 action 的 SSE `done` 事件的 `result` 里，不写入历史；历史重建也不会补出，见「纯前端执行」）。
 
 ```json
 [
@@ -191,30 +191,26 @@ blackboard 不进入 `trimmed_context`，而是由 `utils/blackboard.py` 单独�
     "role": "assistant",
     "type": "act",
     "action": "ask_question",
-    "text": "向用户提问",
-    "needs_user_input": true
+    "text": "向用户提问"
   },
   {
     "role": "assistant",
     "type": "act",
     "action": "ask_choice",
     "text": "请选择",
-    "choices": ["选项A", "选项B"],
-    "needs_user_input": true
+    "choices": ["选项A", "选项B"]
   },
   {
     "role": "assistant",
     "type": "act",
     "action": "summary_and_pause",
-    "text": "进度摘要",
-    "paused": true
+    "text": "进度摘要"
   },
   {
     "role": "assistant",
     "type": "act",
     "action": "attempt_completion",
-    "text": "最终结果",
-    "completed": true
+    "text": "最终结果"
   },
   {
     "role": "assistant",
@@ -595,16 +591,13 @@ LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explo
 {"role":"assistant","type":"act","action":"ask_choice","text":"...","choices":["A","B"]}
 ```
 
-下表状态标记只在**从日志重建历史**（`data_access/observe_log.py`）时补充；网页前端本地渲染这类动作通常不调用 `/api/act/stream/`，而 API 调用方直接调用 `/api/act/stream/` 时 `agent/act.py` 也会写出一条独立 `act` 条目，但**不带**这些状态标记：
+网页前端本地渲染这类动作通常不调用 `/api/act/stream/`；API 调用方直接调用 `/api/act/stream/` 时 `agent/act.py` 也会写出一条独立 `act` 条目，但该条目只含 `action` 与 `text`（`ask_choice` 另含 `choices`），**不带**任何交互状态标记（如上面的示例）。
 
-| 标记 | 适用 action |
-| --- | --- |
-| `needs_user_input: true` | ask_question / ask_choice |
-| `choices: []` | ask_choice |
-| `paused: true` | summary_and_pause |
-| `completed: true` | attempt_completion |
+交互状态标记只存在于该 action 的 SSE `done` 事件的 `result` 里（`needs_user_input` / `paused` / `completed`），用于驱动前端交互循环，**不写入历史条目**；标记与 action 的对应关系见 [`sse_event_flow.md`](sse_event_flow.md) 的「用户交互类」小节。
 
-> 实时流程中，前端执行类动作通常只出现在 `action_decision.content` 里（带 `action` 与 `text`），不一定单独产生 `type:"act"` 条目；由日志重建时才会补成带上述状态标记的 `act` 条目。重建仅针对决策里带非空 `text` 的前端交互动作——重建侧的 `FRONTEND_ACTIONS`（`data_access/observe_log.py`）除 ask_question / ask_choice / summary_and_pause / attempt_completion 外还包含 `generate_document`；`generate_document` 决策通常携带 `title` 而非 `text`，因此一般不会为它补出 `act` 条目，但一旦其决策带非空 `text`，重建同样会补出并置 `completed: true`（所以 `completed: true` 并非只由 attempt_completion 触发，只是实践中几乎总是来自 attempt_completion）。
+> 实时流程中，前端交互类动作通常只出现在 `action_decision.content` 里（带 `action` 与 `text`），不一定单独产生 `type:"act"` 条目；**从日志重建历史时不会为这类动作补出 `act` 条目，也不会补任何状态标记**。`data_access/observe_log.py` 的 `reconstruct_conversation_history()` 在 `conversation_history` 非空时直接返回它；仅当其为空时，`_rebuild_from_operations()` 才会从 `session_operation_log` 恢复（best-effort）一条 `{"role":"user","type":"question"}` 记录，以及 `api_endpoint == "/api/generate-document/stream/"` 的操作对应的 `{"role":"assistant","type":"document"}` 条目——其余阶段（含前端交互动作）的上下文不再从操作日志恢复。
+>
+> `FRONTEND_ACTIONS` 定义在 `utils/context_trim.py` 与 `utils/front_utils.py`，只含 `ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion`（**不含** `generate_document`），用途是历史裁剪分类与 `history_to_text` 渲染，与历史重建无关。
 
 ## observe
 

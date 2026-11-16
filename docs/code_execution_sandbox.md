@@ -202,8 +202,8 @@ network:
 同一请求的启动与拒绝用 `run_id` 关联。示例：
 
 ```json
-{"time": "2026-11-14 09:24:48.123", "event": "start", "session_id": "s-1a2b", "run_id": "9f3c1d2e", "code_chars": 812}
-{"time": "2026-11-14 09:24:49.007", "event": "deny", "kind": "network_access", "detail": "sandbox: network access is not allowed (DNS 'example.com')", "session_id": "s-1a2b", "run_id": "9f3c1d2e"}
+{"time": "2026-11-14 09:24:48.123", "event": "start", "session_id": "s-1a2b", "run_id": "9f3c1d2e4a5b", "code_chars": 812}
+{"time": "2026-11-14 09:24:49.007", "event": "deny", "kind": "network_access", "detail": "sandbox: network access is not allowed (DNS 'example.com')", "session_id": "s-1a2b", "run_id": "9f3c1d2e4a5b"}
 ```
 
 关键点：拒绝事件由**子进程**经协议通道（`{"t":"denied", ...}`）回传，由**父进程**写盘，因此
