@@ -1,4 +1,3 @@
-from utils.get_config import config_data
 from utils.perf_log import record_first_chunk, record_llm_complete, record_llm_input
 from agent.utils.llm_access.LLM import (
     get_model_config, get_extra_body, get_current_use_images, get_current_session_id,
@@ -6,30 +5,7 @@ from agent.utils.llm_access.LLM import (
 from agent.utils.llm_access.image_input import build_user_content
 from data_access.llm_log import record_llm_call, messages_to_json
 
-from datetime import datetime
-import os
-import random
-import string
 import time
-
-llmlog_dir = "./llmlog"
-
-
-def _random_str(length=8):
-    return ''.join(random.choices(string.ascii_lowercase, k=length))
-
-
-def _write_llmlog(question, answer):
-    os.makedirs(llmlog_dir, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{timestamp}-{_random_str()}.txt"
-    filepath = os.path.join(llmlog_dir, filename)
-    content = f"INPUT:\n{question}\n\nOUTPUT:\n{answer}"
-    try:
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
-    except Exception as e:
-        print(f"Error writing llmlog: {e}")
 
 
 def _build_messages(question, model_cfg, images=None):
@@ -90,8 +66,6 @@ def call_llm(question, llm, images=None):
         first_token_ms=None,
         duration_ms=duration_ms,
     )
-    if config_data.get("enable_llmlog", False):
-        _write_llmlog(question, answer.content)
     return answer
 
 
@@ -151,5 +125,3 @@ def _call_llm_stream_events(question, llm, images=None):
         first_token_ms=first_token_ms,
         duration_ms=duration_ms,
     )
-    if config_data.get("enable_llmlog", False):
-        _write_llmlog(question, full_content)

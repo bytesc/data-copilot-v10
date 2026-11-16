@@ -13,7 +13,6 @@ front_img
 doc_workspace
 exports
 cache
-llmlog
 agent_log.txt
 perf_log.csv
 .kilo

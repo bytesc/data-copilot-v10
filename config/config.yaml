@@ -121,8 +121,6 @@ enable_edit: true
 # guard — only enable this on a fully trusted, single-tenant deployment.
 enable_code_sandbox: true
 
-enable_llmlog: false
-
 # enable_llm_log - record every LLM call into the llm_log table in the system
 # database (time, session_id, input JSON with image base64 stripped, output,
 # token usage, first-token latency, total duration). Set false to disable.

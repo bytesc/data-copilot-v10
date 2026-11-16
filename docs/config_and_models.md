@@ -91,7 +91,6 @@ enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
 enable_edit: true             # 数据/知识编辑（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
 enable_code_sandbox: true     # LLM 生成代码是否走沙箱子进程（true，推荐）；false=主进程直接 exec（旧行为，无隔离）
-enable_llmlog: false           # 记录 LLM 调用日志到 llmlog/*.txt
 enable_perf_log: true          # 写接口性能指标到 perf_log.csv
 enable_llm_log: true           # 记录每次 LLM 调用到系统库 llm_log 表（时间、session_id、去除图片base64的输入JSON、输出、token 统计、首字符延迟、总耗时）
 enable_sandbox_log: true       # 写沙箱审计日志到 sandbox_audit.log（每次沙箱启动/每次拒绝，含时间戳与 session_id）
