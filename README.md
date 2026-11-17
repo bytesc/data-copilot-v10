@@ -181,6 +181,7 @@ enable_base_knowledge: true   # 基础知识库检索
 enable_target_knowledge: false # 目标文档模板知识（target_knowledge.md）注入 Think/Observe/代码生成等提示词
 enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
+enable_web_access_log: true   # 记录 web_search / fetch_webpage 调用到系统库 web_access_log 表（session_id、关键词/URL、成功与否、耗时、结果 JSON）
 enable_edit: true             # 数据/知识管理页（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
 max_steps: 999                # 前端 Agent 循环步数上限（0 表示不限制；由前端按本值控制，后端仅返回该配置）
 enable_code_sandbox: true     # LLM 生成代码走沙箱子进程（推荐）；false=主进程直接 exec（旧行为，无隔离）

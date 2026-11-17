@@ -105,10 +105,14 @@ llm_models:
 # https://api.openai.com/v1
 
 # Feature toggles - set false to disable the corresponding capability
-enable_mcp: true
+enable_mcp: false
 enable_base_knowledge: true
 enable_web_search: true
 enable_fetch_url: true
+
+# enable_web_access_log - record web_search / fetch_webpage calls (session id,
+# query/urls, success, duration, result JSON) into the web_access_log table.
+enable_web_access_log: true
 
 enable_target_knowledge: false
 

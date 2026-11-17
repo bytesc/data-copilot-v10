@@ -89,6 +89,7 @@ enable_base_knowledge: true   # 基础知识库检索
 enable_target_knowledge: false # 目标文档模板知识（target_knowledge.md）注入 Think/Observe/代码生成等提示词
 enable_web_search: true       # 联网搜索
 enable_fetch_url: true        # 网页内容抓取
+enable_web_access_log: true    # 记录 web_search / fetch_webpage 调用到系统库 web_access_log 表（session_id、关键词/URL、成功与否、耗时、结果 JSON）
 enable_edit: true             # 数据/知识编辑（设为 false 时前端隐藏 Data、Knowledge 页面，后端对应接口返回 403）
 max_steps: 999                # 前端 Agent 循环步数上限（0 表示不限制；由前端按本值控制，后端仅返回该配置）
 enable_code_sandbox: true     # LLM 生成代码是否走沙箱子进程（true，推荐）；false=主进程直接 exec（旧行为，无隔离）
@@ -460,6 +461,23 @@ reasoning_tokens  INT           -- reasoning token 数（如有）
 first_token_ms    INT           -- 首字符响应延迟(ms)；非流式调用为 NULL
 duration_ms       INT           -- 本次调用总耗时(ms)
 created_at        DATETIME      -- 记录时间
+```
+
+### web_access_log — Web 搜索/抓取日志
+
+每次 `web_search` / `fetch_webpage` action 调用一行，由 `data_access/web_access_log.py` 写入（开关 `enable_web_access_log`，默认开）。记录点在 `agent/act.py` 的 `_act_web_search` / `_act_fetch_webpage`，耗时用 `time.perf_counter()` 测量，`result` 为该次工具调用的**原始 JSON 字符串**。写入为 best-effort，异常只打印、不影响工具返回。
+
+```sql
+id           INT AUTO_INCREMENT PRIMARY KEY
+session_id   VARCHAR(255)  -- 会话ID（可能为空）
+access_type  VARCHAR(50)   -- 行为类型：web_search / fetch_webpage
+query        LONGTEXT      -- 搜索关键词（web_search）
+urls         LONGTEXT      -- 抓取的URL列表(JSON数组，fetch_webpage)
+success      TINYINT(1)    -- 是否成功；fetch 全失败或顶层 error 记为 0，部分失败写 error 摘要
+error        VARCHAR(1024) -- 失败原因
+duration_ms  INT           -- 本次访问耗时(ms)
+result       LONGTEXT      -- 工具返回的原始结果(JSON字符串)
+created_at   DATETIME      -- 记录时间
 ```
 
 ### 系统库知识表

@@ -54,6 +54,7 @@ from data_access.observe_log import (
 from utils.perf_log import perf_api, perf_context
 from data_access.report_log import create_report_log_table, get_generated_files
 from data_access.llm_log import create_llm_log_table, get_total_tokens_last_hour
+from data_access.web_access_log import create_web_access_log_table
 _ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
 _ENABLE_EDIT = config_data.get('enable_edit', True)
 _ENABLE_LLM_TPH_LIMIT = config_data.get('enable_llm_tph_limit', False)
@@ -134,6 +135,7 @@ create_session_log_table()
 create_observe_log_tables()
 create_report_log_table()
 create_llm_log_table()
+create_web_access_log_table()
 create_db_query_guide_table()
 create_brief_info_table()
 init_brief_info()

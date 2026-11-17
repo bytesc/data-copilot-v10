@@ -1,4 +1,5 @@
 import json
+import time
 import traceback
 from typing import List, Optional, Dict, Any
 
@@ -17,6 +18,7 @@ from agent.tools.get_function_info import FUNCTION_DICT
 from agent.tools.web_search.web_search import search_web, fetch_webpages
 from agent.tools.mcp_client import load_mcp_servers, get_mcp_server, MCPClient, MCPError
 from data_access.session_log import record_session_operation
+from data_access.web_access_log import record_web_access
 from utils.front_utils import history_to_text
 from utils.context_trim import prepare_trimmed_context, save_session_step, stream_with_context_retry, cap_text
 from utils.blackboard import (
@@ -720,11 +722,24 @@ def _act_web_search(full_question: str, session_id: str, params: dict, request_j
     except (ValueError, TypeError):
         max_results = 10
 
+    search_start = time.perf_counter()
     raw_result = search_web(query, max_results=max_results)
+    duration_ms = int((time.perf_counter() - search_start) * 1000)
     try:
         result_data = json.loads(raw_result)
     except json.JSONDecodeError:
         result_data = {"error": "Failed to parse search results", "raw": raw_result}
+
+    search_error = result_data.get("error")
+    record_web_access(
+        session_id=session_id,
+        access_type="web_search",
+        query=query,
+        success=not search_error,
+        error=search_error or "",
+        duration_ms=duration_ms,
+        result=raw_result,
+    )
 
     if "error" in result_data:
         error_msg = result_data.get("error", "unknown error")
@@ -770,12 +785,40 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'msg', 'content': f'Fetching {len(urls)} page(s) in parallel...'}, ensure_ascii=False)}\n\n"
 
+    fetch_start = time.perf_counter()
     raw = fetch_webpages(urls, max_length=max_length)
+    duration_ms = int((time.perf_counter() - fetch_start) * 1000)
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
         data = {"results": []}
     pages = data.get("results") or []
+
+    top_error = data.get("error")
+    failed_pages = [p for p in pages if p.get("error")]
+    if top_error:
+        fetch_success = False
+        fetch_error = top_error
+    elif pages and len(failed_pages) == len(pages):
+        fetch_success = False
+        fetch_error = f"All {len(pages)} page(s) failed: " + "; ".join(
+            f"{p.get('url', '')}: {p.get('error')}" for p in failed_pages[:3]
+        )
+    else:
+        fetch_success = True
+        fetch_error = "; ".join(
+            f"{p.get('url', '')}: {p.get('error')}" for p in failed_pages
+        )
+
+    record_web_access(
+        session_id=session_id,
+        access_type="fetch_webpage",
+        urls=urls,
+        success=fetch_success,
+        error=fetch_error,
+        duration_ms=duration_ms,
+        result=raw,
+    )
 
     sections = []
     for p in pages:

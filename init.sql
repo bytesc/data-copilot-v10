@@ -58,6 +58,22 @@ CREATE TABLE IF NOT EXISTS `llm_log` (
   INDEX `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='LLM调用日志表';
 
+CREATE TABLE IF NOT EXISTS `web_access_log` (
+  `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `session_id` VARCHAR(255) COMMENT '会话ID（可能为空）',
+  `access_type` VARCHAR(50) COMMENT '行为类型：web_search / fetch_webpage',
+  `query` LONGTEXT COMMENT '搜索关键词（web_search）',
+  `urls` LONGTEXT COMMENT '抓取的URL列表(JSON数组，fetch_webpage)',
+  `success` TINYINT(1) COMMENT '是否成功',
+  `error` VARCHAR(1024) COMMENT '失败原因',
+  `duration_ms` INT COMMENT '本次访问耗时(ms)',
+  `result` LONGTEXT COMMENT '返回结果(JSON字符串)',
+  `created_at` DATETIME COMMENT '记录时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_session_id` (`session_id`),
+  INDEX `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Web搜索/抓取日志表';
+
 CREATE TABLE IF NOT EXISTS `base_knowledge` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT '主键',
   `key` TEXT NOT NULL COMMENT '基础知识键',
