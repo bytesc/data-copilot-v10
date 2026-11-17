@@ -17,10 +17,6 @@ export const configState = reactive({
 })
 
 const STORAGE_KEY = 'data-copilot-llm-config'
-const LEGACY_SELECTION_KEY = 'data-copilot-llm-selection'
-const LEGACY_MODEL_KEY = 'data-copilot-selected-model'
-const LEGACY_EFFORT_PREFIX = 'data-copilot-reasoning-effort:'
-const LEGACY_STYLE_PREFIX = 'data-copilot-style:'
 
 function storageGet(key) {
   try {
@@ -67,26 +63,6 @@ function normalizeSelection(selection) {
   }
 }
 
-function readLegacySelection() {
-  try {
-    const raw = storageGet(LEGACY_SELECTION_KEY)
-    if (raw) {
-      const saved = normalizeSelection(JSON.parse(raw))
-      if (saved) return saved
-    }
-  } catch (_) {
-    /* ignore */
-  }
-
-  const model = storageGet(LEGACY_MODEL_KEY) || ''
-  if (!model) return null
-  return {
-    model,
-    reasoning_effort: storageGet(`${LEGACY_EFFORT_PREFIX}${model}`) ?? '',
-    style: storageGet(`${LEGACY_STYLE_PREFIX}${model}`) ?? '',
-  }
-}
-
 function readStored() {
   try {
     const raw = storageGet(STORAGE_KEY)
@@ -102,7 +78,7 @@ function readStored() {
   } catch (_) {
     /* ignore */
   }
-  return { models: [], selected: readLegacySelection() }
+  return { models: [], selected: null }
 }
 
 function findModel(models, modelId) {
