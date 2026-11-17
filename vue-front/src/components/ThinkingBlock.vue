@@ -25,8 +25,6 @@ function renderMd(text) {
   color: var(--text-muted);
   font-style: italic;
   font-size: 13px;
-  max-height: 300px;
-  overflow-y: auto;
 }
 .thinking-summary-label {
   color: var(--text-muted);

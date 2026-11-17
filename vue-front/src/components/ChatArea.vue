@@ -1,5 +1,22 @@
 <template>
   <div class="chat-container">
+    <nav v-if="userNavItems.length" class="user-nav" aria-label="User interactions">
+      <button
+        v-for="item in userNavItems"
+        :key="item.id"
+        type="button"
+        class="user-nav-bar"
+        :class="{ active: activeNavId === item.id }"
+        @click="scrollToMessage(item.id)"
+        @mouseenter="activeNavId = item.id"
+        @mouseleave="activeNavId = null"
+        @focus="activeNavId = item.id"
+        @blur="activeNavId = null"
+      >
+        <span v-if="activeNavId === item.id" class="user-nav-preview">{{ item.preview }}</span>
+      </button>
+    </nav>
+
     <div class="messages-area" ref="messagesContainer">
       <div v-if="messages.length === 0 && !isRunning" class="empty-state">
         <div class="empty-icon">💬</div>
@@ -10,6 +27,7 @@
       <MessageItem
         v-for="msg in messages"
         :key="msg.id"
+        :data-msg-id="msg.id"
         :message="msg"
         :server-url="serverUrl"
       />
@@ -224,6 +242,28 @@ const pausedInput = ref('')
 const messagesContainer = ref(null)
 const userInputRef = ref(null)
 const imageInputRef = ref(null)
+const activeNavId = ref(null)
+
+const userNavItems = computed(() =>
+  messages.value
+    .filter(m => m.type === 'user')
+    .map(m => ({ id: m.id, preview: navPreview(m) }))
+)
+
+function navPreview(msg) {
+  const raw = String(msg.content || '').replace(/\s+/g, ' ').trim()
+  const hasImages = Array.isArray(msg.uploaded) && msg.uploaded.length > 0
+  const base = raw || (hasImages ? 'Uploaded images' : 'User input')
+  const text = base.length > 160 ? base.slice(0, 160) + '…' : base
+  return hasImages ? `🖼 ${text}` : text
+}
+
+function scrollToMessage(id) {
+  const container = messagesContainer.value
+  if (!container) return
+  const target = container.querySelector(`[data-msg-id="${id}"]`)
+  target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 const useImages = computed(() => configState.use_images)
 const supportsImages = computed(() => {

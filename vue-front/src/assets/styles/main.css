@@ -287,6 +287,7 @@ html, body {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 .messages-area {
@@ -296,6 +297,62 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.user-nav {
+  position: absolute;
+  top: 64px;
+  bottom: 20px;
+  left: 6px;
+  width: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  z-index: 6;
+}
+
+.user-nav-bar {
+  position: relative;
+  flex: 0 0 auto;
+  width: 8px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: var(--accent-red);
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.user-nav-bar:hover,
+.user-nav-bar.active {
+  opacity: 1;
+  transform: scaleX(1.4);
+}
+
+.user-nav-preview {
+  position: absolute;
+  top: 50%;
+  left: 18px;
+  transform: translateY(-50%);
+  max-width: 320px;
+  width: max-content;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  word-break: break-word;
+  pointer-events: none;
+  z-index: 20;
 }
 
 .empty-state {
@@ -413,6 +470,10 @@ html, body {
 .message-content :deep(a:hover) {
   text-decoration: underline;
 }
+.message-content img {
+  max-width: 100%;
+  height: auto;
+}
 
 .msg-collapse {
   margin: 4px 0;
@@ -435,8 +496,6 @@ html, body {
   padding: 8px 0 8px 8px;
   border-left: 2px solid var(--border-color);
   margin-left: 4px;
-  max-height: 300px;
-  overflow-y: auto;
   word-wrap: break-word;
   overflow-wrap: break-word;
 }

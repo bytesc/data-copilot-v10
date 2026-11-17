@@ -460,11 +460,14 @@ function subPhaseLabel(name) {
 .image-item {
   display: block;
   max-width: 240px;
+  min-width: 0;
   flex: 1 1 auto;
 }
 .image-item img {
   display: block;
   width: 100%;
+  max-width: 100%;
+  height: auto;
   border-radius: calc(var(--radius) - 2px);
   border: 1px solid var(--border-color);
   background: var(--bg-primary, rgba(0, 0, 0, 0.15));
