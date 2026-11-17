@@ -426,7 +426,6 @@ id                   INT AUTO_INCREMENT PRIMARY KEY
 session_id           VARCHAR(255)
 question             LONGTEXT         -- 用户初始问题
 status               VARCHAR(50)      -- 会话状态
-total_tokens         INT              -- 总 token 消耗
 conversation_history LONGTEXT         -- 完整历史（JSON 数组，含 blackboard）
 trimmed_context      LONGTEXT         -- 裁剪后的普通上下文（JSON 数组，不含 blackboard）
 deleted              TINYINT          -- 是否已软删除（1=已删除,0=未删除）；History 页面可恢复

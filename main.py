@@ -475,9 +475,7 @@ def get_sessions(request: Request, limit: int = 50, include_deleted: bool = Fals
     for s in sessions:
         sid = s.get("session_id")
         s["generated_file_count"] = counts.get(sid, 0)
-        # Real LLM usage from llm_log; keep the legacy observe-session estimate
-        # (think prompt character length) separately for reference.
-        s["observe_total_tokens"] = s.get("total_tokens", 0) or 0
+        # Real LLM usage aggregated from llm_log.
         usage = token_totals.get(sid) or {}
         s["prompt_tokens"] = usage.get("prompt_tokens", 0)
         s["completion_tokens"] = usage.get("completion_tokens", 0)

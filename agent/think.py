@@ -154,7 +154,7 @@ def _event_stream_think_impl(
             yield f"data: {json.dumps({'phase': 'think', 'type': 'done', 'content': raw, 'plan_result': plan_result}, ensure_ascii=False)}\n\n"
 
             record_session_operation(session_id, "/api/think/stream/", request_json, ans=raw, result_type="success", prompt_length=prompt_length)
-            log_observe_session(session_id, status="think_done", total_tokens=prompt_length)
+            log_observe_session(session_id, status="think_done")
             history = save_session_step(session_id, conversation_history, [{"role": "assistant", "type": "think", "content": parse_json_raw(raw)}])
             if history:
                 yield f"data: {json.dumps({'type': 'history', 'history': history}, ensure_ascii=False)}\n\n"

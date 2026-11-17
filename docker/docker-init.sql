@@ -40,7 +40,6 @@ CREATE TABLE IF NOT EXISTS `observe_session_log` (
   `session_id` VARCHAR(255) NOT NULL COMMENT '会话ID',
   `question` LONGTEXT COMMENT '用户问题',
   `status` VARCHAR(50) COMMENT '会话状态',
-  `total_tokens` INT COMMENT '总token数',
   `conversation_history` LONGTEXT COMMENT '完整对话上下文(JSON数组)',
   `trimmed_context` LONGTEXT COMMENT '送给LLM的裁剪后上下文(JSON数组)',
   `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '是否已删除(1=已删除,0=未删除)',

@@ -228,7 +228,6 @@ Base URL: `http://<host>:8008`
   "session_id": "xxx",
   "question": "查询上个月销售额",
   "status": "active",
-  "total_tokens": 12000,
   "created_at": "2026-01-01 10:00:00",
   "updated_at": "2026-01-01 10:05:00",
   "conversation_history": [...]

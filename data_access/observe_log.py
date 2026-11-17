@@ -3,7 +3,7 @@ import threading
 from datetime import datetime
 from sqlalchemy import (
     Table, Column, Integer, String, DateTime, MetaData,
-    insert, select, update, desc, func, or_
+    insert, select, update, desc, or_
 )
 from sqlalchemy.dialects.mysql import LONGTEXT, TINYINT
 
@@ -19,7 +19,6 @@ observe_session_log = Table(
     Column("session_id", String(255), nullable=False, comment="会话ID"),
     Column("question", LONGTEXT, comment="用户问题"),
     Column("status", String(50), comment="会话状态"),
-    Column("total_tokens", Integer, comment="总token数"),
     Column("conversation_history", LONGTEXT, comment="完整对话上下文(JSON数组)"),
     Column("trimmed_context", LONGTEXT, comment="送给LLM的裁剪后上下文(JSON数组)"),
     Column("deleted", TINYINT, default=0, comment="是否已删除(1=已删除,0=未删除)"),
@@ -30,18 +29,19 @@ observe_session_log = Table(
 
 # Serializes the check-then-create write of a session row so concurrent phase
 # logs (think/action/act/observe) cannot both INSERT and create a duplicate
-# session row, and so the per-session token aggregate is read and written from
-# a consistent view. Logging is low volume, so a single process-wide lock is
-# enough and avoids per-session bookkeeping.
+# session row. Logging is low volume, so a single process-wide lock is enough
+# and avoids per-session bookkeeping.
 _session_lock = threading.RLock()
 
 
 def create_observe_log_tables():
     metadata.create_all(sys_engine)
     _ensure_column_exists(sys_engine, "observe_session_log", "question", "LONGTEXT COMMENT 'question'")
-    _ensure_column_exists(sys_engine, "observe_session_log", "conversation_history", "LONGTEXT COMMENT 'conversation history' AFTER total_tokens")
+    _ensure_column_exists(sys_engine, "observe_session_log", "conversation_history", "LONGTEXT COMMENT 'conversation history' AFTER status")
     _ensure_column_exists(sys_engine, "observe_session_log", "trimmed_context", "LONGTEXT COMMENT 'trimmed context for LLM' AFTER conversation_history")
     _ensure_column_exists(sys_engine, "observe_session_log", "deleted", "TINYINT NOT NULL DEFAULT 0 COMMENT 'deleted flag' AFTER trimmed_context")
+    # Drop the legacy character-length token estimate; real usage lives in llm_log.
+    _drop_column_if_exists(sys_engine, "observe_session_log", "total_tokens")
 
 
 def _ensure_column_exists(engine, table_name, column_name, column_def):
@@ -71,13 +71,30 @@ def _ensure_column_exists(engine, table_name, column_name, column_def):
         )
 
 
-def log_observe_session(session_id, question="", status="active", total_tokens=0):
+def _drop_column_if_exists(engine, table_name, column_name):
+    import pymysql
+    url = engine.url
+    try:
+        conn = pymysql.connect(
+            host=url.host, port=url.port, user=url.username,
+            password=url.password, database=url.database
+        )
+        cursor = conn.cursor()
+        cursor.execute(f"SHOW COLUMNS FROM {table_name} LIKE '{column_name}'")
+        if cursor.fetchone() is not None:
+            cursor.execute(f"ALTER TABLE {table_name} DROP COLUMN {column_name}")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(
+            f"[WARNING] Failed to drop column '{column_name}' on table "
+            f"'{table_name}': {e}"
+        )
+
+
+def log_observe_session(session_id, question="", status="active"):
     if not session_id:
         return
-    try:
-        delta = int(total_tokens or 0)
-    except (TypeError, ValueError):
-        delta = 0
     try:
         with sys_engine.connect() as conn:
             with _session_lock:
@@ -92,7 +109,6 @@ def log_observe_session(session_id, question="", status="active", total_tokens=0
                             session_id=session_id,
                             question=question,
                             status=status,
-                            total_tokens=delta,
                             created_at=datetime.now(),
                             updated_at=datetime.now(),
                         )
@@ -103,12 +119,6 @@ def log_observe_session(session_id, question="", status="active", total_tokens=0
                             observe_session_log.c.session_id == session_id
                         ).values(
                             status=status,
-                            # Accumulate instead of overwriting so concurrent /
-                            # successive phase updates do not lose the running
-                            # session token total.
-                            total_tokens=func.coalesce(
-                                observe_session_log.c.total_tokens, 0
-                            ) + delta,
                             updated_at=datetime.now(),
                         )
                     )
@@ -170,7 +180,6 @@ def list_sessions(limit=50, include_deleted=False):
                 observe_session_log.c.session_id,
                 observe_session_log.c.question,
                 observe_session_log.c.status,
-                observe_session_log.c.total_tokens,
                 observe_session_log.c.deleted,
                 observe_session_log.c.created_at,
                 observe_session_log.c.updated_at,
@@ -265,7 +274,6 @@ def reconstruct_conversation_history(session_id):
             "session_id": session_id,
             "question": question,
             "status": session_info.get("status", ""),
-            "total_tokens": session_info.get("total_tokens", 0),
             "created_at": str(session_info.get("created_at", "")),
             "updated_at": str(session_info.get("updated_at", "")),
             "conversation_history": history,
