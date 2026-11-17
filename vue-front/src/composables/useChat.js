@@ -776,6 +776,41 @@ function historyToText(history) {
     return true
   }
 
+  // Frontend-only actions (ask_question / ask_choice / summary_and_pause /
+  // attempt_completion) are handled locally by handleFrontendAction and are not
+  // persisted by themselves: their `act` entry only reaches the DB when a later
+  // request carries the client history back. A session that stops on one of them
+  // therefore ends at its own `action_decision` with no `act` entry. On resume,
+  // replay that dangling action so the prompt / completion is restored instead of
+  // silently disappearing.
+  function restorePendingFrontendAction(history) {
+    const entries = (history || []).filter(e => e.type !== 'blackboard')
+    const last = entries[entries.length - 1]
+    if (!last || last.type !== 'action_decision') return
+
+    const content = last.content && typeof last.content === 'object'
+      ? last.content
+      : parseJsonRaw(String(last.content || ''))
+    if (!content || typeof content !== 'object') return
+
+    const actions = Array.isArray(content.actions)
+      ? content.actions
+      : (content.action ? [content] : [])
+    const pending = actions.find(a => a && FRONTEND_ACTIONS.has(a.action))
+    if (!pending) return
+
+    const result = handleFrontendAction(pending.action, pending)
+    if (result.needs_user_input) {
+      awaitingInput.value = true
+      inputPrompt.value = result.full_ans
+      inputChoices.value = result.choices || []
+    } else if (result.paused) {
+      isPaused.value = true
+    } else if (result.completed) {
+      isCompleted.value = true
+    }
+  }
+
   async function resumeSession(sessionData) {
     sessionId.value = sessionData.session_id
     question.value = sessionData.question || ''
@@ -785,7 +820,9 @@ function historyToText(history) {
       content: `Session restored: \`${sessionId.value}\`\nOriginal question: ${question.value}`,
     })
 
-    handleHistoryEvent(sessionData.conversation_history || [])
+    const history = sessionData.conversation_history || []
+    handleHistoryEvent(history)
+    restorePendingFrontendAction(history)
 
     try {
       const files = await fetchGeneratedFiles(sessionId.value)
