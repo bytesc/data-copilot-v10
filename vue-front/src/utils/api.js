@@ -30,6 +30,21 @@ export async function fetchSessions(limit = 50, includeDeleted = false) {
   return data.sessions || []
 }
 
+export async function fetchWebAccessLogs(limit = 200, accessType = '', sessionId = '') {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (accessType) params.set('access_type', accessType)
+  if (sessionId) params.set('session_id', sessionId)
+  const res = await request(`${BASE_URL}/web-access-logs/?${params.toString()}`)
+  const data = await res.json()
+  return data.logs || []
+}
+
+export async function fetchWebAccessLogDetail(id) {
+  const res = await request(`${BASE_URL}/web-access-log/${encodeURIComponent(id)}`)
+  const data = await res.json()
+  return data.log
+}
+
 export async function deleteSession(sessionId) {
   const res = await request(`${BASE_URL}/session/${encodeURIComponent(sessionId)}`, {
     method: 'DELETE',

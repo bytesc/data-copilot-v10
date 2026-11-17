@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import (
-    Table, Column, Integer, String, Text, DateTime, MetaData, insert, select, desc
+    Table, Column, Integer, String, Text, DateTime, MetaData, insert, select, desc, func
 )
 from sqlalchemy.dialects.mysql import LONGTEXT
 import json
@@ -44,6 +44,27 @@ def record_report_generation(session_id, file_name, chat_history="", outline="",
             conn.commit()
     except Exception as e:
         print(f"记录报告生成日志失败: {e}")
+
+
+def get_generated_file_counts(session_ids):
+    """Return a mapping of session_id -> number of generated report files."""
+    session_ids = [s for s in (session_ids or []) if s]
+    if not session_ids:
+        return {}
+    try:
+        with sys_engine.connect() as conn:
+            result = conn.execute(
+                select(
+                    report_generation_log.c.session_id,
+                    func.count().label("cnt"),
+                )
+                .where(report_generation_log.c.session_id.in_(session_ids))
+                .group_by(report_generation_log.c.session_id)
+            ).fetchall()
+        return {row.session_id: row.cnt for row in result}
+    except Exception as e:
+        print(f"统计生成文件数量失败: {e}")
+        return {}
 
 
 def get_generated_files(session_id):

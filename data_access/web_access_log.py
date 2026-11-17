@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 
 from sqlalchemy import (
-    Table, Column, Integer, String, Boolean, DateTime, MetaData, insert
+    Table, Column, Integer, String, Boolean, DateTime, MetaData, insert, select, desc
 )
 from sqlalchemy.dialects.mysql import LONGTEXT
 
@@ -66,3 +66,61 @@ def record_web_access(session_id=None, access_type="", query="", urls=None,
             conn.commit()
     except Exception as e:
         print(f"记录Web访问日志失败: {e}")
+
+
+def _serialize_row(row_dict):
+    return {
+        k: v.isoformat() if isinstance(v, datetime) else v
+        for k, v in row_dict.items()
+    }
+
+
+def list_web_access_logs(limit=100, access_type=None, session_id=None):
+    """List web_search / fetch_webpage records, newest first.
+
+    The heavy ``result`` column is intentionally excluded; fetch a single
+    record with :func:`get_web_access_log` when the full payload is needed.
+    """
+    if sys_engine is None:
+        return []
+    try:
+        with sys_engine.connect() as conn:
+            query = select(
+                web_access_log.c.id,
+                web_access_log.c.session_id,
+                web_access_log.c.access_type,
+                web_access_log.c.query,
+                web_access_log.c.urls,
+                web_access_log.c.success,
+                web_access_log.c.error,
+                web_access_log.c.duration_ms,
+                web_access_log.c.created_at,
+            )
+            if access_type:
+                query = query.where(web_access_log.c.access_type == access_type)
+            if session_id:
+                query = query.where(web_access_log.c.session_id == session_id)
+            result = conn.execute(
+                query.order_by(desc(web_access_log.c.created_at)).limit(limit)
+            ).fetchall()
+            return [_serialize_row(dict(row._mapping)) for row in result]
+    except Exception as e:
+        print(f"查询Web访问日志失败: {e}")
+        return []
+
+
+def get_web_access_log(log_id):
+    """Return one full web access record (including ``result``) or ``None``."""
+    if sys_engine is None:
+        return None
+    try:
+        with sys_engine.connect() as conn:
+            row = conn.execute(
+                select(web_access_log).where(web_access_log.c.id == log_id)
+            ).fetchone()
+            if row is None:
+                return None
+            return _serialize_row(dict(row._mapping))
+    except Exception as e:
+        print(f"查询Web访问日志详情失败: {e}")
+        return None

@@ -65,6 +65,42 @@ def _ensure_created_at_index():
         print(f"[WARNING] Failed to ensure index on llm_log.created_at: {e}")
 
 
+def get_session_token_totals(session_ids):
+    """Return {session_id: {"prompt_tokens", "completion_tokens", "total_tokens"}}.
+
+    Aggregates the real LLM usage recorded per call in ``llm_log`` for the given
+    sessions, used to show accurate token counts in the History page instead of
+    the character-length estimate stored in ``observe_session_log.total_tokens``.
+    Best-effort: returns ``{}`` when the table/engine is unavailable.
+    """
+    session_ids = [s for s in (session_ids or []) if s]
+    if sys_engine is None or not session_ids:
+        return {}
+    try:
+        with sys_engine.connect() as conn:
+            result = conn.execute(
+                select(
+                    llm_log.c.session_id,
+                    func.coalesce(func.sum(llm_log.c.prompt_tokens), 0).label("prompt_tokens"),
+                    func.coalesce(func.sum(llm_log.c.completion_tokens), 0).label("completion_tokens"),
+                    func.coalesce(func.sum(llm_log.c.total_tokens), 0).label("total_tokens"),
+                )
+                .where(llm_log.c.session_id.in_(session_ids))
+                .group_by(llm_log.c.session_id)
+            ).fetchall()
+        return {
+            row.session_id: {
+                "prompt_tokens": int(row.prompt_tokens or 0),
+                "completion_tokens": int(row.completion_tokens or 0),
+                "total_tokens": int(row.total_tokens or 0),
+            }
+            for row in result
+        }
+    except Exception as e:
+        print(f"统计会话token用量失败: {e}")
+        return {}
+
+
 def get_total_tokens_last_hour(window_minutes=TPH_WINDOW_MINUTES):
     """Sum ``total_tokens`` over the trailing sliding window (default 60 min).
 

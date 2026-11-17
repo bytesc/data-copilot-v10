@@ -53,9 +53,11 @@ from data_access.observe_log import (
     delete_session, restore_session
 )
 from utils.perf_log import perf_api, perf_context
-from data_access.report_log import create_report_log_table, get_generated_files
-from data_access.llm_log import create_llm_log_table, get_total_tokens_last_hour
-from data_access.web_access_log import create_web_access_log_table
+from data_access.report_log import create_report_log_table, get_generated_files, get_generated_file_counts
+from data_access.llm_log import create_llm_log_table, get_total_tokens_last_hour, get_session_token_totals
+from data_access.web_access_log import (
+    create_web_access_log_table, list_web_access_logs, get_web_access_log
+)
 _ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
 _ENABLE_EDIT = config_data.get('enable_edit', True)
 _ENABLE_LLM_TPH_LIMIT = config_data.get('enable_llm_tph_limit', False)
@@ -467,7 +469,39 @@ async def get_models():
 @app.get("/api/sessions/")
 def get_sessions(request: Request, limit: int = 50, include_deleted: bool = False):
     sessions = list_sessions(limit, include_deleted=include_deleted)
+    session_ids = [s.get("session_id") for s in sessions]
+    counts = get_generated_file_counts(session_ids)
+    token_totals = get_session_token_totals(session_ids)
+    for s in sessions:
+        sid = s.get("session_id")
+        s["generated_file_count"] = counts.get(sid, 0)
+        # Real LLM usage from llm_log; keep the legacy observe-session estimate
+        # (think prompt character length) separately for reference.
+        s["observe_total_tokens"] = s.get("total_tokens", 0) or 0
+        usage = token_totals.get(sid) or {}
+        s["prompt_tokens"] = usage.get("prompt_tokens", 0)
+        s["completion_tokens"] = usage.get("completion_tokens", 0)
+        s["total_tokens"] = usage.get("total_tokens", 0)
     return JSONResponse(content={"sessions": sessions})
+
+
+@app.get("/api/web-access-logs/")
+def get_web_access_logs(request: Request, limit: int = 100,
+                        access_type: str = "", session_id: str = ""):
+    logs = list_web_access_logs(
+        limit,
+        access_type=access_type or None,
+        session_id=session_id or None,
+    )
+    return JSONResponse(content={"logs": logs})
+
+
+@app.get("/api/web-access-log/{log_id}")
+def get_web_access_log_detail(log_id: int):
+    log = get_web_access_log(log_id)
+    if log is None:
+        raise HTTPException(status_code=404, detail="Web access log not found")
+    return JSONResponse(content={"log": log})
 
 
 @app.get("/api/db-overview/")

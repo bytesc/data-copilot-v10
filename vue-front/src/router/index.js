@@ -11,10 +11,21 @@ import GuideManagePage from '@/pages/GuideManagePage.vue'
 import ToolsPage from '@/pages/ToolsPage.vue'
 import KnowledgePage from '@/pages/KnowledgePage.vue'
 import HistoryPage from '@/pages/HistoryPage.vue'
+import ChatHistoryPage from '@/pages/ChatHistoryPage.vue'
+import WebHistoryPage from '@/pages/WebHistoryPage.vue'
 
 const routes = [
   { path: '/', name: 'chat', component: ChatPage },
-  { path: '/history', name: 'history', component: HistoryPage },
+  {
+    path: '/history',
+    component: HistoryPage,
+    children: [
+      { path: '', name: 'history', redirect: '/history/chat' },
+      { path: 'chat', name: 'chat-history', component: ChatHistoryPage },
+      { path: 'web', name: 'web-history', component: WebHistoryPage },
+    ],
+  },
+  { path: '/web-access', redirect: '/history/web' },
   { path: '/tools', name: 'tools', component: ToolsPage },
   {
     path: '/data',
