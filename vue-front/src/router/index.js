@@ -10,9 +10,11 @@ import CommentManagePage from '@/pages/CommentManagePage.vue'
 import GuideManagePage from '@/pages/GuideManagePage.vue'
 import ToolsPage from '@/pages/ToolsPage.vue'
 import KnowledgePage from '@/pages/KnowledgePage.vue'
+import HistoryPage from '@/pages/HistoryPage.vue'
 
 const routes = [
   { path: '/', name: 'chat', component: ChatPage },
+  { path: '/history', name: 'history', component: HistoryPage },
   { path: '/tools', name: 'tools', component: ToolsPage },
   {
     path: '/data',

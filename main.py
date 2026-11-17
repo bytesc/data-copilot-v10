@@ -49,7 +49,8 @@ from agent.utils.llm_access.LLM import (
 from data_access.session_log import record_session_operation, create_session_log_table
 from data_access.observe_log import (
     create_observe_log_tables,
-    list_sessions, reconstruct_conversation_history
+    list_sessions, reconstruct_conversation_history,
+    delete_session, restore_session
 )
 from utils.perf_log import perf_api, perf_context
 from data_access.report_log import create_report_log_table, get_generated_files
@@ -464,8 +465,8 @@ async def get_models():
 
 
 @app.get("/api/sessions/")
-def get_sessions(request: Request, limit: int = 50):
-    sessions = list_sessions(limit)
+def get_sessions(request: Request, limit: int = 50, include_deleted: bool = False):
+    sessions = list_sessions(limit, include_deleted=include_deleted)
     return JSONResponse(content={"sessions": sessions})
 
 
@@ -736,6 +737,26 @@ def get_session_history(request: Request, session_id: str):
 def get_session_generated_files(request: Request, session_id: str):
     files = get_generated_files(session_id)
     return JSONResponse(content={"files": files})
+
+
+@app.delete("/api/session/{session_id}")
+def remove_session(request: Request, session_id: str):
+    if not delete_session(session_id):
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Session not found"}
+        )
+    return JSONResponse(content={"deleted": True, "session_id": session_id})
+
+
+@app.post("/api/session/{session_id}/restore")
+def restore_deleted_session(request: Request, session_id: str):
+    if not restore_session(session_id):
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Session not found"}
+        )
+    return JSONResponse(content={"restored": True, "session_id": session_id})
 
 
 @app.post("/api/exe-sql/")

@@ -2,9 +2,10 @@ import json
 import threading
 from datetime import datetime
 from sqlalchemy import (
-    Table, Column, Integer, String, DateTime, MetaData, insert, select, desc, func
+    Table, Column, Integer, String, DateTime, MetaData,
+    insert, select, update, desc, func, or_
 )
-from sqlalchemy.dialects.mysql import LONGTEXT
+from sqlalchemy.dialects.mysql import LONGTEXT, TINYINT
 
 from data_access.sys_db_conn import sys_engine
 from data_access.session_log import session_operation_log
@@ -21,6 +22,7 @@ observe_session_log = Table(
     Column("total_tokens", Integer, comment="总token数"),
     Column("conversation_history", LONGTEXT, comment="完整对话上下文(JSON数组)"),
     Column("trimmed_context", LONGTEXT, comment="送给LLM的裁剪后上下文(JSON数组)"),
+    Column("deleted", TINYINT, default=0, comment="是否已删除(1=已删除,0=未删除)"),
     Column("created_at", DateTime, comment="创建时间"),
     Column("updated_at", DateTime, comment="更新时间"),
 )
@@ -39,6 +41,7 @@ def create_observe_log_tables():
     _ensure_column_exists(sys_engine, "observe_session_log", "question", "LONGTEXT COMMENT 'question'")
     _ensure_column_exists(sys_engine, "observe_session_log", "conversation_history", "LONGTEXT COMMENT 'conversation history' AFTER total_tokens")
     _ensure_column_exists(sys_engine, "observe_session_log", "trimmed_context", "LONGTEXT COMMENT 'trimmed context for LLM' AFTER conversation_history")
+    _ensure_column_exists(sys_engine, "observe_session_log", "deleted", "TINYINT NOT NULL DEFAULT 0 COMMENT 'deleted flag' AFTER trimmed_context")
 
 
 def _ensure_column_exists(engine, table_name, column_name, column_def):
@@ -159,26 +162,66 @@ def _serialize_row(row_dict):
     }
 
 
-def list_sessions(limit=50):
+def list_sessions(limit=50, include_deleted=False):
     try:
         with sys_engine.connect() as conn:
-            result = conn.execute(
-                select(
-                    observe_session_log.c.id,
-                    observe_session_log.c.session_id,
-                    observe_session_log.c.question,
-                    observe_session_log.c.status,
-                    observe_session_log.c.total_tokens,
-                    observe_session_log.c.created_at,
-                    observe_session_log.c.updated_at,
+            query = select(
+                observe_session_log.c.id,
+                observe_session_log.c.session_id,
+                observe_session_log.c.question,
+                observe_session_log.c.status,
+                observe_session_log.c.total_tokens,
+                observe_session_log.c.deleted,
+                observe_session_log.c.created_at,
+                observe_session_log.c.updated_at,
+            )
+            if not include_deleted:
+                query = query.where(
+                    or_(
+                        observe_session_log.c.deleted == 0,
+                        observe_session_log.c.deleted.is_(None),
+                    )
                 )
-                .order_by(desc(observe_session_log.c.updated_at))
-                .limit(limit)
+            result = conn.execute(
+                query.order_by(desc(observe_session_log.c.updated_at)).limit(limit)
             ).fetchall()
             return [_serialize_row(dict(row._mapping)) for row in result]
     except Exception as e:
         print(f"查询会话列表失败: {e}")
         return []
+
+
+def set_session_deleted(session_id, deleted):
+    """Soft-delete or restore a session. Returns False when it does not exist."""
+    if not session_id:
+        return False
+    try:
+        with sys_engine.connect() as conn:
+            existing = conn.execute(
+                select(observe_session_log.c.id).where(
+                    observe_session_log.c.session_id == session_id
+                )
+            ).fetchone()
+            if existing is None:
+                return False
+            conn.execute(
+                update(observe_session_log)
+                .where(observe_session_log.c.session_id == session_id)
+                .values(deleted=1 if deleted else 0)
+            )
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"更新会话删除状态失败: {e}")
+        return False
+
+
+def delete_session(session_id):
+    return set_session_deleted(session_id, True)
+
+
+def restore_session(session_id):
+    return set_session_deleted(session_id, False)
 
 
 def get_session_operations(session_id, limit=200):

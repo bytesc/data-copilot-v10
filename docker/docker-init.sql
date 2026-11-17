@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS `observe_session_log` (
   `total_tokens` INT COMMENT '总token数',
   `conversation_history` LONGTEXT COMMENT '完整对话上下文(JSON数组)',
   `trimmed_context` LONGTEXT COMMENT '送给LLM的裁剪后上下文(JSON数组)',
+  `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '是否已删除(1=已删除,0=未删除)',
   `created_at` DATETIME COMMENT '创建时间',
   `updated_at` DATETIME COMMENT '更新时间',
   PRIMARY KEY (`id`),

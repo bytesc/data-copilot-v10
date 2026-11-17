@@ -8,13 +8,16 @@
         <router-link to="/" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">💬</span> Chat
         </router-link>
+        <router-link to="/history" class="nav-link" active-class="nav-link-active">
+          <span class="nav-icon">🕘</span> History
+        </router-link>
         <router-link v-if="enableBaseKnowledge && enableEdit" to="/knowledge" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">📖</span> Knowledge
         </router-link>
         <router-link v-if="enableEdit" to="/data" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">📊</span> Data
         </router-link>
-        <router-link v-if="enableMcp" to="/tools" class="nav-link" active-class="nav-link-active">
+        <router-link to="/tools" class="nav-link" active-class="nav-link-active">
           <span class="nav-icon">🔧</span> Tools
         </router-link>
       </div>
@@ -47,7 +50,6 @@ import ToastHost from '@/components/ToastHost.vue'
 
 const isDark = ref(true)
 
-const enableMcp = computed(() => configState.enable_mcp)
 const enableBaseKnowledge = computed(() => configState.enable_base_knowledge)
 const enableEdit = computed(() => configState.enable_edit)
 

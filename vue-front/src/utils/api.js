@@ -22,10 +22,27 @@ async function request(url, init) {
   return response
 }
 
-export async function fetchSessions(limit = 50) {
-  const res = await request(`${BASE_URL}/sessions/?limit=${limit}`)
+export async function fetchSessions(limit = 50, includeDeleted = false) {
+  const res = await request(
+    `${BASE_URL}/sessions/?limit=${limit}&include_deleted=${includeDeleted ? 'true' : 'false'}`,
+  )
   const data = await res.json()
   return data.sessions || []
+}
+
+export async function deleteSession(sessionId) {
+  const res = await request(`${BASE_URL}/session/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+  })
+  return res.json()
+}
+
+export async function restoreSession(sessionId) {
+  const res = await request(
+    `${BASE_URL}/session/${encodeURIComponent(sessionId)}/restore`,
+    { method: 'POST' },
+  )
+  return res.json()
 }
 
 export async function fetchSessionHistory(sessionId) {

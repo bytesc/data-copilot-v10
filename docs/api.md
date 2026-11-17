@@ -205,15 +205,15 @@ Base URL: `http://<host>:8008`
 
 ## 3. 会话与日志
 
-### GET `/api/sessions/?limit=50`
+### GET `/api/sessions/?limit=50&include_deleted=false`
 
-列出最近会话。
+列出最近会话。默认只返回未删除的会话；`include_deleted=true` 时一并返回已软删除的会话（每个会话带 `deleted` 标记，1=已删除，0=未删除）。此接口无需 `enable_edit`。
 
-**查询参数**: `limit` (int, 默认 50)
+**查询参数**: `limit` (int, 默认 50), `include_deleted` (bool, 默认 false)
 
 **响应** `200`
 ```json
-{ "sessions": [{ "session_id": "xxx", ... }] }
+{ "sessions": [{ "session_id": "xxx", "deleted": 0, ... }] }
 ```
 
 ### GET `/api/session/{session_id}/history`
@@ -233,6 +233,32 @@ Base URL: `http://<host>:8008`
   "updated_at": "2026-01-01 10:05:00",
   "conversation_history": [...]
 }
+```
+
+**错误** `404`: 会话不存在（`{"error": "Session not found"}`）。
+
+### DELETE `/api/session/{session_id}`
+
+软删除会话（仅置 `deleted=1`，数据保留，可通过下方恢复接口还原）。此接口无需 `enable_edit`。
+
+**参数**: `session_id` (路径)
+
+**响应** `200`
+```json
+{ "deleted": true, "session_id": "xxx" }
+```
+
+**错误** `404`: 会话不存在（`{"error": "Session not found"}`）。
+
+### POST `/api/session/{session_id}/restore`
+
+恢复（取消软删除）会话，置 `deleted=0`。此接口无需 `enable_edit`。
+
+**参数**: `session_id` (路径)
+
+**响应** `200`
+```json
+{ "restored": true, "session_id": "xxx" }
 ```
 
 **错误** `404`: 会话不存在（`{"error": "Session not found"}`）。

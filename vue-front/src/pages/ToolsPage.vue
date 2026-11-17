@@ -75,6 +75,7 @@ const activeTab = ref('functions')
 const pythonFunctions = ref([])
 const mcpServers = ref([])
 const loading = ref(true)
+const loadingMcp = ref(true)
 const customFunctions = ref([])
 const error = ref('')
 

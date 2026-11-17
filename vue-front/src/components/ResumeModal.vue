@@ -23,7 +23,7 @@
             <div v-if="loading" class="loading-text">Loading sessions...</div>
             <div v-else-if="sessions.length === 0" class="empty-text">No sessions found</div>
             <div
-              v-for="s in sessions"
+              v-for="s in visibleSessions"
               :key="s.session_id"
               class="session-item"
               @click="selectSession(s)"
@@ -32,6 +32,11 @@
               <div class="session-meta" v-if="s.question">{{ s.question }}</div>
             </div>
           </div>
+          <button
+            v-if="!loading && sessions.length > RECENT_LIMIT"
+            class="btn-secondary view-more-btn"
+            @click="viewMoreHistory"
+          >View more history</button>
         </div>
         <div v-else class="session-detail">
           <p><strong>Session:</strong> {{ selectedSession.session_id }}</p>
@@ -54,11 +59,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { fetchSessions, fetchSessionHistory } from '@/utils/api.js'
 
 const emit = defineEmits(['close', 'resume'])
+const router = useRouter()
 
+const RECENT_LIMIT = 5
 const sessions = ref([])
 const selectedSession = ref(null)
 const loading = ref(false)
@@ -67,6 +75,8 @@ const detailError = ref(null)
 const manualSessionId = ref('')
 const manualLoading = ref(false)
 const manualError = ref(null)
+
+const visibleSessions = computed(() => sessions.value.slice(0, RECENT_LIMIT))
 
 onMounted(async () => {
   loading.value = true
@@ -125,4 +135,17 @@ function goBack() {
   selectedSession.value = null
   detailError.value = null
 }
+
+function viewMoreHistory() {
+  emit('close')
+  router.push('/history')
+}
 </script>
+
+<style scoped>
+.view-more-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+}
+</style>

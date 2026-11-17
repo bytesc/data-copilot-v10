@@ -106,6 +106,8 @@ function historyToText(history) {
 
   const FRONTEND_ACTIONS = new Set(['ask_question', 'ask_choice', 'summary_and_pause', 'attempt_completion'])
 
+  const ASK_ACTIONS = new Set(['ask_question', 'ask_choice'])
+
   // A rate-limit rejection (HTTP 429 / code "llm_tph_limit") pauses the run like
   // an interrupt instead of aborting it.
   function isRateLimitedEvent(event) {
@@ -932,7 +934,7 @@ function historyToText(history) {
         result: entry.result,
         results: entry.results,
         display_content: entry.display_content,
-        collapsed: true,
+        collapsed: !ASK_ACTIONS.has(entry.action),
       })
     } else if (entryType === 'document') {
       addMessage('assistant', 'document', { content: entry.content })

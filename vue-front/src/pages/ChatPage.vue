@@ -60,7 +60,10 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useChat } from '@/composables/useChat.js'
+import { fetchSessionHistory } from '@/utils/api.js'
+import { showErrorToast } from '@/utils/toast.js'
 import LeftPanel from '@/components/LeftPanel.vue'
 import RightPanel from '@/components/RightPanel.vue'
 import ChatArea from '@/components/ChatArea.vue'
@@ -68,6 +71,8 @@ import BlackboardModal from '@/components/BlackboardModal.vue'
 import ResumeModal from '@/components/ResumeModal.vue'
 import YamlOutlineModal from '@/components/YamlOutlineModal.vue'
 
+const route = useRoute()
+const router = useRouter()
 const chatAreaRef = ref(null)
 const chat = useChat()
 
@@ -93,8 +98,18 @@ function syncPanelsWithViewport() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('resize', syncPanelsWithViewport)
+  const resumeId = Array.isArray(route.query.resume) ? route.query.resume[0] : route.query.resume
+  if (resumeId) {
+    await router.replace({ path: '/' })
+    try {
+      const data = await fetchSessionHistory(resumeId)
+      chat.resumeSession(data)
+    } catch (e) {
+      showErrorToast(`Resume failed: ${e.message}`)
+    }
+  }
 })
 onUnmounted(() => {
   window.removeEventListener('resize', syncPanelsWithViewport)
