@@ -293,6 +293,7 @@
   # 统一模式（_event_stream_generate_document_unified）：
   {phase:"act", sub_phase:"generate_document", type:"msg",   content:"Generating document..."}
   {phase:"act", sub_phase:"generate_document", type:"chunk", content:"..."}  ×N
+  {phase:"act", sub_phase:"generate_document", type:"done",  content:"..."}   # 先发一条仅含 content 的 done
   {phase:"act", sub_phase:"generate_document", type:"done",  content:"...",
    title:"...", file_name:"doc_xxxx", download_url_md:"...",
    download_url_docx:"...", download_url_pdf:"...", conversation_history:[...]}

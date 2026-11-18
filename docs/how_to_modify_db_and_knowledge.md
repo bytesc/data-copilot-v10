@@ -127,12 +127,12 @@ FLUSH PRIVILEGES;
 ## 4. 汇总
 
 | 配置项 | MD 文件 | DB 表 | 使用阶段 | 关系 |
-|---|---|---|---|---|---|---|
-| DB_BRIEF | `db_brief.md` | `brief_info.db_brief` | think / explore_schema | 合并，空时不显示标签 |
-| BASE_KNOWLEDGE_BRIEF | `base_knowledge_brief.md` | `brief_info.base_knowledge_brief` | think / explore_base_knowledge | 合并 |
-| MCP_BRIEF | `mcp_brief.md` | `brief_info.mcp_brief` | think / explore_mcp | 合并，空时不显示标签 |
-| FUNCTION_BRIEF | 代码硬编码 | 无 | think | 固定 |
-| CUSTOM_FUNC_BRIEF | `custom_func_brief.md` | `brief_info.custom_func_brief` | think / explore_functions | 合并 |
+|---|---|---|---|---|
+| DB_BRIEF | `db_brief.md` | `brief_info.db_brief` | think + action / explore_schema | 合并，空时不显示标签 |
+| BASE_KNOWLEDGE_BRIEF | `base_knowledge_brief.md` | `brief_info.base_knowledge_brief` | think + action / explore_base_knowledge | 合并 |
+| MCP_BRIEF | `mcp_brief.md` | `brief_info.mcp_brief` | think + action / explore_mcp | 合并，空时不显示标签 |
+| FUNCTION_BRIEF | 代码硬编码 | 无 | think + action | 固定 |
+| CUSTOM_FUNC_BRIEF | `custom_func_brief.md` | `brief_info.custom_func_brief` | think + action / explore_functions | 合并 |
 | Function Catalog | 代码自动生成 | 无 | explore_functions | 自动 |
 | BASE | `base_knowledge.md` | `base_knowledge` | explore_base_knowledge / generate_and_execute / generate_document | 合并 |
 | DOC | `doc_guide.md` | `doc_guide` | generate_document | 合并，空时不显示标签 |
