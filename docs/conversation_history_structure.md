@@ -730,7 +730,7 @@ images:
 | 未匹配类别 | 999（永久） |
 | blackboard | 不参与裁剪（不进入 trimmed_context） |
 
-> `generate_and_execute` 条目的分类顺序固定：先判 `error`（命中即 `act_error`，保留 1），其次判 `result` / `exec_ok`（命中即 `act_result`，保留 999，永久），最后才判 `code`（`act_code`，保留 1，只命中「有 code 但无 result/error」的条目）。落库的成功/失败条目都带 `result` 或 `error`，因此大多落入 `act_result` 被永久保留，`act_code`（保留 1）实际只约束「只有代码、没有执行结果」的条目；对更早的含 `code` 条目，裁剪不会丢弃整条，而是仅剥离其 `code` 字段（`_strip_generated_code`），条目本身和执行结果保留。
+> `generate_and_execute` 条目的分类顺序固定：先判 `error`（命中即 `act_error`，保留 1），其次判 `result` / `exec_ok`（命中即 `act_result`，保留 999，永久），最后才判 `code`（`act_code`，保留 1，只命中「有 code 但无 result/error」的条目）。落库的成功条目带 `result` / `exec_ok`（落入 `act_result`，永久保留），失败条目带 `error`（落入 `act_error`，保留 1），`act_code`（保留 1）实际只约束「只有代码、没有 result/error」的条目；对更早的含 `code` 条目，裁剪不会丢弃整条，而是仅剥离其 `code` 字段（`_strip_generated_code`），条目本身和执行结果保留。
 
 ## 各阶段使用方式
 

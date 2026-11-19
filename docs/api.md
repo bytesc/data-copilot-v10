@@ -188,7 +188,7 @@ Base URL: `http://<host>:8008`
 
 **响应** `200` — `text/csv` 文件下载。
 
-**错误** `403`: `enable_edit=false`。
+**错误** `404`: 表不存在（`{"detail": "Table '<name>' not found"}`）。`403`: `enable_edit=false`。
 
 ### GET `/tmp_imgs/{filename}`
 
@@ -283,6 +283,59 @@ Base URL: `http://<host>:8008`
   ]
 }
 ```
+
+### GET `/api/web-access-logs/`
+
+列出 `web_access_log` 表中的 `web_search` / `fetch_webpage` 调用记录（由 `data_access/web_access_log.py` 的 `list_web_access_logs` 读取，开关 `enable_web_access_log`），按 `created_at` 倒序。此接口无需 `enable_edit`。
+
+**查询参数**: `limit` (int, 默认 100), `access_type` (string, 可选：`web_search` 或 `fetch_webpage`；空字符串表示不过滤), `session_id` (string, 可选；空字符串表示不过滤)
+
+**响应** `200`
+```json
+{
+  "logs": [
+    {
+      "id": 1,
+      "session_id": "xxx",
+      "access_type": "web_search",
+      "query": "搜索关键词",
+      "urls": "",
+      "success": true,
+      "error": "",
+      "duration_ms": 1234,
+      "created_at": "2026-01-01T10:00:00"
+    }
+  ]
+}
+```
+
+> 列表**不含**体积较大的 `result` 字段（工具返回的原始 JSON 字符串）；需要完整结果时用下方的详情接口。`web_search` 记录填 `query`（`urls` 为空串），`fetch_webpage` 记录填 `urls`（JSON 数组字符串，`query` 为空串）。全部字段语义见 [`config_and_models.md`](config_and_models.md) 的「web_access_log」表。
+
+### GET `/api/web-access-log/{log_id}`
+
+获取单条 Web 访问记录的完整内容（**含** `result`）。
+
+**参数**: `log_id` (路径, int)
+
+**响应** `200`
+```json
+{
+  "log": {
+    "id": 1,
+    "session_id": "xxx",
+    "access_type": "web_search",
+    "query": "搜索关键词",
+    "urls": "",
+    "success": true,
+    "error": "",
+    "duration_ms": 1234,
+    "result": "{\"query\": \"...\", \"count\": 10, \"results\": [...]}",
+    "created_at": "2026-01-01T10:00:00"
+  }
+}
+```
+
+**错误** `404`: 记录不存在（`{"detail": "Web access log not found"}`）。
 
 ---
 
@@ -903,6 +956,8 @@ data: {"phase":"act","sub_phase":"generate_document","type":"done","content":"<f
 ### GET `/api/comment-manage/{table_name}/export-csv`
 
 导出表和列注释为 CSV。
+
+**错误** `404`: 表不存在（`{"detail": "Table '<name>' not found"}`）。`403`: `enable_edit=false`。
 
 ### POST `/api/comment-manage/{table_name}/import-csv`
 

@@ -124,7 +124,7 @@ value LONGTEXT
 | `graph_code_guide` | `get_graph_code_guide_db()` |
 | `think_guide` | `get_think_guide_db()` |
 
-另外，`brief_info` 表（结构为 `attr` / `value`）用于存储 `db_brief`、`base_knowledge_brief`、`mcp_brief`、`custom_func_brief` 的 DB 覆盖值，与对应 MD 文件合并后注入。
+另外，`brief_info` 表（结构为 `attr` / `value`）用于存储 `db_brief`、`base_knowledge_brief`、`mcp_brief`、`custom_func_brief` 的 DB 侧内容；`_get_brief_value()` 会把它**追加**到对应 MD 内容之后（`md_fallback + "\n\n" + db_value`，是合并而非覆盖），两者一起注入。
 
 ### 3. 动态注入机制：`_DynamicStr`
 
