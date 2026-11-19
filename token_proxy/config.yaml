@@ -39,16 +39,20 @@ trust_proxy: false
 #   targets         - target names (from targets.yaml) this key may use.
 #                     Omit / null -> any target.
 #   ip_whitelist    - allowed client IPs / CIDRs for this key. Empty -> any IP.
+#                     Single IPs (127.0.0.1) and CIDR ranges (10.0.0.0/8,
+#                     192.168.0.0/16) are accepted. To allow all IPv4, use
+#                     "0.0.0.0/0"; note a bare "0.0.0.0" means only that one
+#                     address. Leave the list empty to allow any IP.
 #   model_whitelist - allowed model names for this key. Empty -> any model.
 keys:
   - key_file: "proxy_key_1.txt"
     targets: ["main", "backup"]
     ip_whitelist: ["127.0.0.1", "::1"]
-    model_whitelist: ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"]
+    model_whitelist: ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash", "glm-5.3-flashx"]
 
   # Example: a second caller restricted to one target, a private network, and a
   # single model.
   # - key_file: "proxy_key_2.txt"
-  #   targets: ["backup"]
+  #   targets: ["main", "backup"]
   #   ip_whitelist: ["10.0.0.0/8"]
   #   model_whitelist: ["deepseek-v4-flash"]

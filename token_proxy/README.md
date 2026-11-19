@@ -102,6 +102,23 @@ keys:
 - `keys` 列表为空 = 不鉴权（开放代理，不推荐）。
 - 兼容内联 `key: "sk-xxx"`，但会记 warning，推荐用 `key_file`。
 
+### 模型清单 `models`
+
+参照主项目 `config/config.yaml` 的 `llm_models`，列出可用的模型名，作为各 key
+`model_whitelist` 的参考清单：
+
+```yaml
+models:
+  - model: "deepseek-v4.1-flash"   # 请求体里的 model 名
+  - model: "deepseek-v4-flash"
+  - model: "glm-5.3-flash"
+  - model: "glm-5.3-flashx"
+```
+
+> 说明：该清单是对照主项目列出的模型名，供运维编写各 key 的 `model_whitelist` 参考；
+> 代理自身不依赖主项目，也不读取主项目的任何代码或配置。实际是否放行由各 key 的
+> `model_whitelist` 决定，选目标由该 key 的 `targets` + `strategy` 决定。
+
 代理 key 文件内容同样是一行：
 
 ```
@@ -145,10 +162,10 @@ curl http://127.0.0.1:8080/v1/models \
 2. **IP 白名单**：按该 key 的 `ip_whitelist` 校验客户端 IP，不符 → `403 ip_not_allowed`。
 3. **模型白名单**：若请求体为 JSON 且含 `model`，按该 key 的 `model_whitelist` 校验，
    不符 → `403 model_not_allowed`。
-4. **选目标**：在该 key 的 `targets` 子集内选择；`X-Proxy-Target` 只能选其中的目标，
-   越权 → `400 target_not_allowed`；无可用目标 → `403 no_target`。
-   - `round_robin`：轮询，连接失败自动切下一个。
-   - `first`：始终用第一个，失败再切下一个。
+4. **选目标**：在该 key 的 `targets` 子集内选择。
+   - `X-Proxy-Target` 指定目标时，须在该子集内，越权 → `400 target_not_allowed`。
+   - 否则按 `strategy`：`round_robin`（轮询）或 `first`（优先第一个）；连接失败自动切下一个。
+   - 子集为空 → `403 no_target`。
 5. **转发**：注入真实 token（默认 `Authorization: Bearer <真实token>`），去掉逐跳头、
    客户端鉴权头、`Host`/`Content-Length` 后发往上游；响应流式回传。
 

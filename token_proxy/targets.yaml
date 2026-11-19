@@ -25,9 +25,13 @@
 keys_dir: "keys"
 
 targets:
+  # Real token for tokenhub; same key file name as the main project
+  # (agent/utils/llm_access/api_key_openai.txt, copied into keys_dir).
   - name: main
     url: "https://tokenhub.tencentmaas.com/v1"
-    key_file: "api_key_main.txt"
+    key_file: "api_key_openai.txt"
+  # Backup target; put its real token in keys/api_key_backup.txt (skipped while
+  # that file is missing).
   - name: backup
     url: "https://api.deepseek.com/v1"
     key_file: "api_key_backup.txt"
