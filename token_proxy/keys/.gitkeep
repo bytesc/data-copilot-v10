@@ -1,0 +1,2 @@
+# Keeps the (otherwise empty, gitignored) keys/ folder in version control.
+# Put one real token per *.txt file here; they are ignored by .gitignore.

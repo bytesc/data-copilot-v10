@@ -1,0 +1,6 @@
+# token_proxy: real tokens live as plain text files under keys/ (one per key),
+# mirroring the main project, which ignores agent/utils/llm_access/*.txt.
+keys/*.txt
+
+__pycache__/
+*.pyc

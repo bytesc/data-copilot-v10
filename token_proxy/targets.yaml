@@ -1,0 +1,33 @@
+# ============================================================================
+# token_proxy - forwarding targets (config file 1 of 2)
+# ----------------------------------------------------------------------------
+# A list of the REAL upstream providers. Each item maps a public target name to
+# the real base URL and the name of the text file that holds the real token.
+#
+# Real tokens are NOT written here. Following the main project's convention
+# (agent/utils/llm_access/*.txt + get_api_key_from_file), each token lives in its
+# own plain text file under keys_dir and is referenced here by file name.
+#
+# Fields per target:
+#   name      - public name, referenced by config.yaml `targets` and selectable
+#               per request via the X-Proxy-Target header.
+#   url       - real upstream OpenAI-compatible base URL (usually ends in /v1).
+#               The proxy strips the caller's leading "/v1" and appends the rest,
+#               so "https://api.openai.com/v1" + "/v1/chat/completions" forwards
+#               to "https://api.openai.com/v1/chat/completions".
+#   key_file  - text file under keys_dir holding the real token (an absolute path
+#               is also accepted).
+# ============================================================================
+
+# Folder holding the real-token text files referenced above. Relative paths
+# resolve against this file. These *.txt files are gitignored, the same way the
+# main project ignores agent/utils/llm_access/*.txt.
+keys_dir: "keys"
+
+targets:
+  - name: main
+    url: "https://tokenhub.tencentmaas.com/v1"
+    key_file: "api_key_main.txt"
+  - name: backup
+    url: "https://api.deepseek.com/v1"
+    key_file: "api_key_backup.txt"

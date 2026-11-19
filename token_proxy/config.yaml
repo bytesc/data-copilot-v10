@@ -1,0 +1,46 @@
+# ============================================================================
+# token_proxy - proxy keys & policies (config file 2 of 2)
+# ----------------------------------------------------------------------------
+# Server settings plus one entry per EXPOSED proxy key. Each proxy key is an
+# independent caller identity: it lists which target names it may use, plus its
+# own client-IP whitelist and model-name whitelist. The real token never leaves
+# targets.yaml / keys_dir; callers only ever see a proxy key from this file.
+# ============================================================================
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+# Routing strategy across the targets allowed for a key:
+#   round_robin - load-balance; on a connect error fail over to the next target.
+#   first       - always use the first allowed target (fail over on error).
+strategy: round_robin
+
+# Upstream read/write timeout in seconds. Keep this large for streaming replies.
+timeout: 600
+
+# Trust the left-most X-Forwarded-For value as the client IP. Only enable this
+# when the proxy sits behind a trusted reverse proxy; otherwise it can be spoofed.
+trust_proxy: false
+
+# One entry per exposed proxy key. Clients present it as
+# "Authorization: Bearer <key>", or via the api-key / x-api-key header.
+#
+# Fields per key:
+#   key             - the proxy key given to the caller.
+#   targets         - target names (from targets.yaml) this key may use.
+#                     Omit / null -> any target.
+#   ip_whitelist    - allowed client IPs / CIDRs for this key. Empty -> any IP.
+#   model_whitelist - allowed model names for this key. Empty -> any model.
+keys:
+  - key: "sk-proxy-REPLACE_ME"
+    targets: ["main", "backup"]
+    ip_whitelist: ["127.0.0.1", "::1"]
+    model_whitelist: ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"]
+
+  # Example: a second caller restricted to one target, a private network, and a
+  # single model.
+  # - key: "sk-proxy-second"
+  #   targets: ["backup"]
+  #   ip_whitelist: ["10.0.0.0/8"]
+  #   model_whitelist: ["deepseek-v4-flash"]
