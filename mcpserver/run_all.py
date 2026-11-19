@@ -4,15 +4,18 @@ import time
 import signal
 import os
 
+# Standalone launcher: each server runs as a script from inside this directory.
+HERE = os.path.dirname(os.path.abspath(__file__))
+
 SERVERS = [
-    ("calculator", 8101, [sys.executable, "-m", "mcpserver.calculator_server"]),
-    ("datetime",    8103, [sys.executable, "-m", "mcpserver.datetime_server"]),
+    ("calculator", 8101, [sys.executable, "calculator_server.py"]),
+    ("datetime",    8103, [sys.executable, "datetime_server.py"]),
 ]
 
 
 def start_server(name: int, port: int, cmd: list) -> subprocess.Popen | None:
     try:
-        p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        p = subprocess.Popen(cmd, cwd=HERE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         time.sleep(0.3)
         ret = p.poll()
         if ret is not None:

@@ -9,7 +9,7 @@
 ```
 mcpserver/
 ├── README.md                    # 本文件
-├── __init__.py                  # 包标记，使 python -m mcpserver.* 可用
+├── __init__.py                  # 包标记
 ├── calculator_server.py         # 计算器 MCP 服务器 (端口 8101)
 ├── datetime_server.py           # 日期时间 MCP 服务器 (端口 8103)
 └── run_all.py                   # 一键启动所有服务器
@@ -17,17 +17,21 @@ mcpserver/
 
 ## 启动服务器
 
+MCP 服务器是独立运行的，启动前先 `cd` 到本目录（`mcpserver/`）下执行。
+
 ### 一键启动所有服务器
 
 ```bash
-python3 -m mcpserver.run_all
+cd mcpserver
+python3 run_all.py
 ```
 
 ### 分别启动
 
 ```bash
-python3 -m mcpserver.calculator_server    # 端口 8101
-python3 -m mcpserver.datetime_server      # 端口 8103
+cd mcpserver
+python3 calculator_server.py    # 端口 8101
+python3 datetime_server.py      # 端口 8103
 ```
 
 ## 新增 MCP 服务器
@@ -99,7 +103,7 @@ mcp_servers:
 SERVERS = [
     ("calculator", 8101, ...),
     ("datetime",   8103, ...),
-    ("example",    8200, ["python", "-m", "mcpserver.example_server"]),
+    ("example",    8200, ["python", "example_server.py"]),
 ]
 ```
 

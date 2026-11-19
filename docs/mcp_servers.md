@@ -39,19 +39,21 @@ mcp_servers:
 
 ## 2. 启动 MCP 服务器
 
-项目内置测试服务器位于 `mcpserver/` 目录。
+项目内置测试服务器位于 `mcpserver/` 目录。MCP 服务器是独立运行的，启动命令需先 `cd` 到 `mcpserver/` 子目录下执行，而不是在仓库根目录。
 
 ### 一键启动所有服务器
 
 ```bash
-python3 -m mcpserver.run_all
+cd mcpserver
+python3 run_all.py
 ```
 
 ### 分别启动
 
 ```bash
-python3 -m mcpserver.calculator_server    # 端口 8101
-python3 -m mcpserver.datetime_server      # 端口 8103
+cd mcpserver
+python3 calculator_server.py    # 端口 8101
+python3 datetime_server.py      # 端口 8103
 ```
 
 ### 启动检查
@@ -111,7 +113,7 @@ mcp_servers:
 SERVERS = [
     ("calculator", 8101, ...),
     ("datetime",   8103, ...),
-    ("example",    8200, ["python", "-m", "mcpserver.example_server"]),
+    ("example",    8200, ["python", "example_server.py"]),
 ]
 ```
 
