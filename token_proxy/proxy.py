@@ -207,33 +207,52 @@ def build_targets(entries: list | None, keys_dir: Path) -> list[Target]:
     return targets
 
 
-def build_policies(entries: list | None) -> list[Policy]:
+def build_policies(entries: list | None, keys_dir: Path) -> list[Policy]:
     """Build the per-proxy-key policies from config.yaml ``keys``.
 
     Each entry is a mapping with:
-      key            - the expose proxy key clients must present.
-      targets        - list of target names from targets.yaml this key may use.
-      ip_whitelist   - allowed client IPs/CIDRs for this key (empty -> any).
-      model_whitelist- allowed model names for this key (empty -> any).
+      key_file        - text file under ``keys_dir`` holding the exposed proxy
+                        key (an inline ``key`` is also accepted but discouraged).
+      targets         - list of target names from targets.yaml this key may use.
+      ip_whitelist    - allowed client IPs/CIDRs for this key (empty -> any).
+      model_whitelist - allowed model names for this key (empty -> any).
     """
     policies: list[Policy] = []
     for entry in entries or []:
         if isinstance(entry, str):
-            entry = {"key": entry}
+            entry = {"key_file": entry}
         if not isinstance(entry, dict):
             log.warning("config: ignoring invalid keys entry %r", entry)
             continue
-        key = entry.get("key") or entry.get("api_key")
-        if not key:
-            log.warning("config: keys entry needs a 'key': %r", entry)
+
+        key: str | None = None
+        key_file = entry.get("key_file")
+        if key_file:
+            key_path = Path(str(key_file))
+            if not key_path.is_absolute():
+                key_path = keys_dir / str(key_file)
+            try:
+                key = get_api_key_from_file(key_path)
+            except OSError as exc:
+                log.error("config: keys entry cannot read key file %s: %s", key_path, exc)
+                continue
+            if not key:
+                log.error("config: proxy key file %s is empty", key_path)
+                continue
+        elif entry.get("key"):
+            key = str(entry["key"])
+            log.warning("config: keys entry uses an inline 'key'; prefer a key_file under proxy_keys_dir")
+        else:
+            log.warning("config: keys entry needs key_file (or key): %r", entry)
             continue
+
         target_names = entry.get("targets")
         if target_names is not None:
             target_names = [str(name) for name in target_names]
         models = {str(m) for m in (entry.get("model_whitelist") or []) if str(m).strip()}
         policies.append(
             Policy(
-                key=str(key),
+                key=key,
                 target_names=target_names,
                 nets=_parse_networks(entry.get("ip_whitelist")),
                 models=models,
@@ -245,7 +264,7 @@ def build_policies(entries: list | None) -> list[Policy]:
 class ProxyState:
     """Everything the proxy needs at request time, derived from the two configs."""
 
-    def __init__(self, config: dict, targets: list[Target], config_path: Path) -> None:
+    def __init__(self, config: dict, targets: list[Target], config_path: Path, proxy_keys_dir: Path) -> None:
         self.config_path = config_path
         server = config.get("server") or {}
         self.host = str(server.get("host", "0.0.0.0"))
@@ -256,7 +275,7 @@ class ProxyState:
         self.trust_proxy = bool(config.get("trust_proxy", False))
 
         self.targets = targets
-        self.keys = build_policies(config.get("keys"))
+        self.keys = build_policies(config.get("keys"), proxy_keys_dir)
         self._counter = itertools.count()
         self.client: httpx.AsyncClient | None = None
 
@@ -376,7 +395,11 @@ def create_app(config_path: Path = DEFAULT_CONFIG_PATH, targets_path: Path = DEF
         keys_dir = (targets_path.parent / keys_dir).resolve()
     targets = build_targets(targets_config.get("targets"), keys_dir)
 
-    state = ProxyState(config, targets, config_path)
+    proxy_keys_dir = Path(str(config.get("proxy_keys_dir") or "proxy_keys"))
+    if not proxy_keys_dir.is_absolute():
+        proxy_keys_dir = (config_path.parent / proxy_keys_dir).resolve()
+
+    state = ProxyState(config, targets, config_path, proxy_keys_dir)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

@@ -3,13 +3,20 @@
 # ----------------------------------------------------------------------------
 # Server settings plus one entry per EXPOSED proxy key. Each proxy key is an
 # independent caller identity: it lists which target names it may use, plus its
-# own client-IP whitelist and model-name whitelist. The real token never leaves
-# targets.yaml / keys_dir; callers only ever see a proxy key from this file.
+# own client-IP whitelist and model-name whitelist. Neither the real token nor
+# the exposed proxy key is written here: the real token lives under keys_dir
+# (targets.yaml) and the proxy key lives under proxy_keys_dir (below), both as
+# plain text files referenced by name. Callers only ever see their proxy key.
 # ============================================================================
 
 server:
   host: "0.0.0.0"
   port: 8080
+
+# Folder holding the exposed proxy-key text files referenced by `keys` below.
+# Relative paths resolve against this config file. These *.txt files are
+# gitignored, the same way keys_dir (real tokens) is.
+proxy_keys_dir: "proxy_keys"
 
 # Routing strategy across the targets allowed for a key:
 #   round_robin - load-balance; on a connect error fail over to the next target.
@@ -23,24 +30,25 @@ timeout: 600
 # when the proxy sits behind a trusted reverse proxy; otherwise it can be spoofed.
 trust_proxy: false
 
-# One entry per exposed proxy key. Clients present it as
+# One entry per exposed proxy key. The key value is NOT written here; it is read
+# from a text file under proxy_keys_dir, and clients present it as
 # "Authorization: Bearer <key>", or via the api-key / x-api-key header.
 #
 # Fields per key:
-#   key             - the proxy key given to the caller.
+#   key_file        - text file under proxy_keys_dir holding the proxy key.
 #   targets         - target names (from targets.yaml) this key may use.
 #                     Omit / null -> any target.
 #   ip_whitelist    - allowed client IPs / CIDRs for this key. Empty -> any IP.
 #   model_whitelist - allowed model names for this key. Empty -> any model.
 keys:
-  - key: "sk-proxy-REPLACE_ME"
+  - key_file: "proxy_key_1.txt"
     targets: ["main", "backup"]
     ip_whitelist: ["127.0.0.1", "::1"]
     model_whitelist: ["deepseek-v4.1-flash", "deepseek-v4-flash", "glm-5.3-flash"]
 
   # Example: a second caller restricted to one target, a private network, and a
   # single model.
-  # - key: "sk-proxy-second"
+  # - key_file: "proxy_key_2.txt"
   #   targets: ["backup"]
   #   ip_whitelist: ["10.0.0.0/8"]
   #   model_whitelist: ["deepseek-v4-flash"]

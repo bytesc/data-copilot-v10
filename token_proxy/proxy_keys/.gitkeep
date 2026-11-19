@@ -1,0 +1,3 @@
+# Keeps the (otherwise empty, gitignored) proxy_keys/ folder in version control.
+# Put one exposed proxy key per *.txt file here; they are ignored by .gitignore.
+# Each is referenced by name from config.yaml `keys: - key_file: ...`.
