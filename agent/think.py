@@ -20,6 +20,7 @@ from utils.get_config import config_data
 from utils.perf_log import perf_api
 
 _ENABLE_TARGET = config_data.get('enable_target_knowledge', False)
+_ENABLE_WEB_SEARCH = config_data.get('enable_web_search', True)
 
 router = APIRouter()
 
@@ -34,6 +35,21 @@ def _build_think_prompt(context: str, blackboard_text: str) -> str:
     target_section = ""
     if _ENABLE_TARGET and TARGET.strip() != "":
         target_section = "The target document template below defines the final report structure and content that must be produced. Ensure your plan covers all sections, data points, images, and tables required by this template:\n\n" + TARGET
+
+    rules = [
+        "Each step should be a specific, actionable task.",
+        "The todo list may be empty, or contain between 1 and 10 items. Set todo to an empty list when there is no data work to do: a simple greeting, thanks, or chit-chat (the assistant answers those briefly), or a request to summarize, conclude, or report on results already in the conversation. If all tasks are done, also set todo to an empty list.",
+        "Mention specific table names and field names in data retrieval tasks.",
+        "A step can contain a query together with the related chart(s).",
+        "When the user asks to analyze data, ALWAYS prefer querying the database directly.",
+        "Do NOT mention specific function or API names - describe what data to get, not how to get it.",
+        "Before generating any code, you MUST first explore the available function catalog (explore_functions) to find the relevant functions.",
+        "Before querying the database, you MUST first explore the database schema (explore_schema) to understand the relevant tables and fields.",
+    ]
+    if _ENABLE_WEB_SEARCH:
+        rules.append("web_search retrieves external facts, news, and reference information. Data analysis must be based on the local database; web results may only be cited as supplementary reference with their source noted, not used as a substitute for local data.")
+    rules.append("The `explore_*` actions write their results into the blackboard, overwriting the previous region. When the user's requirements change or the needed data/functions/knowledge are outside the current blackboard scope, include the corresponding explore action again instead of reusing stale blackboard data.")
+    rules_str = "\n".join(f"{i + 1}. {rule}" for i, rule in enumerate(rules))
 
     return f"""You are an autonomous data analysis Thinker. Your job is to take a user's question, think about it and analyze the available database and tools, and produce a structured plan.
 
@@ -56,16 +72,7 @@ ACTIONS AVAILABLE (reference only — do not output action JSON):
 LANGUAGE — READ THIS FIRST: Before generating any output, check the user's question language. Your ENTIRE output (description and todo items) MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, you MUST write in Chinese. If the user asked in English, you MUST write in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context, database information, and knowledge base may contain mixed languages — they are for factual content ONLY. Their language must NEVER leak into your output. Every word you output must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
 
 Rules:
-1. Each step should be a specific, actionable task.
-2. The todo list may be empty, or contain between 1 and 10 items. If the question is a simple greeting, chat, summary or requires no data analysis, set todo to an empty list. If all tasks are done, set todo to an empty list.
-3. Mention specific table names and field names in data retrieval tasks.
-4. A step can contain a query together with the related chart(s).
-5. When the user asks to analyze data, ALWAYS prefer querying the database directly.
-6. Do NOT mention specific function or API names - describe what data to get, not how to get it.
-7. Before generating any code, you MUST first explore the available function catalog (explore_functions) to find the relevant functions.
-8. Before querying the database, you MUST first explore the database schema (explore_schema) to understand the relevant tables and fields.
-9. web_search retrieves external facts, news, and reference information. Data analysis must be based on the local database; web results may only be cited as supplementary reference with their source noted, not used as a substitute for local data.
-10. The `explore_*` actions write their results into the blackboard, overwriting the previous region. When the user's requirements change or the needed data/functions/knowledge are outside the current blackboard scope, include the corresponding explore action again instead of reusing stale blackboard data.
+{rules_str}
 
 Output ONLY a valid JSON object on a single line (no md block):
 

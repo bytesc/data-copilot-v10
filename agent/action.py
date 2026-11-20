@@ -158,7 +158,7 @@ GROUPING RULES:
 
 _DECISION_RULES = [
     "If the plan is complete or no further actions are needed, choose attempt_completion.",
-    "If the plan has an empty todo list because the request is only a greeting, thanks, or chit-chat that needs no data analysis, choose ask_question with a polite response to the user.",
+    "If the plan has an empty todo list, choose the action by the user's intent: use attempt_completion when the user expects content back as the final answer (e.g., a summary, conclusion, or report of results already in the conversation); use ask_question (or ask_choice) with a polite response only when the request is just a greeting, thanks, or chit-chat that expects no substantive content.",
     "If you need to ask the user something, choose ask_question or ask_choice.",
     "If you want to pause and show progress, choose summary_and_pause.",
     "`summary_and_pause` and `attempt_completion` are single-action only: never place them inside an \"actions\" array. Which actions may be batched is defined by the GROUPING RULES above; never mix Group 1 and Group 2.",
@@ -212,6 +212,7 @@ def _build_action_prompt(
 
 The system is working in Think → Action → Act → Observe cycles. You takes the `Action` part.
 
+⚠️ LANGUAGE — READ THIS FIRST: Before generating any output, check the user's language from the conversation history (the original question and the most recent user messages). All free-text values you output MUST be in the EXACT SAME language as the user: the "text" of ask_question / ask_choice / summary_and_pause / attempt_completion, the "choices" array of ask_choice, the "research_guide" of generate_and_execute, and the "title" of generate_document. If the user asked in Chinese, you MUST write these values in Chinese. If the user asked in English, you MUST write them in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context, database information, and knowledge base may contain mixed languages — they are for factual content ONLY. Their language must NEVER leak into your output. JSON structural keys and action names stay in English as shown; every human-readable word inside text/choices/research_guide/title must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
 
 Output ONLY a valid JSON object on a single line (no md block). Choose from:
 

@@ -10,6 +10,9 @@ from .tools.copilot.utils.code_insert import insert_lines_into_function
 from .tools.tools_def import engine, llm, exe_sql, read_only_engine
 
 from .tools.copilot.utils.code_executor import execute_py_code
+# Single source of truth for the module allow-list promised by the code-gen
+# prompt below; keeps prompt, injected imports and sandbox policy in sync.
+from .tools.copilot.utils.sandbox.policy import ALLOWED_MODULE_ROOTS
 from .tools.copilot.sql_code import get_db_info_prompt, filter_db_fields
 from .tools.copilot.utils.parse_output import parse_generated_python_code
 from utils.perf_log import record_code_exec
@@ -37,7 +40,28 @@ THIRD_MODULE = ["import pandas as pd", "import numpy as np",
                 "import matplotlib.pyplot as plt", "import seaborn as sns",
                 "import json", "import re", "import datetime",
                 "import textwrap", "import random",
-                "import collections", "import io", "import functools"]
+                "import collections", "import io", "import functools",
+                "import itertools", "import statistics", "import decimal",
+                "import fractions", "import uuid", "import string",
+                "import copy", "import typing", "import warnings",
+                "import numbers"]
+
+# The code-gen prompt promises exactly the modules injected into `func`, and the
+# sandbox policy allow-list must match both: a module promised but not injected
+# raises NameError at runtime, while one injected but not allowed is rejected by
+# the policy. Warn loudly if the lists ever drift apart.
+_INJECTED_MODULE_ROOTS = set()
+for _line in IMPORTANT_MODULE + THIRD_MODULE:
+    _parts = _line.split()
+    if len(_parts) >= 2 and _parts[0] in ("import", "from"):
+        _INJECTED_MODULE_ROOTS.add(_parts[1].split(".")[0])
+if _INJECTED_MODULE_ROOTS != ALLOWED_MODULE_ROOTS:
+    print(
+        "[WARNING] Injected code-gen module imports do not match the sandbox "
+        "policy ALLOWED_MODULE_ROOTS; "
+        f"missing={sorted(ALLOWED_MODULE_ROOTS - _INJECTED_MODULE_ROOTS)} "
+        f"extra={sorted(_INJECTED_MODULE_ROOTS - ALLOWED_MODULE_ROOTS)}"
+    )
 
 # print(get_db_info_prompt(engine, simple=True, example=False))
 
@@ -141,12 +165,20 @@ Please use the following functions to write Python code to solve the problem.
 Here are the functions you can call directly (do NOT import them):
 """
     available_import_lines = IMPORTANT_MODULE + THIRD_MODULE
-    module_prompt = """
+    allowed_modules_str = ", ".join(sorted(ALLOWED_MODULE_ROOTS))
+    module_prompt = f"""
 PRE-IMPORTED MODULES (READ THIS FIRST):
-The modules/setup lines listed below are ALREADY imported and initialized in the execution environment. They are injected automatically into your code after generation.
-Your generated code MUST NOT write any import statement, MUST NOT re-import any of these modules, and MUST NOT import or use ANY module other than the ones listed below.
+Your generated code MUST NOT write ANY import statement (e.g. do NOT write `import pandas as pd`), MUST NOT re-import any of these modules, and MUST NOT import or use ANY module other than the ALLOWED MODULES listed below.
+How the modules are provided for you (you never need to import anything yourself):
+- ALL allowed modules are made available by the import/setup lines shown below, which the system injects automatically into your code after generation.
+- In sandboxed execution the runtime additionally pre-initializes the common ones (pd, np, plt, sns, PIL, math, json, re, datetime, matplotlib) before your code runs.
 
-""" + "\n".join(available_import_lines) + "\n"
+Import/setup lines injected automatically:
+{chr(10).join(available_import_lines)}
+
+ALLOWED MODULES (use ONLY these): {allowed_modules_str}.
+Any module outside this list (e.g. os, sys, subprocess, requests, urllib, socket) is blocked by the execution policy and will fail with an error.
+"""
 
     example_code = """
     Here is an example: 
