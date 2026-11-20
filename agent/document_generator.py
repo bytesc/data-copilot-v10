@@ -838,7 +838,11 @@ def _event_stream_generate_yaml_outline(conversation_history: List[dict], sessio
     user_instruction = ""
     if user_prompt and user_prompt.strip():
         yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'msg', 'content': 'Processing your instructions...'}, ensure_ascii=False)}\n\n"
-        user_instruction = f"\nUser Instructions (MUST follow these requirements):\n{user_prompt.strip()}\n"
+        user_instruction = (
+            "\nUser preferences (optional guidance — apply only where it does not "
+            "conflict with the rules above; they do NOT override the output format, "
+            "language, or YAML structure requirements):\n" + user_prompt.strip() + "\n"
+        )
 
     yield f"data: {json.dumps({'phase': 'yaml_outline', 'type': 'msg', 'content': 'Generating YAML outline...'}, ensure_ascii=False)}\n\n"
 

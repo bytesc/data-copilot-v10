@@ -119,7 +119,9 @@ def _event_stream_observe_impl(
 
     def build_prompt(level):
         trimmed = prepare_trimmed_context(session_id, conversation_history, level=level)
-        context = history_to_text(trimmed) if conversation_history else ""
+        # No history (a direct API caller may omit it): fall back to the current
+        # question instead of an empty "(no context)", matching Think/Action/Act.
+        context = history_to_text(trimmed) if conversation_history else question
         blackboard_text = blackboard_section(conversation_history, level=level)
         return _build_observe_prompt(context, blackboard_text)
 
