@@ -1240,6 +1240,8 @@ app.include_router(sys_knowledge_router)
 
 
 def _check_mcp_servers():
+    if not config_data.get("enable_mcp", True):
+        return
     try:
         from agent.tools.mcp_client import load_mcp_servers
         servers = load_mcp_servers()
