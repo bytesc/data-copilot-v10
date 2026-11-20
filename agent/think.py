@@ -64,7 +64,7 @@ Rules:
 6. Do NOT mention specific function or API names - describe what data to get, not how to get it.
 7. Before generating any code, you MUST first explore the available function catalog (explore_functions) to find the relevant functions.
 8. Before querying the database, you MUST first explore the database schema (explore_schema) to understand the relevant tables and fields.
-9. web_search is used to obtain news, articles and other text information, NOT to scrape or collect data for analysis. Data analysis must query the local database.
+9. web_search retrieves external facts, news, and reference information. Data analysis must be based on the local database; web results may only be cited as supplementary reference with their source noted, not used as a substitute for local data.
 10. The `explore_*` actions write their results into the blackboard, overwriting the previous region. When the user's requirements change or the needed data/functions/knowledge are outside the current blackboard scope, include the corresponding explore action again instead of reusing stale blackboard data.
 
 Output ONLY a valid JSON object on a single line (no md block):

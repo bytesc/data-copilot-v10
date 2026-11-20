@@ -74,11 +74,11 @@ _ACTION_DESCRIPTIONS = {
 
 if ENABLE_BASE_KNOWLEDGE:
     _ACTION_DESCRIPTIONS["explore_base_knowledge"] = """- explore_base_knowledge: {"action": "explore_base_knowledge", "keyword": "..."}
-  Explore the base knowledge (business domain knowledge, documentation, thinking strategies). Optional keyword hints the LLM to focus on specific knowledge entries. Running it writes/overwrites the KNOWLEDGE region of the blackboard; re-run it when the user's requirements or domain context change. Use this to retrieve relevant business context, domain rules, or documentation from the knowledge base."""
+  Explore the base knowledge (business domain knowledge and rules). Optional keyword hints the LLM to focus on specific knowledge entries. Running it writes/overwrites the KNOWLEDGE region of the blackboard; re-run it when the user's requirements or domain context change. Use this to retrieve relevant business context, domain rules, or background knowledge from the knowledge base."""
 
 if ENABLE_WEB_SEARCH:
     _ACTION_DESCRIPTIONS["web_search"] = """- web_search: {"action": "web_search", "query": "search query (required)", "max_results": 10}
-  Search the web using DuckDuckGo. `query` is required: omitting it fails the action (there is no context fallback). Use this when the user asks for real-time information, news, facts, or data not available in the local database. Returns a list of results with title, URL, and snippet. Optionally set max_results (default 10, max 50) to control how many results to return."""
+  Search the web using DuckDuckGo. `query` is required: omitting it fails the action (there is no context fallback). Use this when the user asks for real-time information, news, facts, or context not available in the local database. Treat web results as supplementary reference to cite with their source; data analysis itself must be based on the local database. Returns a list of results with title, URL, and snippet. Optionally set max_results (default 10, max 50) to control how many results to return."""
 
 if ENABLE_FETCH_URL:
     _ACTION_DESCRIPTIONS["fetch_webpage"] = """- fetch_webpage: {"action": "fetch_webpage", "urls": ["https://example.com/a", "https://example.com/b"], "max_length": 10000}
@@ -120,9 +120,14 @@ if ENABLE_BASE_KNOWLEDGE:
 if ENABLE_MCP:
     _GROUP_1_ACTIONS.append("explore_mcp")
 
-_GROUP_2_ACTIONS = ["ask_question", "ask_choice", "summary_and_pause", "attempt_completion"]
+_GROUP_2_ACTIONS = ["ask_question", "ask_choice"]
 
-_OTHER_ACTIONS = ["generate_and_execute", "generate_document"]
+# Single-action-only actions. ``summary_and_pause`` / ``attempt_completion`` end
+# the cycle like any other terminal action, so they live here (not in Group 2):
+# they must be output as a lone ``{"action": ...}`` and never inside an
+# ``actions`` array.
+_OTHER_ACTIONS = ["generate_and_execute", "generate_document",
+                  "summary_and_pause", "attempt_completion"]
 if ENABLE_WEB_SEARCH:
     _OTHER_ACTIONS.append("web_search")
 if ENABLE_FETCH_URL:
@@ -138,13 +143,17 @@ You can output MULTIPLE actions in one cycle by using an "actions" array instead
 {{"actions": [{{"action": "explore_schema"}}, {{"action": "explore_functions"}}]}}
 
 GROUPING RULES:
-- Group 1 (Explore & Image Selection): {', '.join(_GROUP_1_ACTIONS)}. These can be batched together.
-- Group 2 (User Interaction): {', '.join(_GROUP_2_ACTIONS)}. These can be batched together. summary_and_pause and attempt_completion must be the LAST action in the array, and each can appear at most once.
-- Group 1 and Group 2 CANNOT be mixed in the same "actions" array. In particular, NEVER output `select_images` together with `ask_question`, `ask_choice`, `summary_and_pause`, or `attempt_completion`.
+- Group 1 (Explore & Image Selection, batchable): {', '.join(_GROUP_1_ACTIONS)}. These can be batched together.
+- Group 2 (User Asking, batchable): {', '.join(_GROUP_2_ACTIONS)}. These two may be batched together.
+- Group 1 and Group 2 CANNOT be mixed in the same "actions" array. In particular, NEVER output `select_images` together with `ask_question` or `ask_choice`.
+- Single-action only ({', '.join(_OTHER_ACTIONS)}): each of these must be output as ONE action, i.e. `{{"action": "..."}}`. NEVER put any of them inside an "actions" array, with or without other actions. In particular, `summary_and_pause` and `attempt_completion` end the cycle and must always be output alone, never batched with `ask_question`/`ask_choice` or anything else.
 - Correct: {{"actions": [{{"action": "explore_schema"}}, {{"action": "select_images", "images": [...]}}]}}
 - Correct: {{"actions": [{{"action": "ask_question", "text": "..."}}, {{"action": "ask_choice", "text": "..."}}]}}
+- Correct: {{"action": "attempt_completion", "text": "..."}}
+- Correct: {{"action": "summary_and_pause", "text": "..."}}
+- INVALID: {{"actions": [{{"action": "ask_question", "text": "..."}}, {{"action": "attempt_completion", "text": "..."}}]}}  (ending action batched with an asking action)
 - INVALID: {{"actions": [{{"action": "select_images", "images": [...]}}, {{"action": "ask_question", "text": "..."}}]}}
-- All other actions ({', '.join(_OTHER_ACTIONS)}) must be used as single actions only.
+- INVALID: {{"actions": [{{"action": "generate_and_execute", "research_guide": "..."}}, {{"action": "explore_schema"}}]}}  (single-action-only action inside a batch)
 """
 
 _DECISION_RULES = [
@@ -152,6 +161,7 @@ _DECISION_RULES = [
     "If the plan has an empty todo list because the request is only a greeting, thanks, or chit-chat that needs no data analysis, choose ask_question with a polite response to the user.",
     "If you need to ask the user something, choose ask_question or ask_choice.",
     "If you want to pause and show progress, choose summary_and_pause.",
+    "`summary_and_pause` and `attempt_completion` are single-action only: never place them inside an \"actions\" array. Which actions may be batched is defined by the GROUPING RULES above; never mix Group 1 and Group 2.",
     "`generate_and_execute` is the major action to solve complex problems.",
     "`explore_schema` returns all relevant data structure and schema in the database at a time based on previous context. DO NOT try to perform two explore_schema with the same consecutively.",
     "`explore_functions` returns all relevant available python function catalog at a time based on previous context. DO NOT try to perform two explore_functions with the same consecutively.",
@@ -164,9 +174,9 @@ _DECISION_RULES = [
     "Each `explore_*` action writes/overwrites its region of the blackboard, and the blackboard is the source of truth for later code generation. When the user's requirements change (new scope, new tables, new analysis, or a correction), re-run the affected `explore_*` actions instead of relying on stale blackboard data.",
 ]
 if ENABLE_BASE_KNOWLEDGE:
-    _DECISION_RULES.append("`explore_base_knowledge` searches the business domain knowledge base with an optional keyword. Use it to retrieve relevant business rules, domain context, documentation, or thinking strategies. DO NOT perform two explore_base_knowledge consecutively.")
+    _DECISION_RULES.append("`explore_base_knowledge` searches the business domain knowledge base with an optional keyword. Use it to retrieve relevant business rules, domain context, or background knowledge. DO NOT perform two explore_base_knowledge consecutively.")
 if ENABLE_WEB_SEARCH:
-    _DECISION_RULES.append("`web_search` searches the web for real-time information. Use it when the user asks about current events, news, facts, or data that is unlikely to be in the local database.")
+    _DECISION_RULES.append("`web_search` searches the web for external facts, news, and reference information. Use it when the user asks about current events, news, facts, or context not available in the local database; treat results as supplementary reference with sources noted, while data analysis stays based on the local database.")
 if ENABLE_FETCH_URL:
     _DECISION_RULES.append("`fetch_webpage` fetches one or more URLs in parallel and returns their extracted main text. Pass multiple URLs via the `urls` array to read several pages at once; only fetch URLs that came from a previous search result.")
 if ENABLE_MCP:
@@ -328,14 +338,22 @@ def _parse_action_json(raw: str) -> dict:
             if act not in VALID_ACTIONS:
                 return {"action": None, "error": f"Unknown action in actions list: {act}", "raw": result}
             action_names.append(act)
-        has_group_1 = any(act in _GROUP_1_ACTIONS for act in action_names)
-        has_group_2 = any(act in _GROUP_2_ACTIONS for act in action_names)
-        if has_group_1 and has_group_2:
-            return {
-                "action": None,
-                "error": "Group 1 actions (explore_*/select_images) cannot be mixed with Group 2 actions (ask_question/ask_choice/summary_and_pause/attempt_completion). Output them in separate cycles.",
-                "raw": result,
-            }
+        # A multi-action array is only valid when every item belongs to the same
+        # batchable group: all Group 1 (explore_*/select_images) or all Group 2
+        # (ask_question/ask_choice). Any single-action-only action (e.g.
+        # generate_and_execute / summary_and_pause / attempt_completion) is
+        # rejected here, so the parser matches the prompt's grouping rules
+        # instead of silently accepting an invalid batch. A one-item array is
+        # tolerated as a common model quirk.
+        if len(action_names) > 1:
+            all_group_1 = all(act in _GROUP_1_ACTIONS for act in action_names)
+            all_group_2 = all(act in _GROUP_2_ACTIONS for act in action_names)
+            if not (all_group_1 or all_group_2):
+                return {
+                    "action": None,
+                    "error": "Invalid action batch: an \"actions\" array may only contain multiple Group 1 actions (explore_*/select_images) or multiple Group 2 actions (ask_question/ask_choice). All other actions must be output alone as a single \"action\".",
+                    "raw": result,
+                }
         return _build_multi_action_result(actions_list)
 
     action = result.get("action", "")

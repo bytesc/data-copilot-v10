@@ -37,7 +37,7 @@
 
 ## action
 
-支持单 action 输出 `action_result:{action, ...}` 或多 action 输出 `action_result:{actions:[{action, ...}, ...]}`。可批量组（`_GROUP_1_ACTIONS`）为 `explore_schema`、`explore_functions`、`select_images`，以及按配置启用的 `explore_base_knowledge`、`explore_mcp`；用户交互类（`ask_question`/`ask_choice`/`summary_and_pause`/`attempt_completion`）可批量，其中 summary_and_pause/attempt_completion 必须在最后。两类不可混排，其余 action 只能单次。
+支持单 action 输出 `action_result:{action, ...}` 或多 action 输出 `action_result:{actions:[{action, ...}, ...]}`。可批量组（`_GROUP_1_ACTIONS`）为 `explore_schema`、`explore_functions`、`select_images`，以及按配置启用的 `explore_base_knowledge`、`explore_mcp`；询问类（`ask_question`/`ask_choice`，`_GROUP_2_ACTIONS`）可批量。两类不可混排。`summary_and_pause`/`attempt_completion` 与 `generate_and_execute`/`generate_document`/`web_search`/`fetch_webpage`/`exe_mcp` 均为“只能单独执行”，不能放进 `actions` 数组。
 
 ```
 成功：

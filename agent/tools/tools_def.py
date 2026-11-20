@@ -220,14 +220,16 @@ def get_save_image_path() -> str:
        - str: A unique path to save the png graph image, the path include the file name.
        Example:
        ```python
-        def func(data_dict):
+        def func():
             # No import statements: pandas / numpy / matplotlib (Agg) and the
             # Chinese font are all provided by the execution environment.
+            # The generated code MUST yield, never return or print.
             # Data
-            x = data_dict['x']
-            y1 = data_dict['y1']
-            y2 = data_dict['y2']
+            x = ['Jan', 'Feb', 'Mar']
+            y1 = [120, 150, 130]
+            y2 = [80, 95, 110]
 
+            yield "Monthly sales comparison:"
             # Plot
             fig, ax = plt.subplots(figsize=(8, 5))
             ax.bar(x, y1, label='A', color='steelblue')
@@ -245,7 +247,7 @@ def get_save_image_path() -> str:
             plt.savefig(path)
             plt.close()
 
-            return path
+            yield path
        ```
        """
     return generate_img_path()

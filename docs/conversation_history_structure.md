@@ -399,7 +399,7 @@ LLM 输出的 JSON 对象，格式为 `{"description": "...", "todo": [...]}`。
 
 ## action
 
-LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explore_schema/functions/base_knowledge/mcp）与 `select_images` 可批量；用户交互类（ask_question/ask_choice/summary_and_pause/attempt_completion）可批量，summary_and_pause/attempt_completion 必须在最后。两类不可混排。
+LLM 输出的 JSON 对象，支持单 action 或多 action。Explore 类（explore_schema/functions/base_knowledge/mcp）与 `select_images` 可批量；询问类（ask_question/ask_choice）可批量。两类不可混排。`summary_and_pause`/`attempt_completion`（及 `generate_and_execute`/`generate_document`/`web_search`/`fetch_webpage`/`exe_mcp`）只能单独执行，不能放进 `actions` 数组。
 
 单 action 格式 `{"action": "...", ...}`：
 

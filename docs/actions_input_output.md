@@ -47,12 +47,12 @@
 {"role":"assistant","type":"action_decision","content":{"actions":[{"action":"explore_schema"},{"action":"explore_functions"}]}}
 ```
 
-**输出（多 action，用户交互类可批量，summary_and_pause/attempt_completion 必须在最后）**
+**输出（多 action，Group 2 询问类可批量）**
 ```json
 {"role":"assistant","type":"action_decision","content":{"actions":[{"action":"ask_question","text":"..."},{"action":"ask_choice","text":"...","choices":["..."]}]}}
 ```
 
-Group 1（`explore_*` / `select_images`）和 Group 2（`ask_question` / `ask_choice` / `summary_and_pause` / `attempt_completion`）不能混在同一个 `actions` 数组中。例如 `[{"action":"select_images",...},{"action":"ask_question",...}]` 是非法的，后端会拒绝并要求重新决策；需要选图并说明时应拆成两个 cycle。解析器只强制上述 Group 1 / Group 2 互斥；其余 action（`generate_and_execute` / `generate_document` / `web_search` / `fetch_webpage` / `exe_mcp`）的“只能单独执行”仅由提示词约束（见 `agent/action.py` 的 `ACTIONS` 文本），`_parse_action_json` 并不会拒绝把它们放进 `actions` 数组。
+`actions` 数组只在“同属同一个可批量组”时合法：Group 1（`explore_*` / `select_images`）或 Group 2（`ask_question` / `ask_choice`）。两类不能混排，例如 `[{"action":"select_images",...},{"action":"ask_question",...}]` 非法，后端会拒绝并要求重新决策；需要选图并说明时应拆成两个 cycle。`summary_and_pause` / `attempt_completion`（以及 `generate_and_execute` / `generate_document` / `web_search` / `fetch_webpage` / `exe_mcp`）属于“只能单独执行”的动作，必须以 `{"action": ...}` 单独输出，不能放进任何 `actions` 数组。解析器（`_parse_action_json`）强制上述规则：多项数组仅当全部属于 Group 1 或全部属于 Group 2 时通过，其余一律拒绝；单项数组按常见写法容忍。
 
 **上下文**
 ```

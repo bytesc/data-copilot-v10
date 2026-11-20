@@ -39,7 +39,9 @@ _ENABLE_BASE_KNOWLEDGE = config_data.get('enable_base_knowledge', True)
 _ENABLE_WEB_SEARCH = config_data.get('enable_web_search', True)
 _ENABLE_FETCH_URL = config_data.get('enable_fetch_url', True)
 
-# Group 2 ("user interaction") actions. The web frontend renders these locally
+# User-interaction actions. These are `ask_question` / `ask_choice` (Group 2 in
+# `agent/action.py`) plus the single-action-only `summary_and_pause` /
+# `attempt_completion`. The web frontend renders these locally
 # and normally does not call /api/act/stream/ for them, but they are declared in
 # `agent/action.py` VALID_ACTIONS and documented as act actions, so the endpoint
 # must execute them too (a direct API caller otherwise got "Unknown action" and
@@ -214,10 +216,11 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
             "selected_images": normalize_selected_images(act_data.get("images")),
         })
     elif action in _USER_INTERACTION_ACTIONS:
-        # Documented act entry for Group 2 actions (docs/actions_input_output.md
-        # sections 6-9): action + text, plus choices for ask_choice. The
-        # interaction semantics (needs_user_input / paused / completed) are
-        # carried on the SSE `done` result so the client can drive its loop.
+        # Documented act entry for user-interaction actions
+        # (docs/actions_input_output.md sections 6-9): action + text, plus
+        # choices for ask_choice. The interaction semantics (needs_user_input /
+        # paused / completed) are carried on the SSE `done` result so the client
+        # can drive its loop.
         entry = {"role": "assistant", "type": "act", "action": action, "text": act_data.get("text", "")}
         if action == "ask_choice":
             entry["choices"] = act_data.get("choices", [])
@@ -1087,7 +1090,7 @@ def _act_select_images(session_id: str, params: dict, request_json: str = ""):
 
 
 def _act_user_interaction(action: str, session_id: str, params: dict, request_json: str = ""):
-    """Execute a Group 2 (user interaction) action: ask_question / ask_choice /
+    """Execute a user-interaction action: ask_question / ask_choice /
     summary_and_pause / attempt_completion.
 
     These actions do not call any tool; they surface ``params["text"]`` (and

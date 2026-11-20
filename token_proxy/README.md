@@ -86,38 +86,22 @@ server:
 
 proxy_keys_dir: "proxy_keys"   # 对外代理 key 文件目录（相对本文件）
 
-strategy: round_robin          # round_robin（轮询+故障转移）| first（优先第一个）
 timeout: 600                   # 上游读写超时（秒），流式建议调大
 trust_proxy: false             # 是否信任 X-Forwarded-For 作为客户端 IP
 
 keys:
   - key_file: "proxy_key_1.txt"          # proxy_keys_dir 下的代理 key 文件
-    targets: ["main", "backup"]          # 该 key 可用的目标；省略 = 全部
+    targets: ["main", "backup"]          # 该 key 可用的目标，按顺序；省略 = 全部
     ip_whitelist: ["127.0.0.1", "::1"]   # 允许的客户端 IP/CIDR；空 = 不限
     model_whitelist: ["deepseek-v4.1-flash", "glm-5.3-flash"]  # 空 = 不限
 ```
 
+- `targets` 按列表顺序使用：**第一个为主，其余为备份**，主目标连接失败时自动切下一个；
+  只想要单目标就在该 key 的 `targets` 里只写一个。
 - `ip_whitelist` 支持单个 IP（`127.0.0.1`）与 CIDR（`192.168.0.0/16`），IPv4/IPv6 均可。
 - `trust_proxy` 仅在代理前有可信反向代理时设为 `true`；否则 `X-Forwarded-For` 可被伪造。
 - `keys` 列表为空 = 不鉴权（开放代理，不推荐）。
 - 兼容内联 `key: "sk-xxx"`，但会记 warning，推荐用 `key_file`。
-
-### 模型清单 `models`
-
-参照主项目 `config/config.yaml` 的 `llm_models`，列出可用的模型名，作为各 key
-`model_whitelist` 的参考清单：
-
-```yaml
-models:
-  - model: "deepseek-v4.1-flash"   # 请求体里的 model 名
-  - model: "deepseek-v4-flash"
-  - model: "glm-5.3-flash"
-  - model: "glm-5.3-flashx"
-```
-
-> 说明：该清单是对照主项目列出的模型名，供运维编写各 key 的 `model_whitelist` 参考；
-> 代理自身不依赖主项目，也不读取主项目的任何代码或配置。实际是否放行由各 key 的
-> `model_whitelist` 决定，选目标由该 key 的 `targets` + `strategy` 决定。
 
 代理 key 文件内容同样是一行：
 
@@ -162,9 +146,9 @@ curl http://127.0.0.1:8088/v1/models \
 2. **IP 白名单**：按该 key 的 `ip_whitelist` 校验客户端 IP，不符 → `403 ip_not_allowed`。
 3. **模型白名单**：若请求体为 JSON 且含 `model`，按该 key 的 `model_whitelist` 校验，
    不符 → `403 model_not_allowed`。
-4. **选目标**：在该 key 的 `targets` 子集内选择。
+4. **选目标**：在该 key 的 `targets` 子集内按顺序选择。
    - `X-Proxy-Target` 指定目标时，须在该子集内，越权 → `400 target_not_allowed`。
-   - 否则按 `strategy`：`round_robin`（轮询）或 `first`（优先第一个）；连接失败自动切下一个。
+   - 否则用第一个作为主目标，连接失败自动切到子集里的下一个（备份）。
    - 子集为空 → `403 no_target`。
 5. **转发**：注入真实 token（默认 `Authorization: Bearer <真实token>`），去掉逐跳头、
    客户端鉴权头、`Host`/`Content-Length` 后发往上游；响应流式回传。

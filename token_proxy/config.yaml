@@ -18,11 +18,6 @@ server:
 # gitignored, the same way keys_dir (real tokens) is.
 proxy_keys_dir: "proxy_keys"
 
-# Routing strategy across the targets allowed for a key:
-#   round_robin - load-balance; on a connect error fail over to the next target.
-#   first       - always use the first allowed target (fail over on error).
-strategy: round_robin
-
 # Upstream read/write timeout in seconds. Keep this large for streaming replies.
 timeout: 600
 

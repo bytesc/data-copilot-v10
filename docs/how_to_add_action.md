@@ -65,7 +65,7 @@ return {
 **d) 若需支持多动作批量执行**
 
 多动作由 `actions` 数组触发，`_parse_action_json` 逐项校验后交给 `_build_multi_action_result` 重建每个条目的字段。要支持批量还需：
-- 把 action 名加入 `_GROUP_1_ACTIONS`（探索/选图类）或 `_GROUP_2_ACTIONS`（用户交互类）。解析器只强制 Group 1 与 Group 2 不能混用，其他动作的“只能单独执行”仅由提示词约束，不在解析器中强制。
+- 把 action 名加入 `_GROUP_1_ACTIONS`（探索/选图类）或 `_GROUP_2_ACTIONS`（询问类，目前为 `ask_question` / `ask_choice`）。解析器强制：多项 `actions` 数组仅当全部属于 Group 1 或全部属于 Group 2 时通过，其余（含“只能单独执行”的动作：`generate_and_execute` / `generate_document` / `summary_and_pause` / `attempt_completion` / `web_search` / `fetch_webpage` / `exe_mcp`）一律拒绝；单项数组容忍。
 - 在 `_build_multi_action_result` 中为每个条目补充需要保留的字段（该函数按白名单字段逐项重建）。
 
 ### 2. `agent/act.py` — 添加执行逻辑

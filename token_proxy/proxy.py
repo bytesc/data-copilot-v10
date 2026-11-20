@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import argparse
 import ipaddress
-import itertools
 import json
 import logging
 import secrets
@@ -270,13 +269,11 @@ class ProxyState:
         self.host = str(server.get("host", "0.0.0.0"))
         self.port = int(server.get("port", 8080))
 
-        self.strategy = str(config.get("strategy", "round_robin")).lower()
         self.timeout = float(config.get("timeout", 600) or 600)
         self.trust_proxy = bool(config.get("trust_proxy", False))
 
         self.targets = targets
         self.keys = build_policies(config.get("keys"), proxy_keys_dir)
-        self._counter = itertools.count()
         self.client: httpx.AsyncClient | None = None
 
     # -- per-key access -----------------------------------------------------
@@ -315,10 +312,10 @@ class ProxyState:
             return None, openai_error(
                 400, f"Target '{forced}' is not allowed", code="target_not_allowed", err_type="permission_error"
             )
-        if self.strategy == "first":
-            return list(allowed), None
-        start = next(self._counter) % len(allowed)
-        return allowed[start:] + allowed[:start], None
+        # No strategy: use the targets in list order. The first is the primary and
+        # the rest are backups, tried in order on a connect error. For a single
+        # target, just configure one in the key's `targets` list.
+        return list(allowed), None
 
 
 # --------------------------------------------------------------------------- #

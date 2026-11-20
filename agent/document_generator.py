@@ -154,7 +154,7 @@ Rules:
 8. Keep the content focused on the section topic
 9. Be thorough but concise
 10. Use proper markdown headings, lists, and tables as needed. Do NOT use any fenced code blocks. Heading depth is limited to `###` (H3) — do NOT use `####`, `#####`, or `######`. Use `###` for sub-headings and plain bold text or bullet points for deeper structure.
-11. ⚠️ Do NOT add numbers to sub-headings (e.g., avoid `### 1. xxx`, `### 2. xxx`). Use descriptive headings only, like `### Key Findings` or `### 核心发现`, so sub-heading numbering never carries over between sections and does not conflict with Word auto-numbering. Numbered lists in body text are allowed but use `-` bullet lists instead of `1.` numbered lists to avoid Word auto-numbering conflicts.
+11. ⚠️ Do NOT add numbers to sub-headings (e.g., avoid `### 1. xxx`, `### 2. xxx`). Use descriptive headings only, like `### Key Findings` or `### 核心发现`, so sub-heading numbering never carries over between sections and does not conflict with Word auto-numbering. In body text, use `-` bullet lists instead of `1.` numbered lists to avoid Word auto-numbering conflicts.
 12. If this section is the final summary or conclusion: do NOT create sub-sections that mirror the earlier section headings. Do NOT structure the summary as a list of per-topic recaps. Instead, synthesize cross-cutting themes into a few concise, actionable recommendations. Answer "so what" and "what to do next." The summary should be shorter than the other sections, not longer.
 """
 
