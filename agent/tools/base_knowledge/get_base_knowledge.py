@@ -58,7 +58,9 @@ def get_base_knowledge_db(key=None, threshold=0.3):
         return {}
 
 
-def base_knowledge_to_str(knowledge):
+def base_knowledge_to_str(knowledge, with_ids=False):
+    if with_ids:
+        return "\n\n".join(f"### [id={v['id']}] {k}\n{v['value']}" for k, v in knowledge.items())
     return "\n\n".join(f"### {k}\n{v['value']}" for k, v in knowledge.items())
 
 
@@ -428,6 +430,11 @@ DB_QUERY_GUIDE = _DynamicStr(_format_db_query_guide)
 
 BASE = _DynamicStr(lambda: "\nbase knowledge for reference:\n" + _BASE_MD\
        + "\n" + base_knowledge_to_str(get_base_knowledge_db()))
+
+# MD-only portion of BASE (`base_knowledge.md`). Code generation injects this
+# instead of BASE: the selected base knowledge is injected via the KNOWLEDGE
+# blackboard region, so the full `base_knowledge` table dump would duplicate it.
+BASE_MD = _DynamicStr(lambda: ("\nbase knowledge for reference:\n" + _BASE_MD) if _BASE_MD.strip() else "")
 
 DOC = _DynamicStr(lambda: ("\ndoc reference(just for reference):\n" + _DOC_MD\
 + "\n" + base_knowledge_to_str(get_doc_guide_db())) if (_DOC_MD.strip() or get_doc_guide_db()) else "")

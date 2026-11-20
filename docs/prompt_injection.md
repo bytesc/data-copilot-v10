@@ -277,7 +277,7 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 
 **文件：** `agent/agent.py` → `get_cot_code_prompt()`
 
-**注入的变量：** `BASE`, `Blackboard`，以及可选 `TARGET`
+**注入的变量：** `BASE_MD`, `Blackboard`，以及可选 `TARGET`
 
 **注入方式：** 字符串拼接
 
@@ -293,9 +293,9 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 | 注入内容 | 来源 | 说明 |
 |----------|------|------|
-| `knowledge` | `BASE` + `code_guide` + `graph_code_guide` | MD base_knowledge.md + DB base_knowledge 表 + DB code_guide 表 + DB graph_code_guide 表 |
+| `knowledge` | `BASE_MD` + `code_guide` + `graph_code_guide` | MD base_knowledge.md + DB code_guide 表 + DB graph_code_guide 表；DB base_knowledge 全量不在此注入（其选中条目已由 blackboard 的 KNOWLEDGE 区提供），避免重复 |
 | `database` | `get_db_info_prompt()` | 数据库表结构；若 blackboard 已有 `schema_detail` 则跳过，避免重复 |
-| `blackboard_text` | `blackboard_section(conversation_history)` | 完整探索结果（DB / FUNC / KNOWLEDGE / MCP） |
+| `blackboard_text` | `blackboard_to_text(blackboard)` | 完整探索结果（DB / FUNC / KNOWLEDGE / MCP）；此阶段省略 FUNC 区的 `func_docs`，因为 `function_info` 已包含选中函数的 docstring |
 | `target_section` | `TARGET` | target_knowledge.md；仅 `enable_target_knowledge=true`（默认 `false`）时注入 |
 | `function_info` | `FUNCTION_DICT` + `ASSIST_FUNCTION_DICT` + `IMPORTANT_FUNC` | 选中函数及其辅助函数、固定重要函数的 docstring；无选中函数时回退 `get_function_info(question, llm, use_all_functions=True)` |
 | `research_guide` | Action 阶段传入 | 自然语言描述需要生成的图表和数据 |
@@ -358,7 +358,7 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 | **Act - explore_functions** | `act.py` | `CUSTOM_FUNC_BRIEF`, 函数目录 | ✅ | MD + DB + blackboard |
 | **Act - explore_base_knowledge** | `act.py` | `BASE_KNOWLEDGE_BRIEF`, `base_knowledge` 表（仅此一张表） | ✅ | MD + DB + blackboard |
 | **Act - explore_mcp** | `act.py` | `MCP_BRIEF`, MCP 工具目录 | ✅ | MD + DB + blackboard |
-| **Act - generate_and_execute** | `agent.py` | `BASE`, `code_guide`, `graph_code_guide`, `TARGET`（可选） | ✅ | MD + DB + blackboard |
+| **Act - generate_and_execute** | `agent.py` | `BASE_MD`, `code_guide`, `graph_code_guide`, `TARGET`（可选） | ✅ | MD + DB + blackboard |
 | **Act - generate_document** | `document_generator.py` | `BASE`, `DOC`, `TARGET`（可选） | ✅ | MD + DB + blackboard |
 | **Observe** | `observe.py` | `Context`, `ACTIONS_BODY`, `TARGET`（可选） | ✅ | blackboard + 裁剪历史 |
 
@@ -424,7 +424,7 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
              schema      base_        &execute     document      functions
                          knowledge
     {THINK_  {DB_BRIEF}  {BASE_       knowledge    {BASE}        {CUSTOM_     {TARGET}
-     KNOWLEDGE}{DB_QUERY_ KNOWLEDGE    = BASE +     {DOC}         FUNC_        {Context}
+     KNOWLEDGE}{DB_QUERY_ KNOWLEDGE    = BASE_MD +  {DOC}         FUNC_        {Context}
     {BRIEF_   GUIDE}     _BRIEF}      code_guide                 BRIEF}       {Blackboard}
      INFO}                             + graph_                                {ACTIONS_
                                        code_guide                               BODY}

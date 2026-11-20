@@ -5,7 +5,7 @@ import time as _time
 
 import pandas as pd
 
-from .tools.base_knowledge.get_base_knowledge import BASE, TARGET, get_code_guide_db, get_graph_code_guide_db, base_knowledge_to_str
+from .tools.base_knowledge.get_base_knowledge import BASE_MD, TARGET, get_code_guide_db, get_graph_code_guide_db, base_knowledge_to_str
 from .tools.copilot.utils.code_insert import insert_lines_into_function
 from .tools.tools_def import engine, llm, exe_sql, read_only_engine
 
@@ -22,7 +22,7 @@ from .utils.final_output_parse import wrap_png_url_with_markdown_image, is_png_u
 from .utils.get_config import config_data
 from .utils.pd_to_csv import pd_to_csv
 from .utils.pd_to_walker import pd_to_walker
-from utils.blackboard import blackboard_to_text, blackboard_input_images
+from utils.blackboard import blackboard_to_text, blackboard_input_images, FUNCTIONS
 from utils.context_trim import cap_text, stream_with_context_retry
 
 STATIC_URL = config_data['static_path']
@@ -65,8 +65,12 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
         selected_functions = None
 
     rag_ans = ""
-    knowledge = ""
-    knowledge = BASE + "\n"
+    # The KNOWLEDGE blackboard region (written by `explore_base_knowledge`) is the
+    # single source of base knowledge for this phase; its selected entries are
+    # injected via `blackboard_text` below. Injecting the full `base_knowledge`
+    # table here would duplicate them, so only `base_knowledge.md` (never offered
+    # to `explore_base_knowledge`) is injected here.
+    knowledge = str(BASE_MD) + "\n" if str(BASE_MD).strip() else ""
     code_guide_data = get_code_guide_db()
     if code_guide_data:
         knowledge += "\nCode Guide:\n" + base_knowledge_to_str(code_guide_data) + "\n"
@@ -75,7 +79,9 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
         knowledge += "\nGraph Code Guide:\n" + base_knowledge_to_str(graph_code_guide_data) + "\n"
     blackboard_text = ""
     if blackboard:
-        bb = blackboard_to_text(blackboard, level=level)
+        # `function_info` below already carries the selected functions'
+        # docstrings, so the FUNC region's short `func_docs` is redundant here.
+        bb = blackboard_to_text(blackboard, level=level, omit_fields={FUNCTIONS: ("func_docs",)})
         if bb:
             blackboard_text = "\n\n## Blackboard\n\n" + bb + "\n"
 

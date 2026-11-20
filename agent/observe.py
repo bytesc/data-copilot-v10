@@ -36,7 +36,7 @@ def _build_observe_prompt(context: str, blackboard_text: str) -> str:
     rules = [
         "ANALYZE RESULT FIRST: Look at the context for execution results and error traces.",
         "SUCCESS: If the result contains the expected data/confirmation without errors, remove that task from the todo list.",
-        "ERROR / EXCEPTION (Autonomous Correction): If the context contains error messages, DO NOT ask the user. Keep the failed task in the todo list. Do not modify steps to fix the error.",
+        "ERROR / EXCEPTION (Autonomous Correction): If the context contains error messages, DO NOT ask the user. Keep the failed task in the todo list unchanged so the next Action cycle retries it; do not rewrite or replace the step yourself — the retry loop and code generation handle the fix.",
         "PARTIAL SUCCESS: If only part of the task was completed, remove completed parts and append new tasks for remaining work.",
         "Keep completed tasks out of the todo list — only include PENDING tasks.",
     ]
@@ -48,7 +48,7 @@ def _build_observe_prompt(context: str, blackboard_text: str) -> str:
     rules.append("Your job is an objective Observer, do not be creative to new solutions.")
     rules_str = "\n".join(f"{i + 1}. {rule}" for i, rule in enumerate(rules))
 
-    return f"""You are an objective Observer. Your job is to review the execution results of the last step, update the plan accordingly.
+    return f"""You are an objective Observer. Your job is to review the execution results of the last step and update the remaining todo list accordingly (remove completed tasks, keep pending ones). You do not rewrite task steps.
 
 {target_section}
 
@@ -66,9 +66,9 @@ ACTIONS AVAILABLE (reference only — do not output action JSON):
 Autonomous State Judgment & Update Rules:
 {rules_str}
 
-- `explore_schema` returns all relevant data structure and schema in the database at a time based on previous context. ALL tables are explored and only return relevant ones! explored means completed! NO need to perform explore_schema with the same input again!
-- `explore_functions` returns all relevant available python function catalog at a time based on previous context. ALL functions are explored and only return relevant ones! explored means completed! NO need to perform explore_functions with the same input again!""" + ("""
-- `explore_base_knowledge` returns all relevant business domain knowledge at a time based on previous context. ALL knowledge entries are explored and only return relevant ones! explored means completed! NO need to perform explore_base_knowledge with the same input again!""" if _ENABLE_BASE_KNOWLEDGE else "") + """
+- `explore_schema` returns all relevant data structure and schema in the database at a time based on previous context: ALL tables are explored and only relevant ones are returned. For the SAME input it is already complete — do NOT run explore_schema again with the same input; re-run it only when the user's requirements change (new scope, tables, or analysis).
+- `explore_functions` returns all relevant available python function catalog at a time based on previous context: ALL functions are explored and only relevant ones are returned. For the SAME input it is already complete — do NOT run explore_functions again with the same input; re-run it only when the user's requirements change.""" + ("""
+- `explore_base_knowledge` returns all relevant business domain knowledge at a time based on previous context: ALL knowledge entries are explored and only relevant ones are returned. For the SAME input it is already complete — do NOT run explore_base_knowledge again with the same input; re-run it only when the user's requirements or domain context change.""" if _ENABLE_BASE_KNOWLEDGE else "") + """
 
 Output ONLY a valid JSON object on a single line (no md block):
 {{"description": "Brief review of what happened and updated strategy in markdown...", "todo": ["Remaining task 1", "Remaining task 2"]}}

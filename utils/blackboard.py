@@ -317,7 +317,8 @@ _BULKY_FIELDS = {
 _LEVEL_BULKY_MAX = {0: None, 1: 20000, 2: 8000, 3: 3000, 4: 1000}
 
 
-def blackboard_to_text(board: Dict[str, Dict[str, Any]], level: int = 0) -> str:
+def blackboard_to_text(board: Dict[str, Dict[str, Any]], level: int = 0,
+                       omit_fields: Optional[Dict[str, tuple]] = None) -> str:
     """Render all blackboard regions as a prompt-friendly text block.
 
     Each region starts with a ``note`` line explaining which action writes it,
@@ -332,16 +333,25 @@ def blackboard_to_text(board: Dict[str, Dict[str, Any]], level: int = 0) -> str:
 
     ``level`` > 0 truncates the bulky free-text fields (used by the
     context-length retry); it does not affect what is persisted.
+
+    ``omit_fields`` optionally skips specific region fields (e.g. code
+    generation drops the FUNC region's ``func_docs`` because ``function_info``
+    already carries the selected functions' docstrings); it does not affect
+    what is persisted.
     """
     bulky_max = _LEVEL_BULKY_MAX.get(level, _LEVEL_BULKY_MAX[max(_LEVEL_BULKY_MAX)])
+    omit = omit_fields or {}
     sections = []
     for region in REGIONS:
         if region not in _REGION_FIELDS:
             continue
         data = board.get(region) or {}
         bulky = _BULKY_FIELDS.get(region, ())
+        omitted = omit.get(region, ())
         lines = []
         for field, is_json in _REGION_FIELDS[region]:
+            if field in omitted:
+                continue
             value = data.get(field)
             if value is None or value == "" or value == []:
                 continue

@@ -86,7 +86,7 @@ FLUSH PRIVILEGES;
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/base_knowledge.md` |
 | 数据库表 | `base_knowledge` 表（key-value 结构） |
 
-**不注入 think / action 提示词**：通过 `explore_base_knowledge` action 按需获取；同时在 `generate_and_execute` 与文档生成（generate_document）阶段全量注入。`BASE_KNOWLEDGE_BRIEF` 为其摘要版本。
+**不注入 think / action 提示词**：通过 `explore_base_knowledge` action 按需获取；文档生成（generate_document）阶段仍全量注入，`generate_and_execute` 阶段则注入 blackboard 中 `explore_base_knowledge` 选中的条目（另注入 `base_knowledge.md` 的 MD 部分，不重复注入该表全量）。`BASE_KNOWLEDGE_BRIEF` 为其摘要版本。
 
 ### 3.8 DOC — 文档知识
 

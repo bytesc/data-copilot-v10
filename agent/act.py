@@ -546,7 +546,7 @@ def _act_explore_base_knowledge(build_question, session_id: str, search_keyword:
         yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'explore_base_knowledge', 'type': 'done', 'content': '*(No relevant knowledge found)*', 'result': {'selected_knowledge_ids': [], 'knowledge_content': '', 'summary': ''}, 'search_keyword': search_keyword}, ensure_ascii=False)}\n\n"
         return {"selected_knowledge_ids": [], "knowledge_content": "", "summary": ""}
 
-    knowledge_text = base_knowledge_to_str(all_knowledge)
+    knowledge_text = base_knowledge_to_str(all_knowledge, with_ids=True)
 
     def build_prompt(level):
         return f"""Analyze the following knowledge base and the user's question to select the relevant knowledge entries.
@@ -561,10 +561,10 @@ Context:
 {keyword_hint}
 
 Output ONLY a JSON object with the following structure:
-- "selected_ids": an array of knowledge entry IDs (integers) that are relevant. Empty list if none.
+- "selected_ids": an array of the entry IDs shown as `[id=N]` in the knowledge base headings above. Empty list if none.
 - "summary": a brief summary of which knowledge entries are relevant and why.
 
-Example:
+Example (ids must be copied from the `[id=N]` markers, never invented):
 {{"selected_ids": [1, 3, 7], "summary": "The user's question relates to company data analysis, entries 1, 3, 7 provide relevant domain knowledge."}}
 """
     prompt = build_prompt(0)
@@ -610,8 +610,16 @@ def _parse_base_knowledge_json(raw: str) -> dict | None:
     from utils.context_trim import parse_json
     result = parse_json(raw)
     if isinstance(result, dict) and "selected_ids" in result:
+        raw_ids = result.get("selected_ids", [])
+        selected_ids = []
+        if isinstance(raw_ids, list):
+            for item in raw_ids:
+                try:
+                    selected_ids.append(int(item))
+                except (TypeError, ValueError):
+                    continue
         return {
-            "selected_ids": result.get("selected_ids", []),
+            "selected_ids": selected_ids,
             "summary": result.get("summary", ""),
         }
     return None

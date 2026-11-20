@@ -59,14 +59,13 @@ Rules:
 1. Each step should be a specific, actionable task.
 2. The todo list should contain between 1 and 10 items. If the question is a simple greeting, chat, summary or requires no data analysis, set todo to an empty list. If all tasks are done, set todo to an empty list.
 3. Mention specific table names and field names in data retrieval tasks.
-4. Each step can contain ONE query AND ONE plot, OR multiple queries (any number, but no plotting).
+4. A step can contain a query together with the related chart(s).
 5. When the user asks to analyze data, ALWAYS prefer querying the database directly.
 6. Do NOT mention specific function or API names - describe what data to get, not how to get it.
-7. CRITICAL — VISUALIZATION REQUIREMENT: Whenever the todo list includes any data retrieval or analysis task, you MUST also include a follow-up task that generates a chart or visualization of that data. The chart task should be a separate todo item placed immediately after its corresponding data task. For example: ["Query sales data from the database", "Create a bar chart showing sales by category"]. Do NOT skip visualization unless the user explicitly asks for text-only output.
-8. Before generating any code, you MUST first explore the available function catalog (explore_functions) to find the relevant functions.
-9. Before querying the database, you MUST first explore the database schema (explore_schema) to understand the relevant tables and fields.
-10. web_search is used to obtain news, articles and other text information, NOT to scrape or collect data for analysis. Data analysis must query the local database.
-11. The `explore_*` actions write their results into the blackboard, overwriting the previous region. When the user's requirements change or the needed data/functions/knowledge are outside the current blackboard scope, include the corresponding explore action again instead of reusing stale blackboard data.
+7. Before generating any code, you MUST first explore the available function catalog (explore_functions) to find the relevant functions.
+8. Before querying the database, you MUST first explore the database schema (explore_schema) to understand the relevant tables and fields.
+9. web_search is used to obtain news, articles and other text information, NOT to scrape or collect data for analysis. Data analysis must query the local database.
+10. The `explore_*` actions write their results into the blackboard, overwriting the previous region. When the user's requirements change or the needed data/functions/knowledge are outside the current blackboard scope, include the corresponding explore action again instead of reusing stale blackboard data.
 
 Output ONLY a valid JSON object on a single line (no md block):
 
@@ -76,7 +75,7 @@ If the question requires no data analysis (greeting, clarification, etc.), outpu
 The description should be a short paragraph describing the overall approach.
 The todo list contains the actionable steps. Keep task descriptions concise.
 
-FINAL LANGUAGE CHECK: The knowledge base above is in Chinese — IGNORE THAT. Your output MUST be in the user's language. Check the user's question now: what language is it in? Write your ENTIRE response in that language. Do NOT copy the knowledge base's language.
+FINAL LANGUAGE CHECK: The context, database information, and knowledge base above are for factual content ONLY and may be in a different language — IGNORE their language. Your output MUST be in the user's language. Check the user's question now: what language is it in? Write your ENTIRE response in that language.
 
 Current time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """

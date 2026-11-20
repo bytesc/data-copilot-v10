@@ -148,8 +148,8 @@ GROUPING RULES:
 """
 
 _DECISION_RULES = [
-    "If the plan has an empty todo list, choose ask_question with a polite response to the user.",
-    "If the plan is complete or no further actions needed, choose attempt_completion.",
+    "If the plan is complete or no further actions are needed, choose attempt_completion.",
+    "If the plan has an empty todo list because the request is only a greeting, thanks, or chit-chat that needs no data analysis, choose ask_question with a polite response to the user.",
     "If you need to ask the user something, choose ask_question or ask_choice.",
     "If you want to pause and show progress, choose summary_and_pause.",
     "`generate_and_execute` is the major action to solve complex problems.",

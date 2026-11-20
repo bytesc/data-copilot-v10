@@ -81,18 +81,18 @@ Below is the structure and comments of all database tables:
 The input above may contain conversation history, a step-by-step plan, and the current task. Your job is to identify which database tables and columns are needed to execute the current task described in the plan.
 
 Requirements:
-1. If the user mentions ANY of these keywords: analysis, analyze, data, query, graph, chart, plot, visualization, statistics, report, explore, inspect, look at, show, display, select, filter, group, count, average, sum, min, max, trend, distribution, comparison, or any data-related operation that requires fetching data from the database, you MUST select relevant tables and columns. NEVER return `__no_db__` for data-fetching requests.
-2. If the user's request is vague but related to data/analysis, select ALL tables and ALL columns by returning `{empty_json}`.
-3. Only select tables and columns directly relevant to the current task.
-4. If only some columns of a table are relevant, include only those columns.
-5. If ALL columns of a table are relevant, use an empty list [] to indicate all columns.
-6. Must include key columns used for table joins (e.g., foreign keys, IDs).
-7. If the task is to summarize, conclude, explain, or describe content that is already in the conversation history or previous execution results, do NOT query the database. Return `__no_db__` instead.
+1. First decide whether the current task needs NEW data from the database. If it fetches, queries, computes, aggregates, plots, or compares database data — including requests phrased with words like analysis, data, query, chart, plot, statistics, report, show, display, filter, group, count, average, sum, min, max, trend, distribution, comparison — you MUST select the relevant tables and columns and MUST NOT return `__no_db__`.
+2. If the task is instead to summarize, conclude, explain, or describe content that is already in the conversation history or previous execution results, do NOT query the database. Return `__no_db__` instead.
+3. If the request is vague but data-related, infer the likely topic from the table and column comments above and select the tables and columns relevant to that topic. Do NOT select the whole database merely because the request is vague.
+4. Only select tables and columns directly relevant to the current task.
+5. If only some columns of a table are relevant, include only those columns.
+6. If ALL columns of a table are relevant, use an empty list [] to indicate all columns.
+7. Must include key columns used for table joins (e.g., foreign keys, IDs).
 
 Output rules:
 - Use `{{"table_name": ["col1", "col2"]}}` to select specific columns
 - Use `{{"table_name": []}}` to select ALL columns of a table
-- Use `{empty_json}` to select ALL tables and ALL columns
+- Use `{empty_json}` to select ALL tables and ALL columns — only when the task genuinely requires the whole database
 - Use `{{"__no_db__": true}}` for greetings/thanks/farewells, or for tasks that summarize/explain existing results without needing new data.
 
 Please output ONLY the JSON inside a ```json code block. Do NOT output raw JSON without the code block. Do not add any explanation before or after the code block:
