@@ -210,8 +210,6 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
 {ACTIONS}                 → 可用动作列表 + DECISION_RULES
 ```
 
-注：`get_db_summary_for_agent()` 与 `get_func_summary_for_agent()` 虽被调用赋给局部变量（`db_summary` / `func_catalog`），但未被拼入返回的 prompt。
-
 **功能：** Action 阶段决定下一步执行哪个动作。
 
 ---
@@ -368,26 +366,11 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 
 ## LLM 搜索流程
 
-`get_*_db_llm()` 函数将查询结果 + 用户上下文发给 LLM，返回结构化结果：
-
-### 事件流格式
-
-```python
-yield {"type": "status", "content": "Analyzing knowledge base..."}
-yield {"type": "chunk", "content": "LLM 响应的文本片段..."}
-yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3, 5]}
-```
-
-### 可用函数
+> 说明：早期的 `get_*_db_llm()` 系列（`get_base_knowledge_db_llm` / `get_db_query_guide_db_llm` / `get_doc_guide_db_llm` / `get_code_guide_db_llm` / `get_think_guide_db_llm`）及其事件流封装（`_llm_search_with_ids` / `_build_knowledge_context`）已移除（无任何调用者）；知识检索现由 `explore_*` act 阶段的提示词直接完成，见上文各注入分析。
 
 | 函数 | 说明 |
 |------|------|
-| `get_base_knowledge_db_llm(context, key)` | 基于 `base_knowledge` 表 + 数据库结构生成查询方案 |
-| `get_db_query_guide_db_llm(context, key)` | 基于 `db_query_guide` 表生成 SQL 查询方案 |
-| `get_doc_guide_db_llm(context, key)` | 基于 `doc_guide` 表生成文档分析方案 |
-| `get_code_guide_db_llm(context, key)` | 基于 `code_guide` 表生成图表代码方案 |
-| `get_graph_code_guide_db(key=None, threshold=0.3)` | 读取 `graph_code_guide` 表全部记录（无 LLM 查询版本） |
-| `get_think_guide_db_llm(context, key)` | 基于 `think_guide` 表生成思考分析方案 |
+| `get_graph_code_guide_db(key=None, threshold=0.3)` | 读取 `graph_code_guide` 表全部记录（无 LLM 查询版本），供代码生成阶段注入 |
 
 ---
 
@@ -440,7 +423,7 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
 
 | 文件 | 用途 |
 |------|------|
-| `agent/tools/base_knowledge/get_base_knowledge.py` | 核心：`_DynamicStr`、`get_*_db()`、`get_*_db_llm()`、`_get_brief_value()`、模块级变量 |
+| `agent/tools/base_knowledge/get_base_knowledge.py` | 核心：`_DynamicStr`、`get_*_db()`、`_get_brief_value()`、模块级变量 |
 | `agent/tools/base_knowledge/set_base_knowledge.py` | 写入 `base_knowledge` 表 |
 | `agent/tools/base_knowledge/set_code_guide.py` | 写入 `code_guide` 表 |
 | `agent/tools/base_knowledge/set_think_guide.py` | 写入 `think_guide` 表 |

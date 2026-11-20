@@ -272,7 +272,6 @@ def _event_stream_act_impl(
     def build_question(level):
         return _build_context(question, conversation_history, session_id, level=level)
 
-    full_question = build_question(0)
     params = params or {}
     # The action phase (agent/action.py) forwards the LLM's exploration hint as
     # `keyword` (see the explore_* action descriptions). The bundled frontend
@@ -332,7 +331,7 @@ def _event_stream_act_impl(
         act_data = yield from _act_explore_mcp(build_question, session_id, params, request_json, build_blackboard, images)
 
     elif action == "exe_mcp":
-        act_data = yield from _act_exe_mcp(full_question, session_id, params, request_json)
+        act_data = yield from _act_exe_mcp(session_id, params, request_json)
 
     elif action == "select_images":
         act_data = yield from _act_select_images(session_id, params, request_json)
@@ -634,14 +633,14 @@ def _parse_base_knowledge_json(raw: str) -> dict | None:
 
 def _act_generate_and_execute(build_question, session_id: str, tables, selected_fields, request_json: str = "", research_guide: str = "", blackboard=None, images=None):
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'generate', 'type': 'status', 'content': 'Generating and executing code...'}, ensure_ascii=False)}\n\n"
-    full_question = build_question(0)
+    context_text = build_question(0)
     full_code = ""
     full_ans = ""
     exec_error = None
     exec_error_kind = ""
     generated_images = []
     for event in generate_and_execute_stream(
-        full_question, tables, retries=2,
+        context_text, tables, retries=2,
         selected_fields=selected_fields,
         research_guide=research_guide,
         blackboard=blackboard,
@@ -1135,7 +1134,7 @@ def _act_user_interaction(action: str, session_id: str, params: dict, request_js
     return {"action": action, "text": text, "choices": choices}
 
 
-def _act_exe_mcp(full_question: str, session_id: str, params: dict, request_json: str = ""):
+def _act_exe_mcp(session_id: str, params: dict, request_json: str = ""):
     tools_list = params.get("tools") or []
 
     # Backward compatible: single tool format (server/tool/params)

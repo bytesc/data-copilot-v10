@@ -13,7 +13,7 @@ from .tools.copilot.utils.code_executor import execute_py_code
 # Single source of truth for the module allow-list promised by the code-gen
 # prompt below; keeps prompt, injected imports and sandbox policy in sync.
 from .tools.copilot.utils.sandbox.policy import ALLOWED_MODULE_ROOTS
-from .tools.copilot.sql_code import get_db_info_prompt, filter_db_fields
+from .tools.copilot.sql_code import get_db_info_prompt
 from .tools.copilot.utils.parse_output import parse_generated_python_code
 from utils.perf_log import record_code_exec
 
@@ -29,6 +29,34 @@ from utils.blackboard import blackboard_to_text, blackboard_input_images, FUNCTI
 from utils.context_trim import cap_text, stream_with_context_retry
 
 STATIC_URL = config_data['static_path']
+
+# Matches a link to a local ``tmp_imgs`` image served from this project's own
+# ``static_path`` (e.g. ``http://127.0.0.1:8008/tmp_imgs/xxx.png``). The char class
+# stops at whitespace/quotes/brackets so a URL inside markdown ``](...)`` or an
+# HTML attribute is captured cleanly.
+_OWN_STATIC_IMAGE_RE = re.compile(
+    re.escape(STATIC_URL.rstrip("/")) + r"/tmp_imgs/[^\s\"'<>()]+\.png",
+    re.IGNORECASE,
+)
+
+
+def _auto_attach_local_images(item: str):
+    """Return the local ``tmp_imgs`` basename(s) for a yielded image item.
+
+    Only images that live in the local ``tmp_imgs`` directory are auto-attached to
+    later LLM calls: a yielded local path (``./tmp_imgs/x.png``) or a link to
+    ``tmp_imgs`` served from this project's own ``static_path``. Arbitrary external
+    image URLs are NEVER captured here, because untrusted content (web pages, MCP
+    results, database text) could otherwise plant an image URL that is silently fed
+    to the model. Such images still appear in the yielded text for the user and can
+    be attached on purpose through the ``select_images`` action.
+    """
+    if not isinstance(item, str):
+        return []
+    if is_local_png_path(item):
+        return [os.path.basename(item)]
+    return [os.path.basename(url) for url in _OWN_STATIC_IMAGE_RE.findall(item)]
+
 
 # `func` runs inside the sandbox subprocess, which already configures the Chinese
 # font and the Agg backend at startup, so no font import/setup is injected here and
@@ -70,7 +98,11 @@ def get_db():
     return get_db_info_prompt(read_only_engine, example=True, simple=True)
 
 
-def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_functions=None, research_guide=None,
+# `context_text` is the text rendered into the prompt's final "Context:" block.
+# The act pipeline passes the already-rendered conversation history; direct API
+# callers of /api/generate-and-execute/stream/ (whose AgentInput has no
+# conversation_history field) may pass a raw question instead.
+def get_cot_code_prompt(context_text, tables=None, selected_fields=None, selected_functions=None, research_guide=None,
                         blackboard=None, level=0):
     blackboard = blackboard or {}
     board_schema = blackboard.get("schema") or {}
@@ -141,7 +173,7 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
             if import_list:
                 function_import.append(import_list)
     else:
-        function_set, function_info, function_import = get_function_info(question, llm, use_all_functions=True)
+        function_set, function_info, function_import = get_function_info(context_text, llm, use_all_functions=True)
 
     if selected_fields is None:
         board_selected_fields = board_schema.get("selected_fields")
@@ -305,11 +337,11 @@ Any module outside this list (e.g. os, sys, subprocess, requests, urllib, socket
         function_info = cap_text(function_info, level)
         database = cap_text(database, level)
         knowledge = cap_text(knowledge, level)
-        question = cap_text(question, level)
+        context_text = cap_text(context_text, level)
 
     cot_prompt = pre_prompt + function_prompt + str(function_info) + \
                  module_prompt + example_code + remind_prompt + \
-                 database + knowledge + blackboard_text + target_section + research_section + " \nContext:\n" + question + \
+                 database + knowledge + blackboard_text + target_section + research_section + " \nContext:\n" + context_text + \
                  final_language_check
     return cot_prompt, rag_ans, function_import
 
@@ -346,7 +378,11 @@ def format_yield_item(item, print_rows=5):
         return "\n" + str(item) + "\n"
 
 
-def generate_and_execute_stream(question, tables=None, retries=2,
+# `context_text` is injected as the prompt's final "Context:" block (see
+# `get_cot_code_prompt`). The act pipeline passes the rendered conversation
+# history; direct API callers may pass a raw question. `question_builder`, when
+# given, rebuilds that text for each context-trim level.
+def generate_and_execute_stream(context_text, tables=None, retries=2,
                                  selected_fields=None, selected_functions=None, print_rows=5,
                                  research_guide=None, blackboard=None, images=None,
                                  question_builder=None, session_id="",
@@ -354,14 +390,14 @@ def generate_and_execute_stream(question, tables=None, retries=2,
     yield {"type": "msg", "content": "Analyzing question...", "phase": "act", "sub_phase": "code"}
 
     cot_prompt, rag_ans, function_import = get_cot_code_prompt(
-        question, tables, selected_fields, selected_functions, research_guide, blackboard)
+        context_text, tables, selected_fields, selected_functions, research_guide, blackboard)
     prompt_length = len(cot_prompt)
     input_images = images
     if input_images is None and blackboard:
         input_images = blackboard_input_images(blackboard)
 
     def build_prompt(level):
-        q = question_builder(level) if question_builder else question
+        q = question_builder(level) if question_builder else context_text
         cot, _, _ = get_cot_code_prompt(
             q, tables, selected_fields, selected_functions, research_guide, blackboard, level=level)
         return cot
@@ -442,14 +478,10 @@ def generate_and_execute_stream(question, tables=None, retries=2,
                 formatted_result += formatted
                 formatted_result += "\n"
                 if isinstance(item, str):
-                    if is_local_png_path(item):
-                        images.append(os.path.basename(item))
-                    elif not is_iframe_tag(item):
-                        # Only capture clean, standalone image URLs. The previous
-                        # `[^"]+` pattern greedily matched across HTML/newlines, so
-                        # an OpenStreetMap minimap iframe (which embeds script and
-                        # Leaflet `.png` tile URLs) was captured as a bogus image.
-                        images.extend(re.findall(r'https?://[^\s"\'<>]+\.png', item))
+                    # Auto-attach only trusted local tmp_imgs images; external
+                    # image URLs are not silently fed to the model (see
+                    # _auto_attach_local_images).
+                    images.extend(_auto_attach_local_images(item))
                 yield {"type": "chunk", "sub_type": "exec_chunk", "content": formatted, "phase": "act", "sub_phase": "exec"}
         except Exception as e:
             error_kind = getattr(e, "kind", "execution_error")

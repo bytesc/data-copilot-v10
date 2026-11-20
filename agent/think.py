@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from agent.action import ACTIONS_BRIEF
 from agent.tools.base_knowledge.get_base_knowledge import TARGET, BRIEF_INFO, THINK_KNOWLEDGE
 from agent.tools.tools_def import llm
-from agent.tools.search_func import get_func_summary_for_agent
 from data_access.session_log import record_session_operation
 from data_access.observe_log import log_observe_session
 from utils.front_utils import history_to_text
@@ -126,8 +125,6 @@ def _event_stream_think_impl(
     log_observe_session(session_id, question=question, status="active")
 
     images = blackboard_input_images_from_history(conversation_history)
-
-    func_catalog = get_func_summary_for_agent()
 
     def build_prompt(level):
         trimmed = prepare_trimmed_context(session_id, conversation_history, level=level)

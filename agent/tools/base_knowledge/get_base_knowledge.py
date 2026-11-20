@@ -10,9 +10,6 @@ from data_access.code_guide_db import code_guide
 from data_access.graph_code_guide_db import graph_code_guide
 from data_access.think_guide_db import think_guide
 from data_access.brief_info_db import brief_info
-from agent.tools.tools_def import llm, engine, read_only_engine
-from agent.tools.search_db import get_db_structure_markdown
-from utils.context_trim import stream_with_context_retry, cap_text
 from utils.get_config import config_data
 
 _KNOWLEDGE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -108,135 +105,6 @@ def get_doc_guide_db(key=None, threshold=0.3):
         return {}
 
 
-def _parse_llm_response_with_ids(raw):
-    from utils.json_parse import parse_json
-    data = parse_json(raw)
-    if isinstance(data, dict):
-        return data.get("description", ""), data.get("useful_ids", [])
-    return raw, []
-
-
-def _llm_search_with_ids(build_prompt):
-    yield {"type": "status", "content": "Analyzing knowledge base..."}
-    full_content = ""
-    for chunk, _ in stream_with_context_retry(build_prompt, llm):
-        if not chunk:
-            continue
-        full_content += chunk
-        yield {"type": "chunk", "content": chunk}
-
-    description, useful_ids = _parse_llm_response_with_ids(full_content)
-    yield {"type": "done", "description": description, "useful_ids": useful_ids}
-
-
-def _build_knowledge_context(knowledge_text, extra_text, role_label, context, instructions, level=0):
-    knowledge_text = cap_text(knowledge_text, level)
-    extra_text = cap_text(extra_text, level)
-    context = cap_text(context, level)
-    return f"""You are a {role_label}. Based on the following knowledge and user context, generate a response.
-
-## Knowledge
-{knowledge_text}
-
-{extra_text}
-
-## User Context
-{context}
-
-## Instructions
-{instructions}
-
-## Output Format
-Output ONLY a valid JSON object inside a ```json code block:
-```json
-{{
-    "description": "your natural language description or analysis here",
-    "useful_ids": [1, 3, 5]
-}}
-```
-
-The `useful_ids` should be a list of knowledge entry IDs that are relevant to the user's context. If no entries are relevant, use an empty list `[]`."""
-
-
-def get_base_knowledge_db_llm(context="", key=None):
-    knowledge = get_base_knowledge_db(key)
-    if not knowledge:
-        yield {"type": "done", "description": "", "useful_ids": []}
-        return
-
-    knowledge_text = base_knowledge_to_str(knowledge)
-    db_structure_text = get_db_structure_markdown(read_only_engine)
-
-    def build_prompt(level):
-        return _build_knowledge_context(
-            knowledge_text, db_structure_text,
-            "data analysis expert",
-            context,
-            "Analyze the user's question against the database schema. Output a natural language query plan describing:\n"
-            "1. Which tables to use\n"
-            "2. Which fields/columns to select\n"
-            "3. How to join tables (if multiple tables are needed)\n"
-            "4. Any aggregation, grouping, filtering, or sorting needed\n"
-            "5. The reasoning behind the plan\n"
-            "Do NOT write any SQL code.",
-            level=level,
-        )
-
-    yield from _llm_search_with_ids(build_prompt)
-
-
-def get_db_query_guide_db_llm(context="", key=None):
-    guide = get_db_query_guide_db(key)
-    if not guide:
-        yield {"type": "done", "description": "", "useful_ids": []}
-        return
-
-    guide_text = base_knowledge_to_str(guide)
-
-    def build_prompt(level):
-        return _build_knowledge_context(
-            guide_text, "",
-            "SQL query expert",
-            context,
-            "Analyze the user's question against the query guide. Output a natural language query plan describing:\n"
-            "1. Which tables to use\n"
-            "2. Which fields/columns to select\n"
-            "3. How to join tables (if multiple tables are needed)\n"
-            "4. Any aggregation, grouping, filtering, or sorting needed\n"
-            "5. The reasoning behind the plan\n"
-            "Do NOT write any SQL code.",
-            level=level,
-        )
-
-    yield from _llm_search_with_ids(build_prompt)
-
-
-def get_doc_guide_db_llm(context="", key=None):
-    doc = get_doc_guide_db(key)
-    if not doc:
-        yield {"type": "done", "description": "", "useful_ids": []}
-        return
-
-    doc_text = base_knowledge_to_str(doc)
-
-    def build_prompt(level):
-        return _build_knowledge_context(
-            doc_text, "",
-            "documentation expert",
-            context,
-            "Analyze the user's question against the document guide. Output a natural language query plan describing:\n"
-            "1. Which tables to use\n"
-            "2. Which fields/columns to select\n"
-            "3. How to join tables (if multiple tables are needed)\n"
-            "4. Any aggregation, grouping, filtering, or sorting needed\n"
-            "5. The reasoning behind the plan\n"
-            "Do NOT write any SQL code.",
-            level=level,
-        )
-
-    yield from _llm_search_with_ids(build_prompt)
-
-
 def get_code_guide_db(key=None, threshold=0.3):
     try:
         with sys_engine.connect() as conn:
@@ -281,32 +149,6 @@ def get_graph_code_guide_db(key=None, threshold=0.3):
         return {}
 
 
-def get_code_guide_db_llm(context="", key=None):
-    guide = get_code_guide_db(key)
-    if not guide:
-        yield {"type": "done", "description": "", "useful_ids": []}
-        return
-
-    guide_text = base_knowledge_to_str(guide)
-
-    def build_prompt(level):
-        return _build_knowledge_context(
-            guide_text, "",
-            "chart code expert",
-            context,
-            "Analyze the user's question against the graph code guide. Output a natural language query plan describing:\n"
-            "1. Which chart type to use\n"
-            "2. Which data fields to use for axes\n"
-            "3. How to aggregate or group data\n"
-            "4. Any custom styling or formatting\n"
-            "5. The reasoning behind the plan\n"
-            "Do NOT write any Python code.",
-            level=level,
-        )
-
-    yield from _llm_search_with_ids(build_prompt)
-
-
 def get_think_guide_db(key=None, threshold=0.3):
     try:
         with sys_engine.connect() as conn:
@@ -327,32 +169,6 @@ def get_think_guide_db(key=None, threshold=0.3):
     except Exception as e:
         print(f"[WARNING] Failed to read think_guide from db: {e}")
         return {}
-
-
-def get_think_guide_db_llm(context="", key=None):
-    knowledge = get_think_guide_db(key)
-    if not knowledge:
-        yield {"type": "done", "description": "", "useful_ids": []}
-        return
-
-    knowledge_text = base_knowledge_to_str(knowledge)
-
-    def build_prompt(level):
-        return _build_knowledge_context(
-            knowledge_text, "",
-            "thinking strategy expert",
-            context,
-            "Analyze the user's question against the think guide. Output a natural language query plan describing:\n"
-            "1. The overall approach to solve the problem\n"
-            "2. Key data points to focus on\n"
-            "3. Analysis methods or techniques to apply\n"
-            "4. Potential pitfalls or edge cases to consider\n"
-            "5. The reasoning behind the plan\n"
-            "Do NOT write any code.",
-            level=level,
-        )
-
-    yield from _llm_search_with_ids(build_prompt)
 
 
 class _DynamicStr:

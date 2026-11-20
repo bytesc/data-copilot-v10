@@ -143,7 +143,6 @@ N = min(base_limit, cap, round(base_limit * factor))   # 且不小于 1
 | `plain_chat.get_plain_chat` / `get_plain_chat_stream` | 截函数目录 + 库结构 + question | 非流式 / 流式 |
 | `data_comment.get_llm_data_comment_func` | 截输入文本 + 表结构 | 非流式 |
 | `llm_predict_hdb` | 截 `search_conditions` + `hdb_price_history`（DB 查询结果，最大块） | 非流式 |
-| `get_base_knowledge`（5 个 `*_db_llm`） | `_build_knowledge_context(level)` 截 knowledge_text / extra_text / context | 流式 |
 | `set_base_knowledge` | 截 existing 知识 + db 结构 + 输入文本 | 非流式 |
 | `set_code_guide` / `set_think_guide` | 截 existing 指南 + 输入文本 | 非流式 |
 

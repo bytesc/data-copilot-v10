@@ -52,11 +52,15 @@ def history_to_text(history: List[dict]) -> str:
                     lines.append(f"[ACT explore_schema] explore_plan:\n{entry['explore_plan']}")
                 if entry.get("selected_guides"):
                     lines.append(f"[ACT explore_schema] selected_guides: {json.dumps(entry['selected_guides'])}")
+                if entry.get("error"):
+                    lines.append(f"[ACT explore_schema] error:\n{entry['error']}")
             elif action == "explore_base_knowledge":
                 if entry.get("selected_knowledge_ids") is not None:
                     lines.append(f"[ACT explore_base_knowledge] selected_knowledge_ids: {json.dumps(entry['selected_knowledge_ids'], ensure_ascii=False)}")
                 if entry.get("summary"):
                     lines.append(f"[ACT explore_base_knowledge] summary:\n{entry['summary']}")
+                if entry.get("error"):
+                    lines.append(f"[ACT explore_base_knowledge] error:\n{entry['error']}")
             elif action == "explore_functions":
                 if entry.get("selected_functions") is not None:
                     lines.append(f"[ACT explore_functions] selected_functions: {json.dumps(entry['selected_functions'], ensure_ascii=False)}")

@@ -154,8 +154,8 @@ GROUPING RULES:
 """
 
 _DECISION_RULES = [
-    "If the plan is complete or no further actions are needed, choose attempt_completion.",
-    "If the plan has an empty todo list, choose the action by the user's intent: use attempt_completion when the user expects content back as the final answer (e.g., a summary, conclusion, or report of results already in the conversation); use ask_question (or ask_choice) with a polite response only when the request is just a greeting, thanks, or chit-chat that expects no substantive content.",
+    "If the plan is complete or no further actions are needed, choose attempt_completion, unless the user asked to generate or produce a report/document file — then choose generate_document.",
+    "If the plan has an empty todo list, choose the action by the user's intent: use attempt_completion when the user expects content back as the final answer inside the conversation (e.g., an in-chat summary, conclusion, or report of results already in the conversation); if the user asks to generate or produce a report/document file, use generate_document instead of attempt_completion; use ask_question (or ask_choice) with a polite response only when the request is just a greeting, thanks, or chit-chat that expects no substantive content.",
     "If you need to ask the user something, choose ask_question or ask_choice.",
     "If you want to pause and show progress, choose summary_and_pause.",
     "`summary_and_pause` and `attempt_completion` are single-action only: never place them inside an \"actions\" array. Which actions may be batched is defined by the GROUPING RULES above; never mix Group 1 and Group 2.",
