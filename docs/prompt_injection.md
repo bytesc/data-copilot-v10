@@ -313,19 +313,21 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 - **分步生成** (`_event_stream_generate_document`): 先由 LLM 生成大纲，再逐部分生成
 - **统一生成** (`_event_stream_generate_document_unified`): 一次完整生成
 
-**两个路径均注入变量：** `BASE`, `DOC`, `Blackboard`
+**各路径均注入变量：** `BASE_MD`, `DOC`, `Blackboard`
 
 **注入方式：** f-string 直接嵌入
 
 ```
-{BASE}                    → MD base_knowledge.md + DB base_knowledge 表
+{BASE_MD}                 → MD base_knowledge.md（仅 MD）
 {DOC}                     → MD doc_guide.md + DB doc_guide 表
 {Blackboard}              → blackboard_section(conversation_history)
 ```
 
 上下文部分先经 `prepare_trimmed_context` 裁剪，再由 `history_to_text` 渲染；blackboard 单独注入。
 
-**功能：** 生成业务摘要文档（MD + DOCX + PDF）。`DOC` 提供文档格式参考，`BASE` 提供数据背景。
+`base_knowledge` 数据库表**不在此注入全量**：选中的条目已由 blackboard 的 `KNOWLEDGE` 区（`explore_base_knowledge` 写入）提供，注入全表会与之重复。此处只注入 `base_knowledge.md`（该 MD 不会被 `explore_base_knowledge` 检索），与代码生成阶段（`agent/agent.py` 的 `get_cot_code_prompt`）保持一致。
+
+**功能：** 生成业务摘要文档（MD + DOCX + PDF）。`DOC` 提供文档格式参考，`BASE_MD` 提供数据背景。
 
 ---
 
@@ -359,7 +361,7 @@ cot_prompt = pre_prompt + function_prompt + function_info +
 | **Act - explore_base_knowledge** | `act.py` | `BASE_KNOWLEDGE_BRIEF`, `base_knowledge` 表（仅此一张表） | ✅ | MD + DB + blackboard |
 | **Act - explore_mcp** | `act.py` | `MCP_BRIEF`, MCP 工具目录 | ✅ | MD + DB + blackboard |
 | **Act - generate_and_execute** | `agent.py` | `BASE_MD`, `code_guide`, `graph_code_guide`, `TARGET`（可选） | ✅ | MD + DB + blackboard |
-| **Act - generate_document** | `document_generator.py` | `BASE`, `DOC`, `TARGET`（可选） | ✅ | MD + DB + blackboard |
+| **Act - generate_document** | `document_generator.py` | `BASE_MD`, `DOC`, `TARGET`（可选） | ✅ | MD + DB + blackboard |
 | **Observe** | `observe.py` | `Context`, `ACTIONS_BODY`, `TARGET`（可选） | ✅ | blackboard + 裁剪历史 |
 
 ---
@@ -423,7 +425,7 @@ yield {"type": "done", "description": "自然语言描述", "useful_ids": [1, 3,
    Think    explore_    explore_     generate_    generate_     explore_     Observe
              schema      base_        &execute     document      functions
                          knowledge
-    {THINK_  {DB_BRIEF}  {BASE_       knowledge    {BASE}        {CUSTOM_     {TARGET}
+    {THINK_  {DB_BRIEF}  {BASE_       knowledge    {BASE_MD}     {CUSTOM_     {TARGET}
      KNOWLEDGE}{DB_QUERY_ KNOWLEDGE    = BASE_MD +  {DOC}         FUNC_        {Context}
     {BRIEF_   GUIDE}     _BRIEF}      code_guide                 BRIEF}       {Blackboard}
      INFO}                             + graph_                                {ACTIONS_

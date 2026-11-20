@@ -97,11 +97,15 @@ def history_to_text(history: List[dict]) -> str:
                     lines.append(f"[ACT web_search] search_result:\n{entry['search_result']}")
                 if entry.get("query"):
                     lines.append(f"[ACT web_search] query: {entry['query']}")
+                if entry.get("error"):
+                    lines.append(f"[ACT web_search] error:\n{entry['error']}")
             elif action == "fetch_webpage":
                 if entry.get("page_content"):
                     lines.append(f"[ACT fetch_webpage] page_content:\n{entry['page_content']}")
                 if entry.get("url"):
                     lines.append(f"[ACT fetch_webpage] url: {entry['url']}")
+                if entry.get("error"):
+                    lines.append(f"[ACT fetch_webpage] error:\n{entry['error']}")
             elif action == "explore_mcp":
                 if entry.get("selected_tools") is not None:
                     lines.append(f"[ACT explore_mcp] selected_tools: {json.dumps(entry['selected_tools'], ensure_ascii=False)}")

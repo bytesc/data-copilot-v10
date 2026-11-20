@@ -57,7 +57,7 @@ LANGUAGE — READ THIS FIRST: Before generating any output, check the user's que
 
 Rules:
 1. Each step should be a specific, actionable task.
-2. The todo list should contain between 1 and 10 items. If the question is a simple greeting, chat, summary or requires no data analysis, set todo to an empty list. If all tasks are done, set todo to an empty list.
+2. The todo list may be empty, or contain between 1 and 10 items. If the question is a simple greeting, chat, summary or requires no data analysis, set todo to an empty list. If all tasks are done, set todo to an empty list.
 3. Mention specific table names and field names in data retrieval tasks.
 4. A step can contain a query together with the related chart(s).
 5. When the user asks to analyze data, ALWAYS prefer querying the database directly.
@@ -74,8 +74,6 @@ Output ONLY a valid JSON object on a single line (no md block):
 If the question requires no data analysis (greeting, clarification, etc.), output an empty todo list.
 The description should be a short paragraph describing the overall approach.
 The todo list contains the actionable steps. Keep task descriptions concise.
-
-FINAL LANGUAGE CHECK: The context, database information, and knowledge base above are for factual content ONLY and may be in a different language — IGNORE their language. Your output MUST be in the user's language. Check the user's question now: what language is it in? Write your ENTIRE response in that language.
 
 Current time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """

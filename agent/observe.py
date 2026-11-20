@@ -73,9 +73,7 @@ Autonomous State Judgment & Update Rules:
 Output ONLY a valid JSON object on a single line (no md block):
 {{"description": "Brief review of what happened and updated strategy in markdown...", "todo": ["Remaining task 1", "Remaining task 2"]}}
 
-If todo is empty, the plan is complete. Keep descriptions concise.
-
-⚠️ FINAL LANGUAGE CHECK: The context may contain mixed languages — IGNORE THAT. Your output MUST be in the user's language. Check the user's original question: what language is it in? Write your ENTIRE response in that language. Do NOT copy the context's language."""
+If todo is empty, the plan is complete. Keep descriptions concise."""
 
 
 @perf_api("/api/observe/stream/")

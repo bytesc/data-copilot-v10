@@ -21,7 +21,7 @@ from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
-from agent.tools.base_knowledge.get_base_knowledge import DOC, TARGET, BASE
+from agent.tools.base_knowledge.get_base_knowledge import DOC, TARGET, BASE_MD
 from agent.tools.tools_def import llm
 from agent.utils.pd_to_walker import generate_random_string
 from agent.utils.get_config import config_data
@@ -200,7 +200,7 @@ sections:
       - type: image                       # image → chart/figure from conversation
         description: "Brief description of what this chart illustrates"
     subsections:
-      - heading: "1.1 Subsection Heading"
+      - heading: "Subsection Heading"
         description: "Brief description."
         elements:
           - type: text
@@ -213,7 +213,7 @@ sections:
     subsections: []
 
 Rules:
-1. Use numbered headings for clarity (1., 1.1, 2., etc.)
+1. Use numbered headings for top-level sections only (1., 2., 3., etc.). Do NOT number subsections — use descriptive heading text only.
 2. Every section MUST include both "elements" and "subsections" keys. If a section or subsection has no content, use an empty list `[]`.
 3. The "elements" array defines every content block in exact order. Each element has:
    - type: one of text / table / image (text = paragraphs, table = data table, image = chart/figure)
@@ -566,7 +566,7 @@ def _event_stream_generate_document(conversation_history: List[dict], session_id
         ctx, bb = _doc_context(conversation_history, session_id, level)
         return f"""{OUTLINE_SYSTEM}
 
-{cap_text(BASE, level)}
+{cap_text(BASE_MD, level)}
 
 {cap_text(DOC, level)}
 
@@ -619,7 +619,7 @@ Section Description: {description}{used_hint}
 Full Document Outline (all sections):
 {chr(10).join(f'  {j+1}. {p["heading"]} — {p["description"]}' for j, p in enumerate(parts))}
 
-{cap_text(BASE, level)}
+{cap_text(BASE_MD, level)}
 
 {cap_text(DOC, level)}
 
@@ -735,7 +735,7 @@ def _event_stream_generate_document_unified(conversation_history: List[dict], se
         ctx, bb = _doc_context(conversation_history, session_id, level)
         return f"""{UNIFIED_SYSTEM}
 
-{cap_text(BASE, level)}
+{cap_text(BASE_MD, level)}
 
 {cap_text(DOC, level)}
 
@@ -846,7 +846,7 @@ def _event_stream_generate_yaml_outline(conversation_history: List[dict], sessio
         ctx, bb = _doc_context(conversation_history, session_id, level)
         return f"""{YAML_OUTLINE_SYSTEM}
 
-{cap_text(BASE, level)}
+{cap_text(BASE_MD, level)}
 
 {cap_text(DOC, level)}
 
@@ -1008,7 +1008,7 @@ def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outl
             used_hint=used_hint,
         )}
 
-{cap_text(BASE, level)}
+{cap_text(BASE_MD, level)}
 
 {cap_text(DOC, level)}
 
@@ -1016,9 +1016,7 @@ def _event_stream_generate_from_yaml(conversation_history: List[dict], yaml_outl
 
 Conversation History:
 {ctx}
-{bb}
-
-Write the content for the section "{heading}" in markdown format."""
+{bb}"""
 
         section_prompt = build_section_prompt(0)
         part_raw = ""

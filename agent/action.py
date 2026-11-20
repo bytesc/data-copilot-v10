@@ -58,8 +58,8 @@ _ACTION_DESCRIPTIONS = {
     "generate_and_execute": """- generate_and_execute: {"action": "generate_and_execute", "research_guide": "..."}
   Decide to execute code that calls functions. The function names are read from the FUNC region of the blackboard (selected by `explore_functions`); do NOT include a "funcs" field. The actual code will be generated in the next phase. Do NOT include any code or "code" field in the JSON output.
   research_guide: Optional natural language description of what data to search for and what images/charts to generate. Include details like chart types, data sources, labels, colors, and axis sorting. This guides the code generation phase to produce the correct visualizations. Use this when the task requires specific charts or images. If the user only asks to view, observe, or describe an existing image, do NOT regenerate it; use `select_images` with the exact existing filename instead.""",
-    "ask_question": """- ask_question: {"action": "ask_question", "text": "Your question for the user here..."}
-  Ask the user a question. Use it incase you need some information from user.""",
+    "ask_question": """- ask_question: {"action": "ask_question", "text": "Your question or short reply for the user here..."}
+  Ask the user a question, or send a short polite reply when no data work is needed. Use it when you need information from the user, or to respond to a greeting, thanks, or chit-chat.""",
     "ask_choice": """- ask_choice: {"action": "ask_choice", "text": "Your question here...", "choices": ["option1", "option2"]}
   Give user some choices to choice only one of them.""",
     "summary_and_pause": """- summary_and_pause: {"action": "summary_and_pause", "text": "Your progress summary here..."}
@@ -77,12 +77,12 @@ if ENABLE_BASE_KNOWLEDGE:
   Explore the base knowledge (business domain knowledge, documentation, thinking strategies). Optional keyword hints the LLM to focus on specific knowledge entries. Running it writes/overwrites the KNOWLEDGE region of the blackboard; re-run it when the user's requirements or domain context change. Use this to retrieve relevant business context, domain rules, or documentation from the knowledge base."""
 
 if ENABLE_WEB_SEARCH:
-    _ACTION_DESCRIPTIONS["web_search"] = """- web_search: {"action": "web_search", "query": "search query", "max_results": 10}
-  Search the web using DuckDuckGo. Use this when the user asks for real-time information, news, facts, or data not available in the local database. Returns a list of results with title, URL, and snippet. Optionally set max_results (default 10, max 50) to control how many results to return."""
+    _ACTION_DESCRIPTIONS["web_search"] = """- web_search: {"action": "web_search", "query": "search query (required)", "max_results": 10}
+  Search the web using DuckDuckGo. `query` is required: omitting it fails the action (there is no context fallback). Use this when the user asks for real-time information, news, facts, or data not available in the local database. Returns a list of results with title, URL, and snippet. Optionally set max_results (default 10, max 50) to control how many results to return."""
 
 if ENABLE_FETCH_URL:
     _ACTION_DESCRIPTIONS["fetch_webpage"] = """- fetch_webpage: {"action": "fetch_webpage", "urls": ["https://example.com/a", "https://example.com/b"], "max_length": 10000}
-   Fetch and extract the main text content of one or more webpages IN PARALLEL. Use this after `web_search` to read the full content of promising results. `urls` is an array of 1-10 URLs from previous search results; a single "url" string is also accepted. max_length controls max characters returned per page (default 10000)."""
+   Fetch and extract the main text content of one or more webpages IN PARALLEL. Use this after `web_search` to read the full content of promising results. `urls` is REQUIRED (an array of 1-10 URLs from previous search results; a single "url" string is also accepted) — omitting both fails the action, there is no context fallback. max_length controls max characters returned per page (default 10000)."""
 
 if ENABLE_MCP:
     _ACTION_DESCRIPTIONS["explore_mcp"] = """- explore_mcp: {"action": "explore_mcp", "keyword": "..."}

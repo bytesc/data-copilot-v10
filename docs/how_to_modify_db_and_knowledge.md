@@ -86,7 +86,7 @@ FLUSH PRIVILEGES;
 | MD 文件 | `agent/tools/base_knowledge/knowledge_docs/base_knowledge.md` |
 | 数据库表 | `base_knowledge` 表（key-value 结构） |
 
-**不注入 think / action 提示词**：通过 `explore_base_knowledge` action 按需获取；文档生成（generate_document）阶段仍全量注入，`generate_and_execute` 阶段则注入 blackboard 中 `explore_base_knowledge` 选中的条目（另注入 `base_knowledge.md` 的 MD 部分，不重复注入该表全量）。`BASE_KNOWLEDGE_BRIEF` 为其摘要版本。
+**不注入 think / action 提示词**：通过 `explore_base_knowledge` action 按需获取；`generate_and_execute` 与 `generate_document` 阶段均注入 blackboard 中 `explore_base_knowledge` 选中的条目（另注入 `base_knowledge.md` 的 MD 部分，即 `BASE_MD`，不重复注入该表全量）。`BASE_KNOWLEDGE_BRIEF` 为其摘要版本。
 
 ### 3.8 DOC — 文档知识
 
@@ -134,7 +134,7 @@ FLUSH PRIVILEGES;
 | FUNCTION_BRIEF | 代码硬编码 | 无 | think + action | 固定 |
 | CUSTOM_FUNC_BRIEF | `custom_func_brief.md` | `brief_info.custom_func_brief` | think + action / explore_functions | 合并 |
 | Function Catalog | 代码自动生成 | 无 | explore_functions | 自动 |
-| BASE | `base_knowledge.md` | `base_knowledge` | explore_base_knowledge / generate_and_execute / generate_document | 合并 |
+| BASE_MD | `base_knowledge.md` | 无（表全量不注入） | generate_and_execute / generate_document | 仅 MD，空时不显示标签 |
 | DOC | `doc_guide.md` | `doc_guide` | generate_document | 合并，空时不显示标签 |
 | THINK_KNOWLEDGE | `think_guide.md` | `think_guide` | think | 合并，空时不显示标签 |
 | CODE_GUIDE | 无 | `code_guide` | generate_and_execute | 仅 DB，空时不显示标签 |

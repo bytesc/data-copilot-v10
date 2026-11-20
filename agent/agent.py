@@ -138,12 +138,12 @@ def get_cot_code_prompt(question, tables=None, selected_fields=None, selected_fu
 Please use the following functions to write Python code to solve the problem.
 """
     function_prompt = """ 
-Here is the functions you can import and use:
+Here are the functions you can call directly (do NOT import them):
 """
     available_import_lines = IMPORTANT_MODULE + THIRD_MODULE
     module_prompt = """
 PRE-IMPORTED MODULES (READ THIS FIRST):
-The modules/setup lines listed below are ALREADY imported and initialized in the execution environment. They are injected automatically into your code after generation (in the same way as described in the Remind section).
+The modules/setup lines listed below are ALREADY imported and initialized in the execution environment. They are injected automatically into your code after generation.
 Your generated code MUST NOT write any import statement, MUST NOT re-import any of these modules, and MUST NOT import or use ANY module other than the ones listed below.
 
 """ + "\n".join(available_import_lines) + "\n"

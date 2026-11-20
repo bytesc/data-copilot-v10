@@ -72,9 +72,9 @@ Group 1（`explore_*` / `select_images`）和 Group 2（`ask_question` / `ask_ch
 | `text` | ask_question / ask_choice / summary_and_pause / attempt_completion | 前端交互必填 | 缺少时前端无可展示/提问的内容 |
 | `choices` | ask_choice | ask_choice 必填（至少一项） | 其他 action 中无效 |
 | `title` | generate_document | 可选 | 由文档生成器自动生成标题 |
-| `query` | web_search | 建议必填 | 为空时回退使用当前完整上下文作为查询词 |
+| `query` | web_search | 必填 | 为空时该 action 失败并写入错误 act 条目（无上下文回退，避免把完整对话内容发送给外部搜索引擎） |
 | `max_results` | web_search | 可选 | 默认 10，超过 50 按 50 处理 |
-| `urls` | fetch_webpage | 建议必填 | URL 数组（1-10 个），并行抓取；为空时回退到单个 `url`，再无则用当前完整上下文 |
+| `urls` | fetch_webpage | 必填 | URL 数组（1-10 个），并行抓取；为空时回退到单个 `url`，再无则该 action 失败并写入错误 act 条目（无上下文回退） |
 | `url` | fetch_webpage | 兼容字段 | 单个 URL 字符串；仅在 `urls` 为空时使用 |
 | `max_length` | fetch_webpage | 可选 | 每页默认 10000，超过 50000 按 50000 处理 |
 | `server` | exe_mcp | 单工具格式必填，与 `tool` 搭配 | 使用 `tools` 批量格式时忽略 |

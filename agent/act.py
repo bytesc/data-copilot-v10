@@ -162,6 +162,8 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
         entries.append({"role": "assistant", "type": "act", "action": "generate_document", "title": title, "file_name": file_name, "full_text": full_text, "download_url_md": act_data.get("download_url_md", ""), "download_url_docx": act_data.get("download_url_docx", ""), "download_url_pdf": act_data.get("download_url_pdf", "")})
     elif action == "web_search":
         entry = {"role": "assistant", "type": "act", "action": "web_search"}
+        if act_data.get("error"):
+            entry["error"] = act_data["error"]
         if act_data.get("display_content"):
             entry["search_result"] = act_data["display_content"]
         elif act_data.get("search_results"):
@@ -179,6 +181,8 @@ def _build_act_entries(action: str, act_data: dict) -> List[dict]:
                 entries.append(entry)
         else:
             entry = {"role": "assistant", "type": "act", "action": "fetch_webpage"}
+            if act_data.get("error"):
+                entry["error"] = act_data["error"]
             if act_data.get("display_content"):
                 entry["page_content"] = act_data["display_content"]
             elif act_data.get("content"):
@@ -316,10 +320,10 @@ def _event_stream_act_impl(
         act_data = yield from _act_generate_document(conversation_history, session_id, title, request_json)
 
     elif action == "web_search":
-        act_data = yield from _act_web_search(full_question, session_id, params, request_json)
+        act_data = yield from _act_web_search(session_id, params, request_json)
 
     elif action == "fetch_webpage":
-        act_data = yield from _act_fetch_webpage(full_question, session_id, params, request_json)
+        act_data = yield from _act_fetch_webpage(session_id, params, request_json)
 
     elif action == "explore_mcp":
         act_data = yield from _act_explore_mcp(build_question, session_id, params, request_json, build_blackboard, images)
@@ -717,11 +721,23 @@ def _act_generate_document(conversation_history, session_id, title: str = "", re
     }
 
 
-def _act_web_search(full_question: str, session_id: str, params: dict, request_json: str = ""):
+def _act_web_search(session_id: str, params: dict, request_json: str = ""):
     query = (params.get("query") or "").strip()
     max_results = params.get("max_results", 10)
+
+    # Missing query fails the action instead of falling back to the whole
+    # conversation text: the old fallback echoed the full context (including
+    # untrusted tool/page content) to the external search engine and searched
+    # for garbage. The error is returned so an act entry records it and the
+    # Action phase can re-decide with proper params.
     if not query:
-        query = full_question.strip()
+        err = "web_search requires a non-empty `query` parameter"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'error', 'content': err}, ensure_ascii=False)}\n\n"
+        record_session_operation(
+            session_id, "/api/act/stream/", request_json,
+            ans="", result_type="error", msg=err[:500],
+        )
+        return {"error": err, "query": ""}
 
     yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'web_search', 'type': 'msg', 'content': f'Searching: {query}...'}, ensure_ascii=False)}\n\n"
 
@@ -773,7 +789,7 @@ def _act_web_search(full_question: str, session_id: str, params: dict, request_j
     return {"search_results": result_data, "query": query, "display_content": display_content}
 
 
-def _act_fetch_webpage(full_question: str, session_id: str, params: dict, request_json: str = ""):
+def _act_fetch_webpage(session_id: str, params: dict, request_json: str = ""):
     # Accept {"urls": [...]} (new, parallel) or {"url": "..."} (single / legacy).
     raw_urls = params.get("urls")
     urls = [u.strip() for u in raw_urls if isinstance(u, str) and u.strip()] if isinstance(raw_urls, list) else []
@@ -781,8 +797,20 @@ def _act_fetch_webpage(full_question: str, session_id: str, params: dict, reques
         single = (params.get("url") or "").strip()
         if single:
             urls = [single]
+
+    # Missing URLs fails the action instead of treating the whole conversation
+    # text as a URL (the old fallback), which fetched garbage and echoed the
+    # full context into the fetch pipeline. The error is returned so an act
+    # entry records it and the Action phase can re-decide with proper params.
     if not urls:
-        urls = [full_question.strip()]
+        err = "fetch_webpage requires a `urls` array (or a single `url` string)"
+        yield f"data: {json.dumps({'phase': 'act', 'sub_phase': 'fetch_webpage', 'type': 'error', 'content': err}, ensure_ascii=False)}\n\n"
+        record_session_operation(
+            session_id, "/api/act/stream/", request_json,
+            ans="", result_type="error", msg=err[:500],
+        )
+        return {"error": err}
+
     urls = urls[:10]
 
     max_length = params.get("max_length", 10000)
