@@ -94,6 +94,26 @@ if ENABLE_MCP:
 
 ACTIONS_BODY = "\n\n".join(_ACTION_DESCRIPTIONS[a] for a in VALID_ACTIONS)
 
+
+def _action_brief(description: str) -> str:
+    """Return an action's name + prose, dropping its JSON output template.
+
+    Think/Observe only need to know which actions exist. The ``{"action": ...}``
+    templates are the Action phase's own output format; injecting them into
+    Think/Observe lets the model copy the wrong JSON schema instead of the
+    required ``{"description", "todo"}`` plan.
+    """
+    lines = description.split("\n")
+    name = lines[0].split(": {", 1)[0].rstrip()
+    body = [line.rstrip() for line in lines[1:] if not line.strip().startswith("{")]
+    if not body:
+        return f"{name}:"
+    return "\n".join([f"{name}: {body[0].strip()}"] + body[1:])
+
+
+# Reference-only action list for Think/Observe: names + prose, no JSON schemas.
+ACTIONS_BRIEF = "\n\n".join(_action_brief(_ACTION_DESCRIPTIONS[a]) for a in VALID_ACTIONS)
+
 _GROUP_1_ACTIONS = ["explore_schema", "explore_functions", "select_images"]
 if ENABLE_BASE_KNOWLEDGE:
     _GROUP_1_ACTIONS.append("explore_base_knowledge")

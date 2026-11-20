@@ -11,7 +11,7 @@
 
 server:
   host: "0.0.0.0"
-  port: 8080
+  port: 8088
 
 # Folder holding the exposed proxy-key text files referenced by `keys` below.
 # Relative paths resolve against this config file. These *.txt files are

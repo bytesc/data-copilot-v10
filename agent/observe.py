@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from agent.action import ACTIONS, ACTIONS_BODY
+from agent.action import ACTIONS_BRIEF
 from agent.tools.base_knowledge.get_base_knowledge import TARGET
 from agent.tools.tools_def import llm
 from data_access.session_log import record_session_operation
@@ -33,6 +33,21 @@ def _build_observe_prompt(context: str, blackboard_text: str) -> str:
     if _ENABLE_TARGET and TARGET.strip() != "":
         target_section = "The target document template below defines the content that must be included. Review the execution results against this template to determine what still needs to be done:\n\n" + TARGET
 
+    rules = [
+        "ANALYZE RESULT FIRST: Look at the context for execution results and error traces.",
+        "SUCCESS: If the result contains the expected data/confirmation without errors, remove that task from the todo list.",
+        "ERROR / EXCEPTION (Autonomous Correction): If the context contains error messages, DO NOT ask the user. Keep the failed task in the todo list. Do not modify steps to fix the error.",
+        "PARTIAL SUCCESS: If only part of the task was completed, remove completed parts and append new tasks for remaining work.",
+        "Keep completed tasks out of the todo list — only include PENDING tasks.",
+    ]
+    if target_section:
+        rules.append(
+            "CRITICAL — COMPLETENESS CHECK: Before setting todo to empty, compare what has been accomplished against the target document template above. If any section, data point, image/chart, or table from the template has not been addressed, add tasks to cover them. Do NOT mark the plan as complete if the target document template has requirements that have not been fulfilled."
+        )
+    rules.append("If there are pending tasks, the todo list should contain between 1 and 10 items.")
+    rules.append("Your job is an objective Observer, do not be creative to new solutions.")
+    rules_str = "\n".join(f"{i + 1}. {rule}" for i, rule in enumerate(rules))
+
     return f"""You are an objective Observer. Your job is to review the execution results of the last step, update the plan accordingly.
 
 {target_section}
@@ -43,20 +58,13 @@ Context (includes execution results and errors):
 
 The system is working in Think → Action → Act → Observe cycles. You takes the `Observe` part.
 
-ACTIONS AVAILABLE:
-{ACTIONS_BODY}
+ACTIONS AVAILABLE (reference only — do not output action JSON):
+{ACTIONS_BRIEF}
 
 ⚠️ LANGUAGE — READ THIS FIRST: Before generating any output, check the user's original question language. Your ENTIRE output (description and todo items) MUST be in the EXACT SAME language as the user's original question. If the user asked in Chinese, you MUST write in Chinese. If the user asked in English, you MUST write in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context may contain mixed languages — it is for factual content ONLY. Their language must NEVER leak into your output. Every word you output must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
 
 Autonomous State Judgment & Update Rules:
-1. ANALYZE RESULT FIRST: Look at the context for execution results and error traces.
-2. SUCCESS: If the result contains the expected data/confirmation without errors, remove that task from the todo list.
-3. ERROR / EXCEPTION (Autonomous Correction): If the context contains error messages, DO NOT ask the user. Keep the failed task in the todo list. Do not modify steps to fix the error.
-4. PARTIAL SUCCESS: If only part of the task was completed, remove completed parts and append new tasks for remaining work.
-5. Keep completed tasks out of the todo list — only include PENDING tasks.
-6. CRITICAL — COMPLETENESS CHECK: Before setting todo to empty, compare what has been accomplished against the target document template above. If any section, data point, image/chart, or table from the template has not been addressed, add tasks to cover them. Do NOT mark the plan as complete if the target document template has requirements that have not been fulfilled.
-7. If there are pending tasks, the todo list should contain between 1 and 10 items.
-8. Your job is an objective Observer, do not be creative to new solutions.
+{rules_str}
 
 - `explore_schema` returns all relevant data structure and schema in the database at a time based on previous context. ALL tables are explored and only return relevant ones! explored means completed! NO need to perform explore_schema with the same input again!
 - `explore_functions` returns all relevant available python function catalog at a time based on previous context. ALL functions are explored and only return relevant ones! explored means completed! NO need to perform explore_functions with the same input again!""" + ("""

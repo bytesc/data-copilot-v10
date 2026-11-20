@@ -38,7 +38,7 @@ python proxy.py
 可选参数：
 
 ```bash
-python proxy.py --host 127.0.0.1 --port 8080 \
+python proxy.py --host 127.0.0.1 --port 8088 \
                 --config config.yaml --targets targets.yaml --log-level info
 ```
 
@@ -82,7 +82,7 @@ keys/api_key_main.txt  ->  sk-真实token
 ```yaml
 server:
   host: "0.0.0.0"
-  port: 8080
+  port: 8088
 
 proxy_keys_dir: "proxy_keys"   # 对外代理 key 文件目录（相对本文件）
 
@@ -131,19 +131,19 @@ proxy_keys/proxy_key_1.txt  ->  sk-proxy-xxx
 
 ```bash
 # 非流式
-curl http://127.0.0.1:8080/v1/chat/completions \
+curl http://127.0.0.1:8088/v1/chat/completions \
   -H "Authorization: Bearer sk-proxy-xxx" \
   -H "Content-Type: application/json" \
   -d '{"model":"deepseek-v4.1-flash","messages":[{"role":"user","content":"hi"}]}'
 
 # 流式
-curl -N http://127.0.0.1:8080/v1/chat/completions \
+curl -N http://127.0.0.1:8088/v1/chat/completions \
   -H "Authorization: Bearer sk-proxy-xxx" \
   -H "Content-Type: application/json" \
   -d '{"model":"deepseek-v4.1-flash","messages":[{"role":"user","content":"hi"}],"stream":true}'
 
 # 指定目标（须在该 key 的 targets 内）
-curl http://127.0.0.1:8080/v1/models \
+curl http://127.0.0.1:8088/v1/models \
   -H "Authorization: Bearer sk-proxy-xxx" \
   -H "X-Proxy-Target: backup"
 ```

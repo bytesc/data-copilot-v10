@@ -92,6 +92,20 @@ llm_models:
     supports_images: true
     reasoning_effort: ["low", "high", "max"]
     extra_params: {}
+  # Proxy-routed variant of deepseek-v4.1-flash: requests go through token_proxy
+  # so the real token stays hidden. Display name ends with "P".
+  # url is the proxy base (cd token_proxy && python proxy.py); api_key_proxy.txt
+  # holds the proxy key (must match a key in token_proxy/proxy_keys/), NOT the
+  # upstream token.
+  - id: "deepseek-v4.1-flash-p"
+    name: "DeepSeek V4.1 Flash P"        # "P" = via proxy
+    model: "deepseek-v4.1-flash"
+    url: "http://127.0.0.1:8088/v1"
+    key_file: "api_key_proxy.txt"
+    supports_images: true
+    reasoning_effort: ["none", "low", "high", "max"]
+    style_temperature: {Formal: 0.2, Casual: 0.7, Technical: 0.1}
+    extra_params: {"max_tokens": 393216}
 
 
 # Example model names (qwen3.7-flash qwen3.8-max / glm-4 / deepseek-chat deepseek-v4-flash deepseek-v4-pro / qwen-max / gpt-4o-mini)
