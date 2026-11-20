@@ -467,6 +467,8 @@ Context:
 
 Available functions: {func_names}
 
+LANGUAGE IS CRITICAL: The "plan" field text MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, write the plan in Chinese. If the user asked in English, write the plan in English.
+
 Output ONLY a JSON object with the following structure:
 {{"selected_functions": ["func1", "func2"], "plan": "brief plan describing how these functions will be used"}}
 
@@ -565,6 +567,8 @@ Context:
 {build_question(level)}
 {build_blackboard(level)}
 {keyword_hint}
+
+LANGUAGE IS CRITICAL: The "summary" field text MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, write the summary in Chinese. If the user asked in English, write the summary in English.
 
 Output ONLY a JSON object with the following structure:
 - "selected_ids": an array of the entry IDs shown as `[id=N]` in the knowledge base headings above. Empty list if none.
@@ -944,6 +948,8 @@ Context:
 {build_question(level)}
 {build_blackboard(level)}
 {keyword_hint}
+
+LANGUAGE IS CRITICAL: The "plan" field text MUST be in the EXACT SAME language as the user's question. If the user asked in Chinese, write the plan in Chinese. If the user asked in English, write the plan in English.
 
 Output ONLY a JSON object with the following structure:
 - "selected_tools": an array of objects with "server" and "name" fields identifying which tools to use.

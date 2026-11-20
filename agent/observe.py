@@ -61,7 +61,7 @@ The system is working in Think → Action → Act → Observe cycles. You takes 
 ACTIONS AVAILABLE (reference only — do not output action JSON):
 {ACTIONS_BRIEF}
 
-⚠️ LANGUAGE — READ THIS FIRST: Before generating any output, check the user's original question language. Your ENTIRE output (description and todo items) MUST be in the EXACT SAME language as the user's original question. If the user asked in Chinese, you MUST write in Chinese. If the user asked in English, you MUST write in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context may contain mixed languages — it is for factual content ONLY. Their language must NEVER leak into your output. Every word you output must be in the user's language. VIOLATING THIS RULE IS A CRITICAL ERROR.
+⚠️ LANGUAGE — READ THIS FIRST: Before generating any output, check the user's original question language. All the prose you write (the description and todo items) MUST be in the EXACT SAME language as the user's original question. If the user asked in Chinese, you MUST write the prose in Chinese. If the user asked in English, you MUST write the prose in English. This is NOT a suggestion — it is a HARD REQUIREMENT. The context may contain mixed languages — it is for factual content ONLY. Their language must NEVER leak into the prose you write. Table names, field names, and data values quoted from the database keep their original language and MUST NOT be translated. VIOLATING THIS RULE IS A CRITICAL ERROR.
 
 Autonomous State Judgment & Update Rules:
 {rules_str}

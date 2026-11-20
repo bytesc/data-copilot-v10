@@ -262,12 +262,28 @@ THINK_KNOWLEDGE = _DynamicStr(lambda: ("\nthink knowledge for reference:\n" + _T
        + "\n" + base_knowledge_to_str(get_think_guide_db())) if (_THINK_KNOWLEDGE_MD.strip() or get_think_guide_db()) else "")
 
 
+def _brief_body(value: str, label: str) -> str:
+    """Strip a leading bare ``label:`` line from a brief value.
+
+    ``DB_BRIEF`` / ``MCP_BRIEF`` prefix their content with a plain ``DataBase
+    Brief:`` / ``MCP Brief:`` line because their standalone callers render that
+    line as the section label. ``BRIEF_INFO`` instead renders every brief under
+    a single unified ``### <label>`` heading, so the bare line must be removed
+    to avoid a duplicated heading.
+    """
+    body = value.strip()
+    prefix = f"{label}:"
+    if body.startswith(prefix):
+        body = body[len(prefix):].lstrip("\n")
+    return body
+
+
 def _get_brief_info(enabled_knowledge=True, enabled_mcp=True):
     parts = []
 
-    db = str(DB_BRIEF)
-    if db.strip():
-        parts.append(f"{db}\n\nUse `explore_schema` to explore table schemas and sample data.")
+    db = _brief_body(str(DB_BRIEF), "DataBase Brief")
+    if db:
+        parts.append(f"### DataBase Brief\n{db}\n\nUse `explore_schema` to explore table schemas and sample data.")
 
     if enabled_knowledge:
         bk = str(BASE_KNOWLEDGE_BRIEF)
@@ -275,8 +291,8 @@ def _get_brief_info(enabled_knowledge=True, enabled_mcp=True):
             parts.append(f"### Domain Knowledge Brief\n{bk}\n\nUse `explore_base_knowledge` to explore full business domain knowledge.")
 
     if enabled_mcp:
-        mcp = str(MCP_BRIEF)
-        if mcp.strip():
+        mcp = _brief_body(str(MCP_BRIEF), "MCP Brief")
+        if mcp:
             parts.append(f"### MCP Brief\n{mcp}\n\nUse `explore_mcp` to explore available MCP tools.")
 
     func_hardcoded = """
